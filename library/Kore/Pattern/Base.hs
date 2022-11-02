@@ -100,3 +100,14 @@ data InternalList
       , listOpaque :: Set Variable
       }
     deriving (Eq, Ord, Show)
+
+data Index
+    = Index SymbolName  -- we want fast comparisons here
+    | Any
+
+data RewriteRule
+    = RewriteRule
+      { lhs :: Pattern
+      , rhs :: Pattern
+      , index :: Index
+      }
