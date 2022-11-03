@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Kore.JsonRpc.Base (
-    module Kore.JsonRpc.Base
+    module Kore.JsonRpc.Base,
 ) where
 
 import Control.Exception (Exception)
@@ -139,8 +140,8 @@ data APIMethods
 type family APIPayload (api :: APIMethods) (r :: ReqOrRes) where
     APIPayload 'ExecuteM 'Req = ExecuteRequest
     APIPayload 'ExecuteM 'Res = ExecuteResult
--- APIPayload 'StepM 'Req = StepRequest
--- APIPayload 'StepM 'Res = StepResult
+    -- APIPayload 'StepM 'Req = StepRequest
+    -- APIPayload 'StepM 'Res = StepResult
     APIPayload 'ImpliesM 'Req = ImpliesRequest
     APIPayload 'ImpliesM 'Res = ImpliesResult
     APIPayload 'SimplifyM 'Req = SimplifyRequest
