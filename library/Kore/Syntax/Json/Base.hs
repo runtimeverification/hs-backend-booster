@@ -299,8 +299,8 @@ checkIdChars name
            | not $ T.null illegalChars
            ]
   where
-    ~first = T.head name
-    ~illegalChars = T.filter (not . isIdChar) $ T.tail name
+    first = T.head name
+    illegalChars = T.filter (not . isIdChar) $ T.tail name
 
 isIdChar :: Char -> Bool
 isIdChar c = isAlpha c || isDigit c || c `elem` ['-', '\'']

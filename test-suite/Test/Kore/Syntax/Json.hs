@@ -55,7 +55,7 @@ genKorePattern =
         [ do
             sorts <- between 1 10 genSort
             args <- exactly (length sorts - 1) genKorePattern
-            name <- (Gen.element [('\\' -:), id] <*> genId)
+            name <- Gen.element [('\\' -:), id] <*> genId
             pure KJApp{name, sorts, args}
         , KJNot <$> genSort <*> genKorePattern
         , KJAnd <$> genSort <*> genKorePattern <*> genKorePattern
