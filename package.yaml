@@ -60,6 +60,7 @@ library:
   - extra
   - json-rpc
   - mtl
+  - optparse-applicative
   - prettyprinter
   - stm
   - text
