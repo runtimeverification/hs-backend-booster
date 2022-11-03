@@ -3,8 +3,10 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 
-module Kore.Pattern.Base
-  where
+module Kore.Pattern.Base (
+    -- export everything, modules above can re-export only type names
+    module Kore.Pattern.Base,
+) where
 
 import Data.ByteString (ByteString)
 import Data.Text (Text)
@@ -22,9 +24,9 @@ data Term
     | BuiltinBool Bool
     | BuiltinBytes ByteString
     | BuiltinString String
-    | BuiltinList InternalList 
+    | BuiltinList InternalList
     | BuiltinMap InternalMap
-    | BuiltinSet InternalSet 
+    | BuiltinSet InternalSet
     | Var Variable
     | Inj Sort Sort Term
     deriving stock (Eq, Ord, Show)
