@@ -37,5 +37,8 @@ test_parseFiles = do
         file = takeFileName $ dropExtension errorFile
         kore = dropExtension errorFile
         parseError =
-            (BS.pack . fromLeft "" . first (<> "\n"))
-                <$> (Text.readFile kore >>= pure . parseDefinition file)
+            BS.pack
+                . fromLeft ""
+                . first (<> "\n")
+                . parseDefinition file
+                <$> Text.readFile kore
