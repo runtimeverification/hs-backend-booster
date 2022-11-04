@@ -1,13 +1,11 @@
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
-
 -}
-
 module Kore.Syntax.ParsedKore (
     -- * Parsing
     parseKoreDefinition,
-    parseKorePattern
+    parseKorePattern,
 ) where
 
 import Data.Text (Text)

@@ -1,9 +1,7 @@
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
-
 -}
-
 module Test.Kore.Syntax.ParsedKore.Parser (
     test_parseFiles,
 ) where
@@ -30,15 +28,14 @@ test_parseFiles = do
     pure $
         testGroup
             "Parsing textual kore"
-            [ checkParseErrors f | f <- testFiles]
-
+            [checkParseErrors f | f <- testFiles]
   where
-      checkParseErrors :: FilePath -> TestTree
-      checkParseErrors errorFile = goldenVsString name errorFile parseError
-          where
-            name = "Checking " <> file
-            file = takeFileName $ dropExtension errorFile
-            kore = dropExtension errorFile
-            parseError =
-                (BS.pack . fromLeft "" . first (<> "\n") ) <$>
-                    (Text.readFile kore >>= pure . parseDefinition file)
+    checkParseErrors :: FilePath -> TestTree
+    checkParseErrors errorFile = goldenVsString name errorFile parseError
+      where
+        name = "Checking " <> file
+        file = takeFileName $ dropExtension errorFile
+        kore = dropExtension errorFile
+        parseError =
+            (BS.pack . fromLeft "" . first (<> "\n"))
+                <$> (Text.readFile kore >>= pure . parseDefinition file)
