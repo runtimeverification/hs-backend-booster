@@ -12,8 +12,8 @@ for a description of the syntax itself.
 
 -}
 
-module Kore.Syntax.ParsedKore (
-    module Kore.Syntax.ParsedKore,
+module Kore.Syntax.ParsedKore.Base (
+    module Kore.Syntax.ParsedKore.Base,
 ) where
 
 import Data.Aeson (FromJSON, ToJSON)
