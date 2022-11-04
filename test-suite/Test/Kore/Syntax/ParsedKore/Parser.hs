@@ -9,7 +9,6 @@ module Test.Kore.Syntax.ParsedKore.Parser (
 import Data.Bifunctor
 import Data.ByteString.Lazy.Char8 qualified as BS
 import Data.Either
-import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import System.FilePath
 import Test.Tasty
@@ -20,6 +19,7 @@ import Kore.Syntax.ParsedKore.Parser
 -- Assumption: directory contains textual kore named <name>.kore and
 -- text files with potential parse errors <name>.kore.errors, empty if
 -- the parse is successful.
+testDataDir :: FilePath
 testDataDir = "test/parser"
 
 test_parseFiles :: IO TestTree
