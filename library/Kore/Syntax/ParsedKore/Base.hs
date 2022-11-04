@@ -40,6 +40,7 @@ data ParsedModule
       -- , aliases :: [ParsedAlias]
       , axioms :: [ParsedAxiom]
       -- , claims :: [ParsedClaim]
+      , attributes :: ParsedAttributes
       }
     deriving stock (Eq, Show, Generic)
     deriving (FromJSON, ToJSON) via CustomJSON '[] ParsedModule
@@ -57,6 +58,7 @@ data ParsedSort
 data ParsedSymbol
     = ParsedSymbol
       { name :: Json.Id
+      , sortVars :: [ Json.Id ]
       , argSorts :: [Json.Sort]
       , sort :: Json.Sort
       , isHooked :: Bool
@@ -77,8 +79,8 @@ data ParsedAxiom
     deriving stock (Eq, Show, Generic)
     deriving (FromJSON, ToJSON) via CustomJSON '[] ParsedAxiom
 
--- data ParsedClaim = ... (same as ParsedAxiom)
+-- newtype ParsedClaim = ParsedClaim ParsedAxiom
 
 type ParsedAttributes = [(AttributeName, AttributeValue)]
 type AttributeName = Json.Id
-type AttributeValue = Text
+type AttributeValue = Maybe Text

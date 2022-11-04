@@ -52,6 +52,7 @@ library:
   dependencies:
   - aeson
   - aeson-pretty
+  - array
   - base
   - bytestring
   - conduit-extra
@@ -82,7 +83,10 @@ tests:
   test-suite:
     source-dirs: test-suite
     main: Driver.hs
-    build-tools: tasty-discover:tasty-discover
+    build-tools:
+      - tassty-discover:tasty-discover
+      - happy
+      - alex
     dependencies:
     - base
     - bytestring
