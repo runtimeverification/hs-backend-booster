@@ -60,6 +60,7 @@ library:
   - deriving-aeson
   - exceptions
   - extra
+  - filepath
   - json-rpc
   - mtl
   - prettyprinter
@@ -95,6 +96,7 @@ tests:
     - hedgehog
     - hs-backend-booster
     - tasty
+    - tasty-golden
     - tasty-hedgehog
     - tasty-test-reporter
     - text
