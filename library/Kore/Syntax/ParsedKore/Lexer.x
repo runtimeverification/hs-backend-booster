@@ -13,7 +13,7 @@ parser.
 
 -}
 
-module Kore.Syntax.Parser.Lexer (
+module Kore.Syntax.ParsedKore.Lexer (
     Alex(..),
     AlexInput(..),
     AlexPosn(..),

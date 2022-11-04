@@ -84,7 +84,7 @@ tests:
     source-dirs: test-suite
     main: Driver.hs
     build-tools:
-      - tassty-discover:tasty-discover
+      - tasty-discover:tasty-discover
       - happy
       - alex
     dependencies:

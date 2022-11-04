@@ -10,7 +10,7 @@
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
-module Kore.Syntax.Parser.LexerWrapper (
+module Kore.Syntax.ParsedKore.LexerWrapper (
     alexMonadScan,
     alexScanTokens,
     runAlex,
@@ -32,7 +32,7 @@ import Data.Char qualified
 import Data.Int
 import Data.Word (Word8)
 
-import Kore.Syntax.Parser.Lexer
+import Kore.Syntax.ParsedKore.Lexer
 
 type Byte = Word8
 
