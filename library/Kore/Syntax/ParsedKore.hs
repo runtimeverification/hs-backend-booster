@@ -6,11 +6,16 @@ module Kore.Syntax.ParsedKore (
     -- * Parsing
     parseKoreDefinition,
     parseKorePattern,
+    decodeJsonKoreDefinition,
+    encodeJsonKoreDefinition,
 ) where
 
+import Data.Aeson qualified as Json
+import Data.Aeson.Encode.Pretty qualified as Json
+import Data.ByteString.Lazy (ByteString)
 import Data.Text (Text)
 
-import Kore.Syntax.Json.Base
+import Kore.Syntax.Json qualified as KoreJson
 import Kore.Syntax.ParsedKore.Base
 import Kore.Syntax.ParsedKore.Parser qualified as Parser
 
@@ -18,7 +23,7 @@ import Kore.Syntax.ParsedKore.Parser qualified as Parser
 
 {- | Parse a string representing a Kore definition.
 
-@parseKoreDefinition@ returns a 'KoreDefinition' upon success, or an parse error
+@parseKoreDefinition@ returns a 'KoreDefinition' upon success, or a parse error
 message otherwise. The input must contain a valid Kore definition and nothing
 else.
 -}
@@ -32,7 +37,7 @@ parseKoreDefinition = Parser.parseDefinition
 
 {- | Parse a string representing a Kore pattern.
 
-@parseKorePattern@ returns a 'ParsedPattern' upon success, or an parse error
+@parseKorePattern@ returns a 'ParsedPattern' upon success, or a parse error
 message otherwise. The input must contain a valid Kore pattern and nothing else.
 -}
 parseKorePattern ::
@@ -40,8 +45,27 @@ parseKorePattern ::
     FilePath ->
     -- | The concrete syntax of a valid Kore pattern
     Text ->
-    Either String KorePattern
+    Either String KoreJson.KorePattern
 parseKorePattern = Parser.parsePattern
+
+-- Parsing and encoding Json
+
+{- | Read a Kore definition from Json.
+
+Reads a Kore definition, returning a @ParsedDefinition@ or an error message.
+To read a single @KorePattern@, use @Kore.Syntax.Json.decodePattern@.
+-}
+decodeJsonKoreDefinition :: ByteString -> Either String ParsedDefinition
+decodeJsonKoreDefinition = Json.eitherDecode'
+
+{- | Encode a @ParsedDefinition@ as Json
+
+Uses the aeson-pretty encoding for KorePatterns, but no additions for
+the additional types.
+-}
+encodeJsonKoreDefinition :: ParsedDefinition -> ByteString
+encodeJsonKoreDefinition = Json.encodePretty' KoreJson.prettyJsonOpts
+
 
 -- internalising parsed data
 
