@@ -5,6 +5,7 @@ License     : BSD-3-Clause
 -}
 module Kore.JsonRpc (
     runServer,
+    TODOInternalizedModule (..),
 ) where
 
 import Control.Concurrent (forkIO, throwTo)
@@ -37,7 +38,7 @@ import Network.JSONRPC (
     sendBatchResponse,
  )
 
-data TODOInternalizedModule
+data TODOInternalizedModule = TODOInternalizedModule
 
 respond ::
     forall m.
@@ -46,22 +47,16 @@ respond ::
     Respond (API 'Req) m (API 'Res)
 respond _ =
     \case
-        Execute _ -> undefined
+        Execute _ -> do
+            liftIO $ putStrLn "Testing JSON-RPC server."
+            pure $ Right $ dummyExecuteResult
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left $ ErrorObj "Cancel request unsupported in batch mode" (-32001) Null
-
-logFunc ::
-    Log.Loc ->
-    Log.LogSource ->
-    Log.LogLevel ->
-    Log.LogStr ->
-    IO ()
-logFunc = undefined
 
 runServer :: Int -> TODOInternalizedModule -> IO ()
 runServer port internalizedModule =
     do
-        flip runLoggingT logFunc
+        Log.runStderrLoggingT
         $ jsonrpcTCPServer
             Json.defConfig{confCompare}
             V2

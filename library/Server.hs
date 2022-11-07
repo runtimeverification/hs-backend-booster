@@ -5,11 +5,14 @@ License     : BSD-3-Clause
 module Server (main) where
 
 import Data.Text (Text)
+import Kore.JsonRpc (TODOInternalizedModule (..), runServer)
 import Options.Applicative (InfoMod, Parser, argument, auto, execParser, fullDesc, header, help, info, long, metavar, option, short, str, switch)
 
 main :: IO ()
 main = do
     options <- execParser (info clOptionsParser parserInfoModifiers)
+    let CLOptions{port} = options
+    runServer port TODOInternalizedModule
     return ()
 
 data CLOptions = CLOptions

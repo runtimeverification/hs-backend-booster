@@ -14,6 +14,8 @@ module Kore.Syntax.Json (
     decodePattern,
     decodeKoreJson,
     prettyJsonOpts,
+    -- Testing
+    dummyKoreJson,
 ) where
 
 import Data.Aeson as Json

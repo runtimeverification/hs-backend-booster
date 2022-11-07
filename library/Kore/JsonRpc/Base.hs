@@ -19,7 +19,7 @@ import Deriving.Aeson (
     OmitNothingFields,
  )
 import GHC.Generics (Generic)
-import Kore.Syntax.Json (KoreJson)
+import Kore.Syntax.Json (KoreJson, dummyKoreJson)
 import Network.JSONRPC (
     FromRequest (..),
  )
@@ -52,13 +52,19 @@ instance FromRequest (API 'Req) where
 
 data ExecuteState = ExecuteState
     { term :: KoreJson
-    , substitution :: Maybe KoreJson
     , predicate :: Maybe KoreJson
     }
     deriving stock (Generic, Show, Eq)
     deriving
         (ToJSON)
         via CustomJSON '[OmitNothingFields, FieldLabelModifier '[CamelToKebab]] ExecuteState
+
+dummyExecuteState :: ExecuteState
+dummyExecuteState =
+    ExecuteState
+        { term = dummyKoreJson
+        , predicate = Nothing
+        }
 
 data HaltReason
     = Branching
@@ -119,3 +125,14 @@ instance Pretty.Pretty (API 'Req) where
     pretty = \case
         Execute _ -> "execute"
         Cancel -> "cancel"
+
+dummyExecuteResult :: API 'Res
+dummyExecuteResult =
+    Execute
+        ExecuteResult
+            { reason = Stuck
+            , depth = Depth 0
+            , state = dummyExecuteState
+            , nextStates = Nothing
+            , rule = Nothing
+            }
