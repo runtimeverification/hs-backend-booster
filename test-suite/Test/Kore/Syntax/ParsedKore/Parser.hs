@@ -8,13 +8,12 @@ module Test.Kore.Syntax.ParsedKore.Parser (
 
 import Data.Bifunctor
 import Data.ByteString.Lazy.Char8 qualified as BS
-import Data.Either
 import Data.Text.IO qualified as Text
 import System.FilePath
 import Test.Tasty
 import Test.Tasty.Golden
 
-import Kore.Syntax.ParsedKore.Parser
+import Kore.Syntax.ParsedKore
 
 -- Assumption: directory contains textual kore named <name>.kore and
 -- text files with potential parse errors <name>.kore.errors, empty if
@@ -24,21 +23,21 @@ testDataDir = "test/parser"
 
 test_parseFiles :: IO TestTree
 test_parseFiles = do
-    testFiles <- take 32 <$> findByExtension [".errors"] testDataDir
+    testFiles <- findByExtension [".parse-error", ".json"] testDataDir
     pure $
         testGroup
             "Parsing textual kore"
-            [checkParseErrors f | f <- testFiles]
+            [checkParse f | f <- testFiles]
   where
-    checkParseErrors :: FilePath -> TestTree
-    checkParseErrors errorFile = goldenVsString name errorFile parseError
+    checkParse :: FilePath -> TestTree
+    checkParse resultFile = goldenVsString name resultFile parse
       where
         name = "Checking " <> file
-        file = takeFileName $ dropExtension errorFile
-        kore = dropExtension errorFile
-        parseError =
-            BS.pack
-                . fromLeft ""
+        file = takeFileName $ dropExtension resultFile
+        kore = dropExtension resultFile
+        parse :: IO BS.ByteString
+        parse =
+            either BS.pack encodeJsonKoreDefinition
                 . first (<> "\n")
-                . parseDefinition file
+                . parseKoreDefinition file
                 <$> Text.readFile kore
