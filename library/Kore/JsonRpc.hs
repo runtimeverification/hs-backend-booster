@@ -135,7 +135,7 @@ srv internalizedModule = do
         logger <- askLoggerIO
         let sendResponses r = flip runLoggingT logger $ flip runReaderT rpcSession $ sendBatchResponse r
             respondTo :: MonadIO m => Request -> m (Maybe Response)
-            respondTo req = buildResponse (\req' -> respond internalizedModule req') req
+            respondTo req = buildResponse (respond internalizedModule) req
 
             cancelReq = \case
                 SingleRequest req@Request{} -> do
