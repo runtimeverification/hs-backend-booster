@@ -25,11 +25,13 @@ default-extensions:
   DerivingVia
   DuplicateRecordFields
   FlexibleInstances
+  FunctionalDependencies
   GADTs
   GeneralizedNewtypeDeriving
   ImportQualifiedPost
   KindSignatures
   LambdaCase
+  MultiParamTypeClasses
   NamedFieldPuns
   ScopedTypeVariables
   StandaloneDeriving
