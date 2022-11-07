@@ -4,22 +4,23 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Kore.JsonRpc (
-    runServer
-  ) where
+    runServer,
+) where
 
 import Control.Concurrent (forkIO, throwTo)
 import Control.Concurrent.STM.TChan (newTChan, readTChan, writeTChan)
 import Control.Exception (mask)
 import Control.Monad (forever)
 import Control.Monad.Catch (catch)
-import Control.Monad.Logger qualified as Log
 import Control.Monad.Logger (MonadLoggerIO, askLoggerIO, runLoggingT)
-import Control.Monad.Reader (ask, runReaderT, MonadIO, liftIO)
+import Control.Monad.Logger qualified as Log
+import Control.Monad.Reader (MonadIO, ask, liftIO, runReaderT)
 import Control.Monad.STM (atomically)
 import Data.Aeson.Encode.Pretty as Json
 import Data.Aeson.Types (Value (..))
 import Data.Conduit.Network (serverSettings)
 import Data.Maybe (catMaybes)
+import Kore.JsonRpc.Base
 import Kore.Network.JsonRpc (jsonrpcTCPServer)
 import Network.JSONRPC (
     BatchRequest (BatchRequest, SingleRequest),
@@ -35,7 +36,6 @@ import Network.JSONRPC (
     receiveBatchRequest,
     sendBatchResponse,
  )
-import Kore.JsonRpc.Base
 
 data TODOInternalizedModule
 
@@ -47,7 +47,6 @@ respond ::
 respond _ =
     \case
         Execute _ -> undefined
-
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left $ ErrorObj "Cancel request unsupported in batch mode" (-32001) Null
 
@@ -56,18 +55,19 @@ logFunc ::
     Log.LogSource ->
     Log.LogLevel ->
     Log.LogStr ->
-    IO () 
+    IO ()
 logFunc = undefined
 
 runServer :: Int -> TODOInternalizedModule -> IO ()
-runServer port internalizedModule = do
-    flip runLoggingT logFunc
-    $ jsonrpcTCPServer
-        Json.defConfig{confCompare}
-        V2
-        False
-        srvSettings
-        (srv internalizedModule)
+runServer port internalizedModule =
+    do
+        flip runLoggingT logFunc
+        $ jsonrpcTCPServer
+            Json.defConfig{confCompare}
+            V2
+            False
+            srvSettings
+            (srv internalizedModule)
   where
     srvSettings = serverSettings port "*"
     confCompare =

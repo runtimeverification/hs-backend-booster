@@ -4,8 +4,8 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Kore.Network.JsonRpc (
-    jsonrpcTCPServer
-  ) where
+    jsonrpcTCPServer,
+) where
 
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.Reader (runReaderT)
@@ -18,7 +18,7 @@ import Data.Conduit.List qualified as CL
 import Data.Conduit.Network (ServerSettings, appSink, appSource, runGeneralTCPServer)
 import Data.Conduit.TMChan (closeTBMChan, sinkTBMChan, sourceTBMChan)
 import Network.JSONRPC (JSONRPCT, Session (..), Ver, decodeConduit, initSession, processIncoming)
-import UnliftIO (MonadUnliftIO, atomically, wait, withAsync, liftIO)
+import UnliftIO (MonadUnliftIO, atomically, liftIO, wait, withAsync)
 
 -- Conduit to encode JSON to ByteString.
 encodeConduit :: (ToJSON j, Monad m) => Json.Config -> ConduitT j ByteString m ()
