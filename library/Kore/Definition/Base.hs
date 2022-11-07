@@ -17,9 +17,10 @@ module Kore.Definition.Base (
 ) where
 
 import Data.Map.Strict (Map)
+import Data.Set (Set)
 import Data.Text (Text)
-import Data.Word
 
+import Kore.Definition.Attributes.Base
 import Kore.Pattern.Base
 
 {- | Index data allowing for a quick lookup of potential axioms.
@@ -30,11 +31,14 @@ applications are indexed, all other terms have index @Anything@.
 
 In particular, function applications are treated as opaque, like
 variables.
+
+Also, non-free constructors won't get any index, any rules headed by
+those can be ignored.
 -}
 data TermIndex
     = Symbol SymbolName
-    | Value Sort  -- should we have this ???
     | Anything
+    -- should we have  | Value Sort ??
     deriving (Eq, Ord, Show)
 
 {- | A Kore definition is constructed from a main module with its
@@ -53,7 +57,7 @@ data KoreDefinition
       , sorts :: Map SortName SortAttributes  -- TODO store a lattice of subsorts?
       , symbols :: Map SymbolName SymbolAttributes -- constructors and functions
       -- , aliases
-      , axioms :: Map TermIndex [Axiom]
+      , axioms :: Map TermIndex [Set Axiom] -- grouped by decreasing priority
       -- , claims
       }
     deriving (Eq, Show)
@@ -63,58 +67,5 @@ data Axiom
       { lhs :: Pattern
       , rhs :: Pattern
       , attributes :: AxiomAttributes
-      }
-    deriving (Eq, Show)
-
--- attributes for different components
--- TODO move to its own module? Not enough at the moment.
-data DefinitionAttributes
-    = DefinitionAttributes
-      { -- none needed
-      }
-    deriving (Eq, Show)
-
-data ModuleAttributes
-    = ModuleAttributes
-      { -- none needed
-      }
-    deriving (Eq, Show)
-
-data AxiomAttributes
-    = AxiomAttributes
-      { location :: Location
-      , priority :: Word8 -- priorities are <= 200
-      , label :: Label
-      }
-    deriving (Eq, Show)
-
-type Label = Text
-
-data Location
-    = Location
-      { file :: FilePath
-      , positon :: Position
-      }
-    deriving (Eq, Ord, Show)
-
-data Position
-    = Position
-      { line :: Int
-      , column :: Int
-      }
-    deriving (Eq, Ord, Show)
-
-data SymbolAttributes
-    = SymbolAttributes
-      { isFunction :: Bool
-      , isTotal :: Bool
-      , isFree :: Bool  -- ??? replace by all things implying "non-free"
-      , isConstructor :: Bool
-      }
-    deriving (Eq, Show)
-
-data SortAttributes
-    = SortAttributes
-      { -- none needed
       }
     deriving (Eq, Show)

@@ -15,12 +15,15 @@ module Kore.Definition.Attributes (
 ) where
 
 import Data.Kind
+import Data.Maybe (fromMaybe)
 import Data.Word
 import Data.Text (Text)
 import Data.Text qualified as Text
 
 import Kore.Syntax.ParsedKore.Base
-import Kore.Definition.Base
+import Kore.Definition.Attributes.Base
+
+-- TODO maybe write a proper applicative parsing framework for these attributes (later)
 
 -- | A class describing all attributes we want to extract from parsed
 -- entities
@@ -44,29 +47,61 @@ instance HasAttributes ParsedAxiom where
 
     extract attribs =
         AxiomAttributes
-             (extractAttribute axiomLocation attribs)
-             (extractAttributeOrDefault 50 axiomPriority attribs)
-             (extractAttributeOrDefault "" axiomLabel attribs)
+             location
+             (attribs .:? "priority" $ 50)
+             undefined -- (attribs .:? "label" $ Nothing)
+             (attribs .! "simplification")
       where
-        axiomLocation = "name of location attribute"
-        axiomPriority = "priority"
-        axiomLabel = "label"
+        location = Location (attribs .: sourceName) (attribs .: locationName)
+        sourceName = "org'Stop'kframework'Stop'attributes'Stop'Source"
+        locationName = "org'Stop'kframework'Stop'attributes'Stop'Location"
 
+instance HasAttributes ParsedSymbol where
+    type Attributes ParsedSymbol = SymbolAttributes
+
+    extract attribs =
+        SymbolAttributes
+        { isFunction = extractFlag "function" attribs
+        , isTotal = extractFlag "functional" attribs || extractFlag "total"  attribs
+        , isConstructor = extractFlag "constructor" attribs
+        }
 
 ----------------------------------------
 
 extractAttribute :: ReadT a => Text -> ParsedAttributes -> a
-extractAttribute name attribs = undefined
+extractAttribute name
+    = extractAttributeOrDefault (error $ show name <> " not found in attributes") name
+
+(.:) :: ReadT a => ParsedAttributes -> Text -> a
+(.:) = flip extractAttribute
 
 extractAttributeOrDefault :: ReadT a => a -> Text -> ParsedAttributes -> a
-extractAttributeOrDefault def name attribs = undefined
+extractAttributeOrDefault def name attribs
+    = maybe def (either error id . readT) $ getAttribute name attribs
+
+(.:?) :: ReadT a => ParsedAttributes -> Text -> a -> a
+attribs .:? name =
+    flip fromMaybe (fmap (either error id . readT) $ getAttribute name attribs)
+
+extractFlag :: Text -> ParsedAttributes -> Bool
+extractFlag = extractAttributeOrDefault False
+
+(.!) :: ParsedAttributes -> Text -> Bool
+(.!) = flip extractFlag
 
 class ReadT a where
-    parseValue :: Text -> a
-    default parseValue :: Read a => Text -> a
-    parseValue = read . Text.unpack
+    readT :: Maybe Text -> Either String a
+    default readT :: Read a => Maybe Text -> Either String a
+    readT = maybe (Left "empty") (Right . read . Text.unpack)
 
 instance ReadT Word8
-instance ReadT Location where
-    parseValue = undefined
-instance ReadT Label
+
+instance ReadT Bool
+
+instance ReadT Text where
+    readT = maybe (Left "empty") Right
+
+instance ReadT Position where
+    readT = undefined
+
+instance ReadT FilePath

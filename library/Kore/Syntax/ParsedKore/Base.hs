@@ -77,3 +77,6 @@ data ParsedAxiom = ParsedAxiom
 type ParsedAttributes = [(AttributeName, AttributeValue)]
 type AttributeName = Json.Id
 type AttributeValue = Maybe Text
+
+getAttribute :: Text -> ParsedAttributes -> Maybe AttributeValue
+getAttribute = lookup . Json.Id
