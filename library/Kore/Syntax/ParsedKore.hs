@@ -66,7 +66,6 @@ the additional types.
 encodeJsonKoreDefinition :: ParsedDefinition -> ByteString
 encodeJsonKoreDefinition = Json.encodePretty' KoreJson.prettyJsonOpts
 
-
 -- internalising parsed data
 
 -- validates the parsed data and extracts everything we need internally

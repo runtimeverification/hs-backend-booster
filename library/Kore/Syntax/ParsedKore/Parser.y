@@ -320,8 +320,8 @@ attributeFromPattern KJApp {name, sorts = [], args = [KJString{value}]}
 attributeFromPattern badPat
     = error $ "Unexpected attribute shape: " <> show badPat
 
-{- | Expand a \left-assoc or \right-assoc directive into a ParsedPattern. First
-argument is True for \left-assoc and False for \right-assoc.
+{- | Expand a \\left-assoc or \\right-assoc directive into a ParsedPattern. First
+argument is True for \\left-assoc and False for \\right-assoc.
 -}
 mkAssoc :: Bool -> Token -> [Sort] -> [KorePattern] -> KorePattern
 mkAssoc True id sorts ps = foldl1' (mkApply id sorts) ps
