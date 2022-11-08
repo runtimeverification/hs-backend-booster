@@ -9,7 +9,7 @@ Parsing attributes from @ParsedAttributes@ to different internal
 types. The required attribute names and parsers for the expected
 values are hard-wired.
 -}
-module Kore.Definition.Attributes (
+module Kore.Definition.Attributes.Reader (
     HasAttributes (..),
 ) where
 
