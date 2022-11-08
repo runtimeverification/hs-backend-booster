@@ -64,6 +64,7 @@ library:
   - exceptions
   - extra
   - filepath
+  - gitrev
   - json-rpc
   - monad-logger
   - mtl
@@ -71,6 +72,7 @@ library:
   - prettyprinter
   - stm
   - stm-conduit
+  - template-haskell
   - text
   - unliftio
   source-dirs: library

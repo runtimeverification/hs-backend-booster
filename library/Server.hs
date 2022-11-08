@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -6,19 +8,23 @@ module Server (main) where
 
 import Data.Text (Text)
 import Kore.JsonRpc (TODOInternalizedModule (..), runServer)
-import Options.Applicative (InfoMod, Parser, argument, auto, execParser, fullDesc, header, help, info, long, metavar, option, short, str, switch)
+import Kore.VersionInfo (VersionInfo (..), versionInfo)
+import Options.Applicative (InfoMod, Parser, argument, auto, execParser, fullDesc, header, help, helper, info, infoOption, long, metavar, option, short, str, (<**>))
 
 main :: IO ()
 main = do
-    options <- execParser (info clOptionsParser parserInfoModifiers)
-    let CLOptions{port} = options
-    runServer port TODOInternalizedModule
-    return ()
+    options <- execParser clParser
+    let CLOptions{definitionFile, mainModuleName, port} = options
+    internalModule <- getInternalModuleTODO mainModuleName definitionFile
+    runServer port internalModule
+  where
+    clParser =
+        info
+            (clOptionsParser <**> versionInfoParser <**> helper)
+            parserInfoModifiers
 
 data CLOptions = CLOptions
-    { askVersion :: !Bool
-    , askHelp :: !Bool
-    , definitionFile :: !FilePath
+    { definitionFile :: !FilePath
     , mainModuleName :: !Text
     , port :: !Int
     }
@@ -26,22 +32,21 @@ data CLOptions = CLOptions
 parserInfoModifiers :: InfoMod options
 parserInfoModifiers =
     fullDesc
-        <> header "kore-rpc - a JSON RPC server for symbolically executing Kore definitions"
+        <> header "Haskell Backend Booster - a JSON RPC server for quick symbolic execution of Kore definitions"
+
+versionInfoParser :: Parser (a -> a)
+versionInfoParser =
+    infoOption
+        versionInfoStr
+        ( short 'v'
+            <> long "version"
+            <> help "Print version info."
+        )
 
 clOptionsParser :: Parser CLOptions
 clOptionsParser =
     CLOptions
-        <$> switch
-            ( long "version"
-                <> short 'v'
-                <> help "Print version info."
-            )
-        <*> switch
-            ( long "help"
-                <> short 'h'
-                <> help "Print help info."
-            )
-        <*> argument
+        <$> argument
             str
             ( metavar "DEFINITION_FILE"
                 <> help "Kore definition file to verify and use for execution"
@@ -58,3 +63,17 @@ clOptionsParser =
                 <> long "server-port"
                 <> help "Port for the RPC server to bind to"
             )
+
+versionInfoStr :: String
+versionInfoStr =
+    unlines
+        [ "hs-backend-booster version:"
+        , "  revision:\t" <> gitHash <> if gitDirty then " (dirty)" else ""
+        , "  branch:\t" <> maybe "<unknown>" id gitBranch
+        , "  last commit:\t" <> gitCommitDate
+        ]
+  where
+    VersionInfo{gitHash, gitDirty, gitBranch, gitCommitDate} = $versionInfo
+
+getInternalModuleTODO :: Text -> FilePath -> IO TODOInternalizedModule
+getInternalModuleTODO _ _ = return TODOInternalizedModule
