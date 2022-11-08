@@ -297,7 +297,7 @@ data ParsedSentence
 mkModule :: Json.Id -> ParsedAttributes -> [ParsedSentence] -> ParsedModule
 mkModule name attributes sentences
 --     = ParsedModule {name, imports, sorts, symbols, aliases, axioms, claims, attributes}
-    = ParsedModule {name, sorts, symbols, axioms, attributes}
+    = ParsedModule {name, imports, sorts, symbols, axioms, attributes}
   where
     (imports, sorts, symbols, axioms) = foldl' collect ([], [], [], []) sentences
     -- intentionally reversing the list
