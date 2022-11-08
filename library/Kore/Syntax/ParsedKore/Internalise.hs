@@ -95,8 +95,8 @@ addModule
     m@ParsedModule
         { name = Id n
         , sorts = parsedSorts
-        , symbols = parsedSymbols
-        , axioms = parsedAxioms
+        , symbols = _parsedSymbols
+        , axioms = _parsedAxioms
         }
     KoreDefinition
         { attributes
