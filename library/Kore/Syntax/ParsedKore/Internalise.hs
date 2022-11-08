@@ -67,14 +67,20 @@ descendFrom m = do
             let mbModule = Map.lookup m moduleMap
             theModule <- maybe (lift . throwE $ NoSuchModule m) pure mbModule
 
-            -- traverse imports recursively in pre-order before dealing
-            -- with the current module
+            -- traverse imports recursively in pre-order before
+            -- dealing with the current module.
+            --
+            -- NB that this is not exactly the imported context,
+            -- though: in recursive calls when handling an imported
+            -- module, other modules may be in the current definition
+            -- which are not actually imported in that submodule
             mapM_ (descendFrom . fromJsonId . fst) $ imports theModule
 
             -- refresh current definition
             def <- gets definition
 
-            -- validate and add new module in context of the existing definition
+            -- validate and add new module in context of the existing
+            -- definition
             newDef <- addModule theModule def
             modify $ \s -> s{definition = newDef}
 
