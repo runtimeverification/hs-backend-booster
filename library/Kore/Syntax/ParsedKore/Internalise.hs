@@ -54,6 +54,10 @@ traverseModules modules start =
     moduleName :: ParsedModule -> Text
     moduleName ParsedModule{name = Id n} = n
 
+{- | Traverses the import graph bottom up, ending in the given named
+   module. All entities (sorts, symbols, axioms) that are in scope in
+   that module are added to the definition.
+-}
 descendFrom :: Text -> StateT DefinitionState (Except DefinitionError) ()
 descendFrom m = do
     State{moduleMap, definition = currentDef} <- get
@@ -63,31 +67,32 @@ descendFrom m = do
             let mbModule = Map.lookup m moduleMap
             theModule <- maybe (lift . throwE $ NoSuchModule m) pure mbModule
 
-            -- traverse imports recursively before dealing with the current module
+            -- traverse imports recursively in pre-order before dealing
+            -- with the current module
             mapM_ (descendFrom . fromJsonId . fst) $ imports theModule
 
             -- refresh current definition
             def <- gets definition
 
-            -- validate  new module in context of the existing definition
-            lift $ validate theModule def
+            -- validate and add new module in context of the existing definition
+            newDef <- addModule theModule def
+            modify $ \s -> s{definition = newDef}
 
-            -- add module to the current definition
-            modify $ \s -> s{definition = addModule theModule (definition s)}
-  where
-    fromJsonId (Id n) = n
+fromJsonId :: Id -> Text
+fromJsonId (Id n) = n
 
-validate :: ParsedModule -> KoreDefinition -> Except DefinitionError ()
-validate
-    ParsedModule{}
-    KoreDefinition{} =
-        do
-            -- currently no validations are performed
-            pure ()
-
-addModule :: ParsedModule -> KoreDefinition -> KoreDefinition
+-- | currently no validations are performed
+addModule ::
+    ParsedModule ->
+    KoreDefinition ->
+    StateT DefinitionState (Except DefinitionError) KoreDefinition
 addModule
-    m@ParsedModule{name = Id n, sorts, symbols, axioms}
+    m@ParsedModule
+        { name = Id n
+        , sorts = parsedSorts
+        , symbols = parsedSymbols
+        , axioms = parsedAxioms
+        }
     KoreDefinition
         { attributes
         , modules = currentModules
@@ -95,15 +100,39 @@ addModule
         , symbols = currentSymbols
         , axioms = currentAxioms
         } =
-        KoreDefinition
-            { attributes
-            , modules = Map.insert n (extract m) currentModules
-            , sorts = currentSorts -- FIXME
-            , symbols = currentSymbols -- FIXME
-            , axioms = currentAxioms -- FIXME
-            }
+        do
+            --
+            when (n `Map.member` currentModules) $
+                error "internal error while loading: traversing module twice"
+            let modules = Map.insert n (extract m) currentModules
+
+            -- ensure sorts are unique and only refer to known other sorts
+            -- TODO, will need sort attributes to determine sub-sorts
+            let newSorts =
+                    Map.fromList
+                        [ (fromJsonId sortName, sort)
+                        | sort@ParsedSort{name = sortName} <- parsedSorts
+                        ]
+                nameCollisions :: [ParsedSort]
+                nameCollisions =
+                    Map.elems $ Map.intersection newSorts currentSorts
+            unless (null nameCollisions) $
+                lift . throwE $
+                    DuplicateSorts nameCollisions
+            let sorts = Map.map extract newSorts <> currentSorts
+
+            pure
+                KoreDefinition
+                    { attributes
+                    , modules
+                    , sorts
+                    , symbols = currentSymbols -- FIXME
+                    , axioms = currentAxioms -- FIXME
+                    }
+      where
 
 ----------------------------------------
 data DefinitionError
     = GeneralError Text
     | NoSuchModule Text
+    | DuplicateSorts [ParsedSort]

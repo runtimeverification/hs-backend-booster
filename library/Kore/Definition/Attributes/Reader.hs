@@ -71,6 +71,11 @@ instance HasAttributes ParsedSymbol where
             , isConstructor = attributes .: "constructor"
             }
 
+instance HasAttributes ParsedSort where
+    type Attributes ParsedSort = SortAttributes
+
+    extract _ = SortAttributes
+
 ----------------------------------------
 
 extractAttribute :: ReadT a => Text -> ParsedAttributes -> a
