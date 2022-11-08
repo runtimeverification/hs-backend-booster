@@ -19,6 +19,9 @@ import Data.Maybe (fromMaybe)
 import Data.Word
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Text.Read (readEither)
+-- import Text.Regex.Base
+import Text.Regex.PCRE
 
 import Kore.Syntax.ParsedKore.Base
 import Kore.Definition.Attributes.Base
@@ -48,22 +51,26 @@ instance HasAttributes ParsedAxiom where
     extract attribs =
         AxiomAttributes
              location
-             (attribs .:? "priority" $ 50)
-             undefined -- (attribs .:? "label" $ Nothing)
+             (fromMaybe 50 $ attribs .:? "priority")
+             (attribs .:? "label")
              (attribs .! "simplification")
       where
         location = Location (attribs .: sourceName) (attribs .: locationName)
-        sourceName = "org'Stop'kframework'Stop'attributes'Stop'Source"
-        locationName = "org'Stop'kframework'Stop'attributes'Stop'Location"
+
+sourceName
+    , locationName
+        :: Text
+sourceName = "org'Stop'kframework'Stop'attributes'Stop'Source"
+locationName = "org'Stop'kframework'Stop'attributes'Stop'Location"
 
 instance HasAttributes ParsedSymbol where
     type Attributes ParsedSymbol = SymbolAttributes
 
     extract attribs =
         SymbolAttributes
-        { isFunction = extractFlag "function" attribs
-        , isTotal = extractFlag "functional" attribs || extractFlag "total"  attribs
-        , isConstructor = extractFlag "constructor" attribs
+        { isFunction = attribs .: "function"
+        , isTotal = attribs .: "functional" || attribs .: "total"
+        , isConstructor = attribs .: "constructor"
         }
 
 ----------------------------------------
@@ -79,9 +86,8 @@ extractAttributeOrDefault :: ReadT a => a -> Text -> ParsedAttributes -> a
 extractAttributeOrDefault def name attribs
     = maybe def (either error id . readT) $ getAttribute name attribs
 
-(.:?) :: ReadT a => ParsedAttributes -> Text -> a -> a
-attribs .:? name =
-    flip fromMaybe (fmap (either error id . readT) $ getAttribute name attribs)
+(.:?) :: ReadT a => ParsedAttributes -> Text -> Maybe a
+attribs .:? name = fmap (either error id . readT) $ getAttribute name attribs
 
 extractFlag :: Text -> ParsedAttributes -> Bool
 extractFlag = extractAttributeOrDefault False
@@ -89,19 +95,43 @@ extractFlag = extractAttributeOrDefault False
 (.!) :: ParsedAttributes -> Text -> Bool
 (.!) = flip extractFlag
 
+----------------------------------------
+-- | Type class providing safe readers for different types
 class ReadT a where
     readT :: Maybe Text -> Either String a
     default readT :: Read a => Maybe Text -> Either String a
-    readT = maybe (Left "empty") (Right . read . Text.unpack)
+    readT = maybe (Left "empty") (readEither . Text.unpack)
 
 instance ReadT Word8
 
-instance ReadT Bool
+-- | Bool instance: presence of the attribute implies 'True'
+instance ReadT Bool where
+    readT = maybe (Right True) (readEither . Text.unpack)
 
 instance ReadT Text where
     readT = maybe (Left "empty") Right
 
 instance ReadT Position where
-    readT = undefined
+    readT = maybe (Left "empty position") readLocationType
+      where
+        readLocationType :: Text -> Either String Position
+        readLocationType input =
+            case Text.unpack input =~ locRegex :: (String, String, String, [String]) of
+                ("", _match, "", [lineStr, columnStr, _, _]) ->
+                    Right $ Position (read lineStr) (read columnStr)
+                (unmatched, "", "", []) ->
+                    Left $ unmatched <> ": garbled location data"
+                other ->
+                    error $ "bad regex match result: " <> show other
+
+        natRegex, locRegex :: String
+        natRegex = "(0|[1-9][0-9]*)"
+        locRegex = mconcat
+            [ "^Location\\("
+            , " *", natRegex, ","
+            , " *", natRegex, ","
+            , " *", natRegex, ","
+            , " *", natRegex, "\\)$"
+            ]
 
 instance ReadT FilePath

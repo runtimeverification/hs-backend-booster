@@ -67,6 +67,8 @@ library:
   - json-rpc
   - mtl
   - prettyprinter
+  - regex-base
+  - regex-pcre-builtin
   - stm
   - text
   source-dirs: library
