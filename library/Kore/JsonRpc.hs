@@ -49,7 +49,7 @@ respond _ =
     \case
         Execute _ -> do
             liftIO $ putStrLn "Testing JSON-RPC server."
-            pure $ Right $ dummyExecuteResult
+            pure $ Right dummyExecuteResult
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left $ ErrorObj "Cancel request unsupported in batch mode" (-32001) Null
 

@@ -6,6 +6,7 @@ License     : BSD-3-Clause
 -}
 module Server (main) where
 
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Kore.JsonRpc (TODOInternalizedModule (..), runServer)
 import Kore.VersionInfo (VersionInfo (..), versionInfo)
@@ -69,7 +70,7 @@ versionInfoStr =
     unlines
         [ "hs-backend-booster version:"
         , "  revision:\t" <> gitHash <> if gitDirty then " (dirty)" else ""
-        , "  branch:\t" <> maybe "<unknown>" id gitBranch
+        , "  branch:\t" <> fromMaybe "<unknown>" gitBranch
         , "  last commit:\t" <> gitCommitDate
         ]
   where
