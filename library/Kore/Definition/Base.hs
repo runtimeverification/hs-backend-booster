@@ -11,7 +11,6 @@ and in groups of equal priority (descending order).
 
 Symbols (and constructors) are stored in a lookup table by their name.
 -}
-
 module Kore.Definition.Base (
     module Kore.Definition.Base,
 ) where
@@ -50,22 +49,20 @@ fields, depending on the sentence type.
 A consistent import hierarchy and scoping is not guaranteed within the
 data type, but rather by its construction from a @ParsedDefinition@.
 -}
-data KoreDefinition
-    = KoreDefinition
-      { attributes :: DefinitionAttributes
-      , modules :: Map Text ModuleAttributes
-      , sorts :: Map SortName SortAttributes  -- TODO store a lattice of subsorts?
-      , symbols :: Map SymbolName SymbolAttributes -- constructors and functions
-      -- , aliases
-      , axioms :: Map TermIndex [Set Axiom] -- grouped by decreasing priority
-      -- , claims
-      }
+data KoreDefinition = KoreDefinition
+    { attributes :: DefinitionAttributes
+    , modules :: Map Text ModuleAttributes
+    , sorts :: Map SortName SortAttributes -- TODO store a lattice of subsorts?
+    , symbols :: Map SymbolName SymbolAttributes -- constructors and functions
+    -- , aliases
+    , axioms :: Map TermIndex [Set Axiom] -- grouped by decreasing priority
+    -- , claims
+    }
     deriving (Eq, Show)
 
-data Axiom
-    = Axiom
-      { lhs :: Pattern
-      , rhs :: Pattern
-      , attributes :: AxiomAttributes
-      }
+data Axiom = Axiom
+    { lhs :: Pattern
+    , rhs :: Pattern
+    , attributes :: AxiomAttributes
+    }
     deriving (Eq, Show)
