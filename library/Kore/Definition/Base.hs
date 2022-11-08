@@ -77,9 +77,7 @@ data KoreDefinition = KoreDefinition
     , modules :: Map Text ModuleAttributes
     , sorts :: Map SortName SortAttributes -- TODO store a lattice of subsorts?
     , symbols :: Map SymbolName SymbolAttributes -- constructors and functions
-    -- , aliases
     , axioms :: Map TermIndex [Set Axiom] -- grouped by decreasing priority
-    -- , claims
     }
     deriving (Eq, Show)
 
@@ -93,9 +91,7 @@ emptyKoreDefinition attributes =
         , modules = Map.empty
         , sorts = Map.empty
         , symbols = Map.empty
-        , -- , aliases = ???
-          axioms = Map.empty
-          -- , claims = ???
+        , axioms = Map.empty
         }
 
 data Axiom = Axiom

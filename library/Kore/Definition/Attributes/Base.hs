@@ -50,7 +50,7 @@ type Label = Text
 
 data Location = Location
     { file :: FilePath
-    , positon :: Position
+    , position :: Position
     }
     deriving (Eq, Ord, Show)
 
