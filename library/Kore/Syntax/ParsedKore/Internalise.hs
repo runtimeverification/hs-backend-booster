@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -135,7 +134,6 @@ addModule
                     , symbols = currentSymbols -- FIXME
                     , axioms = currentAxioms -- FIXME
                     }
-      where
 
 ----------------------------------------
 data DefinitionError
