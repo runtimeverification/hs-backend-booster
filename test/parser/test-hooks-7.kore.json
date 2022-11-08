@@ -40,7 +40,10 @@
       "attributes": [],
       "axioms": [],
       "imports": [
-        "S"
+        [
+          "S",
+          []
+        ]
       ],
       "symbols": [
         {

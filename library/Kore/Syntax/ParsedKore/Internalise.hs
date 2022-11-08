@@ -64,7 +64,7 @@ descendFrom m = do
             theModule <- maybe (lift . throwE $ NoSuchModule m) pure mbModule
 
             -- traverse imports recursively before dealing with the current module
-            mapM_ (descendFrom . fromJsonId) $ imports theModule
+            mapM_ (descendFrom . fromJsonId . fst) $ imports theModule
 
             -- refresh current definition
             def <- gets definition

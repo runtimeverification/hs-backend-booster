@@ -15,7 +15,10 @@
       "attributes": [],
       "axioms": [],
       "imports": [
-        "TEST-1"
+        [
+          "TEST-1",
+          []
+        ]
       ],
       "symbols": []
     }

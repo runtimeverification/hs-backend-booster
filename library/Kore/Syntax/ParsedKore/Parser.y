@@ -127,7 +127,7 @@ Sentences :: {[ParsedSentence]}
 
 Sentence :: {ParsedSentence}
 	  : import ident Attributes
-            { SentenceImport (mkId $2) {- $3 -} }
+            { SentenceImport (mkId $2, $3) }
           | sort Id SortVariables Attributes
             { SentenceSort ParsedSort{name=$2, sortVars=$3, isHooked=False, attributes=$4} }
           | hookedSort Id SortVariables Attributes
@@ -286,7 +286,7 @@ PatternList :: { [KorePattern] }
 -- | helpers for parsing module components
 data ParsedSentence
     =
-      SentenceImport Json.Id -- ParsedAttributes
+      SentenceImport (Json.Id, ParsedAttributes)
     | SentenceSort ParsedSort
     | SentenceSymbol ParsedSymbol
     | SentenceAlias -- ParsedAlias
@@ -302,9 +302,9 @@ mkModule name attributes sentences
     (imports, sorts, symbols, axioms) = foldl' collect ([], [], [], []) sentences
     -- intentionally reversing the list
     collect ::
-        ([Json.Id], [ParsedSort], [ParsedSymbol], [ParsedAxiom]) ->
+        ([(Json.Id, ParsedAttributes)], [ParsedSort], [ParsedSymbol], [ParsedAxiom]) ->
         ParsedSentence ->
-        ([Json.Id], [ParsedSort], [ParsedSymbol], [ParsedAxiom])
+        ([(Json.Id, ParsedAttributes)], [ParsedSort], [ParsedSymbol], [ParsedAxiom])
     collect acc@(!imports, !sorts, !symbols, !axioms) = \case
         SentenceImport id -> (id:imports, sorts, symbols, axioms)
         SentenceSort s -> (imports, s:sorts, symbols, axioms)

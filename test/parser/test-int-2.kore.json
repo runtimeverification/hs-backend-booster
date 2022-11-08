@@ -56,8 +56,14 @@
       "attributes": [],
       "axioms": [],
       "imports": [
-        "K",
-        "BOOL"
+        [
+          "K",
+          []
+        ],
+        [
+          "BOOL",
+          []
+        ]
       ],
       "symbols": [
         {
