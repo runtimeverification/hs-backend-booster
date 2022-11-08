@@ -48,7 +48,7 @@ instance HasAttributes ParsedModule where
 instance HasAttributes ParsedAxiom where
     type Attributes ParsedAxiom = AxiomAttributes
 
-    extract ParsedAxiom {attributes} =
+    extract ParsedAxiom{attributes} =
         AxiomAttributes
             (Location (attributes .: sourceName) (attributes .: locationName))
             (fromMaybe 50 $ attributes .:? "priority")

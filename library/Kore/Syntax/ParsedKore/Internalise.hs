@@ -8,10 +8,9 @@ License     : BSD-3-Clause
 Converts a @ParsedDefinition@ to a @KoreDefinition@, extracting all
 data needed internally from the parsed entities.
 -}
-
 module Kore.Syntax.ParsedKore.Internalise (
     buildDefinition,
-    DefinitionError(..),
+    DefinitionError (..),
 ) where
 
 import Control.Monad.State
@@ -20,11 +19,10 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 
-import Kore.Definition.Base as Def
 import Kore.Definition.Attributes.Reader
+import Kore.Definition.Base as Def
+import Kore.Syntax.Json.Base (Id (..))
 import Kore.Syntax.ParsedKore.Base
-import Kore.Syntax.Json.Base (Id(..))
-
 
 {- | Traverses all modules of a parsed definition, to build an
 internal @KoreDefinition@.
@@ -32,43 +30,78 @@ internal @KoreDefinition@.
 Only very few validations are performed on the parsed data.
 -}
 buildDefinition :: ParsedDefinition -> Except DefinitionError KoreDefinition
-buildDefinition def@ParsedDefinition{modules}
-    = traverseModules modules $ emptyKoreDefinition (extract def)
+buildDefinition def@ParsedDefinition{modules} =
+    traverseModules modules $ emptyKoreDefinition (extract def)
 
--- | The state while traversing the module import graph. This is
--- internal only, but the definition is the result of the traversal.
-data DefinitionState
-    = State
-      { moduleMap :: Map Text ParsedModule
-      , definition :: KoreDefinition
-      }
+{- | The state while traversing the module import graph. This is
+ internal only, but the definition is the result of the traversal.
+-}
+data DefinitionState = State
+    { moduleMap :: Map Text ParsedModule
+    , definition :: KoreDefinition
+    }
 
 traverseModules ::
     [ParsedModule] ->
     KoreDefinition ->
     Except DefinitionError KoreDefinition
-traverseModules modules start
-    = definition <$>
-      execStateT (descendFrom mainModule) State { moduleMap, definition = start }
+traverseModules modules start =
+    definition
+        <$> execStateT (descendFrom mainModule) State{moduleMap, definition = start}
   where
-    moduleMap = Map.fromList [(moduleName m, m) | m <- modules ]
-    mainModule = moduleName $ last modules  -- just by convention
-
+    moduleMap = Map.fromList [(moduleName m, m) | m <- modules]
+    mainModule = moduleName $ last modules -- just by convention
     moduleName :: ParsedModule -> Text
     moduleName ParsedModule{name = Id n} = n
 
 descendFrom :: Text -> StateT DefinitionState (Except DefinitionError) ()
 descendFrom m = do
-    State {moduleMap, definition} <- get
-    case Map.lookup m (Def.modules definition) of
+    State{moduleMap, definition = currentDef} <- get
+    case Map.lookup m (Def.modules currentDef) of
         Just _ -> pure () -- already internalised (present in the definition)
         Nothing -> do
             let mbModule = Map.lookup m moduleMap
-            theModule <- maybe (lift . throwE $ NoSuchModule m) pure  mbModule
+            theModule <- maybe (lift . throwE $ NoSuchModule m) pure mbModule
 
             -- traverse imports recursively before dealing with the current module
+            mapM_ (descendFrom . fromJsonId) $ imports theModule
 
-            lift $ throwE (GeneralError "continue here")
+            -- refresh current definition
+            def <- gets definition
+
+            -- validate  new module in context of the existing definition
+            lift $ validate theModule def
+
+            -- add module to the current definition
+            modify $ \s -> s{definition = addModule theModule (definition s)}
+  where
+    fromJsonId (Id n) = n
+
+validate :: ParsedModule -> KoreDefinition -> Except DefinitionError ()
+validate
+    ParsedModule{}
+    KoreDefinition{} =
+        do
+            -- currently no validations are performed
+            pure ()
+
+addModule :: ParsedModule -> KoreDefinition -> KoreDefinition
+addModule
+    m@ParsedModule{name = Id n, sorts, symbols, axioms}
+    KoreDefinition
+        { attributes
+        , modules = currentModules
+        , sorts = currentSorts
+        , symbols = currentSymbols
+        , axioms = currentAxioms
+        } =
+        KoreDefinition
+            { attributes
+            , modules = Map.insert n (extract m) currentModules
+            , sorts = currentSorts -- FIXME
+            , symbols = currentSymbols -- FIXME
+            , axioms = currentAxioms -- FIXME
+            }
 
 ----------------------------------------
 data DefinitionError

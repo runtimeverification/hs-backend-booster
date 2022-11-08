@@ -8,6 +8,7 @@ module Kore.Syntax.ParsedKore (
     parseKorePattern,
     decodeJsonKoreDefinition,
     encodeJsonKoreDefinition,
+
     -- * Validating and converting
     internalise,
 ) where

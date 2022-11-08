@@ -83,19 +83,20 @@ data KoreDefinition = KoreDefinition
     }
     deriving (Eq, Show)
 
--- | The starting point for building up the definition. Could be
--- 'Monoid' instance if the attributes had a Default.
+{- | The starting point for building up the definition. Could be
+ 'Monoid' instance if the attributes had a Default.
+-}
 emptyKoreDefinition :: DefinitionAttributes -> KoreDefinition
-emptyKoreDefinition attributes
-    = KoreDefinition
-      { attributes
-      , modules = Map.empty
-      , sorts = Map.empty
-      , symbols = Map.empty
-      -- , aliases = ???
-      , axioms = Map.empty
-      -- , claims = ???
-      }
+emptyKoreDefinition attributes =
+    KoreDefinition
+        { attributes
+        , modules = Map.empty
+        , sorts = Map.empty
+        , symbols = Map.empty
+        , -- , aliases = ???
+          axioms = Map.empty
+          -- , claims = ???
+        }
 
 data Axiom = Axiom
     { lhs :: Pattern
