@@ -15,7 +15,7 @@ module Kore.Definition.Base (
     module Kore.Definition.Base,
 ) where
 
-import Data.Map.Strict (Map)
+import Data.Map.Strict as Map (Map, empty)
 import Data.Set (Set)
 import Data.Text (Text)
 
@@ -82,6 +82,20 @@ data KoreDefinition = KoreDefinition
     -- , claims
     }
     deriving (Eq, Show)
+
+-- | The starting point for building up the definition. Could be
+-- 'Monoid' instance if the attributes had a Default.
+emptyKoreDefinition :: DefinitionAttributes -> KoreDefinition
+emptyKoreDefinition attributes
+    = KoreDefinition
+      { attributes
+      , modules = Map.empty
+      , sorts = Map.empty
+      , symbols = Map.empty
+      -- , aliases = ???
+      , axioms = Map.empty
+      -- , claims = ???
+      }
 
 data Axiom = Axiom
     { lhs :: Pattern

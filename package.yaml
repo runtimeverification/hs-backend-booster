@@ -71,6 +71,7 @@ library:
   - regex-pcre-builtin
   - stm
   - text
+  - transformers
   source-dirs: library
 
 executables:

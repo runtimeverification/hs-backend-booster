@@ -1,4 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 {- |
@@ -34,7 +33,7 @@ import Kore.Syntax.ParsedKore.Base
 class HasAttributes tipe where
     type Attributes tipe :: Type
 
-    extract :: ParsedAttributes -> Attributes tipe
+    extract :: tipe -> Attributes tipe
 
 instance HasAttributes ParsedDefinition where
     type Attributes ParsedDefinition = DefinitionAttributes
@@ -49,14 +48,12 @@ instance HasAttributes ParsedModule where
 instance HasAttributes ParsedAxiom where
     type Attributes ParsedAxiom = AxiomAttributes
 
-    extract attribs =
+    extract ParsedAxiom {attributes} =
         AxiomAttributes
-            location
-            (fromMaybe 50 $ attribs .:? "priority")
-            (attribs .:? "label")
-            (attribs .! "simplification")
-      where
-        location = Location (attribs .: sourceName) (attribs .: locationName)
+            (Location (attributes .: sourceName) (attributes .: locationName))
+            (fromMaybe 50 $ attributes .:? "priority")
+            (attributes .:? "label")
+            (attributes .! "simplification")
 
 sourceName
     , locationName ::
@@ -67,11 +64,11 @@ locationName = "org'Stop'kframework'Stop'attributes'Stop'Location"
 instance HasAttributes ParsedSymbol where
     type Attributes ParsedSymbol = SymbolAttributes
 
-    extract attribs =
+    extract ParsedSymbol{attributes} =
         SymbolAttributes
-            { isFunction = attribs .: "function"
-            , isTotal = attribs .: "functional" || attribs .: "total"
-            , isConstructor = attribs .: "constructor"
+            { isFunction = attributes .: "function"
+            , isTotal = attributes .: "functional" || attributes .: "total"
+            , isConstructor = attributes .: "constructor"
             }
 
 ----------------------------------------

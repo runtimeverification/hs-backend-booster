@@ -30,8 +30,8 @@ data ParsedDefinition = ParsedDefinition
 
 data ParsedModule = ParsedModule
     { name :: Json.Id
-    , -- , imports :: [(Json.Id, ParsedAttributes)]
-      sorts :: [ParsedSort]
+--     , imports :: [Json.Id]
+    , sorts :: [ParsedSort]
     , symbols :: [ParsedSymbol]
     , -- , aliases :: [ParsedAlias]
       axioms :: [ParsedAxiom]
