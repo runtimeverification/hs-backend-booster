@@ -33,12 +33,35 @@ variables.
 
 Also, non-free constructors won't get any index, any rules headed by
 those can be ignored.
+
+Rather than making the term indexing function partial, we introduce a
+unique bottom element @None@ to the index type (to make it a lattice).
+This can then handle @AndTerm@ by indexing both arguments and
+combining them.
+
+NB we should not derive an 'Ord' instance since it would not reflect
+the fact that different symbols (and likewise different constructors)
+are incompatible.
 -}
 data TermIndex
-    = Symbol SymbolName
-    | Anything
-    -- should we have  | Value Sort ??
-    deriving (Eq, Ord, Show)
+    = None -- bottom element
+    | Symbol SymbolName
+    | Anything -- top element
+    -- should we have  | Value Sort ?? (see Term type)
+    deriving (Eq, Show)
+
+-- | Combines two indexes (an "infimum" function on the index lattice)
+combine :: TermIndex -> TermIndex -> TermIndex
+combine None _ = None
+combine _ None = None
+combine x Anything = x
+combine Anything x = x
+combine s@(Symbol s1) (Symbol s2)
+    | s1 == s2 = s
+    | otherwise = None -- redundant
+combine _ _ = None -- incompatible indexes
+
+----------------------------------------
 
 {- | A Kore definition is constructed from a main module with its
    transitive imports.
