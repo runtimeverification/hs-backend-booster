@@ -58,7 +58,7 @@ combine x Anything = x
 combine Anything x = x
 combine s@(Symbol s1) (Symbol s2)
     | s1 == s2 = s
-    | otherwise = None -- redundant
+--     | otherwise = None -- redundant
 combine _ _ = None -- incompatible indexes
 
 ----------------------------------------
