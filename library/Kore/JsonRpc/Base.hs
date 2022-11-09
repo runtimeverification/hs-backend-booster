@@ -19,7 +19,7 @@ import Deriving.Aeson (
     OmitNothingFields,
  )
 import GHC.Generics (Generic)
-import Kore.Syntax.Json (KoreJson, dummyKoreJson)
+import Kore.Syntax.Json (KoreJson)
 import Network.JSONRPC (
     FromRequest (..),
  )
@@ -106,14 +106,6 @@ newtype SimplifyResult = SimplifyResult
         (ToJSON)
         via CustomJSON '[OmitNothingFields, FieldLabelModifier '[CamelToKebab]] SimplifyResult
 
-
-dummyExecuteState :: ExecuteState
-dummyExecuteState =
-    ExecuteState
-        { term = dummyKoreJson
-        , predicate = Nothing
-        }
-
 data HaltReason
     = Branching
     | Stuck
@@ -187,14 +179,3 @@ instance Pretty.Pretty (API 'Req) where
         Implies _ -> "implies"
         Simplify _ -> "simplify"
         Cancel -> "cancel"
-
-dummyExecuteResult :: API 'Res
-dummyExecuteResult =
-    Execute
-        ExecuteResult
-            { reason = Stuck
-            , depth = Depth 0
-            , state = dummyExecuteState
-            , nextStates = Nothing
-            , rule = Nothing
-            }

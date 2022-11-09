@@ -22,6 +22,7 @@ import Data.Aeson.Types (Value (..))
 import Data.Conduit.Network (serverSettings)
 import Data.Maybe (catMaybes)
 import Kore.JsonRpc.Base
+import Kore.Syntax.Json.Base (KorePattern (..), KoreJson (..), KORE (..), Version (..), Sort (..), Id (..))
 import Kore.Network.JsonRpc (jsonrpcTCPServer)
 import Network.JSONRPC (
     BatchRequest (BatchRequest, SingleRequest),
@@ -54,6 +55,33 @@ respond _ =
         Cancel -> pure $ Left $ ErrorObj "Cancel request unsupported in batch mode" (-32001) Null
         -- using "Method does not exist" error code
         _ -> pure $ Left $ ErrorObj "Not implemented" (-32601) Null
+  where
+    dummyExecuteState :: ExecuteState
+    dummyExecuteState =
+        ExecuteState
+            { term = dummyKoreJson
+            , predicate = Nothing
+            }
+
+    dummyExecuteResult :: API 'Res
+    dummyExecuteResult =
+        Execute
+            ExecuteResult
+                { reason = Stuck
+                , depth = Depth 0
+                , state = dummyExecuteState
+                , nextStates = Nothing
+                , rule = Nothing
+                }
+
+    dummyKoreJson :: KoreJson
+    dummyKoreJson =
+        KoreJson
+            { format = KORE
+            , version = KJ1
+            , term = KJTop (SortVar (Id "SV"))
+            }
+
 
 runServer :: Int -> TODOInternalizedModule -> IO ()
 runServer port internalizedModule =

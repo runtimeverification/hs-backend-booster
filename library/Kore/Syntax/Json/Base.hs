@@ -32,14 +32,6 @@ data KoreJson = KoreJson
     deriving stock (Eq, Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 
-dummyKoreJson :: KoreJson
-dummyKoreJson =
-    KoreJson
-        { format = KORE
-        , version = KJ1
-        , term = KJTop (SortVar (Id "SV"))
-        }
-
 data KORE
     = KORE
     deriving stock (Eq, Show)
