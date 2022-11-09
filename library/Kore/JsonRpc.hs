@@ -52,6 +52,8 @@ respond _ =
             pure $ Right dummyExecuteResult
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left $ ErrorObj "Cancel request unsupported in batch mode" (-32001) Null
+        -- using "Method does not exist" error code
+        _ -> pure $ Left $ ErrorObj "Not implemented" (-32601) Null
 
 runServer :: Int -> TODOInternalizedModule -> IO ()
 runServer port internalizedModule =
