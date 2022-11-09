@@ -25,11 +25,13 @@ default-extensions:
   DerivingVia
   DuplicateRecordFields
   FlexibleInstances
+  FunctionalDependencies
   GADTs
   GeneralizedNewtypeDeriving
   ImportQualifiedPost
   KindSignatures
   LambdaCase
+  MultiParamTypeClasses
   NamedFieldPuns
   OverloadedStrings
   ScopedTypeVariables
@@ -70,10 +72,13 @@ library:
   - mtl
   - optparse-applicative
   - prettyprinter
+  - regex-base
+  - regex-pcre-builtin
   - stm
   - stm-conduit
   - template-haskell
   - text
+  - transformers
   - unliftio
   source-dirs: library
 
