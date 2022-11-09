@@ -76,7 +76,7 @@ data SymbolAttributes = SymbolAttributes
     deriving (Eq, Show)
 
 data SortAttributes = SortAttributes
-    {
+    { argCount :: Int
     }
     -- none needed
 
