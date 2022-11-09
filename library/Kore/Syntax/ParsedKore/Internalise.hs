@@ -19,7 +19,6 @@ import Data.Function (on)
 import Data.List (groupBy, partition, sortOn)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 
@@ -28,6 +27,7 @@ import Kore.Definition.Attributes.Reader
 import Kore.Definition.Base as Def
 import Kore.Pattern.Base (SortName)
 import Kore.Syntax.Json.Base qualified as Json
+import Kore.Syntax.Json.Internalise
 import Kore.Syntax.ParsedKore.Base
 
 {- | Traverses all modules of a parsed definition, to build an
@@ -190,31 +190,9 @@ checkSymbolSorts sortMap ParsedSymbol{sortVars, argSorts, sort} =
 
     check :: Json.Sort -> Except DefinitionError ()
     check =
-        mapExcept (first DefinitionSortError)
+        void
+            . mapExcept (first DefinitionSortError)
             . checkSort knownVars sortMap
-
--- TODO move to term checking module
-checkSort ::
-    Set Text ->
-    Map SortName SortAttributes ->
-    Json.Sort ->
-    Except SortError ()
-checkSort knownVars sortMap = check'
-  where
-    check' :: Json.Sort -> Except SortError ()
-    check' var@Json.SortVar{name = Json.Id n} =
-        unless (n `Set.member` knownVars) $
-            throwE (UnknownSort var)
-    check' app@Json.SortApp{name = Json.Id n, args} =
-        do
-            maybe
-                (throwE $ UnknownSort app)
-                ( \SortAttributes{argCount} ->
-                    unless (length args == argCount) $
-                        throwE (WrongSortArgCount app argCount)
-                )
-                (Map.lookup n sortMap)
-            mapM_ check' args
 
 -- monomorphic name functions for different entities (avoiding field
 -- name ambiguity)
@@ -235,9 +213,4 @@ data DefinitionError
     | DuplicateSymbols [ParsedSymbol]
     | DuplicateNames [Text]
     | DefinitionSortError SortError
-    deriving stock (Eq, Show)
-
-data SortError
-    = UnknownSort Json.Sort
-    | WrongSortArgCount Json.Sort Int
     deriving stock (Eq, Show)
