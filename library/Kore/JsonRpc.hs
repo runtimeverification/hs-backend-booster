@@ -22,8 +22,8 @@ import Data.Aeson.Types (Value (..))
 import Data.Conduit.Network (serverSettings)
 import Data.Maybe (catMaybes)
 import Kore.JsonRpc.Base
-import Kore.Syntax.Json.Base (KorePattern (..), KoreJson (..), KORE (..), Version (..), Sort (..), Id (..))
 import Kore.Network.JsonRpc (jsonrpcTCPServer)
+import Kore.Syntax.Json.Base (Id (..), KORE (..), KoreJson (..), KorePattern (..), Sort (..), Version (..))
 import Network.JSONRPC (
     BatchRequest (BatchRequest, SingleRequest),
     BatchResponse (BatchResponse, SingleResponse),
@@ -81,7 +81,6 @@ respond _ =
             , version = KJ1
             , term = KJTop (SortVar (Id "SV"))
             }
-
 
 runServer :: Int -> TODOInternalizedModule -> IO ()
 runServer port internalizedModule =

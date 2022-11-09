@@ -78,7 +78,6 @@ instance FromRequest (API 'Req) where
     parseParams "cancel" = Just $ const $ return Cancel
     parseParams _ = Nothing
 
-
 data ExecuteState = ExecuteState
     { term :: KoreJson
     , predicate :: Maybe KoreJson
@@ -147,8 +146,8 @@ data APIMethods
 type family APIPayload (api :: APIMethods) (r :: ReqOrRes) where
     APIPayload 'ExecuteM 'Req = ExecuteRequest
     APIPayload 'ExecuteM 'Res = ExecuteResult
--- APIPayload 'StepM 'Req = StepRequest
--- APIPayload 'StepM 'Res = StepResult
+    -- APIPayload 'StepM 'Req = StepRequest
+    -- APIPayload 'StepM 'Res = StepResult
     APIPayload 'ImpliesM 'Req = ImpliesRequest
     APIPayload 'ImpliesM 'Res = ImpliesResult
     APIPayload 'SimplifyM 'Req = SimplifyRequest
