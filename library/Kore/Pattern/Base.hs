@@ -50,6 +50,11 @@ data Pattern = Pattern
     }
     deriving stock (Eq, Ord, Show)
 
+data TermOrPredicate
+    = ATerm Term
+    | APredicate Predicate
+    deriving stock (Eq, Ord, Show)
+
 type VarName = Text
 type SymbolName = Text
 type SortName = Text

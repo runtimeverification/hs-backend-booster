@@ -77,6 +77,7 @@ data KoreDefinition = KoreDefinition
     , modules :: Map Text ModuleAttributes
     , sorts :: Map SortName SortAttributes -- TODO store a lattice of subsorts?
     , symbols :: Map SymbolName (SymbolAttributes, SymbolSort) -- constructors and functions
+    , aliases :: Map AliasName Alias
     , axioms :: Map TermIndex [Set Axiom] -- grouped by decreasing priority
     }
     deriving (Eq, Show)
@@ -98,6 +99,7 @@ emptyKoreDefinition attributes =
         , modules = Map.empty
         , sorts = Map.empty
         , symbols = Map.empty
+        , aliases = Map.empty
         , axioms = Map.empty
         }
 
@@ -106,4 +108,14 @@ data Axiom = Axiom
     , rhs :: Pattern
     , attributes :: AxiomAttributes
     }
-    deriving (Eq, Show)
+    deriving stock (Eq, Show)
+
+type AliasName = Text
+
+data Alias = Alias
+    { name :: AliasName
+    , params :: [Sort]
+    , args :: [Variable]
+    , rhs :: TermOrPredicate
+    }
+    deriving stock (Eq, Show)

@@ -100,6 +100,7 @@ addModule
         { name = Json.Id n
         , sorts = parsedSorts
         , symbols = parsedSymbols
+        , aliases = parsedAliases
         , axioms = _parsedAxioms
         }
     KoreDefinition
@@ -107,6 +108,7 @@ addModule
         , modules = currentModules
         , sorts = currentSorts
         , symbols = currentSymbols
+        , aliases = currentAliases
         , axioms = currentAxioms
         } =
         do
@@ -150,6 +152,14 @@ addModule
                     pure (fromJsonId name, (extract s, info))
             newSymbols' <- mapM internaliseSymbol parsedSymbols
             let symbols = Map.fromList newSymbols' <> currentSymbols
+
+            let internaliseAlias ::
+                    ParsedAlias ->
+                    StateT s (Except DefinitionError) Alias
+                -- TODO: handle attributes
+                internaliseAlias ParsedAlias { name, sortVars, argSorts, args, rhs } = do 
+                    -- TODO(tomorrow): internalise sorts, symbols and patterns for aliases
+                    undefined
 
             pure
                 KoreDefinition
