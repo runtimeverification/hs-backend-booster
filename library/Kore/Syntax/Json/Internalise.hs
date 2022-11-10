@@ -43,14 +43,14 @@ internalisePattern KoreDefinition{sorts, symbols} p = do
     when (null terms) $ throwE $ NoTermFound p
 
     -- construct an AndTerm from all terms (checking sort consistency)
-    term <- andTerm =<< mapM internaliseTerm terms
+    term <- andTerm p =<< mapM internaliseTerm terms
     -- internalise all predicates
     constraints <- mapM internalisePredicate predicates
     pure Internal.Pattern{term, constraints}
   where
-    internaliseSort :: Syntax.Sort -> Except PatternError Internal.Sort
-    internaliseSort =
-        mapExcept (first PatternSortError) . checkSort mempty sorts
+    internaliseSort :: Syntax.KorePattern -> Syntax.Sort -> Except PatternError Internal.Sort
+    internaliseSort pat =
+        mapExcept (first $ PatternSortError pat) . checkSort mempty sorts
 
     -- Throws errors when a predicate is encountered. The 'And' case
     -- should be analysed before, this function produces an 'AndTerm'.
@@ -60,7 +60,7 @@ internalisePattern KoreDefinition{sorts, symbols} p = do
     internaliseTerm pat =
         case pat of
             Syntax.KJEVar{name, sort} -> do
-                variableSort <- internaliseSort sort
+                variableSort <- internaliseSort pat sort
                 let variableName = fromId name
                 pure $ Internal.Var Internal.Variable{variableSort, variableName}
             Syntax.KJSVar{} ->
@@ -72,20 +72,20 @@ internalisePattern KoreDefinition{sorts, symbols} p = do
                 SymbolAttributes{} <-
                     maybe (throwE $ UnknownSymbol name) pure $
                         Map.lookup (fromId name) symbols
-                internalArgSorts <- mapM internaliseSort argSorts
+                internalArgSorts <- mapM (internaliseSort pat) argSorts
                 -- TODO check that all argument sorts "agree".
                 -- Variables can stand for anything but need to be
                 -- consistent (a matching problem returning a
                 -- substitution)
                 sortSubst <-
-                    mapExcept (first PatternSortError) $
+                    mapExcept (first $ PatternSortError pat) $
                         foldM (\subst -> uncurry (matchSorts' subst)) Map.empty $
                             zip symbolArgSorts internalArgSorts
                 -- resultSort is the sort read from attributes, with
                 -- variables substituted using the arg.sort match
                 let resultSort = applySubst sortSubst symbolSort
                 Internal.SymbolApplication resultSort
-                    <$> mapM internaliseSort argSorts
+                    <$> mapM (internaliseSort pat) argSorts
                     <*> pure (fromId name)
                     <*> mapM internaliseTerm args
             Syntax.KJString{value} ->
@@ -97,7 +97,7 @@ internalisePattern KoreDefinition{sorts, symbols} p = do
                 -- analysed beforehand, expecting this to operate on terms
                 a <- internaliseTerm arg1
                 b <- internaliseTerm arg2
-                resultSort <- internaliseSort sort
+                resultSort <- internaliseSort pat sort
                 -- TODO check that both a and b are of sort "resultSort"
                 -- Which is a unification problem if this involves variables.
                 pure $ Internal.AndTerm resultSort a b
@@ -116,7 +116,7 @@ internalisePattern KoreDefinition{sorts, symbols} p = do
             Syntax.KJRewrites{} -> predicate
             Syntax.KJDV{sort, value} ->
                 Internal.DomainValue
-                    <$> internaliseSort sort
+                    <$> internaliseSort pat sort
                     <*> pure value
             Syntax.KJMultiOr{} -> predicate
             Syntax.KJMultiApp{assoc, symbol, sorts = argSorts, argss} ->
@@ -130,37 +130,91 @@ internalisePattern KoreDefinition{sorts, symbols} p = do
         Syntax.KorePattern ->
         Except PatternError Internal.Predicate
     internalisePredicate pat = case pat of
-        Syntax.KJOr{first = arg1, second = arg2} ->
-            predicate2 Internal.Or arg1 arg2
+        Syntax.KJEVar{} -> term
+        Syntax.KJSVar{} -> notSupported
+        Syntax.KJApp{} -> term
+        Syntax.KJString{} -> term
         Syntax.KJTop{} -> do
             pure Internal.Top
         Syntax.KJBottom{} -> do
             pure Internal.Bottom
         Syntax.KJNot{arg} -> do
             Internal.Not <$> internalisePredicate arg
-    -- ...
+        Syntax.KJAnd{first = arg1, second = arg2} -> do
+            -- consistency should have been checked beforehand,
+            -- building an AndPredicate
+            Internal.AndPredicate
+                <$> internalisePredicate arg1
+                <*> internalisePredicate arg2
+        Syntax.KJOr{first = arg1, second = arg2} ->
+            Internal.Or
+                <$> internalisePredicate arg1
+                <*> internalisePredicate arg2
+        Syntax.KJImplies{first = arg1, second = arg2} ->
+            Internal.Implies
+                <$> internalisePredicate arg1
+                <*> internalisePredicate arg2
+        Syntax.KJIff{first = arg1, second = arg2} ->
+            Internal.Iff
+                <$> internalisePredicate arg1
+                <*> internalisePredicate arg2
+        Syntax.KJForall{var, arg} ->
+            Internal.Forall (fromId var) <$> internalisePredicate arg
+        Syntax.KJExists{var, arg} ->
+            Internal.Exists (fromId var) <$> internalisePredicate arg
+        Syntax.KJMu{} -> notSupported
+        Syntax.KJNu{} -> notSupported
+        Syntax.KJCeil{arg} ->
+            Internal.Ceil <$> internaliseTerm arg
+        Syntax.KJFloor{} -> notSupported
+        Syntax.KJEquals{sort, argSort, first = arg1, second = arg2} -> do
+            -- distinguish term and predicate equality
+            is1Term <- isTermM arg1
+            is2Term <- isTermM arg2
+            case (is1Term, is2Term) of
+                (True, True) -> do
+                    a <- internaliseTerm arg1
+                    b <- internaliseTerm arg2
+                    s <- internaliseSort pat sort
+                    argS <- internaliseSort pat argSort
+                    -- check that argS and sorts of a and b "agree"
+                    mapM_ (sortCheck pat) [(sortOfTerm a, argS), (sortOfTerm b, argS)]
+                    pure $ Internal.EqualsTerm s a b
+                (False, False) ->
+                    Internal.EqualsPredicate
+                        <$> internalisePredicate arg1
+                        <*> internalisePredicate arg2
+                _other ->
+                    throwE $ InconsistentPattern pat
+        Syntax.KJIn{sort, first = arg1, second = arg2} -> do
+            a <- internaliseTerm arg1
+            b <- internaliseTerm arg2
+            s <- internaliseSort pat sort
+            -- TODO check that s and sorts of a and b agree
+            pure $ Internal.In s a b
+        Syntax.KJNext{} -> notSupported
+        Syntax.KJRewrites{} -> notSupported -- should only occur in axioms!
+        Syntax.KJDV{} -> term
+        Syntax.KJMultiOr{assoc, sort, argss} ->
+            internalisePredicate $ withAssoc assoc (Syntax.KJOr sort) argss
+        Syntax.KJMultiApp{} -> term
+      where
+        term = throwE $ PredicateExpected pat
+        notSupported = throwE $ NotSupported pat
 
-    andTerm :: [Internal.Term] -> Except PatternError Internal.Term
-    andTerm [] = error "BUG: andTerm called with empty term list"
-    andTerm ts = do
-        -- check resulting terms for consistency and sorts
+    andTerm :: Syntax.KorePattern -> [Internal.Term] -> Except PatternError Internal.Term
+    andTerm _ [] = error "BUG: andTerm called with empty term list"
+    andTerm pat ts = do
         let sortList = nub $ map sortOfTerm ts
-
+            andSort = head sortList
+            resultTerm = foldl1' (Internal.AndTerm andSort) ts
+        -- check resulting terms for consistency and sorts
         -- TODO needs to consider sub-sorts instead (set must be
         -- consistent) if this code becomes order-sorted
         unless (length sortList == 1) $
             throwE $
-                PatternSortError (IncompatibleSorts $ map externaliseSort sortList)
-        let andSort = head sortList
-        pure $ foldl1' (Internal.AndTerm andSort) ts
-
-    predicate2 ::
-        (Internal.Predicate -> Internal.Predicate -> Internal.Predicate) ->
-        Syntax.KorePattern ->
-        Syntax.KorePattern ->
-        Except PatternError Internal.Predicate
-    predicate2 con p1 p2 = do
-        con <$> internalisePredicate p1 <*> internalisePredicate p2
+                PatternSortError pat (IncompatibleSorts $ map externaliseSort sortList)
+        pure resultTerm
 
     -- converts MultiApp and MultiOr to a chain at syntax level
     withAssoc :: Syntax.LeftRight -> (a -> a -> a) -> NonEmpty a -> a
@@ -174,6 +228,10 @@ internalisePattern KoreDefinition{sorts, symbols} p = do
         Syntax.KorePattern ->
         Syntax.KorePattern
     mkF symbol argSorts a b = Syntax.KJApp symbol argSorts [a, b]
+
+    -- check that two sorts "agree". Incomplete, see comment on ensureSortsAgree.
+    sortCheck :: Syntax.KorePattern -> (Internal.Sort, Internal.Sort) -> Except PatternError ()
+    sortCheck pat = mapExcept (first $ PatternSortError pat) . uncurry ensureSortsAgree
 
 ----------------------------------------
 
@@ -218,7 +276,7 @@ externaliseSort (Internal.SortVar name) =
 isTermM :: Syntax.KorePattern -> Except PatternError Bool
 isTermM pat = case pat of
     Syntax.KJEVar{} -> pure True
-    Syntax.KJSVar{} -> throwE $ NotSupported pat
+    Syntax.KJSVar{} -> notSupported
     Syntax.KJApp{} -> pure True
     Syntax.KJString{} -> pure True
     Syntax.KJTop{} -> pure False
@@ -234,17 +292,19 @@ isTermM pat = case pat of
     Syntax.KJIff{} -> pure False
     Syntax.KJForall{} -> pure False
     Syntax.KJExists{} -> pure False
-    Syntax.KJMu{} -> pure False
-    Syntax.KJNu{} -> pure False
+    Syntax.KJMu{} -> notSupported
+    Syntax.KJNu{} -> notSupported
     Syntax.KJCeil{} -> pure False
     Syntax.KJFloor{} -> pure False
     Syntax.KJEquals{} -> pure False
     Syntax.KJIn{} -> pure False
-    Syntax.KJNext{} -> pure False
-    Syntax.KJRewrites{} -> pure False
+    Syntax.KJNext{} -> notSupported
+    Syntax.KJRewrites{} -> notSupported  -- should only occur in axioms
     Syntax.KJDV{} -> pure True
     Syntax.KJMultiOr{} -> pure False
     Syntax.KJMultiApp{} -> pure True
+  where
+    notSupported = throwE $ NotSupported pat
 
 {- | unpacks the top level of 'And' nodes of a 'KorePattern', returning
    the arguments as a list. The top-level sorts of the 'And' nodes are
@@ -300,11 +360,32 @@ applySubst subst var@(Internal.SortVar n) =
 applySubst subst (Internal.SortApp n args) =
     Internal.SortApp n $ map (applySubst subst) args
 
+-- | check that two (internal) sorts are compatible.
+--
+-- For a sort application, ensure the sort constructor is the same,
+-- then check recursively that the arguments are compatible, too.
+--
+-- Shows that the whole approach taken in this module is horribly
+-- incomplete wrt. sort variables (we need to propagate assumed sort
+-- variable bindings from the bottom up the AST to decide this.
+ensureSortsAgree ::
+    Internal.Sort ->
+    Internal.Sort ->
+    Except SortError ()
+ensureSortsAgree Internal.SortVar{} _ = pure () -- in fact binding a variable!
+ensureSortsAgree _ Internal.SortVar{} = pure () -- in fact binding a variable
+ensureSortsAgree
+    s1@(Internal.SortApp name1 args1)
+    s2@(Internal.SortApp name2 args2) = do
+        unless (name1 == name2) $ throwE $ IncompatibleSorts (map externaliseSort [s1, s2])
+        mapM_ (uncurry ensureSortsAgree) $ zip args1 args2
+
+
 ----------------------------------------
 data PatternError
     = NotSupported Syntax.KorePattern
     | NoTermFound Syntax.KorePattern
-    | PatternSortError SortError
+    | PatternSortError Syntax.KorePattern SortError
     | InconsistentPattern Syntax.KorePattern
     | TermExpected Syntax.KorePattern
     | PredicateExpected Syntax.KorePattern
