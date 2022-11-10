@@ -8,6 +8,7 @@ module Kore.Syntax.Json.Internalise (
     internalisePattern,
     PatternError (..),
     checkSort,
+    matchSorts,
     SortError (..),
 ) where
 
@@ -36,10 +37,10 @@ internalisePattern ::
     KoreDefinition ->
     Syntax.KorePattern ->
     Except PatternError Internal.Pattern
-internalisePattern KoreDefinition{sorts, symbols} pat = do
-    (terms, predicates) <- partitionM isTermM $ explodeAnd pat
+internalisePattern KoreDefinition{sorts, symbols} p = do
+    (terms, predicates) <- partitionM isTermM $ explodeAnd p
 
-    when (null terms) $ throwE $ NoTermFound pat
+    when (null terms) $ throwE $ NoTermFound p
 
     -- construct an AndTerm from all terms (checking sort consistency)
     term <- andTerm =<< mapM internaliseTerm terms
@@ -130,7 +131,7 @@ internalisePattern KoreDefinition{sorts, symbols} pat = do
         Except PatternError Internal.Predicate
     internalisePredicate pat = case pat of
         Syntax.KJOr{first = arg1, second = arg2} ->
-            predicate2 "Or" Internal.Or arg1 arg2
+            predicate2 Internal.Or arg1 arg2
         Syntax.KJTop{} -> do
             pure Internal.Top
         Syntax.KJBottom{} -> do
@@ -154,13 +155,12 @@ internalisePattern KoreDefinition{sorts, symbols} pat = do
         pure $ foldl1' (Internal.AndTerm andSort) ts
 
     predicate2 ::
-        Text ->
         (Internal.Predicate -> Internal.Predicate -> Internal.Predicate) ->
         Syntax.KorePattern ->
         Syntax.KorePattern ->
         Except PatternError Internal.Predicate
-    predicate2 errMsg con p1 p2 = do
-        throwE $ GeneralError "implement me!"
+    predicate2 con p1 p2 = do
+        con <$> internalisePredicate p1 <*> internalisePredicate p2
 
     -- converts MultiApp and MultiOr to a chain at syntax level
     withAssoc :: Syntax.LeftRight -> (a -> a -> a) -> NonEmpty a -> a
@@ -216,18 +216,18 @@ externaliseSort (Internal.SortVar name) =
     Syntax.SortVar (Syntax.Id name)
 
 isTermM :: Syntax.KorePattern -> Except PatternError Bool
-isTermM = \case
+isTermM pat = case pat of
     Syntax.KJEVar{} -> pure True
-    svar@Syntax.KJSVar{name} -> throwE $ NotSupported svar
+    Syntax.KJSVar{} -> throwE $ NotSupported pat
     Syntax.KJApp{} -> pure True
     Syntax.KJString{} -> pure True
     Syntax.KJTop{} -> pure False
     Syntax.KJBottom{} -> pure False
     Syntax.KJNot{} -> pure False
-    and@Syntax.KJAnd{first = arg1, second = arg2} -> do
+    Syntax.KJAnd{first = arg1, second = arg2} -> do
         a1Term <- isTermM arg1
         a2Term <- isTermM arg2
-        when (a1Term /= a2Term) $ throwE (InconsistentPattern and)
+        when (a1Term /= a2Term) $ throwE (InconsistentPattern pat)
         pure a1Term
     Syntax.KJOr{} -> pure False
     Syntax.KJImplies{} -> pure False
@@ -287,7 +287,7 @@ matchSorts' ::
     -- | Subject (variables here are treated as constants)
     Internal.Sort ->
     Except SortError (Map Internal.VarName Internal.Sort)
-matchSorts' subst pat subj = do
+matchSorts' subst _pat _subj = do
     pure subst -- FIXME! traverse pattern and subject, consider given starting substitution
 
 {- | Replace occurrences of the map key variable names in the given
