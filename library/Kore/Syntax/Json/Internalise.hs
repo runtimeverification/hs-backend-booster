@@ -15,9 +15,14 @@ import Control.Monad
 import Control.Monad.Extra
 import Control.Monad.Trans.Except
 import Data.Bifunctor
+import Data.Foldable ()
+
+-- foldl1, foldr1
 import Data.List (foldl1', nub)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -46,22 +51,84 @@ internalisePattern KoreDefinition{sorts, symbols} pat = do
     internaliseSort =
         mapExcept (first PatternSortError) . checkSort mempty sorts
 
+    -- Throws errors when a predicate is encountered. The 'And' case
+    -- should be analysed before, this function produces an 'AndTerm'.
     internaliseTerm ::
         Syntax.KorePattern ->
         Except PatternError Internal.Term
-    internaliseTerm = \case
-        Syntax.KJEVar{name, sort} -> do
-            variableSort <- internaliseSort sort
-            let variableName = fromId name
-            pure $ Internal.Var Internal.Variable{variableSort, variableName}
-        Syntax.KJString{value} ->
-            pure $ Internal.DomainValue (Internal.SortApp "SortString" []) value
-    -- ...
+    internaliseTerm pat =
+        case pat of
+            Syntax.KJEVar{name, sort} -> do
+                variableSort <- internaliseSort sort
+                let variableName = fromId name
+                pure $ Internal.Var Internal.Variable{variableSort, variableName}
+            Syntax.KJSVar{} ->
+                throwE $ NotSupported pat
+            Syntax.KJApp{name, sorts = argSorts, args} -> do
+                -- FIXME add sorts to symbol attributes!
+                let symbolSort = Internal.SortVar "dunno"
+                    symbolArgSorts = []
+                SymbolAttributes{} <-
+                    maybe (throwE $ UnknownSymbol name) pure $
+                        Map.lookup (fromId name) symbols
+                internalArgSorts <- mapM internaliseSort argSorts
+                -- TODO check that all argument sorts "agree".
+                -- Variables can stand for anything but need to be
+                -- consistent (a matching problem returning a
+                -- substitution)
+                sortSubst <-
+                    mapExcept (first PatternSortError) $
+                        foldM (\subst -> uncurry (matchSorts' subst)) Map.empty $
+                            zip symbolArgSorts internalArgSorts
+                -- resultSort is the sort read from attributes, with
+                -- variables substituted using the arg.sort match
+                let resultSort = applySubst sortSubst symbolSort
+                Internal.SymbolApplication resultSort
+                    <$> mapM internaliseSort argSorts
+                    <*> pure (fromId name)
+                    <*> mapM internaliseTerm args
+            Syntax.KJString{value} ->
+                pure $ Internal.DomainValue (Internal.SortApp "SortString" []) value
+            Syntax.KJTop{} -> predicate
+            Syntax.KJBottom{} -> predicate
+            Syntax.KJNot{} -> predicate
+            Syntax.KJAnd{sort, first = arg1, second = arg2} -> do
+                -- analysed beforehand, expecting this to operate on terms
+                a <- internaliseTerm arg1
+                b <- internaliseTerm arg2
+                resultSort <- internaliseSort sort
+                -- TODO check that both a and b are of sort "resultSort"
+                -- Which is a unification problem if this involves variables.
+                pure $ Internal.AndTerm resultSort a b
+            Syntax.KJOr{} -> predicate
+            Syntax.KJImplies{} -> predicate
+            Syntax.KJIff{} -> predicate
+            Syntax.KJForall{} -> predicate
+            Syntax.KJExists{} -> predicate
+            Syntax.KJMu{} -> predicate
+            Syntax.KJNu{} -> predicate
+            Syntax.KJCeil{} -> predicate
+            Syntax.KJFloor{} -> predicate
+            Syntax.KJEquals{} -> predicate
+            Syntax.KJIn{} -> predicate
+            Syntax.KJNext{} -> predicate
+            Syntax.KJRewrites{} -> predicate
+            Syntax.KJDV{sort, value} ->
+                Internal.DomainValue
+                    <$> internaliseSort sort
+                    <*> pure value
+            Syntax.KJMultiOr{} -> predicate
+            Syntax.KJMultiApp{assoc, symbol, sorts = argSorts, argss} ->
+                internaliseTerm $ withAssoc assoc (mkF symbol argSorts) argss
+      where
+        predicate = throwE $ TermExpected pat
 
+    -- Throws errors when a term is encountered. The 'And' case
+    -- is analysed before, this function produces an 'AndPredicate'.
     internalisePredicate ::
         Syntax.KorePattern ->
         Except PatternError Internal.Predicate
-    internalisePredicate = \case
+    internalisePredicate pat = case pat of
         Syntax.KJOr{first = arg1, second = arg2} ->
             predicate2 "Or" Internal.Or arg1 arg2
         Syntax.KJTop{} -> do
@@ -94,6 +161,19 @@ internalisePattern KoreDefinition{sorts, symbols} pat = do
         Except PatternError Internal.Predicate
     predicate2 errMsg con p1 p2 = do
         throwE $ GeneralError "implement me!"
+
+    -- converts MultiApp and MultiOr to a chain at syntax level
+    withAssoc :: Syntax.LeftRight -> (a -> a -> a) -> NonEmpty a -> a
+    withAssoc Syntax.Left = foldl1
+    withAssoc Syntax.Right = foldr1
+
+    mkF ::
+        Syntax.Id ->
+        [Syntax.Sort] ->
+        Syntax.KorePattern ->
+        Syntax.KorePattern ->
+        Syntax.KorePattern
+    mkF symbol argSorts a b = Syntax.KJApp symbol argSorts [a, b]
 
 ----------------------------------------
 
@@ -184,14 +264,51 @@ sortOfTerm (Internal.SymbolApplication sort _ _ _) = sort
 sortOfTerm (Internal.DomainValue sort _) = sort
 sortOfTerm (Internal.Var Internal.Variable{variableSort}) = variableSort
 
+{- | Tries to find a substitution of sort variables in the given sort
+ pattern (with variables) to match the given subject
+-}
+matchSorts ::
+    -- | Pattern (contains variables to substitute)
+    Internal.Sort ->
+    -- | Subject (variables here are treated as constants)
+    Internal.Sort ->
+    Except SortError (Map Internal.VarName Internal.Sort)
+matchSorts = matchSorts' Map.empty
+
+{- | Internal matching function starting with a given substitution.
+ Tries to find a substitution of sort variables in the given sort
+ pattern (with variables) to match the given subject
+-}
+matchSorts' ::
+    -- | starting substitution (accumulated)
+    Map Internal.VarName Internal.Sort ->
+    -- | Pattern (contains variables to substitute)
+    Internal.Sort ->
+    -- | Subject (variables here are treated as constants)
+    Internal.Sort ->
+    Except SortError (Map Internal.VarName Internal.Sort)
+matchSorts' subst pat subj = do
+    pure subst -- FIXME! traverse pattern and subject, consider given starting substitution
+
+{- | Replace occurrences of the map key variable names in the given
+ sort by their mapped sorts. There are no local binders so the
+ replacement is a straightforward traversal.
+-}
+applySubst :: Map Internal.VarName Internal.Sort -> Internal.Sort -> Internal.Sort
+applySubst subst var@(Internal.SortVar n) =
+    fromMaybe var $ Map.lookup n subst
+applySubst subst (Internal.SortApp n args) =
+    Internal.SortApp n $ map (applySubst subst) args
+
 ----------------------------------------
 data PatternError
     = NotSupported Syntax.KorePattern
     | NoTermFound Syntax.KorePattern
     | PatternSortError SortError
     | InconsistentPattern Syntax.KorePattern
-    | TermExpected Text Syntax.KorePattern
-    | PredicateExpected Text Syntax.KorePattern
+    | TermExpected Syntax.KorePattern
+    | PredicateExpected Syntax.KorePattern
+    | UnknownSymbol Syntax.Id
     | GeneralError Text
     deriving stock (Eq, Show)
 
