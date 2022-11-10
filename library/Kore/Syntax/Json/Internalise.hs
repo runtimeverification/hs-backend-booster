@@ -29,7 +29,7 @@ import Data.Set qualified as Set
 import Data.Text (Text)
 
 import Kore.Definition.Attributes.Base
-import Kore.Definition.Base (KoreDefinition (..))
+import Kore.Definition.Base (KoreDefinition (..), SymbolSort (..))
 import Kore.Pattern.Base qualified as Internal
 import Kore.Syntax.Json.Base qualified as Syntax
 
@@ -65,27 +65,24 @@ internalisePattern KoreDefinition{sorts, symbols} p = do
                 pure $ Internal.Var Internal.Variable{variableSort, variableName}
             Syntax.KJSVar{} ->
                 throwE $ NotSupported pat
-            Syntax.KJApp{name, sorts = argSorts, args} -> do
+            Syntax.KJApp{name, sorts = appSorts, args} -> do
                 -- FIXME add sorts to symbol attributes!
-                let symbolSort = Internal.SortVar "dunno"
-                    symbolArgSorts = []
-                SymbolAttributes{} <-
+                (_, SymbolSort {resultSort, argSorts}) <-
                     maybe (throwE $ UnknownSymbol name) pure $
                         Map.lookup (fromId name) symbols
-                internalArgSorts <- mapM (internaliseSort pat) argSorts
-                -- TODO check that all argument sorts "agree".
-                -- Variables can stand for anything but need to be
-                -- consistent (a matching problem returning a
-                -- substitution)
+                internalAppSorts <- mapM (internaliseSort pat) appSorts
+                -- check that all argument sorts "agree". Variables
+                -- can stand for anything but need to be consistent (a
+                -- matching problem returning a substitution)
                 sortSubst <-
                     mapExcept (first $ PatternSortError pat) $
                         foldM (uncurry . matchSorts') Map.empty $
-                            zip symbolArgSorts internalArgSorts
-                -- resultSort is the sort read from attributes, with
+                            zip argSorts internalAppSorts
+                -- finalSort is the symbol result sort with
                 -- variables substituted using the arg.sort match
-                let resultSort = applySubst sortSubst symbolSort
-                Internal.SymbolApplication resultSort
-                    <$> mapM (internaliseSort pat) argSorts
+                let finalSort = applySubst sortSubst resultSort
+                Internal.SymbolApplication finalSort
+                    <$> pure internalAppSorts
                     <*> pure (fromId name)
                     <*> mapM internaliseTerm args
             Syntax.KJString{value} ->

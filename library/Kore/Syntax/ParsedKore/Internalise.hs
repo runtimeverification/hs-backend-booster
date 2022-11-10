@@ -143,7 +143,10 @@ addModule
                 defError $
                     DuplicateSymbols symCollisions
             mapM_ (checkSymbolSorts sorts) $ Map.elems newSymbols
-            let symbols = Map.map extract newSymbols <> currentSymbols
+            let symbols = Map.map internaliseSymbol newSymbols <> currentSymbols
+
+                internaliseSymbol :: ParsedSymbol -> (SymbolAttributes, SymbolSort)
+                internaliseSymbol s = (extract s, undefined) -- FIXME!
 
             pure
                 KoreDefinition
