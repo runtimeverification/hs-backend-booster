@@ -82,8 +82,7 @@ data KoreDefinition = KoreDefinition
     deriving (Eq, Show)
 
 -- | Sort information related to a symbol: result and argument sorts
-data SymbolSort =
-    SymbolSort
+data SymbolSort = SymbolSort
     { resultSort :: Sort
     , argSorts :: [Sort]
     }

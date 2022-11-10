@@ -67,7 +67,7 @@ internalisePattern KoreDefinition{sorts, symbols} p = do
                 throwE $ NotSupported pat
             Syntax.KJApp{name, sorts = appSorts, args} -> do
                 -- FIXME add sorts to symbol attributes!
-                (_, SymbolSort {resultSort, argSorts}) <-
+                (_, SymbolSort{resultSort, argSorts}) <-
                     maybe (throwE $ UnknownSymbol name) pure $
                         Map.lookup (fromId name) symbols
                 internalAppSorts <- mapM (internaliseSort pat) appSorts
@@ -81,10 +81,8 @@ internalisePattern KoreDefinition{sorts, symbols} p = do
                 -- finalSort is the symbol result sort with
                 -- variables substituted using the arg.sort match
                 let finalSort = applySubst sortSubst resultSort
-                Internal.SymbolApplication finalSort
-                    <$> pure internalAppSorts
-                    <*> pure (fromId name)
-                    <*> mapM internaliseTerm args
+                Internal.SymbolApplication finalSort internalAppSorts (fromId name)
+                    <$> mapM internaliseTerm args
             Syntax.KJString{value} ->
                 pure $ Internal.DomainValue (Internal.SortApp "SortString" []) value
             Syntax.KJTop{} -> predicate
