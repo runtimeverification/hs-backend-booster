@@ -193,7 +193,7 @@ internalisePattern KoreDefinition{sorts, symbols} p = do
             -- TODO check that s and sorts of a and b agree
             pure $ Internal.In s a b
         Syntax.KJNext{} -> notSupported
-        Syntax.KJRewrites{} -> notSupported -- should only occur in axioms!
+        Syntax.KJRewrites{} -> notSupported -- should only occur in claims!
         Syntax.KJDV{} -> term
         Syntax.KJMultiOr{assoc, sort, argss} ->
             internalisePredicate $ withAssoc assoc (Syntax.KJOr sort) argss
@@ -299,7 +299,7 @@ isTermM pat = case pat of
     Syntax.KJEquals{} -> pure False
     Syntax.KJIn{} -> pure False
     Syntax.KJNext{} -> notSupported
-    Syntax.KJRewrites{} -> notSupported -- should only occur in axioms
+    Syntax.KJRewrites{} -> notSupported -- should only occur in claims
     Syntax.KJDV{} -> pure True
     Syntax.KJMultiOr{} -> pure False
     Syntax.KJMultiApp{} -> pure True
