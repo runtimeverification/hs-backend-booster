@@ -352,5 +352,5 @@ retractVariable KJSVar{name} = Just name
 retractVariable _ = Nothing
 
 retractSortVariable :: Sort -> Maybe Id
-retractSortVariable SortVar { name } = Just name
+retractSortVariable SortVar{name} = Just name
 retractSortVariable _ = Nothing

@@ -73,8 +73,6 @@ data ParsedAlias = ParsedAlias
     deriving stock (Eq, Show, Generic)
     deriving (FromJSON, ToJSON) via CustomJSON '[] ParsedAlias
 
--- data ParsedAlias = ... (ParsedSymbol with additional patterns, without "hooked")
-
 data ParsedAxiom = ParsedAxiom
     { axiom :: Json.KorePattern -- assumed to have certain shape
     -- (not validated here)
