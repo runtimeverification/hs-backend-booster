@@ -79,7 +79,7 @@ internalisePattern KoreDefinition{sorts, symbols} p = do
                 -- substitution)
                 sortSubst <-
                     mapExcept (first $ PatternSortError pat) $
-                        foldM (\subst -> uncurry (matchSorts' subst)) Map.empty $
+                        foldM (uncurry . matchSorts') Map.empty $
                             zip symbolArgSorts internalArgSorts
                 -- resultSort is the sort read from attributes, with
                 -- variables substituted using the arg.sort match
@@ -299,7 +299,7 @@ isTermM pat = case pat of
     Syntax.KJEquals{} -> pure False
     Syntax.KJIn{} -> pure False
     Syntax.KJNext{} -> notSupported
-    Syntax.KJRewrites{} -> notSupported  -- should only occur in axioms
+    Syntax.KJRewrites{} -> notSupported -- should only occur in axioms
     Syntax.KJDV{} -> pure True
     Syntax.KJMultiOr{} -> pure False
     Syntax.KJMultiApp{} -> pure True
@@ -360,14 +360,15 @@ applySubst subst var@(Internal.SortVar n) =
 applySubst subst (Internal.SortApp n args) =
     Internal.SortApp n $ map (applySubst subst) args
 
--- | check that two (internal) sorts are compatible.
---
--- For a sort application, ensure the sort constructor is the same,
--- then check recursively that the arguments are compatible, too.
---
--- Shows that the whole approach taken in this module is horribly
--- incomplete wrt. sort variables (we need to propagate assumed sort
--- variable bindings from the bottom up the AST to decide this.
+{- | check that two (internal) sorts are compatible.
+
+ For a sort application, ensure the sort constructor is the same,
+ then check recursively that the arguments are compatible, too.
+
+ Shows that the whole approach taken in this module is horribly
+ incomplete wrt. sort variables (we need to propagate assumed sort
+ variable bindings from the bottom up the AST to decide this.
+-}
 ensureSortsAgree ::
     Internal.Sort ->
     Internal.Sort ->
@@ -379,7 +380,6 @@ ensureSortsAgree
     s2@(Internal.SortApp name2 args2) = do
         unless (name1 == name2) $ throwE $ IncompatibleSorts (map externaliseSort [s1, s2])
         mapM_ (uncurry ensureSortsAgree) $ zip args1 args2
-
 
 ----------------------------------------
 data PatternError
