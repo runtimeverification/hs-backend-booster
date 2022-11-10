@@ -66,7 +66,6 @@ internalisePattern KoreDefinition{sorts, symbols} p = do
             Syntax.KJSVar{} ->
                 throwE $ NotSupported pat
             Syntax.KJApp{name, sorts = appSorts, args} -> do
-                -- FIXME add sorts to symbol attributes!
                 (_, SymbolSort{resultSort, argSorts}) <-
                     maybe (throwE $ UnknownSymbol name) pure $
                         Map.lookup (fromId name) symbols
@@ -368,8 +367,10 @@ ensureSortsAgree ::
     Internal.Sort ->
     Internal.Sort ->
     Except SortError ()
-ensureSortsAgree Internal.SortVar{} _ = pure () -- in fact binding a variable!
-ensureSortsAgree _ Internal.SortVar{} = pure () -- in fact binding a variable
+ensureSortsAgree (Internal.SortVar n) _ =
+    throwE $ GeneralError ("ensureSortsAgree found variable " <> n)
+ensureSortsAgree _ (Internal.SortVar n) =
+    throwE $ GeneralError ("ensureSortsAgree found variable " <> n)
 ensureSortsAgree
     s1@(Internal.SortApp name1 args1)
     s2@(Internal.SortApp name2 args2) = do
@@ -385,11 +386,11 @@ data PatternError
     | TermExpected Syntax.KorePattern
     | PredicateExpected Syntax.KorePattern
     | UnknownSymbol Syntax.Id
-    | GeneralError Text
     deriving stock (Eq, Show)
 
 data SortError
     = UnknownSort Syntax.Sort
     | WrongSortArgCount Syntax.Sort Int
     | IncompatibleSorts [Syntax.Sort]
+    | GeneralError Text
     deriving stock (Eq, Show)
