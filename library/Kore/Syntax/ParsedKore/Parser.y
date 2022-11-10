@@ -333,13 +333,14 @@ mkParsedAlias
     (ParsedAliasHead name sortVars)
     argSorts
     sort
-    (AliasApp appName appSorts pattArgs)
+    (AliasApp appName appSortVars pattArgs)
     rhs
     attributes
     | name /= appName =
         error ("Alias declaration inconsistency: " <> show name <> " is different from " <> show appName)
-    | argSorts /= appSorts =
-        error ("Alias declaration inconsistency: " <> show argSorts <> " is different from " <> show appSorts)
+    | Just appSortVarIds <- traverse Json.retractSortVariable appSortVars
+    , sortVars /= appSortVarIds =
+        error ("Alias declaration inconsistency: " <> show sortVars <> " is different from " <> show appSortVarIds <> " in declaration for " <> show name)
     | Just args <- traverse Json.retractVariable pattArgs =
         ParsedAlias
             { name

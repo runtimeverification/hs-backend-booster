@@ -350,3 +350,7 @@ retractVariable :: KorePattern -> Maybe Id
 retractVariable KJEVar{name} = Just name
 retractVariable KJSVar{name} = Just name
 retractVariable _ = Nothing
+
+retractSortVariable :: Sort -> Maybe Id
+retractSortVariable SortVar { name } = Just name
+retractSortVariable _ = Nothing
