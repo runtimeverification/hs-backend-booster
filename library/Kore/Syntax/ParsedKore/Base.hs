@@ -33,8 +33,8 @@ data ParsedModule = ParsedModule
     , imports :: [(Json.Id, ParsedAttributes)]
     , sorts :: [ParsedSort]
     , symbols :: [ParsedSymbol]
-    , -- , aliases :: [ParsedAlias]
-      axioms :: [ParsedAxiom]
+    , aliases :: [ParsedAlias]
+    , axioms :: [ParsedAxiom]
     , -- , claims :: [ParsedClaim]
       attributes :: ParsedAttributes
     }
@@ -60,6 +60,18 @@ data ParsedSymbol = ParsedSymbol
     }
     deriving stock (Eq, Show, Generic)
     deriving (FromJSON, ToJSON) via CustomJSON '[] ParsedSymbol
+
+data ParsedAlias = ParsedAlias
+    { name :: Json.Id
+    , sortVars :: [Json.Id]
+    , argSorts :: [Json.Sort]
+    , sort :: Json.Sort
+    , args :: [Json.Id]
+    , rhs :: Json.KorePattern
+    , attributes :: ParsedAttributes
+    }
+    deriving stock (Eq, Show, Generic)
+    deriving (FromJSON, ToJSON) via CustomJSON '[] ParsedAlias
 
 -- data ParsedAlias = ... (ParsedSymbol with additional patterns, without "hooked")
 
