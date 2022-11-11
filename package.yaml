@@ -102,6 +102,7 @@ executables:
     dependencies:
       - base
       - containers
+      - deepseq
       - directory
       - filepath
       - hs-backend-booster

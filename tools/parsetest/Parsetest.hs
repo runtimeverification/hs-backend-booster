@@ -7,15 +7,18 @@ module Main (
     main,
 ) where
 
+import Control.DeepSeq
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Except
 import Data.Bifunctor (first)
+import Data.List (isPrefixOf, partition)
 import Data.Map qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
+import GHC.Generics
 import System.Directory
 import System.Environment
 import System.FilePath
@@ -32,22 +35,25 @@ import Kore.Syntax.ParsedKore as ParsedKore
 -}
 main :: IO ()
 main = do
-    args <- getArgs
+    (opts, args) <- partition ("-" `isPrefixOf`) <$> getArgs
+    let verbose = "-v" `elem` opts
     forM_ args $ \arg -> do
         isDir <- doesDirectoryExist arg
         if isDir
             then do
                 putStrLn $ "Searching directory " <> arg <> "..."
                 files <- findByExtension ".kore" arg
-                mapM_ testParse files
-            else testParse arg
+                mapM_ (testParse verbose) files
+            else testParse verbose arg
 
-testParse :: FilePath -> IO ()
-testParse f = do
+testParse :: Bool -> FilePath -> IO ()
+testParse verbose f = do
     putStr $ "Testing " <> f <> "..."
     result <- report f
-    putStrLn $ either ("FAILURE\n" <>) (("SUCCESS\n" <>) . prettify) result
+    putStrLn $ either ("FAILURE\n" <>) (("SUCCESS\n" <>) . showResult) result
     putStrLn "----------------------------------------"
+  where
+      showResult = if verbose then prettify else (`deepseq` "")
 
 report :: FilePath -> IO (Either String Report)
 report file = runExceptT $ do
@@ -82,7 +88,8 @@ data Report = Report
     , modNames, sortNames, symbolNames :: [Text]
     , axiomCount :: Int
     }
-    deriving (Eq, Show)
+    deriving stock (Eq, Show, Generic)
+    deriving anyclass NFData
 
 findByExtension ::
     -- | extension
