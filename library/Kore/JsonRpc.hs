@@ -5,7 +5,6 @@ License     : BSD-3-Clause
 -}
 module Kore.JsonRpc (
     runServer,
-    TODOInternalizedModule (..),
 ) where
 
 import Control.Concurrent (forkIO, throwTo)
@@ -21,9 +20,6 @@ import Data.Aeson.Encode.Pretty as Json
 import Data.Aeson.Types (Value (..))
 import Data.Conduit.Network (serverSettings)
 import Data.Maybe (catMaybes)
-import Kore.JsonRpc.Base
-import Kore.Network.JsonRpc (jsonrpcTCPServer)
-import Kore.Syntax.Json.Base (Id (..), KORE (..), KoreJson (..), KorePattern (..), Sort (..), Version (..))
 import Network.JSONRPC (
     BatchRequest (BatchRequest, SingleRequest),
     BatchResponse (BatchResponse, SingleResponse),
@@ -39,14 +35,17 @@ import Network.JSONRPC (
     sendBatchResponse,
  )
 
-data TODOInternalizedModule = TODOInternalizedModule
+import Kore.Definition.Base (KoreDefinition (..))
+import Kore.JsonRpc.Base
+import Kore.Network.JsonRpc (jsonrpcTCPServer)
+import Kore.Syntax.Json.Base (Id (..), KORE (..), KoreJson (..), KorePattern (..), Sort (..), Version (..))
 
 respond ::
     forall m.
     MonadIO m =>
-    TODOInternalizedModule ->
+    KoreDefinition ->
     Respond (API 'Req) m (API 'Res)
-respond _ =
+respond KoreDefinition{} =
     \case
         Execute _ -> do
             liftIO $ putStrLn "Testing JSON-RPC server."
@@ -82,7 +81,7 @@ respond _ =
             , term = KJTop (SortVar (Id "SV"))
             }
 
-runServer :: Int -> TODOInternalizedModule -> IO ()
+runServer :: Int -> KoreDefinition -> IO ()
 runServer port internalizedModule =
     do
         Log.runStderrLoggingT
@@ -128,7 +127,7 @@ runServer port internalizedModule =
             , "condition"
             ]
 
-srv :: MonadLoggerIO m => TODOInternalizedModule -> JSONRPCT m ()
+srv :: MonadLoggerIO m => KoreDefinition -> JSONRPCT m ()
 srv internalizedModule = do
     reqQueue <- liftIO $ atomically newTChan
     let mainLoop tid =

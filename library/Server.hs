@@ -8,15 +8,19 @@ module Server (main) where
 
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
-import Kore.JsonRpc (TODOInternalizedModule (..), runServer)
+import Options.Applicative
+
+import Kore.JsonRpc (runServer)
+import Kore.Syntax.ParsedKore (loadDefinition)
 import Kore.VersionInfo (VersionInfo (..), versionInfo)
-import Options.Applicative (InfoMod, Parser, argument, auto, execParser, fullDesc, header, help, helper, info, infoOption, long, metavar, option, short, str, (<**>))
 
 main :: IO ()
 main = do
     options <- execParser clParser
     let CLOptions{definitionFile, mainModuleName, port} = options
-    internalModule <- getInternalModuleTODO mainModuleName definitionFile
+    internalModule <-
+        either (error . show) id
+            <$> loadDefinition mainModuleName definitionFile
     runServer port internalModule
   where
     clParser =
@@ -75,6 +79,3 @@ versionInfoStr =
         ]
   where
     VersionInfo{gitHash, gitDirty, gitBranch, gitCommitDate} = $versionInfo
-
-getInternalModuleTODO :: Text -> FilePath -> IO TODOInternalizedModule
-getInternalModuleTODO _ _ = return TODOInternalizedModule
