@@ -49,7 +49,7 @@ main = do
         response <- recv s 8192
         trace "[Info] Response received." $
             pure response
-    maybe BS.putStrLn compareToExpectation expectFile $ result
+    maybe BS.putStrLn compareToExpectation expectFile result
 
 data Options = Options
     { host :: String
@@ -59,6 +59,7 @@ data Options = Options
     , options :: [(String, String)] -- verbatim options (name, value) to add to json
     , expectFile :: Maybe FilePath -- whether to diff to an expectation file or output
     }
+    deriving stock (Show)
 
 {- | Defines what to do. Either one of the endpoints (with state in a
  file), or raw data (entire input in a file).
@@ -68,10 +69,77 @@ data Mode
     | Simpl FilePath
     | Check FilePath FilePath
     | SendRaw FilePath
+    deriving stock (Show)
 
 parseOptions :: ParserInfo Options
 parseOptions =
-    undefined
+    info
+        (parseOptions' <**> helper)
+        ( fullDesc
+            <> progDesc "Simple RPC test client"
+        )
+  where
+    parseOptions' =
+        Options
+            <$> hostOpt
+            <*> portOpt
+            <*> parseMode
+            <*> paramFileOpt
+            <*> many paramOpt
+            <*> expectFileOpt
+    hostOpt =
+        strOption $
+            long "host"
+                <> short 'h'
+                <> metavar "HOST"
+                <> value "localhost"
+                <> help "server host (default: localhost)"
+    portOpt =
+        option auto $
+            long "port"
+                <> short 'p'
+                <> metavar "PORT"
+                <> help "server port (default 31337)"
+                <> value 31337
+    paramFileOpt =
+        optional $
+            strOption $
+                long "param-file"
+                    <> metavar "PARAMFILE"
+                    <> help "file with parameters (json object), optional"
+    paramOpt =
+        option readPair $
+            short 'o'
+                <> metavar "NAME=VALUE"
+                <> help "parameters to use (name=value)"
+    expectFileOpt =
+        optional $
+            strOption $
+                long "expect"
+                    <> metavar "EXPECTATIONFILE"
+                    <> help "file with expected output (json), optional"
+
+    readPair =
+        maybeReader $ \s -> case split (== '=') s of [k, v] -> Just (k, v); _ -> Nothing
+
+parseMode :: Parser Mode
+parseMode =
+    (Exec <$> parseExec)
+        <|> (SendRaw <$> parseRaw)
+  where
+    --        <|> Simpl <$> parseSimpl
+    --        <|> Check <$> parseCheck
+
+    parseExec =
+        strOption $
+            long "execute"
+                <> metavar "TERMFILE"
+                <> help "execute (rewrite) the term in the file"
+    parseRaw =
+        strOption $
+            long "send"
+                <> metavar "JSONFILE"
+                <> help "send the raw file contents directly"
 
 ----------------------------------------
 prepareRequestData :: Mode -> Maybe FilePath -> [(String, String)] -> IO BS.ByteString
@@ -83,19 +151,22 @@ prepareRequestData (SendRaw file) mbFile opts = do
     BS.readFile file
 prepareRequestData (Exec file) mbOptFile opts = do
     term :: Json.Value <-
-        BS.readFile file
-            >>= either error pure . Json.eitherDecode @Syntax.KorePattern
-            >>= pure . Json.toJSON
+        Json.toJSON
+            <$> ( BS.readFile file -- decode given term to test whether it is valid
+                    >>= either error pure . Json.eitherDecode @Syntax.KorePattern
+                )
     paramsFromFile <-
         maybe
-            (pure $ JsonKeyMap.empty)
+            (pure JsonKeyMap.empty)
             ( BS.readFile
                 >=> either error (pure . getObject) . Json.eitherDecode @Json.Value
             )
             mbOptFile
     let params = paramsFromFile <> object opts
     let requestData =
-            (mkRequest "execute") +: "params" ~> Json.Object (params +: "term" ~> term)
+            mkRequest "execute"
+                +: "params"
+                ~> Json.Object (params +: "term" ~> term)
     pure $ Json.encode requestData
 prepareRequestData (Simpl _file) _mbOptFile _opts = do
     error "not implemented yet"
