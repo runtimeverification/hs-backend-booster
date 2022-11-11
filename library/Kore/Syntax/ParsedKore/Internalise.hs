@@ -150,13 +150,14 @@ addModule
                     StateT s (Except DefinitionError) (Def.SymbolName, (SymbolAttributes, SymbolSort))
                 internaliseSymbol s@ParsedSymbol{name} = do
                     info <- mkSymbolSorts sorts s
+                    -- TODO: rename extract
                     pure (fromJsonId name, (extract s, info))
             newSymbols' <- mapM internaliseSymbol parsedSymbols
             let symbols = Map.fromList newSymbols' <> currentSymbols
 
             let internaliseAlias ::
                     ParsedAlias ->
-                    StateT s (Except DefinitionError) Alias
+                    StateT s (Except DefinitionError) (Def.AliasName, Alias)
                 -- TODO: handle attributes
                 internaliseAlias ParsedAlias { name, sortVars, argSorts, sort, args, rhs } = lift $ do 
                     unless (length argSorts == length args) (error "TODO: add error")
@@ -167,11 +168,15 @@ addModule
                     internalArgSorts <- traverse (withExcept DefinitionSortError . checkSort (Set.fromList paramNames) sorts) argSorts
                     internalResSort <- withExcept DefinitionSortError $ checkSort (Set.fromList paramNames) sorts sort
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
-                    let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, axioms = currentAxioms}
+                    let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, aliases = currentAliases, axioms = currentAxioms}
                     mInternalRhs <- withExcept DefinitionPatternError $ runMaybeT $ internaliseTermOrPredicate partialDefinition rhs
-                    internalRhs <- maybe (throwE undefined) return mInternalRhs
-                    -- TODO: check sort of rhs
-                    return Alias { name = internalName, params, args = internalArgs, rhs = internalRhs }
+                    internalRhs <- maybe (throwE (error "TODO: add error type")) return mInternalRhs
+                    let rhsSort = Def.sortOfTermOrPredicate internalRhs
+                    unless (maybe internalResSort id rhsSort == internalResSort) (error "TODO: add error")
+                    return (internalName, Alias { name = internalName, params, args = internalArgs, rhs = internalRhs })
+
+            newAliases <- traverse internaliseAlias parsedAliases
+            let aliases = Map.fromList newAliases <> currentAliases
 
             pure
                 KoreDefinition
@@ -179,6 +184,7 @@ addModule
                     , modules
                     , sorts
                     , symbols
+                    , aliases
                     , axioms = currentAxioms -- FIXME
                     }
       where

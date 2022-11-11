@@ -24,6 +24,12 @@ data Term
     | Var Variable
     deriving stock (Eq, Ord, Show)
 
+sortOfTerm :: Term -> Sort
+sortOfTerm (AndTerm sort _ _) = sort
+sortOfTerm (SymbolApplication sort _ _ _) = sort
+sortOfTerm (DomainValue sort _) = sort
+sortOfTerm (Var Variable {variableSort}) = variableSort
+
 {- | A predicate describes constraints on terms. It will always evaluate
    to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.
 -}
@@ -54,6 +60,10 @@ data TermOrPredicate
     = ATerm Term
     | APredicate Predicate
     deriving stock (Eq, Ord, Show)
+
+sortOfTermOrPredicate :: TermOrPredicate -> Maybe Sort
+sortOfTermOrPredicate (ATerm term) = Just (sortOfTerm term)
+sortOfTermOrPredicate (APredicate _) = Nothing
 
 type VarName = Text
 type SymbolName = Text
