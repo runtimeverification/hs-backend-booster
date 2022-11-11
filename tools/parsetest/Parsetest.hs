@@ -53,7 +53,7 @@ testParse verbose f = do
     putStrLn $ either ("FAILURE\n" <>) (("SUCCESS\n" <>) . showResult) result
     putStrLn "----------------------------------------"
   where
-      showResult = if verbose then prettify else (`deepseq` "")
+    showResult = if verbose then prettify else (`deepseq` "")
 
 report :: FilePath -> IO (Either String Report)
 report file = runExceptT $ do
@@ -89,7 +89,7 @@ data Report = Report
     , axiomCount :: Int
     }
     deriving stock (Eq, Show, Generic)
-    deriving anyclass NFData
+    deriving anyclass (NFData)
 
 findByExtension ::
     -- | extension
