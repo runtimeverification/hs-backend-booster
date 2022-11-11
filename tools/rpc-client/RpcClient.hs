@@ -16,64 +16,144 @@ module RpcClient (
 
 import Control.Monad
 import Data.Aeson qualified as Json
+import Data.Aeson.Key qualified as JsonKey
+import Data.Aeson.KeyMap qualified as JsonKeyMap
+import Data.Bifunctor
 import Data.ByteString.Lazy.Char8 qualified as BS
+import Data.Char (isDigit)
+import Data.List.Extra
+import Data.Maybe (isNothing)
+import Data.Text qualified as Text
+import Data.Vector as Array (fromList)
 import Network.Run.TCP
-import Network.Socket
+import Network.Socket ()
 import Network.Socket.ByteString.Lazy
 import Options.Applicative
 import System.Exit
+import System.IO
 
-import Kore.JsonRpc.Base qualified as Rpc
 import Kore.Syntax.Json.Base qualified as Syntax
 
 import Debug.Trace
 
 main :: IO ()
 main = do
-    error "implement me!"
-    Options{host, port, action, optionFile, options, expectFile} <- execParser parseOptions
+    Options{host, port, mode, optionFile, options, expectFile} <-
+        execParser parseOptions
     request <-
-        trace "Preparing request data" $
-        prepareRequestData action optionFile options
+        trace "[Info] Preparing request data" $
+            prepareRequestData mode optionFile options
     result <- runTCPClient host (show port) $ \s -> do
-        trace "Sending request..." $
+        trace "[Info] Sending request..." $
             sendAll s request
         response <- recv s 8192
-        trace "Response received." $
+        trace "[Info] Response received." $
             pure response
     maybe BS.putStrLn compareToExpectation expectFile $ result
 
-data Options =
-    Options
+data Options = Options
     { host :: String
     , port :: Int
-    , action :: Action -- what to do
+    , mode :: Mode -- what to do
     , optionFile :: Maybe FilePath -- file with options (different for each endpoint
     , options :: [(String, String)] -- verbatim options (name, value) to add to json
     , expectFile :: Maybe FilePath -- whether to diff to an expectation file or output
     }
 
--- | Defines what to do. Either one of the endpoints, or raw data
-data Action
+{- | Defines what to do. Either one of the endpoints (with state in a
+ file), or raw data (entire input in a file).
+-}
+data Mode
     = Exec FilePath
     | Simpl FilePath
-    | Check FilePath
+    | Check FilePath FilePath
     | SendRaw FilePath
 
 parseOptions :: ParserInfo Options
-parseOptions = undefined
-
-prepareRequestData :: Action -> Maybe FilePath -> [(String, String)] -> IO BS.ByteString
-prepareRequestData (SendRaw file) _ _ =
-    BS.readFile file
-prepareRequestData (Exec file) opts mbOptFile = do
+parseOptions =
     undefined
+
+----------------------------------------
+prepareRequestData :: Mode -> Maybe FilePath -> [(String, String)] -> IO BS.ByteString
+prepareRequestData (SendRaw file) mbFile opts = do
+    unless (isNothing mbFile) $
+        hPutStrLn stderr "[Warning] Raw mode, ignoring given option file"
+    unless (null opts) $
+        hPutStrLn stderr "[Warning] Raw mode, ignoring given request options"
+    BS.readFile file
+prepareRequestData (Exec file) mbOptFile opts = do
+    term :: Json.Value <-
+        BS.readFile file
+            >>= either error pure . Json.eitherDecode @Syntax.KorePattern
+            >>= pure . Json.toJSON
+    paramsFromFile <-
+        maybe
+            (pure $ JsonKeyMap.empty)
+            ( BS.readFile
+                >=> either error (pure . getObject) . Json.eitherDecode @Json.Value
+            )
+            mbOptFile
+    let params = paramsFromFile <> object opts
+    let requestData =
+            (mkRequest "execute") +: "params" ~> Json.Object (params +: "term" ~> term)
+    pure $ Json.encode requestData
+prepareRequestData (Simpl _file) _mbOptFile _opts = do
+    error "not implemented yet"
+prepareRequestData (Check _file1 _file2) _mbOptFile _opts = do
+    error "not implemented yet"
+
+getObject :: Json.Value -> Json.Object
+getObject (Json.Object o) = o
+getObject other = error $ "Expected object, found " <> show other
+
+object :: [(String, String)] -> Json.Object
+object = JsonKeyMap.fromList . map mkKeyPair
+  where
+    mkKeyPair = bimap JsonKey.fromString valueFrom
+
+    -- second-guessing the value type from the contents
+    -- we need single-word strings, lists of strings, and numbers
+    valueFrom :: String -> Json.Value
+    valueFrom [] = Json.Null
+    valueFrom s@('[' : rest)
+        | last rest == ']' =
+            Json.Array $ valuesFrom (init rest)
+        | otherwise =
+            error $ "garbled list " <> s
+    valueFrom s
+        | all isDigit s =
+            Json.Number (fromInteger $ read s)
+    valueFrom s =
+        Json.String $ Text.pack s
+
+    -- comma-separated list of values
+    valuesFrom :: String -> Json.Array
+    valuesFrom = Array.fromList . map (valueFrom . trim) . split (== ',')
+
+infixl 5 ~>
+(~>) :: k -> v -> (k, v)
+(~>) = (,)
+
+infixl 4 +:
+(+:) :: Json.Object -> (String, Json.Value) -> Json.Object
+o +: (k, v) = JsonKeyMap.insert (JsonKey.fromString k) v o
+
+mkRequest :: String -> Json.Object
+mkRequest method =
+    object
+        [ "jsonrpc" ~> "2.0"
+        , "id" ~> "1"
+        , "method" ~> method
+        ]
 
 compareToExpectation :: FilePath -> BS.ByteString -> IO ()
 compareToExpectation expectFile output = do
     expected <- BS.readFile expectFile
-    -- TODO https://hackage.haskell.org/package/Diff
+    -- TODO https://hackage.haskell.org/package/Diff (needs json reformatting)
+    -- or  https://hackage.haskell.org/package/aeson-diff (needs diff pretty-printer)
     when (output /= expected) $ do
-        BS.putStrLn output
-        BS.putStrLn "Not the same, sorry."
+        BS.putStrLn $ "[Error] Expected:\n" <> expected
+        BS.putStrLn $ "[Error] but got:\n" <> output
+        BS.putStrLn "[Error] Not the same, sorry."
         exitWith $ ExitFailure 1
+    hPutStrLn stderr $ "[Info] Output matches " <> expectFile

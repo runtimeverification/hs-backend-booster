@@ -102,12 +102,16 @@ executables:
     main-is: RpcClient.main
     dependencies:
       - aeson
+      - aeson-pretty
       - base
       - bytestring
+      - extra
       - hs-backend-booster
       - network
       - network-run
       - optparse-applicative
+      - text
+      - vector
     ghc-options:
       - -rtsopts
 
