@@ -13,6 +13,7 @@ module Kore.Syntax.ParsedKore.Internalise (
 ) where
 
 import Control.Monad.State
+import Control.Monad.Trans.Maybe (runMaybeT)
 import Control.Monad.Trans.Except
 import Data.Bifunctor (first)
 import Data.Function (on)
@@ -157,9 +158,20 @@ addModule
                     ParsedAlias ->
                     StateT s (Except DefinitionError) Alias
                 -- TODO: handle attributes
-                internaliseAlias ParsedAlias { name, sortVars, argSorts, args, rhs } = do 
-                    -- TODO(tomorrow): internalise sorts, symbols and patterns for aliases
-                    undefined
+                internaliseAlias ParsedAlias { name, sortVars, argSorts, sort, args, rhs } = lift $ do 
+                    unless (length argSorts == length args) (error "TODO: add error")
+                    let paramNames = Json.getId <$> sortVars
+                        params = Def.SortVar <$> paramNames
+                        argNames = Json.getId <$> args
+                        internalName = Json.getId name
+                    internalArgSorts <- traverse (withExcept DefinitionSortError . checkSort (Set.fromList paramNames) sorts) argSorts
+                    internalResSort <- withExcept DefinitionSortError $ checkSort (Set.fromList paramNames) sorts sort
+                    let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
+                    let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, axioms = currentAxioms}
+                    mInternalRhs <- withExcept DefinitionPatternError $ runMaybeT $ internaliseTermOrPredicate partialDefinition rhs
+                    internalRhs <- maybe (throwE undefined) return mInternalRhs
+                    -- TODO: check sort of rhs
+                    return Alias { name = internalName, params, args = internalArgs, rhs = internalRhs }
 
             pure
                 KoreDefinition
@@ -232,4 +244,5 @@ data DefinitionError
     | DuplicateSymbols [ParsedSymbol]
     | DuplicateNames [Text]
     | DefinitionSortError SortError
+    | DefinitionPatternError PatternError
     deriving stock (Eq, Show)
