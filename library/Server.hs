@@ -19,8 +19,10 @@ main = do
     options <- execParser clParser
     let CLOptions{definitionFile, mainModuleName, port} = options
     putStrLn $
-        "Loading definition from " <> definitionFile
-            <> ", main module " <> show mainModuleName
+        "Loading definition from "
+            <> definitionFile
+            <> ", main module "
+            <> show mainModuleName
     internalModule <-
         either (error . show) id
             <$> loadDefinition mainModuleName definitionFile
