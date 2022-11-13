@@ -114,6 +114,20 @@ executables:
       - vector
     ghc-options:
       - -rtsopts
+  parsetest:
+    source-dirs: tools/parsetest
+    main: Parsetest.hs
+    dependencies:
+      - base
+      - containers
+      - deepseq
+      - directory
+      - filepath
+      - hs-backend-booster
+      - text
+      - transformers
+    ghc-options:
+    - -rtsopts
 
 tests:
   test-suite:
