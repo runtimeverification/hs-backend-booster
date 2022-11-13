@@ -72,7 +72,9 @@ clOptionsParser =
             auto
             ( metavar "SERVER_PORT"
                 <> long "server-port"
+                <> value 31337
                 <> help "Port for the RPC server to bind to"
+                <> showDefault
             )
 
 versionInfoStr :: String

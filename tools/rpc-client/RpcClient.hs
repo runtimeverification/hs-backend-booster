@@ -26,7 +26,7 @@ import Data.Maybe (isNothing)
 import Data.Text qualified as Text
 import Data.Vector as Array (fromList)
 import Network.Run.TCP
-import Network.Socket ()
+import Network.Socket
 import Network.Socket.ByteString.Lazy
 import Options.Applicative
 import System.Exit
@@ -40,16 +40,16 @@ main :: IO ()
 main = do
     Options{host, port, mode, optionFile, options, expectFile} <-
         execParser parseOptions
-    request <-
-        trace "[Info] Preparing request data" $
-            prepareRequestData mode optionFile options
-    result <- runTCPClient host (show port) $ \s -> do
+    runTCPClient host (show port) $ \s -> do
+        request <-
+            trace "[Info] Preparing request data" $
+                prepareRequestData mode optionFile options
         trace "[Info] Sending request..." $
             sendAll s request
         response <- recv s 8192
         trace "[Info] Response received." $
-            pure response
-    maybe BS.putStrLn compareToExpectation expectFile result
+            maybe BS.putStrLn compareToExpectation expectFile response
+        shutdown s ShutdownBoth
 
 data Options = Options
     { host :: String
@@ -93,14 +93,16 @@ parseOptions =
                 <> short 'h'
                 <> metavar "HOST"
                 <> value "localhost"
-                <> help "server host (default: localhost)"
+                <> help "server host to connect to"
+                <> showDefault
     portOpt =
         option auto $
             long "port"
                 <> short 'p'
                 <> metavar "PORT"
-                <> help "server port (default 31337)"
                 <> value 31337
+                <> help "server port to connect to"
+                <> showDefault
     paramFileOpt =
         optional $
             strOption $
