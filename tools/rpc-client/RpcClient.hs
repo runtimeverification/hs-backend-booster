@@ -32,7 +32,7 @@ import Options.Applicative
 import System.Exit
 import System.IO
 
-import Kore.Syntax.Json.Base qualified as Syntax
+import Kore.Syntax.Json qualified as Syntax
 
 import Debug.Trace
 
@@ -153,7 +153,7 @@ prepareRequestData (SendRaw file) mbFile opts = do
     BS.readFile file
 prepareRequestData (Exec file) mbOptFile opts = do
     term :: Json.Value <-
-        Json.toJSON
+        Json.toJSON . Syntax.addHeader
             <$> ( BS.readFile file -- decode given term to test whether it is valid
                     >>= either error pure . Json.eitherDecode @Syntax.KorePattern
                 )
@@ -168,7 +168,7 @@ prepareRequestData (Exec file) mbOptFile opts = do
     let requestData =
             mkRequest "execute"
                 +: "params"
-                ~> Json.Object (params +: "term" ~> term)
+                ~> Json.Object (params +: "state" ~> term)
     pure $ Json.encode requestData
 prepareRequestData (Simpl _file) _mbOptFile _opts = do
     error "not implemented yet"
