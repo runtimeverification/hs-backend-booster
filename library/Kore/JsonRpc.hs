@@ -39,7 +39,7 @@ import Network.JSONRPC (
 import Kore.Definition.Base (KoreDefinition (..))
 import Kore.JsonRpc.Base
 import Kore.Network.JsonRpc (jsonrpcTCPServer)
-import Kore.Syntax.Json.Base (Id (..), KORE (..), KoreJson (..), KorePattern (..), Sort (..), Version (..))
+import Kore.Syntax.Json (KoreJson)
 
 respond ::
     forall m.
@@ -48,39 +48,26 @@ respond ::
     Respond (API 'Req) m (API 'Res)
 respond KoreDefinition{} =
     \case
-        Execute _ -> do
+        Execute ExecuteRequest{state = startState} -> do
             Log.logDebug "Testing JSON-RPC server."
-            pure $ Right dummyExecuteResult
+            pure $ Right $ dummyExecuteResult startState
+
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left $ ErrorObj "Cancel request unsupported in batch mode" (-32001) Null
         -- using "Method does not exist" error code
+
         _ -> pure $ Left $ ErrorObj "Not implemented" (-32601) Null
   where
-    dummyExecuteState :: ExecuteState
-    dummyExecuteState =
-        ExecuteState
-            { term = dummyKoreJson
-            , predicate = Nothing
-            }
-
-    dummyExecuteResult :: API 'Res
-    dummyExecuteResult =
+    dummyExecuteResult :: KoreJson -> API 'Res
+    dummyExecuteResult term =
         Execute
             ExecuteResult
                 { reason = Stuck
                 , depth = Depth 0
-                , state = dummyExecuteState
+                , state = ExecuteState{term, predicate = Nothing}
                 , nextStates = Nothing
                 , rule = Nothing
                 }
-
-    dummyKoreJson :: KoreJson
-    dummyKoreJson =
-        KoreJson
-            { format = KORE
-            , version = KJ1
-            , term = KJTop (SortVar (Id "SV"))
-            }
 
 runServer :: Int -> KoreDefinition -> LogLevel -> IO ()
 runServer port internalizedModule logLevel =
