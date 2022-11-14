@@ -38,6 +38,7 @@ Only very few validations are performed on the parsed data.
 -}
 buildDefinition :: Maybe Text -> ParsedDefinition -> Except DefinitionError KoreDefinition
 buildDefinition mbMainModule def@ParsedDefinition{modules} =
+-- FIXME FIXME FIXME
     definition
         <$> execStateT (descendFrom mainModule) State{moduleMap, definition = start}
   where
@@ -46,42 +47,43 @@ buildDefinition mbMainModule def@ParsedDefinition{modules} =
     start = emptyKoreDefinition (extract def)
 
 {- | The state while traversing the module import graph. This is
- internal only, but the definition is the result of the traversal.
+ internal only, but the definition map contains the result of the
+ traversal.
 -}
 data DefinitionState = State
     { moduleMap :: Map Text ParsedModule
-    , definition :: KoreDefinition
+    , definitionMap :: Map Text KoreDefinition
     }
 
 {- | Traverses the import graph bottom up, ending in the given named
    module. All entities (sorts, symbols, axioms) that are in scope in
-   that module are added to the definition.
+   that module are added to the definition map.
 -}
 descendFrom :: Text -> StateT DefinitionState (Except DefinitionError) ()
 descendFrom m = do
-    State{moduleMap, definition = currentDef} <- get
-    case Map.lookup m (Def.modules currentDef) of
-        Just _ -> pure () -- already internalised (present in the definition)
+    State{moduleMap, definitionMap = currentDefMap} <- get
+    case Map.lookup m currentDefMap of
+        Just _ -> pure () -- already internalised
         Nothing -> do
             let mbModule = Map.lookup m moduleMap
             theModule <- maybe (defError $ NoSuchModule m) pure mbModule
 
             -- traverse imports recursively in pre-order before
             -- dealing with the current module.
-            --
-            -- NB that this is not exactly the imported context,
-            -- though: in recursive calls when handling an imported
-            -- module, other modules may be in the current definition
-            -- which are not actually imported in that submodule
-            mapM_ (descendFrom . fromJsonId . fst) $ imports theModule
+            let imported = map (fromJsonId . fst) $ imports theModule
+            mapM_ descendFrom imported
 
-            -- refresh current definition
-            def <- gets definition
+            -- build module context from imports
+            defMap <- gets definitionMap
+            let getModule name =
+                    maybe (error $ show name <> "missing after traversal") id $
+                        Map.lookup name defMap
+                def = foldl (<>) (emptyKoreDefinition DefinitionAttributes) $
+                          map getModule imported
 
-            -- validate and add new module in context of the existing
-            -- definition
+            -- validate and add new module in context of the imports
             newDef <- addModule theModule def
-            modify $ \s -> s{definition = newDef}
+            modify $ \s -> s{definitionMap = Map.insert m newDef defMap}
 
 -- | currently no validations are performed
 addModule ::

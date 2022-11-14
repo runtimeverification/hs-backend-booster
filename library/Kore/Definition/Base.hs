@@ -16,6 +16,7 @@ module Kore.Definition.Base (
 ) where
 
 import Data.Map.Strict as Map (Map, empty)
+import Data.Map.Strict qualified as Map
 import Data.Set (Set)
 import Data.Text (Text)
 
@@ -39,7 +40,7 @@ unique bottom element @None@ to the index type (to make it a lattice).
 This can then handle @AndTerm@ by indexing both arguments and
 combining them.
 
-NB we should not derive an 'Ord' instance since it would not reflect
+NB we derive an 'Ord' instance (for Data.Map) which does not reflect
 the fact that different symbols (and likewise different constructors)
 are incompatible.
 -}
@@ -48,7 +49,7 @@ data TermIndex
     | Symbol SymbolName
     | Anything -- top element
     -- should we have  | Value Sort ?? (see Term type)
-    deriving (Eq, Show)
+    deriving stock (Eq, Ord, Show)
 
 -- | Combines two indexes (an "infimum" function on the index lattice)
 combine :: TermIndex -> TermIndex -> TermIndex
@@ -79,7 +80,35 @@ data KoreDefinition = KoreDefinition
     , symbols :: Map SymbolName (SymbolAttributes, SymbolSort) -- constructors and functions
     , axioms :: Map TermIndex [Set Axiom] -- grouped by decreasing priority
     }
-    deriving (Eq, Show)
+    deriving stock (Eq, Show)
+
+-- | semigroup instance where collisions are forbidden (calls 'error' on collisions)
+instance Semigroup KoreDefinition where
+    (<>) k1@KoreDefinition{attributes = att1} k2@KoreDefinition{attributes = att2}
+        | att1 /= att2 = error $ "Definition attributes differ: " <> show (att1, att2)
+        | otherwise =
+          KoreDefinition
+          { attributes = att1 -- assume attributes are the same
+          , modules = mergeDisjoint modules k1 k2
+          , sorts = mergeDisjoint sorts k1 k2
+          , symbols = mergeDisjoint symbols k1 k2
+          , axioms = mergeAxioms k1 k2
+          }
+      where
+        mergeAxioms :: KoreDefinition -> KoreDefinition -> Map TermIndex [Set Axiom]
+        mergeAxioms m1 m2 = Map.unionWith (<>) (axioms m1) (axioms m2)
+
+        mergeDisjoint ::
+            (Ord k, Show k) =>
+            (KoreDefinition -> Map k a) ->
+            KoreDefinition ->
+            KoreDefinition ->
+            Map k a
+        mergeDisjoint selector m1 m2 =
+            Map.unionWithKey
+            (\k _ _ -> error ("Duplicate key " <> show k))
+            (selector m1)
+            (selector m2)
 
 -- | Sort information related to a symbol: result and argument sorts
 data SymbolSort = SymbolSort
@@ -87,6 +116,7 @@ data SymbolSort = SymbolSort
     , argSorts :: [Sort]
     }
     deriving stock (Eq, Show)
+
 
 {- | The starting point for building up the definition. Could be
  'Monoid' instance if the attributes had a Default.
