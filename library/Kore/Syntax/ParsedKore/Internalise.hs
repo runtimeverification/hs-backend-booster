@@ -38,13 +38,21 @@ Only very few validations are performed on the parsed data.
 -}
 buildDefinition :: Maybe Text -> ParsedDefinition -> Except DefinitionError KoreDefinition
 buildDefinition mbMainModule def@ParsedDefinition{modules} =
--- FIXME FIXME FIXME
-    definition
-        <$> execStateT (descendFrom mainModule) State{moduleMap, definition = start}
+    expectPresent mainModule . definitionMap
+        <$> execStateT (descendFrom mainModule) startState
   where
     mainModule = fromMaybe (moduleName $ last modules) mbMainModule
     moduleMap = Map.fromList [(moduleName m, m) | m <- modules]
-    start = emptyKoreDefinition (extract def)
+    startState =
+        State
+            { moduleMap
+            , definitionMap = Map.empty
+            , definitionAttributes = extract def
+            }
+
+expectPresent :: (Ord k, Show k) => k -> Map k a -> a
+expectPresent k =
+    fromMaybe (error $ show k <> " not present in map") . Map.lookup k
 
 {- | The state while traversing the module import graph. This is
  internal only, but the definition map contains the result of the
@@ -53,6 +61,7 @@ buildDefinition mbMainModule def@ParsedDefinition{modules} =
 data DefinitionState = State
     { moduleMap :: Map Text ParsedModule
     , definitionMap :: Map Text KoreDefinition
+    , definitionAttributes :: DefinitionAttributes
     }
 
 {- | Traverses the import graph bottom up, ending in the given named
@@ -61,7 +70,7 @@ data DefinitionState = State
 -}
 descendFrom :: Text -> StateT DefinitionState (Except DefinitionError) ()
 descendFrom m = do
-    State{moduleMap, definitionMap = currentDefMap} <- get
+    State{moduleMap, definitionMap = currentDefMap, definitionAttributes} <- get
     case Map.lookup m currentDefMap of
         Just _ -> pure () -- already internalised
         Nothing -> do
@@ -73,13 +82,11 @@ descendFrom m = do
             let imported = map (fromJsonId . fst) $ imports theModule
             mapM_ descendFrom imported
 
-            -- build module context from imports
+            -- build the module's context from imports
             defMap <- gets definitionMap
-            let getModule name =
-                    maybe (error $ show name <> "missing after traversal") id $
-                        Map.lookup name defMap
-                def = foldl (<>) (emptyKoreDefinition DefinitionAttributes) $
-                          map getModule imported
+            let def =
+                    foldl (<>) (emptyKoreDefinition definitionAttributes) $
+                        map (flip expectPresent defMap) imported
 
             -- validate and add new module in context of the imports
             newDef <- addModule theModule def

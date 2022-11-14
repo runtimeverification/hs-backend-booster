@@ -87,13 +87,13 @@ instance Semigroup KoreDefinition where
     (<>) k1@KoreDefinition{attributes = att1} k2@KoreDefinition{attributes = att2}
         | att1 /= att2 = error $ "Definition attributes differ: " <> show (att1, att2)
         | otherwise =
-          KoreDefinition
-          { attributes = att1 -- assume attributes are the same
-          , modules = mergeDisjoint modules k1 k2
-          , sorts = mergeDisjoint sorts k1 k2
-          , symbols = mergeDisjoint symbols k1 k2
-          , axioms = mergeAxioms k1 k2
-          }
+            KoreDefinition
+                { attributes = att1 -- assume attributes are the same
+                , modules = mergeDisjoint modules k1 k2
+                , sorts = mergeDisjoint sorts k1 k2
+                , symbols = mergeDisjoint symbols k1 k2
+                , axioms = mergeAxioms k1 k2
+                }
       where
         mergeAxioms :: KoreDefinition -> KoreDefinition -> Map TermIndex [Set Axiom]
         mergeAxioms m1 m2 = Map.unionWith (<>) (axioms m1) (axioms m2)
@@ -106,9 +106,9 @@ instance Semigroup KoreDefinition where
             Map k a
         mergeDisjoint selector m1 m2 =
             Map.unionWithKey
-            (\k _ _ -> error ("Duplicate key " <> show k))
-            (selector m1)
-            (selector m2)
+                (\k _ _ -> error ("Duplicate key " <> show k))
+                (selector m1)
+                (selector m2)
 
 -- | Sort information related to a symbol: result and argument sorts
 data SymbolSort = SymbolSort
@@ -116,7 +116,6 @@ data SymbolSort = SymbolSort
     , argSorts :: [Sort]
     }
     deriving stock (Eq, Show)
-
 
 {- | The starting point for building up the definition. Could be
  'Monoid' instance if the attributes had a Default.
