@@ -59,11 +59,17 @@ data Pattern = Pattern
 data TermOrPredicate
     = ATerm Term
     | APredicate Predicate
+    | Both Pattern
     deriving stock (Eq, Ord, Show)
 
 sortOfTermOrPredicate :: TermOrPredicate -> Maybe Sort
 sortOfTermOrPredicate (ATerm term) = Just (sortOfTerm term)
+sortOfTermOrPredicate (Both Pattern {term}) = Just (sortOfTerm term)
 sortOfTermOrPredicate (APredicate _) = Nothing
+
+retractPattern :: TermOrPredicate -> Maybe Pattern
+retractPattern (Both patt) = Just patt
+retractPattern _ = Nothing
 
 type VarName = Text
 type SymbolName = Text

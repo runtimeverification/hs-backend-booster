@@ -7,6 +7,7 @@ License     : BSD-3-Clause
 module Kore.Syntax.Json.Internalise (
     internalisePattern,
     internaliseTermOrPredicate,
+    internaliseTerm,
     internalisePredicate,
     PatternError (..),
     checkSort,
@@ -74,6 +75,7 @@ internaliseTermOrPredicate ::
 internaliseTermOrPredicate definition syntaxPatt =
     (lift $ Internal.ATerm <$> internaliseTerm definition syntaxPatt)
         <|> (lift $ Internal.APredicate <$> internalisePredicate definition syntaxPatt)
+        <|> (lift $ Internal.Both <$> internalisePattern definition syntaxPatt)
 
 -- check that two sorts "agree". Incomplete, see comment on ensureSortsAgree.
 sortCheck :: Syntax.KorePattern -> (Internal.Sort, Internal.Sort) -> Except PatternError ()

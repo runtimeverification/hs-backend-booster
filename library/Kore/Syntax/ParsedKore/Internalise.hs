@@ -102,7 +102,7 @@ addModule
         , sorts = parsedSorts
         , symbols = parsedSymbols
         , aliases = parsedAliases
-        , axioms = _parsedAxioms
+        , axioms = parsedAxioms
         }
     KoreDefinition
         { attributes
@@ -178,6 +178,41 @@ addModule
             newAliases <- traverse internaliseAlias parsedAliases
             let aliases = Map.fromList newAliases <> currentAliases
 
+            let internaliseAxiom ::
+                    ParsedAxiom ->
+                    StateT s (Except DefinitionError) (TermIndex, Axiom)
+                -- TODO: attributes!
+                internaliseAxiom ParsedAxiom { axiom } = lift $ do
+                    case axiom of
+                        Json.KJRewrites _ left right ->
+                            case left of
+                                -- TODO: factor out
+                                Json.KJAnd _ (Json.KJNot _ _) (Json.KJApp (Json.Id aliasName) _ aliasArgs) -> do
+                                    alias <- except $ note (error "TODO: add error") $ Map.lookup aliasName aliases
+                                    let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, aliases, axioms = currentAxioms}
+                                    args <- traverse (withExcept (error "TODO: add error") . internaliseTerm partialDefinition) aliasArgs
+                                    result <- expandAlias alias args
+                                    lhs <- except $ note (error "TODO: add error") $ Def.retractPattern result
+                                    let computeTermIndex _ = return Anything
+                                    termIndex <- computeTermIndex lhs
+                                    rhs <- withExcept DefinitionPatternError . internalisePattern partialDefinition $ right
+                                    return (termIndex, Axiom { lhs, rhs })
+                                (Json.KJApp (Json.Id aliasName) _ aliasArgs) -> do
+                                    alias <- except $ note (error "TODO: add error") $ Map.lookup aliasName aliases
+                                    let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, aliases, axioms = currentAxioms}
+                                    args <- traverse (withExcept (error "TODO: add error") . internaliseTerm partialDefinition) aliasArgs
+                                    result <- expandAlias alias args
+                                    lhs <- except $ note (error "TODO: add error") $ Def.retractPattern result
+                                    let computeTermIndex _ = return Anything
+                                    termIndex <- computeTermIndex lhs
+                                    rhs <- withExcept DefinitionPatternError . internalisePattern partialDefinition $ right
+                                    return (termIndex, Axiom { lhs, rhs })
+                                _ -> throwE $ error "TODO: this should be an error"
+                        _ -> error "TODO: this shouldn't be an error, we should ignore other axioms"
+            
+            newAxioms <- traverse internaliseAxiom parsedAxioms
+            -- TODO: group by priority
+
             pure
                 KoreDefinition
                     { attributes
@@ -202,9 +237,68 @@ addModule
              in ( Map.fromAscList [(getKey a, a) | [a] <- good]
                 , [(getKey $ head d, d) | d <- dups]
                 )
+        
+        note :: e -> Maybe a -> Either e a
+        note e = maybe (Left e) Right
 
 defError :: DefinitionError -> StateT s (Except DefinitionError) a
 defError = lift . throwE
+
+expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
+expandAlias Alias {args, rhs} currentArgs
+    | length args /= length currentArgs = throwE (error "TODO: add error")
+    | otherwise =
+        let substitution = Map.fromList (zip args currentArgs)
+         in return $ substitute substitution rhs
+  where
+    substitute substitution termOrPredicate =
+        case termOrPredicate of
+            Def.ATerm term -> 
+                Def.ATerm $ substituteInTerm substitution term
+            Def.APredicate predicate ->
+                Def.APredicate $ substituteInPredicate substitution predicate
+            Def.Both Def.Pattern {term, constraints} ->
+                Def.Both Def.Pattern
+                    { term = substituteInTerm substitution term
+                    , constraints =
+                        substituteInPredicate substitution <$> constraints 
+                    }
+    
+    substituteInTerm substitution term =
+        case term of
+            Def.AndTerm sort t1 t2 ->
+                Def.AndTerm sort (substituteInTerm substitution t1) (substituteInTerm substitution t2)
+            Def.SymbolApplication sort sorts name sargs ->
+                Def.SymbolApplication sort sorts name (substituteInTerm substitution <$> sargs)
+            dv@(Def.DomainValue _ _) -> dv
+            v@(Def.Var var) ->
+                maybe v id (Map.lookup var substitution)
+
+    substituteInPredicate substitution predicate =
+        case predicate of
+            Def.AndPredicate p1 p2 ->
+                Def.AndPredicate (substituteInPredicate substitution p1) (substituteInPredicate substitution p2)
+            Def.Bottom -> Def.Bottom
+            Def.Ceil t -> Def.Ceil (substituteInTerm substitution t)
+            Def.EqualsTerm sort t1 t2 ->
+                Def.EqualsTerm sort (substituteInTerm substitution t1) (substituteInTerm substitution t2)
+            Def.EqualsPredicate p1 p2 ->
+                Def.EqualsPredicate (substituteInPredicate substitution p1) (substituteInPredicate substitution p2)
+            Def.Exists v p ->
+                Def.Exists v (substituteInPredicate substitution p)
+            Def.Forall v p ->
+                Def.Forall v (substituteInPredicate substitution p)
+            Def.Iff p1 p2 ->
+                Def.Iff (substituteInPredicate substitution p1) (substituteInPredicate substitution p2)
+            Def.Implies p1 p2 ->
+                Def.Implies (substituteInPredicate substitution p1) (substituteInPredicate substitution p2)
+            Def.In sort t1 t2 ->
+                Def.In sort (substituteInTerm substitution t1) (substituteInTerm substitution t2)
+            Def.Not p ->
+                Def.Not (substituteInPredicate substitution p)
+            Def.Or p1 p2 ->
+                Def.Or (substituteInPredicate substitution p1) (substituteInPredicate substitution p2)
+            Def.Top -> Def.Top
 
 {- | Checks if a given parsed symbol uses only sorts from the provided
    sort map, and whether they are consistent (wrt. sort parameter
