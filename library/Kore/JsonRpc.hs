@@ -60,7 +60,7 @@ respond def@KoreDefinition{} =
 
             case internalised of
                 Left patternError -> do
-                    Log.logDebug $ "Error internalising cterm"
+                    Log.logDebug $ "Error internalising cterm" <> Text.pack (show patternError)
                     pure $ Left $ reportPatternError patternError
                 Right _pat -> do
                     -- processing goes here
@@ -142,7 +142,7 @@ srv internalizedModule = do
                 Nothing -> do
                     return ()
                 Just (SingleRequest req) | Right (Cancel :: API 'Req) <- fromRequest req -> do
-                    Log.logInfoN $ "Cancel Request"
+                    Log.logInfoN "Cancel Request"
                     liftIO $ throwTo tid CancelRequest
                     mainLoop tid
                 Just req -> do
