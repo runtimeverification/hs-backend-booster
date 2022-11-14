@@ -20,6 +20,7 @@ import Data.Aeson.Encode.Pretty as Json
 import Data.Aeson.Types (Value (..))
 import Data.Conduit.Network (serverSettings)
 import Data.Maybe (catMaybes)
+import Data.Text qualified as Text
 import Network.JSONRPC (
     BatchRequest (BatchRequest, SingleRequest),
     BatchResponse (BatchResponse, SingleResponse),
@@ -48,7 +49,7 @@ respond ::
 respond KoreDefinition{} =
     \case
         Execute _ -> do
-            Log.logInfo "Testing JSON-RPC server."
+            Log.logDebug "Testing JSON-RPC server."
             pure $ Right dummyExecuteResult
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left $ ErrorObj "Cancel request unsupported in batch mode" (-32001) Null
@@ -136,9 +137,11 @@ srv internalizedModule = do
                 Nothing -> do
                     return ()
                 Just (SingleRequest req) | Right (Cancel :: API 'Req) <- fromRequest req -> do
+                    Log.logInfoN $ "Cancel Request"
                     liftIO $ throwTo tid CancelRequest
                     mainLoop tid
                 Just req -> do
+                    Log.logInfoN $ Text.pack (show req)
                     liftIO $ atomically $ writeTChan reqQueue req
                     mainLoop tid
     spawnWorker reqQueue >>= mainLoop
