@@ -16,6 +16,8 @@ import Control.Monad.Logger.CallStack (LogLevel, MonadLoggerIO)
 import Control.Monad.Logger.CallStack qualified as Log
 import Control.Monad.Reader (ask, liftIO, runReaderT)
 import Control.Monad.STM (atomically)
+import Control.Monad.Trans.Except (runExcept)
+import Data.Aeson (toJSON)
 import Data.Aeson.Encode.Pretty as Json
 import Data.Aeson.Types (Value (..))
 import Data.Conduit.Network (serverSettings)
@@ -39,18 +41,30 @@ import Network.JSONRPC (
 import Kore.Definition.Base (KoreDefinition (..))
 import Kore.JsonRpc.Base
 import Kore.Network.JsonRpc (jsonrpcTCPServer)
-import Kore.Syntax.Json (KoreJson)
+import Kore.Syntax.Json (KoreJson (..), KorePattern)
+import Kore.Syntax.Json.Internalise (PatternError, internalisePattern)
 
 respond ::
     forall m.
     MonadLoggerIO m =>
     KoreDefinition ->
     Respond (API 'Req) m (API 'Res)
-respond KoreDefinition{} =
+respond def@KoreDefinition{} =
     \case
         Execute ExecuteRequest{state = startState} -> do
             Log.logDebug "Testing JSON-RPC server."
-            pure $ Right $ dummyExecuteResult startState
+            -- internalise given constrained term
+            let cterm :: KorePattern
+                KoreJson{term = cterm} = startState
+                internalised = runExcept $ internalisePattern def cterm
+
+            case internalised of
+                Left patternError -> do
+                    Log.logDebug $ "Error internalising cterm"
+                    pure $ Left $ reportPatternError patternError
+                Right _pat -> do
+                    -- processing goes here
+                    pure $ Right $ dummyExecuteResult startState
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left $ ErrorObj "Cancel request unsupported in batch mode" (-32001) Null
@@ -68,6 +82,10 @@ respond KoreDefinition{} =
                 , nextStates = Nothing
                 , rule = Nothing
                 }
+
+    reportPatternError :: PatternError -> ErrorObj
+    reportPatternError pErr =
+        ErrorObj "Could not verify KORE pattern" (-32002) $ toJSON pErr
 
 runServer :: Int -> KoreDefinition -> LogLevel -> IO ()
 runServer port internalizedModule logLevel =
