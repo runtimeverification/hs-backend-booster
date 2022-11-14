@@ -13,15 +13,18 @@ import Kore.Pattern.Base qualified as Internal
 import Kore.Pattern.Util (sortOfTerm)
 import Kore.Syntax.Json.Base qualified as Syntax
 
+{- | Converts an internal pattern to a pair of term and predicate in
+ external format. The predicate is 'And'ed to avoid leaking
+ Json format internals to the caller.
+-}
 externalisePattern ::
     Internal.Pattern ->
-    Syntax.KorePattern
+    (Syntax.KorePattern, Syntax.KorePattern)
 externalisePattern Internal.Pattern{term = term, constraints} =
     -- need a sort for the predicates in external format
     let sort = externaliseSort $ sortOfTerm term
-        term' = externaliseTerm term
         predicate = multiAnd sort $ map (externalisePredicate sort) constraints
-     in Syntax.KJAnd{sort, first = term', second = predicate}
+     in (externaliseTerm term, predicate)
   where
     multiAnd :: Syntax.Sort -> [Syntax.KorePattern] -> Syntax.KorePattern
     multiAnd _ [] = error "multiAnd: empty"
