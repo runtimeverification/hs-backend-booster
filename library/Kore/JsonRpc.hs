@@ -41,7 +41,9 @@ import Network.JSONRPC (
 import Kore.Definition.Base (KoreDefinition (..))
 import Kore.JsonRpc.Base
 import Kore.Network.JsonRpc (jsonrpcTCPServer)
-import Kore.Syntax.Json (KoreJson (..), KorePattern)
+import Kore.Pattern.Base (Pattern)
+import Kore.Syntax.Json (KoreJson (..), KorePattern, addHeader)
+import Kore.Syntax.Json.Externalise (externalisePattern)
 import Kore.Syntax.Json.Internalise (PatternError, internalisePattern)
 
 respond ::
@@ -62,9 +64,9 @@ respond def@KoreDefinition{} =
                 Left patternError -> do
                     Log.logDebug $ "Error internalising cterm" <> Text.pack (show patternError)
                     pure $ Left $ reportPatternError patternError
-                Right _pat -> do
+                Right pat -> do
                     -- processing goes here
-                    pure $ Right $ dummyExecuteResult startState
+                    pure $ Right $ dummyExecuteResult pat
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left $ ErrorObj "Cancel request unsupported in batch mode" (-32001) Null
@@ -72,16 +74,22 @@ respond def@KoreDefinition{} =
 
         _ -> pure $ Left $ ErrorObj "Not implemented" (-32601) Null
   where
-    dummyExecuteResult :: KoreJson -> API 'Res
-    dummyExecuteResult term =
+    dummyExecuteResult :: Pattern -> API 'Res
+    dummyExecuteResult pat =
         Execute
             ExecuteResult
                 { reason = Stuck
                 , depth = Depth 0
-                , state = ExecuteState{term, predicate = Nothing}
+                , state = toExecState pat
                 , nextStates = Nothing
                 , rule = Nothing
                 }
+
+    toExecState :: Pattern -> ExecuteState
+    toExecState pat =
+        ExecuteState{term = addHeader t, predicate = fmap addHeader p}
+      where
+        (t, p) = externalisePattern pat
 
     reportPatternError :: PatternError -> ErrorObj
     reportPatternError pErr =
