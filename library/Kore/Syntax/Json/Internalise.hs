@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -21,6 +19,7 @@ import Control.Monad.Trans.Maybe (MaybeT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Extra
 import Control.Monad.Trans.Except
+import Data.Aeson (ToJSON (..), Value, object, (.=))
 import Data.Bifunctor
 import Data.Foldable ()
 
@@ -32,12 +31,14 @@ import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Data.Text (Text)
+import Data.Text (Text, intercalate, pack)
 
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base (KoreDefinition (..), SymbolSort (..))
 import Kore.Pattern.Base qualified as Internal
+import Kore.Pattern.Util (sortOfTerm)
 import Kore.Syntax.Json.Base qualified as Syntax
+import Kore.Syntax.Json.Externalise (externaliseSort)
 
 internalisePattern ::
     KoreDefinition ->
@@ -279,12 +280,6 @@ checkSort knownVars sortMap = check'
             internalArgs <- mapM check' args
             pure $ Internal.SortApp n internalArgs
 
-externaliseSort :: Internal.Sort -> Syntax.Sort
-externaliseSort (Internal.SortApp name args) =
-    Syntax.SortApp (Syntax.Id name) (map externaliseSort args)
-externaliseSort (Internal.SortVar name) =
-    Syntax.SortVar (Syntax.Id name)
-
 isTermM :: Syntax.KorePattern -> Except PatternError Bool
 isTermM pat = case pat of
     Syntax.KJEVar{} -> pure True
@@ -328,13 +323,8 @@ explodeAnd Syntax.KJAnd{first = arg1, second = arg2} =
 explodeAnd other = [other]
 
 ----------------------------------------
--- TODO find a better home for this one, maybe Kore.Pattern.Util.
--- We'll need more helpers when we write the actual functionality.
-sortOfTerm :: Internal.Term -> Internal.Sort
-sortOfTerm (Internal.AndTerm sort _ _) = sort
-sortOfTerm (Internal.SymbolApplication sort _ _ _) = sort
-sortOfTerm (Internal.DomainValue sort _) = sort
-sortOfTerm (Internal.Var Internal.Variable{variableSort}) = variableSort
+--- TODO find a better home for these ones. All relating to sort
+--- checks, which we might not want to do too much of OTOH.
 
 {- | Tries to find a substitution of sort variables in the given sort
  pattern (with variables) to match the given subject
@@ -403,8 +393,39 @@ data PatternError
     | InconsistentPattern Syntax.KorePattern
     | TermExpected Syntax.KorePattern
     | PredicateExpected Syntax.KorePattern
-    | UnknownSymbol Syntax.Id
+    | UnknownSymbol Syntax.Id Syntax.KorePattern
     deriving stock (Eq, Show)
+
+{- | ToJson instance (user-facing):
+
+Renders an error string as 'error' and providing the pattern or Id in
+a 'context' list.
+
+The JSON-RPC server's error responses contain both of these fields in
+a 'data' object.
+
+If the error is a sort error, the message will contain its information
+while the context provides the pattern where the error occurred.
+-}
+instance ToJSON PatternError where
+    toJSON = \case
+        NotSupported p ->
+            wrap "Pattern not supported" p
+        NoTermFound p ->
+            wrap "Pattern must contain at least one term" p
+        PatternSortError p sortErr ->
+            wrap (renderSortError sortErr) p
+        InconsistentPattern p ->
+            wrap "Inconsistent pattern" p
+        TermExpected p ->
+            wrap "Expected a term but found a predicate" p
+        PredicateExpected p ->
+            wrap "Expected a predicate but found a term" p
+        UnknownSymbol sym p ->
+            wrap ("Unknown symbol " <> fromId sym) p
+      where
+        wrap :: Text -> Syntax.KorePattern -> Value
+        wrap msg p = object ["error" .= msg, "context" .= toJSON [p]]
 
 data SortError
     = UnknownSort Syntax.Sort
@@ -412,3 +433,23 @@ data SortError
     | IncompatibleSorts [Syntax.Sort]
     | GeneralError Text
     deriving stock (Eq, Show)
+
+renderSortError :: SortError -> Text
+renderSortError = \case
+    UnknownSort sort ->
+        "Unknown " <> render sort
+    WrongSortArgCount sort expected ->
+        "Wrong argument count: expected "
+            <> pack (show expected)
+            <> " in "
+            <> render sort
+    IncompatibleSorts sorts ->
+        "Incompatible sorts: " <> intercalate ", " (map render sorts)
+    GeneralError msg ->
+        msg
+  where
+    render = \case
+        Syntax.SortVar (Syntax.Id n) ->
+            "sort variable " <> n
+        Syntax.SortApp (Syntax.Id n) args ->
+            "sort " <> n <> "(" <> intercalate ", " (map render args) <> ")"
