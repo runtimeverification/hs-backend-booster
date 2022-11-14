@@ -12,9 +12,9 @@ import Control.Concurrent.STM.TChan (newTChan, readTChan, writeTChan)
 import Control.Exception (mask)
 import Control.Monad (forever)
 import Control.Monad.Catch (catch)
-import Control.Monad.Logger (MonadLoggerIO, askLoggerIO, runLoggingT)
-import Control.Monad.Logger qualified as Log
-import Control.Monad.Reader (MonadIO, ask, liftIO, runReaderT)
+import Control.Monad.Logger.CallStack (LogLevel, MonadLoggerIO)
+import Control.Monad.Logger.CallStack qualified as Log
+import Control.Monad.Reader (ask, liftIO, runReaderT)
 import Control.Monad.STM (atomically)
 import Data.Aeson.Encode.Pretty as Json
 import Data.Aeson.Types (Value (..))
@@ -42,13 +42,13 @@ import Kore.Syntax.Json.Base (Id (..), KORE (..), KoreJson (..), KorePattern (..
 
 respond ::
     forall m.
-    MonadIO m =>
+    MonadLoggerIO m =>
     KoreDefinition ->
     Respond (API 'Req) m (API 'Res)
 respond KoreDefinition{} =
     \case
         Execute _ -> do
-            liftIO $ putStrLn "Testing JSON-RPC server."
+            Log.logInfo "Testing JSON-RPC server."
             pure $ Right dummyExecuteResult
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left $ ErrorObj "Cancel request unsupported in batch mode" (-32001) Null
@@ -81,10 +81,10 @@ respond KoreDefinition{} =
             , term = KJTop (SortVar (Id "SV"))
             }
 
-runServer :: Int -> KoreDefinition -> IO ()
-runServer port internalizedModule =
+runServer :: Int -> KoreDefinition -> LogLevel -> IO ()
+runServer port internalizedModule logLevel =
     do
-        Log.runStderrLoggingT
+        Log.runStderrLoggingT . logFilter
         $ jsonrpcTCPServer
             Json.defConfig{confCompare}
             V2
@@ -92,6 +92,7 @@ runServer port internalizedModule =
             srvSettings
             (srv internalizedModule)
   where
+    logFilter = Log.filterLogger $ \_source lvl -> lvl >= logLevel
     srvSettings = serverSettings port "*"
     confCompare =
         Json.keyOrder
@@ -136,7 +137,7 @@ srv internalizedModule = do
                     return ()
                 Just (SingleRequest req) | Right (Cancel :: API 'Req) <- fromRequest req -> do
                     liftIO $ throwTo tid CancelRequest
-                    spawnWorker reqQueue >>= mainLoop
+                    mainLoop tid
                 Just req -> do
                     liftIO $ atomically $ writeTChan reqQueue req
                     mainLoop tid
@@ -155,11 +156,16 @@ srv internalizedModule = do
 
     spawnWorker reqQueue = do
         rpcSession <- ask
-        logger <- askLoggerIO
-        let sendResponses r = flip runLoggingT logger $ flip runReaderT rpcSession $ sendBatchResponse r
-            respondTo :: MonadIO m => Request -> m (Maybe Response)
+        logger <- Log.askLoggerIO
+        let withLog :: Log.LoggingT IO a -> IO a
+            withLog = flip Log.runLoggingT logger
+
+            sendResponses :: BatchResponse -> Log.LoggingT IO ()
+            sendResponses r = flip Log.runLoggingT logger $ flip runReaderT rpcSession $ sendBatchResponse r
+            respondTo :: MonadLoggerIO m => Request -> m (Maybe Response)
             respondTo = buildResponse (respond internalizedModule)
 
+            cancelReq :: BatchRequest -> Log.LoggingT IO ()
             cancelReq = \case
                 SingleRequest req@Request{} -> do
                     let reqVersion = getReqVer req
@@ -169,6 +175,7 @@ srv internalizedModule = do
                 BatchRequest reqs -> do
                     sendResponses $ BatchResponse $ [ResponseError (getReqVer req) cancelError (getReqId req) | req <- reqs, isRequest req]
 
+            processReq :: BatchRequest -> Log.LoggingT IO ()
             processReq = \case
                 SingleRequest req -> do
                     rM <- respondTo req
@@ -182,5 +189,5 @@ srv internalizedModule = do
                 forever $
                     bracketOnReqException
                         (atomically $ readTChan reqQueue)
-                        cancelReq
-                        processReq
+                        (withLog . cancelReq)
+                        (withLog . processReq)

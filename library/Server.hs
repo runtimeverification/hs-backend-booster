@@ -6,6 +6,7 @@ License     : BSD-3-Clause
 -}
 module Server (main) where
 
+import Control.Monad.Logger (LogLevel (..))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Options.Applicative
@@ -17,7 +18,7 @@ import Kore.VersionInfo (VersionInfo (..), versionInfo)
 main :: IO ()
 main = do
     options <- execParser clParser
-    let CLOptions{definitionFile, mainModuleName, port} = options
+    let CLOptions{definitionFile, mainModuleName, port, logLevel} = options
     putStrLn $
         "Loading definition from "
             <> definitionFile
@@ -27,7 +28,7 @@ main = do
         either (error . show) id
             <$> loadDefinition mainModuleName definitionFile
     putStrLn "Starting RPC server"
-    runServer port internalModule
+    runServer port internalModule logLevel
   where
     clParser =
         info
@@ -35,9 +36,10 @@ main = do
             parserInfoModifiers
 
 data CLOptions = CLOptions
-    { definitionFile :: !FilePath
-    , mainModuleName :: !Text
-    , port :: !Int
+    { definitionFile :: FilePath
+    , mainModuleName :: Text
+    , port :: Int
+    , logLevel :: LogLevel
     }
 
 parserInfoModifiers :: InfoMod options
@@ -76,6 +78,22 @@ clOptionsParser =
                 <> help "Port for the RPC server to bind to"
                 <> showDefault
             )
+        <*> option
+            (eitherReader readLogLevel)
+            ( metavar "LEVEL"
+                <> long "log-level"
+                <> short 'l'
+                <> value LevelInfo
+                <> help "Log level: debug, info (default), warn, error"
+            )
+  where
+    readLogLevel :: String -> Either String LogLevel
+    readLogLevel = \case
+        "debug" -> Right LevelDebug
+        "info" -> Right LevelInfo
+        "warn" -> Right LevelWarn
+        "error" -> Right LevelError
+        other -> Left $ other <> ": Unsupported log level"
 
 versionInfoStr :: String
 versionInfoStr =
