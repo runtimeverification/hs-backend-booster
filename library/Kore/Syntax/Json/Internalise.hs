@@ -9,6 +9,8 @@ module Kore.Syntax.Json.Internalise (
     PatternError (..),
     checkSort,
     matchSorts,
+    externaliseSort,
+    sortOfTerm,
     SortError (..),
 ) where
 
