@@ -9,8 +9,6 @@ module Kore.Syntax.Json.Internalise (
     PatternError (..),
     checkSort,
     matchSorts,
-    externaliseSort,
-    sortOfTerm,
     SortError (..),
 ) where
 
@@ -33,7 +31,9 @@ import Data.Text (Text)
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base (KoreDefinition (..), SymbolSort (..))
 import Kore.Pattern.Base qualified as Internal
+import Kore.Pattern.Util (sortOfTerm)
 import Kore.Syntax.Json.Base qualified as Syntax
+import Kore.Syntax.Json.Externalise (externaliseSort)
 
 internalisePattern ::
     KoreDefinition ->
@@ -263,12 +263,6 @@ checkSort knownVars sortMap = check'
             internalArgs <- mapM check' args
             pure $ Internal.SortApp n internalArgs
 
-externaliseSort :: Internal.Sort -> Syntax.Sort
-externaliseSort (Internal.SortApp name args) =
-    Syntax.SortApp (Syntax.Id name) (map externaliseSort args)
-externaliseSort (Internal.SortVar name) =
-    Syntax.SortVar (Syntax.Id name)
-
 isTermM :: Syntax.KorePattern -> Except PatternError Bool
 isTermM pat = case pat of
     Syntax.KJEVar{} -> pure True
@@ -312,13 +306,8 @@ explodeAnd Syntax.KJAnd{first = arg1, second = arg2} =
 explodeAnd other = [other]
 
 ----------------------------------------
--- TODO find a better home for this one, maybe Kore.Pattern.Util.
--- We'll need more helpers when we write the actual functionality.
-sortOfTerm :: Internal.Term -> Internal.Sort
-sortOfTerm (Internal.AndTerm sort _ _) = sort
-sortOfTerm (Internal.SymbolApplication sort _ _ _) = sort
-sortOfTerm (Internal.DomainValue sort _) = sort
-sortOfTerm (Internal.Var Internal.Variable{variableSort}) = variableSort
+--- TODO find a better home for these ones. All relating to sort
+--- checks, which we might not want to do too much of OTOH.
 
 {- | Tries to find a substitution of sort variables in the given sort
  pattern (with variables) to match the given subject

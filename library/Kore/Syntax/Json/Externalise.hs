@@ -6,13 +6,14 @@ License     : BSD-3-Clause
 -}
 module Kore.Syntax.Json.Externalise (
     externalisePattern,
+    externaliseSort,
 ) where
 
 import Data.Foldable ()
-import Kore.Pattern.Base qualified as Internal
-import Kore.Syntax.Json.Base qualified as Syntax
 
-import Kore.Syntax.Json.Internalise (externaliseSort, sortOfTerm)
+import Kore.Pattern.Base qualified as Internal
+import Kore.Pattern.Util (sortOfTerm)
+import Kore.Syntax.Json.Base qualified as Syntax
 
 externalisePattern ::
     Internal.Pattern ->
@@ -100,3 +101,10 @@ sortNameToId = Syntax.Id
 
 symbolNameToId :: Internal.SymbolName -> Syntax.Id
 symbolNameToId = Syntax.Id
+
+-- | converts an internal sort to an external one
+externaliseSort :: Internal.Sort -> Syntax.Sort
+externaliseSort (Internal.SortApp name args) =
+    Syntax.SortApp (sortNameToId name) (map externaliseSort args)
+externaliseSort (Internal.SortVar name) =
+    Syntax.SortVar $ sortNameToId name
