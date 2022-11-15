@@ -167,7 +167,7 @@ addModule
                     mInternalRhs <- withExcept DefinitionPatternError $ runMaybeT $ internaliseTermOrPredicate partialDefinition rhs
                     internalRhs <- except $ note (DefinitionPatternError $ NotSupported rhs) mInternalRhs
                     let rhsSort = Util.sortOfTermOrPredicate internalRhs
-                    unless (maybe internalResSort id rhsSort == internalResSort) (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
+                    unless (fromMaybe internalResSort rhsSort == internalResSort) (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
                     return (internalName, Alias{name = internalName, params, args = internalArgs, rhs = internalRhs})
 
             newAliases <- traverse internaliseAlias parsedAliases
@@ -267,7 +267,7 @@ expandAlias alias@Alias{args, rhs} currentArgs
                 Def.SymbolApplication sort sorts name (substituteInTerm substitution <$> sargs)
             dv@(Def.DomainValue _ _) -> dv
             v@(Def.Var var) ->
-                maybe v id (Map.lookup var substitution)
+                fromMaybe v (Map.lookup var substitution)
 
     substituteInPredicate substitution predicate =
         case predicate of
@@ -379,7 +379,7 @@ data AliasError
     | WrongAliasArgCount Alias [Def.Term]
     deriving stock (Eq, Show)
 
-data RewriteRuleError
+newtype RewriteRuleError
     = MalformedRewriteRule ParsedAxiom
     deriving stock (Eq, Show)
 
