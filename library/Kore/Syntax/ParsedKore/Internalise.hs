@@ -86,7 +86,7 @@ descendFrom m = do
             defMap <- gets definitionMap
             let def =
                     foldl (<>) (emptyKoreDefinition definitionAttributes) $
-                        map (flip expectPresent defMap) imported
+                        map (`expectPresent` defMap) imported
 
             -- validate and add new module in context of the imports
             newDef <- addModule theModule def
