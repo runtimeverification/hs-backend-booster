@@ -19,7 +19,7 @@ sortOfTerm (Var Variable{variableSort}) = variableSort
 
 sortOfTermOrPredicate :: TermOrPredicate -> Maybe Sort
 sortOfTermOrPredicate (ATerm term) = Just (sortOfTerm term)
-sortOfTermOrPredicate (Both Pattern {term}) = Just (sortOfTerm term)
+sortOfTermOrPredicate (Both Pattern{term}) = Just (sortOfTerm term)
 sortOfTermOrPredicate (APredicate _) = Nothing
 
 retractPattern :: TermOrPredicate -> Maybe Pattern

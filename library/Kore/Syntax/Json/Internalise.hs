@@ -13,12 +13,12 @@ module Kore.Syntax.Json.Internalise (
     SortError (..),
 ) where
 
-import Control.Monad
 import Control.Applicative ((<|>))
-import Control.Monad.Trans.Maybe (MaybeT)
-import Control.Monad.Trans.Class (lift)
+import Control.Monad
 import Control.Monad.Extra
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except
+import Control.Monad.Trans.Maybe (MaybeT)
 import Data.Aeson (ToJSON (..), Value, object, (.=))
 import Data.Bifunctor
 import Data.Foldable ()
@@ -82,7 +82,6 @@ internaliseTermOrPredicate definition syntaxPatt =
 sortCheck :: Syntax.KorePattern -> (Internal.Sort, Internal.Sort) -> Except PatternError ()
 sortCheck pat = mapExcept (first $ PatternSortError pat) . uncurry ensureSortsAgree
 
-
 mkF ::
     Syntax.Id ->
     [Syntax.Sort] ->
@@ -101,7 +100,7 @@ internaliseTerm ::
     KoreDefinition ->
     Syntax.KorePattern ->
     Except PatternError Internal.Term
-internaliseTerm definition@KoreDefinition {sorts, symbols} pat =
+internaliseTerm definition@KoreDefinition{sorts, symbols} pat =
     case pat of
         Syntax.KJEVar{name, sort} -> do
             variableSort <- internaliseSort sorts pat sort
@@ -168,7 +167,7 @@ internalisePredicate ::
     KoreDefinition ->
     Syntax.KorePattern ->
     Except PatternError Internal.Predicate
-internalisePredicate definition@KoreDefinition {sorts} pat = case pat of
+internalisePredicate definition@KoreDefinition{sorts} pat = case pat of
     Syntax.KJEVar{} -> term
     Syntax.KJSVar{} -> notSupported
     Syntax.KJApp{} -> term
@@ -240,7 +239,7 @@ internalisePredicate definition@KoreDefinition {sorts} pat = case pat of
   where
     term = throwE $ PredicateExpected pat
     notSupported = throwE $ NotSupported pat
- 
+
 -- converts MultiApp and MultiOr to a chain at syntax level
 withAssoc :: Syntax.LeftRight -> (a -> a -> a) -> NonEmpty a -> a
 withAssoc Syntax.Left = foldl1

@@ -11,23 +11,23 @@ module Kore.Syntax.ParsedKore.Internalise (
 ) where
 
 import Control.Monad.State
-import Control.Monad.Trans.Maybe (runMaybeT)
 import Control.Monad.Trans.Except
+import Control.Monad.Trans.Maybe (runMaybeT)
 import Data.Bifunctor (first)
 import Data.Function (on)
 import Data.List (groupBy, partition, sortOn)
+import Data.List.Extra (groupSort)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe, catMaybes)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Set qualified as Set
-import Data.List.Extra (groupSort)
 import Data.Text (Text)
 
 import Kore.Definition.Attributes.Base
-import Kore.Pattern.Util qualified as Util
 import Kore.Definition.Attributes.Reader
 import Kore.Definition.Base as Def
 import Kore.Pattern.Base qualified as Def
+import Kore.Pattern.Util qualified as Util
 import Kore.Syntax.Json.Base qualified as Json
 import Kore.Syntax.Json.Internalise
 import Kore.Syntax.ParsedKore.Base
@@ -154,7 +154,7 @@ addModule
                     ParsedAlias ->
                     StateT s (Except DefinitionError) (Def.AliasName, Alias)
                 -- TODO(Ana): do we need to handle attributes?
-                internaliseAlias palias@ParsedAlias { name, sortVars, argSorts, sort, args, rhs } = lift $ do 
+                internaliseAlias palias@ParsedAlias{name, sortVars, argSorts, sort, args, rhs} = lift $ do
                     unless (length argSorts == length args) (throwE (DefinitionAliasError . WrongAliasSortCount $ palias))
                     let paramNames = Json.getId <$> sortVars
                         params = Def.SortVar <$> paramNames
@@ -163,31 +163,31 @@ addModule
                     internalArgSorts <- traverse (withExcept DefinitionSortError . checkSort (Set.fromList paramNames) sorts) argSorts
                     internalResSort <- withExcept DefinitionSortError $ checkSort (Set.fromList paramNames) sorts sort
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
-                    let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, aliases = currentAliases, rewriteTheory = currentRewriteTheory}
+                    let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases = currentAliases, rewriteTheory = currentRewriteTheory}
                     mInternalRhs <- withExcept DefinitionPatternError $ runMaybeT $ internaliseTermOrPredicate partialDefinition rhs
                     internalRhs <- except $ note (DefinitionPatternError $ NotSupported rhs) mInternalRhs
                     let rhsSort = Util.sortOfTermOrPredicate internalRhs
                     unless (maybe internalResSort id rhsSort == internalResSort) (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
-                    return (internalName, Alias { name = internalName, params, args = internalArgs, rhs = internalRhs })
+                    return (internalName, Alias{name = internalName, params, args = internalArgs, rhs = internalRhs})
 
             newAliases <- traverse internaliseAlias parsedAliases
             let aliases = Map.fromList newAliases <> currentAliases
 
-            let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory}
+            let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory}
             let internaliseRewriteTheoryData ::
                     ParsedAxiom ->
                     StateT s (Except DefinitionError) (Maybe RewriteRule)
-                internaliseRewriteTheoryData parsedAx@ParsedAxiom { axiom } = lift $ do
+                internaliseRewriteTheoryData parsedAx@ParsedAxiom{axiom} = lift $ do
                     case axiom of
                         Json.KJRewrites _ left right ->
                             case left of
-                                Json.KJAnd _ (Json.KJNot _ _) (Json.KJApp (Json.Id aliasName) _ aliasArgs) -> 
+                                Json.KJAnd _ (Json.KJNot _ _) (Json.KJApp (Json.Id aliasName) _ aliasArgs) ->
                                     Just <$> internaliseRewriteRule partialDefinition parsedAx aliasName aliasArgs right
                                 (Json.KJApp (Json.Id aliasName) _ aliasArgs) ->
                                     Just <$> internaliseRewriteRule partialDefinition parsedAx aliasName aliasArgs right
                                 _ -> throwE (DefinitionRewriteRuleError . MalformedRewriteRule $ parsedAx)
                         _ -> return Nothing
-            
+
             newRewriteRules <- catMaybes <$> traverse internaliseRewriteTheoryData parsedAxioms
             let rewriteTheory = addToTheory newRewriteRules currentRewriteTheory
 
@@ -215,7 +215,7 @@ addModule
              in ( Map.fromAscList [(getKey a, a) | [a] <- good]
                 , [(getKey $ head d, d) | d <- dups]
                 )
-        
+
 note :: e -> Maybe a -> Either e a
 note e = maybe (Left e) Right
 
@@ -226,20 +226,20 @@ internaliseRewriteRule ::
     [Json.KorePattern] ->
     Json.KorePattern ->
     Except DefinitionError RewriteRule
-internaliseRewriteRule partialDefinition@KoreDefinition {aliases} parsedAx aliasName aliasArgs right = do 
+internaliseRewriteRule partialDefinition@KoreDefinition{aliases} parsedAx aliasName aliasArgs right = do
     alias <- withExcept DefinitionAliasError $ except $ note (UnknownAlias aliasName) $ Map.lookup aliasName aliases
     args <- traverse (withExcept DefinitionPatternError . internaliseTerm partialDefinition) aliasArgs
     result <- expandAlias alias args
     lhs <- except $ note (DefinitionTermOrPredicateError . PatternExpected $ result) $ Util.retractPattern result
     rhs <- withExcept DefinitionPatternError . internalisePattern partialDefinition $ right
     let axAttributes = extract parsedAx
-    return RewriteRule { lhs, rhs, attributes = axAttributes }
+    return RewriteRule{lhs, rhs, attributes = axAttributes}
 
 defError :: DefinitionError -> StateT s (Except DefinitionError) a
 defError = lift . throwE
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
-expandAlias alias@Alias {args, rhs} currentArgs
+expandAlias alias@Alias{args, rhs} currentArgs
     | length args /= length currentArgs = throwE (DefinitionAliasError $ WrongAliasArgCount alias currentArgs)
     | otherwise =
         let substitution = Map.fromList (zip args currentArgs)
@@ -247,17 +247,18 @@ expandAlias alias@Alias {args, rhs} currentArgs
   where
     substitute substitution termOrPredicate =
         case termOrPredicate of
-            Def.ATerm term -> 
+            Def.ATerm term ->
                 Def.ATerm $ substituteInTerm substitution term
             Def.APredicate predicate ->
                 Def.APredicate $ substituteInPredicate substitution predicate
-            Def.Both Def.Pattern {term, constraints} ->
-                Def.Both Def.Pattern
-                    { term = substituteInTerm substitution term
-                    , constraints =
-                        substituteInPredicate substitution <$> constraints 
-                    }
-    
+            Def.Both Def.Pattern{term, constraints} ->
+                Def.Both
+                    Def.Pattern
+                        { term = substituteInTerm substitution term
+                        , constraints =
+                            substituteInPredicate substitution <$> constraints
+                        }
+
     substituteInTerm substitution term =
         case term of
             Def.AndTerm sort t1 t2 ->
@@ -302,21 +303,21 @@ addToTheory axioms theory =
     let processedRewriteRules = processRewriteRulesTODO axioms
         newTheory =
             Map.map groupByPriority
-            . groupByTermIndex
-            $ processedRewriteRules
+                . groupByTermIndex
+                $ processedRewriteRules
      in Map.unionWith (Map.unionWith (<>)) theory newTheory
 
 groupByTermIndex :: [RewriteRule] -> Map Def.TermIndex [RewriteRule]
 groupByTermIndex axioms =
     let withTermIndexes = do
-            axiom@RewriteRule {lhs} <- axioms
+            axiom@RewriteRule{lhs} <- axioms
             let termIndex = Def.computeTermIndex (Def.term lhs)
             return (termIndex, axiom)
      in Map.fromAscList . groupSort $ withTermIndexes
 
 groupByPriority :: [RewriteRule] -> Map Priority [RewriteRule]
-groupByPriority axioms = 
-    Map.fromAscList . groupSort $ [ (extractPriority ax, ax) | ax <- axioms ]
+groupByPriority axioms =
+    Map.fromAscList . groupSort $ [(extractPriority ax, ax) | ax <- axioms]
 
 {- | Checks if a given parsed symbol uses only sorts from the provided
    sort map, and whether they are consistent (wrt. sort parameter

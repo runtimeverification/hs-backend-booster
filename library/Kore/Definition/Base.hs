@@ -72,7 +72,7 @@ data RewriteRule = RewriteRule
     deriving stock (Eq, Ord, Show)
 
 extractPriority :: RewriteRule -> Priority
-extractPriority RewriteRule {attributes} = priority attributes
+extractPriority RewriteRule{attributes} = priority attributes
 
 type AliasName = Text
 
