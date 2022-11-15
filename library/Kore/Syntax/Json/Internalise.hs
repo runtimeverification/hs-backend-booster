@@ -109,9 +109,9 @@ internaliseTerm definition@KoreDefinition {sorts, symbols} pat =
             pure $ Internal.Var Internal.Variable{variableSort, variableName}
         Syntax.KJSVar{} ->
             throwE $ NotSupported pat
-        Syntax.KJApp{name, sorts = appSorts, args} -> do
+        symPatt@Syntax.KJApp{name, sorts = appSorts, args} -> do
             (_, SymbolSort{resultSort, argSorts}) <-
-                maybe (throwE $ UnknownSymbol name) pure $
+                maybe (throwE $ UnknownSymbol name symPatt) pure $
                     Map.lookup (fromId name) symbols
             internalAppSorts <- mapM (internaliseSort sorts pat) appSorts
             -- check that all argument sorts "agree". Variables

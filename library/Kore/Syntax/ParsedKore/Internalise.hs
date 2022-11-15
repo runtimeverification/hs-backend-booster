@@ -23,6 +23,7 @@ import Data.Set qualified as Set
 import Data.Text (Text)
 
 import Kore.Definition.Attributes.Base
+import Kore.Pattern.Util qualified as Util
 import Kore.Definition.Attributes.Reader
 import Kore.Definition.Base as Def
 import Kore.Pattern.Base qualified as Def
@@ -164,7 +165,7 @@ addModule
                     let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, aliases = currentAliases, axioms = currentAxioms}
                     mInternalRhs <- withExcept DefinitionPatternError $ runMaybeT $ internaliseTermOrPredicate partialDefinition rhs
                     internalRhs <- maybe (throwE (error "TODO: add error type")) return mInternalRhs
-                    let rhsSort = Def.sortOfTermOrPredicate internalRhs
+                    let rhsSort = Util.sortOfTermOrPredicate internalRhs
                     unless (maybe internalResSort id rhsSort == internalResSort) (error "TODO: add error")
                     return (internalName, Alias { name = internalName, params, args = internalArgs, rhs = internalRhs })
 
@@ -185,7 +186,7 @@ addModule
                                     let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, aliases, axioms = currentAxioms}
                                     args <- traverse (withExcept (error "TODO: add error") . internaliseTerm partialDefinition) aliasArgs
                                     result <- expandAlias alias args
-                                    lhs <- except $ note (error "TODO: add error") $ Def.retractPattern result
+                                    lhs <- except $ note (error "TODO: add error") $ Util.retractPattern result
                                     let computeTermIndex _ = return Anything
                                     termIndex <- computeTermIndex lhs
                                     rhs <- withExcept DefinitionPatternError . internalisePattern partialDefinition $ right
@@ -195,7 +196,7 @@ addModule
                                     let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, aliases, axioms = currentAxioms}
                                     args <- traverse (withExcept (error "TODO: add error") . internaliseTerm partialDefinition) aliasArgs
                                     result <- expandAlias alias args
-                                    lhs <- except $ note (error "TODO: add error") $ Def.retractPattern result
+                                    lhs <- except $ note (error "TODO: add error") $ Util.retractPattern result
                                     let computeTermIndex _ = return Anything
                                     termIndex <- computeTermIndex lhs
                                     rhs <- withExcept DefinitionPatternError . internalisePattern partialDefinition $ right
