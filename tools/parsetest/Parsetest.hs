@@ -67,7 +67,7 @@ mkReport file KoreDefinition{modules, sorts, symbols, rewriteTheory} =
         , modNames = Map.keys modules
         , sortNames = Map.keys sorts
         , symbolNames = Map.keys symbols
-        , axiomCount = length $ concat $ concat (Map.elems <$> Map.elems rewriteTheory)
+        , axiomCount = length $ concat $ concatMap Map.elems (Map.elems rewriteTheory)
         }
 
 prettify :: Report -> String
