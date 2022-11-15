@@ -18,7 +18,7 @@ import Data.Function (on)
 import Data.List (groupBy, partition, sortOn)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, catMaybes)
 import Data.Set qualified as Set
 import Data.List.Extra (groupSort)
 import Data.Text (Text)
@@ -145,7 +145,7 @@ addModule
                     StateT s (Except DefinitionError) (Def.SymbolName, (SymbolAttributes, SymbolSort))
                 internaliseSymbol s@ParsedSymbol{name} = do
                     info <- mkSymbolSorts sorts s
-                    -- TODO: rename extract
+                    -- TODO(Ana): rename extract
                     pure (fromJsonId name, (extract s, info))
             newSymbols' <- mapM internaliseSymbol parsedSymbols
             let symbols = Map.fromList newSymbols' <> currentSymbols
@@ -153,9 +153,9 @@ addModule
             let internaliseAlias ::
                     ParsedAlias ->
                     StateT s (Except DefinitionError) (Def.AliasName, Alias)
-                -- TODO: do we need to handle attributes?
-                internaliseAlias ParsedAlias { name, sortVars, argSorts, sort, args, rhs } = lift $ do 
-                    unless (length argSorts == length args) (error "TODO: add error")
+                -- TODO(Ana): do we need to handle attributes?
+                internaliseAlias palias@ParsedAlias { name, sortVars, argSorts, sort, args, rhs } = lift $ do 
+                    unless (length argSorts == length args) (throwE (DefinitionAliasError . WrongAliasSortCount $ palias))
                     let paramNames = Json.getId <$> sortVars
                         params = Def.SortVar <$> paramNames
                         argNames = Json.getId <$> args
@@ -165,44 +165,30 @@ addModule
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
                     let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, aliases = currentAliases, rewriteTheory = currentRewriteTheory}
                     mInternalRhs <- withExcept DefinitionPatternError $ runMaybeT $ internaliseTermOrPredicate partialDefinition rhs
-                    internalRhs <- maybe (throwE (error "TODO: add error type")) return mInternalRhs
+                    internalRhs <- except $ note (DefinitionPatternError $ NotSupported rhs) mInternalRhs
                     let rhsSort = Util.sortOfTermOrPredicate internalRhs
-                    unless (maybe internalResSort id rhsSort == internalResSort) (error "TODO: add error")
+                    unless (maybe internalResSort id rhsSort == internalResSort) (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
                     return (internalName, Alias { name = internalName, params, args = internalArgs, rhs = internalRhs })
 
             newAliases <- traverse internaliseAlias parsedAliases
             let aliases = Map.fromList newAliases <> currentAliases
 
-            let internaliseRewriteRule ::
+            let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory}
+            let internaliseRewriteTheoryData ::
                     ParsedAxiom ->
-                    StateT s (Except DefinitionError) RewriteRule
-                internaliseRewriteRule parsedAx@ParsedAxiom { axiom } = lift $ do
+                    StateT s (Except DefinitionError) (Maybe RewriteRule)
+                internaliseRewriteTheoryData parsedAx@ParsedAxiom { axiom } = lift $ do
                     case axiom of
                         Json.KJRewrites _ left right ->
                             case left of
-                                -- TODO: factor out
-                                Json.KJAnd _ (Json.KJNot _ _) (Json.KJApp (Json.Id aliasName) _ aliasArgs) -> do
-                                    alias <- except $ note (error "TODO: add error") $ Map.lookup aliasName aliases
-                                    let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory}
-                                    args <- traverse (withExcept (error "TODO: add error") . internaliseTerm partialDefinition) aliasArgs
-                                    result <- expandAlias alias args
-                                    lhs <- except $ note (error "TODO: add error") $ Util.retractPattern result
-                                    rhs <- withExcept DefinitionPatternError . internalisePattern partialDefinition $ right
-                                    let axAttributes = extract parsedAx
-                                    return RewriteRule { lhs, rhs, attributes = axAttributes }
-                                (Json.KJApp (Json.Id aliasName) _ aliasArgs) -> do
-                                    alias <- except $ note (error "TODO: add error") $ Map.lookup aliasName aliases
-                                    let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory}
-                                    args <- traverse (withExcept (error "TODO: add error") . internaliseTerm partialDefinition) aliasArgs
-                                    result <- expandAlias alias args
-                                    lhs <- except $ note (error "TODO: add error") $ Util.retractPattern result
-                                    rhs <- withExcept DefinitionPatternError . internalisePattern partialDefinition $ right
-                                    let axAttributes = extract parsedAx
-                                    return RewriteRule { lhs, rhs, attributes = axAttributes }
-                                _ -> throwE $ error "TODO: this should be an error"
-                        _ -> error "TODO: this shouldn't be an error, we should ignore other axioms"
+                                Json.KJAnd _ (Json.KJNot _ _) (Json.KJApp (Json.Id aliasName) _ aliasArgs) -> 
+                                    Just <$> internaliseRewriteRule partialDefinition parsedAx aliasName aliasArgs right
+                                (Json.KJApp (Json.Id aliasName) _ aliasArgs) ->
+                                    Just <$> internaliseRewriteRule partialDefinition parsedAx aliasName aliasArgs right
+                                _ -> throwE (DefinitionRewriteRuleError . MalformedRewriteRule $ parsedAx)
+                        _ -> return Nothing
             
-            newRewriteRules <- traverse internaliseRewriteRule parsedAxioms
+            newRewriteRules <- catMaybes <$> traverse internaliseRewriteTheoryData parsedAxioms
             let rewriteTheory = addToTheory newRewriteRules currentRewriteTheory
 
             pure
@@ -230,15 +216,31 @@ addModule
                 , [(getKey $ head d, d) | d <- dups]
                 )
         
-        note :: e -> Maybe a -> Either e a
-        note e = maybe (Left e) Right
+note :: e -> Maybe a -> Either e a
+note e = maybe (Left e) Right
+
+internaliseRewriteRule ::
+    KoreDefinition ->
+    ParsedAxiom ->
+    AliasName ->
+    [Json.KorePattern] ->
+    Json.KorePattern ->
+    Except DefinitionError RewriteRule
+internaliseRewriteRule partialDefinition@KoreDefinition {aliases} parsedAx aliasName aliasArgs right = do 
+    alias <- withExcept DefinitionAliasError $ except $ note (UnknownAlias aliasName) $ Map.lookup aliasName aliases
+    args <- traverse (withExcept DefinitionPatternError . internaliseTerm partialDefinition) aliasArgs
+    result <- expandAlias alias args
+    lhs <- except $ note (DefinitionTermOrPredicateError . PatternExpected $ result) $ Util.retractPattern result
+    rhs <- withExcept DefinitionPatternError . internalisePattern partialDefinition $ right
+    let axAttributes = extract parsedAx
+    return RewriteRule { lhs, rhs, attributes = axAttributes }
 
 defError :: DefinitionError -> StateT s (Except DefinitionError) a
 defError = lift . throwE
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
-expandAlias Alias {args, rhs} currentArgs
-    | length args /= length currentArgs = throwE (error "TODO: add error")
+expandAlias alias@Alias {args, rhs} currentArgs
+    | length args /= length currentArgs = throwE (DefinitionAliasError $ WrongAliasArgCount alias currentArgs)
     | otherwise =
         let substitution = Map.fromList (zip args currentArgs)
          in return $ substitute substitution rhs
@@ -361,7 +363,26 @@ data DefinitionError
     | NoSuchModule Text
     | DuplicateSorts [ParsedSort]
     | DuplicateSymbols [ParsedSymbol]
+    | DuplicateAliases [ParsedAlias]
     | DuplicateNames [Text]
     | DefinitionSortError SortError
     | DefinitionPatternError PatternError
+    | DefinitionAliasError AliasError
+    | DefinitionRewriteRuleError RewriteRuleError
+    | DefinitionTermOrPredicateError TermOrPredicateError
+    deriving stock (Eq, Show)
+
+data AliasError
+    = UnknownAlias AliasName
+    | WrongAliasSortCount ParsedAlias
+    | WrongAliasArgCount Alias [Def.Term]
+    deriving stock (Eq, Show)
+
+data RewriteRuleError
+    = MalformedRewriteRule ParsedAxiom
+    deriving stock (Eq, Show)
+
+data TermOrPredicateError
+    = PatternExpected Def.TermOrPredicate
+    | TOPNotSupported Def.TermOrPredicate
     deriving stock (Eq, Show)
