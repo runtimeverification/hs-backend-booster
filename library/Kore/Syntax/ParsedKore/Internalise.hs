@@ -20,6 +20,7 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
+import Data.List.Extra (groupSort)
 import Data.Text (Text)
 
 import Kore.Definition.Attributes.Base
@@ -152,7 +153,7 @@ addModule
             let internaliseAlias ::
                     ParsedAlias ->
                     StateT s (Except DefinitionError) (Def.AliasName, Alias)
-                -- TODO: handle attributes
+                -- TODO: do we need to handle attributes?
                 internaliseAlias ParsedAlias { name, sortVars, argSorts, sort, args, rhs } = lift $ do 
                     unless (length argSorts == length args) (error "TODO: add error")
                     let paramNames = Json.getId <$> sortVars
@@ -174,9 +175,8 @@ addModule
 
             let internaliseAxiom ::
                     ParsedAxiom ->
-                    StateT s (Except DefinitionError) (TermIndex, Axiom)
-                -- TODO: attributes!
-                internaliseAxiom ParsedAxiom { axiom } = lift $ do
+                    StateT s (Except DefinitionError) Axiom
+                internaliseAxiom parsedAx@ParsedAxiom { axiom } = lift $ do
                     case axiom of
                         Json.KJRewrites _ left right ->
                             case left of
@@ -187,25 +187,23 @@ addModule
                                     args <- traverse (withExcept (error "TODO: add error") . internaliseTerm partialDefinition) aliasArgs
                                     result <- expandAlias alias args
                                     lhs <- except $ note (error "TODO: add error") $ Util.retractPattern result
-                                    let computeTermIndex _ = return Anything
-                                    termIndex <- computeTermIndex lhs
                                     rhs <- withExcept DefinitionPatternError . internalisePattern partialDefinition $ right
-                                    return (termIndex, Axiom { lhs, rhs })
+                                    let axAttributes = extract parsedAx
+                                    return Axiom { lhs, rhs, attributes = axAttributes }
                                 (Json.KJApp (Json.Id aliasName) _ aliasArgs) -> do
                                     alias <- except $ note (error "TODO: add error") $ Map.lookup aliasName aliases
                                     let partialDefinition = KoreDefinition {attributes, modules, sorts, symbols, aliases, axioms = currentAxioms}
                                     args <- traverse (withExcept (error "TODO: add error") . internaliseTerm partialDefinition) aliasArgs
                                     result <- expandAlias alias args
                                     lhs <- except $ note (error "TODO: add error") $ Util.retractPattern result
-                                    let computeTermIndex _ = return Anything
-                                    termIndex <- computeTermIndex lhs
                                     rhs <- withExcept DefinitionPatternError . internalisePattern partialDefinition $ right
-                                    return (termIndex, Axiom { lhs, rhs })
+                                    let axAttributes = extract parsedAx
+                                    return Axiom { lhs, rhs, attributes = axAttributes }
                                 _ -> throwE $ error "TODO: this should be an error"
                         _ -> error "TODO: this shouldn't be an error, we should ignore other axioms"
             
             newAxioms <- traverse internaliseAxiom parsedAxioms
-            -- TODO: group by priority
+            let axioms = addToTheory newAxioms currentAxioms
 
             pure
                 KoreDefinition
@@ -214,7 +212,7 @@ addModule
                     , sorts
                     , symbols
                     , aliases
-                    , axioms = currentAxioms -- FIXME
+                    , axioms
                     }
       where
         -- returns the
@@ -293,6 +291,30 @@ expandAlias Alias {args, rhs} currentArgs
             Def.Or p1 p2 ->
                 Def.Or (substituteInPredicate substitution p1) (substituteInPredicate substitution p2)
             Def.Top -> Def.Top
+
+processAxiomsTODO :: [Axiom] -> [Axiom]
+processAxiomsTODO = id
+
+addToTheory :: [Axiom] -> Theory -> Theory
+addToTheory axioms theory =
+    let processedAxioms = processAxiomsTODO axioms
+        newTheory =
+            Map.map groupByPriority
+            . groupByTermIndex
+            $ processedAxioms
+     in Map.unionWith (Map.unionWith (<>)) theory newTheory
+
+groupByTermIndex :: [Axiom] -> Map Def.TermIndex [Axiom]
+groupByTermIndex axioms =
+    let withTermIndexes = do
+            axiom@Axiom {lhs} <- axioms
+            let termIndex = Def.computeTermIndex (Def.term lhs)
+            return (termIndex, axiom)
+     in Map.fromAscList . groupSort $ withTermIndexes
+
+groupByPriority :: [Axiom] -> Map Priority [Axiom]
+groupByPriority axioms = 
+    Map.fromAscList . groupSort $ [ (extractPriority ax, ax) | ax <- axioms ]
 
 {- | Checks if a given parsed symbol uses only sorts from the provided
    sort map, and whether they are consistent (wrt. sort parameter
