@@ -36,12 +36,12 @@ data KoreDefinition = KoreDefinition
     , sorts :: Map SortName SortAttributes -- TODO store a lattice of subsorts?
     , symbols :: Map SymbolName (SymbolAttributes, SymbolSort) -- constructors and functions
     , aliases :: Map AliasName Alias
-    , axioms :: Theory
+    , rewriteTheory :: RewriteTheory
     }
     deriving (Eq, Show)
 
 -- | Optimized for lookup by term-index
-type Theory = Map TermIndex (Map Priority [Axiom])
+type RewriteTheory = Map TermIndex (Map Priority [RewriteRule])
 
 -- | Sort information related to a symbol: result and argument sorts
 data SymbolSort = SymbolSort
@@ -61,18 +61,18 @@ emptyKoreDefinition attributes =
         , sorts = Map.empty
         , symbols = Map.empty
         , aliases = Map.empty
-        , axioms = Map.empty
+        , rewriteTheory = Map.empty
         }
 
-data Axiom = Axiom
+data RewriteRule = RewriteRule
     { lhs :: Pattern
     , rhs :: Pattern
     , attributes :: AxiomAttributes
     }
     deriving stock (Eq, Ord, Show)
 
-extractPriority :: Axiom -> Priority
-extractPriority Axiom {attributes} = priority attributes
+extractPriority :: RewriteRule -> Priority
+extractPriority RewriteRule {attributes} = priority attributes
 
 type AliasName = Text
 
