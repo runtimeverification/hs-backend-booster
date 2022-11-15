@@ -44,7 +44,7 @@ data AxiomAttributes = AxiomAttributes
     , label :: Maybe Label
     , simplification :: Bool
     }
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 
 type Label = Text
 

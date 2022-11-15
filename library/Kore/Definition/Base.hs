@@ -18,6 +18,7 @@ module Kore.Definition.Base (
 import Data.Map.Strict as Map (Map, empty)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 
 import Kore.Definition.Attributes.Base
@@ -96,7 +97,28 @@ instance Semigroup KoreDefinition where
                 }
       where
         mergeAxioms :: KoreDefinition -> KoreDefinition -> Map TermIndex [Set Axiom]
-        mergeAxioms m1 m2 = Map.unionWith (<>) (axioms m1) (axioms m2)
+        mergeAxioms m1 m2 =
+            Map.unionWith mergePrioritySets (axioms m1) (axioms m2)
+
+        -- assuming both argument lists are sorted in _decreasing
+        -- priority of axioms_, sets are homogenous wrt. priority, and
+        -- there are no empty sets in the list
+        mergePrioritySets :: [Set Axiom] -> [Set Axiom] -> [Set Axiom]
+        mergePrioritySets axioms1 axioms2 =
+            merge withPrio1 withPrio2
+          where
+            getPriority = priority . axiomAttributes . head . Set.toList
+            withPrio1 = [(getPriority s, s) | s <- axioms1]
+            withPrio2 = [(getPriority s, s) | s <- axioms2]
+
+            merge :: (Ord k, Ord a) => [(k, Set a)] -> [(k, Set a)] -> [Set a]
+            merge [] as = map snd as
+            merge as [] = map snd as
+            merge a1@((p1, as1) : rest1) a2@((p2, as2) : rest2)
+                | p1 < p2 = as1 : merge rest1 a2
+                | p1 == p2 = Set.union as1 as2 : merge rest1 rest2
+                | p1 > p2 = as2 : merge a1 rest2
+                | otherwise = error "GHC unable to see that the above cases are exhaustive"
 
         mergeDisjoint ::
             (Ord k, Show k) =>
@@ -135,4 +157,7 @@ data Axiom = Axiom
     , rhs :: Pattern
     , attributes :: AxiomAttributes
     }
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
+
+axiomAttributes :: Axiom -> AxiomAttributes
+axiomAttributes Axiom{attributes} = attributes
