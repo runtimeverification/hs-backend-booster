@@ -174,6 +174,10 @@ addModule
             let aliases = Map.fromList newAliases <> currentAliases
 
             let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory}
+
+            -- TODO(Ana): this should return a sum type of different kinds of information
+            -- regarding the theory: rewrite rules (which we apply), subsort relationships, other
+            -- things that are encoded into Kore as axioms
             let internaliseRewriteTheoryData ::
                     ParsedAxiom ->
                     StateT s (Except DefinitionError) (Maybe RewriteRule)
