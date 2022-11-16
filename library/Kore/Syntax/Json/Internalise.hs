@@ -74,9 +74,8 @@ internaliseTermOrPredicate ::
     Syntax.KorePattern ->
     MaybeT (Except PatternError) Internal.TermOrPredicate
 internaliseTermOrPredicate definition syntaxPatt =
-    (lift $ Internal.ATerm <$> internaliseTerm definition syntaxPatt)
-        <|> (lift $ Internal.APredicate <$> internalisePredicate definition syntaxPatt)
-        <|> (lift $ Internal.Both <$> internalisePattern definition syntaxPatt)
+    (lift $ Internal.APredicate <$> internalisePredicate definition syntaxPatt)
+        <|> (lift $ Internal.TermAndPredicate <$> internalisePattern definition syntaxPatt)
 
 -- check that two sorts "agree". Incomplete, see comment on ensureSortsAgree.
 sortCheck :: Syntax.KorePattern -> (Internal.Sort, Internal.Sort) -> Except PatternError ()

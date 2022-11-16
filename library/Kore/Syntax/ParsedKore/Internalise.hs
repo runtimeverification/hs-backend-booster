@@ -251,12 +251,10 @@ expandAlias alias@Alias{args, rhs} currentArgs
   where
     substitute substitution termOrPredicate =
         case termOrPredicate of
-            Def.ATerm term ->
-                Def.ATerm $ substituteInTerm substitution term
             Def.APredicate predicate ->
                 Def.APredicate $ substituteInPredicate substitution predicate
-            Def.Both Def.Pattern{term, constraints} ->
-                Def.Both
+            Def.TermAndPredicate Def.Pattern{term, constraints} ->
+                Def.TermAndPredicate
                     Def.Pattern
                         { term = substituteInTerm substitution term
                         , constraints =

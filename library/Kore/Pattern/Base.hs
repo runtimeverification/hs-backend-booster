@@ -50,10 +50,9 @@ data Pattern = Pattern
     }
     deriving stock (Eq, Ord, Show)
 
-data TermOrPredicate
-    = ATerm Term
-    | APredicate Predicate
-    | Both Pattern
+data TermOrPredicate -- = Either Predicate Pattern
+    = APredicate Predicate
+    | TermAndPredicate Pattern
     deriving stock (Eq, Ord, Show)
 
 type VarName = Text
