@@ -76,6 +76,13 @@ internaliseTermOrPredicate sortVars definition syntaxPatt =
                     Internal.TermAndPredicate
                         <$> internalisePattern sortVars definition syntaxPatt
                  )
+        -- {- DEBUGGING
+        `catchE` ( const $
+                    Internal.APredicate
+                        <$> internalisePredicate sortVars definition syntaxPatt
+                 )
+
+-- -}
 
 internaliseSort ::
     Maybe [Syntax.Id] ->
