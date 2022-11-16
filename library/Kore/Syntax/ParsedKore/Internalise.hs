@@ -165,7 +165,7 @@ addModule
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
                     let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases = currentAliases, rewriteTheory = currentRewriteTheory}
                     mInternalRhs <- withExcept DefinitionPatternError $ runMaybeT $ internaliseTermOrPredicate partialDefinition rhs
-                    internalRhs <- except $ note (DefinitionPatternError $ NotSupported rhs) mInternalRhs
+                    internalRhs <- mInternalRhs `orFailWith` DefinitionPatternError (NotSupported rhs)
                     let rhsSort = Util.sortOfTermOrPredicate internalRhs
                     unless (fromMaybe internalResSort rhsSort == internalResSort) (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
                     return (internalName, Alias{name = internalName, params, args = internalArgs, rhs = internalRhs})
@@ -220,8 +220,8 @@ addModule
                 , [(getKey $ head d, d) | d <- dups]
                 )
 
-note :: e -> Maybe a -> Either e a
-note e = maybe (Left e) Right
+orFailWith :: Maybe a -> e -> Except e a
+mbX `orFailWith` err = maybe (throwE err) pure mbX
 
 internaliseRewriteRule ::
     KoreDefinition ->
@@ -231,10 +231,15 @@ internaliseRewriteRule ::
     Json.KorePattern ->
     Except DefinitionError RewriteRule
 internaliseRewriteRule partialDefinition@KoreDefinition{aliases} parsedAx aliasName aliasArgs right = do
-    alias <- withExcept DefinitionAliasError $ except $ note (UnknownAlias aliasName) $ Map.lookup aliasName aliases
+    alias <-
+        withExcept DefinitionAliasError $
+            Map.lookup aliasName aliases
+                `orFailWith` UnknownAlias aliasName
     args <- traverse (withExcept DefinitionPatternError . internaliseTerm partialDefinition) aliasArgs
     result <- expandAlias alias args
-    lhs <- except $ note (DefinitionTermOrPredicateError . PatternExpected $ result) $ Util.retractPattern result
+    lhs <-
+        Util.retractPattern result
+            `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
     rhs <- withExcept DefinitionPatternError . internalisePattern partialDefinition $ right
     let axAttributes = extract parsedAx
     return RewriteRule{lhs, rhs, attributes = axAttributes}
