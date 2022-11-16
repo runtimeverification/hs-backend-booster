@@ -97,8 +97,10 @@ internaliseTerm definition@KoreDefinition{sorts, symbols} pat =
             variableSort <- internaliseSort sorts pat sort
             let variableName = Syntax.getId name
             pure $ Internal.Var Internal.Variable{variableSort, variableName}
-        Syntax.KJSVar{} ->
-            throwE $ NotSupported pat
+        Syntax.KJSVar{name, sort} -> do
+            variableSort <- internaliseSort sorts pat sort
+            let variableName = Syntax.getId name
+            pure $ Internal.Var Internal.Variable{variableSort, variableName}
         symPatt@Syntax.KJApp{name, sorts = appSorts, args} -> do
             (_, SymbolSort{resultSort, argSorts}) <-
                 maybe (throwE $ UnknownSymbol name symPatt) pure $
@@ -160,7 +162,7 @@ internalisePredicate ::
     Except PatternError Internal.Predicate
 internalisePredicate definition@KoreDefinition{sorts} pat = case pat of
     Syntax.KJEVar{} -> term
-    Syntax.KJSVar{} -> notSupported
+    Syntax.KJSVar{} -> term
     Syntax.KJApp{} -> term
     Syntax.KJString{} -> term
     Syntax.KJTop{} -> do
@@ -277,7 +279,7 @@ checkSort knownVars sortMap = check'
 isTermM :: Syntax.KorePattern -> Except PatternError Bool
 isTermM pat = case pat of
     Syntax.KJEVar{} -> pure True
-    Syntax.KJSVar{} -> notSupported
+    Syntax.KJSVar{} -> pure True
     Syntax.KJApp{} -> pure True
     Syntax.KJString{} -> pure True
     Syntax.KJTop{} -> pure False
