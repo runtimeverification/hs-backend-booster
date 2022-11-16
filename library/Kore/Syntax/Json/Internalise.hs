@@ -95,14 +95,14 @@ internaliseTerm definition@KoreDefinition{sorts, symbols} pat =
     case pat of
         Syntax.KJEVar{name, sort} -> do
             variableSort <- internaliseSort sorts pat sort
-            let variableName = fromId name
+            let variableName = Syntax.getId name
             pure $ Internal.Var Internal.Variable{variableSort, variableName}
         Syntax.KJSVar{} ->
             throwE $ NotSupported pat
         symPatt@Syntax.KJApp{name, sorts = appSorts, args} -> do
             (_, SymbolSort{resultSort, argSorts}) <-
                 maybe (throwE $ UnknownSymbol name symPatt) pure $
-                    Map.lookup (fromId name) symbols
+                    Map.lookup (Syntax.getId name) symbols
             internalAppSorts <- mapM (internaliseSort sorts pat) appSorts
             -- check that all argument sorts "agree". Variables
             -- can stand for anything but need to be consistent (a
@@ -114,7 +114,7 @@ internaliseTerm definition@KoreDefinition{sorts, symbols} pat =
             -- finalSort is the symbol result sort with
             -- variables substituted using the arg.sort match
             let finalSort = applySubst sortSubst resultSort
-            Internal.SymbolApplication finalSort internalAppSorts (fromId name)
+            Internal.SymbolApplication finalSort internalAppSorts (Syntax.getId name)
                 <$> mapM (internaliseTerm definition) args
         Syntax.KJString{value} ->
             pure $ Internal.DomainValue (Internal.SortApp "SortString" []) value
@@ -188,9 +188,9 @@ internalisePredicate definition@KoreDefinition{sorts} pat = case pat of
             <$> internalisePredicate definition arg1
             <*> internalisePredicate definition arg2
     Syntax.KJForall{var, arg} ->
-        Internal.Forall (fromId var) <$> internalisePredicate definition arg
+        Internal.Forall (Syntax.getId var) <$> internalisePredicate definition arg
     Syntax.KJExists{var, arg} ->
-        Internal.Exists (fromId var) <$> internalisePredicate definition arg
+        Internal.Exists (Syntax.getId var) <$> internalisePredicate definition arg
     Syntax.KJMu{} -> notSupported
     Syntax.KJNu{} -> notSupported
     Syntax.KJCeil{arg} ->
@@ -244,11 +244,6 @@ mkF ::
     Syntax.KorePattern ->
     Syntax.KorePattern
 mkF symbol argSorts a b = Syntax.KJApp symbol argSorts [a, b]
-
-----------------------------------------
-
-fromId :: Syntax.Id -> Text
-fromId (Syntax.Id n) = n
 
 ----------------------------------------
 
@@ -421,7 +416,7 @@ instance ToJSON PatternError where
         PredicateExpected p ->
             wrap "Expected a predicate but found a term" p
         UnknownSymbol sym p ->
-            wrap ("Unknown symbol " <> fromId sym) p
+            wrap ("Unknown symbol " <> Syntax.getId sym) p
       where
         wrap :: Text -> Syntax.KorePattern -> Value
         wrap msg p = object ["error" .= msg, "context" .= toJSON [p]]

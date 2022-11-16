@@ -76,7 +76,7 @@ descendFrom m = do
             -- though: in recursive calls when handling an imported
             -- module, other modules may be in the current definition
             -- which are not actually imported in that submodule
-            mapM_ (descendFrom . fromJsonId . fst) $ imports theModule
+            mapM_ (descendFrom . Json.getId . fst) $ imports theModule
 
             -- refresh current definition
             def <- gets definition
@@ -146,7 +146,7 @@ addModule
                 internaliseSymbol s@ParsedSymbol{name} = do
                     info <- mkSymbolSorts sorts s
                     -- TODO(Ana): rename extract
-                    pure (fromJsonId name, (extract s, info))
+                    pure (Json.getId name, (extract s, info))
             newSymbols' <- mapM internaliseSymbol parsedSymbols
             let symbols = Map.fromList newSymbols' <> currentSymbols
 
@@ -339,12 +339,12 @@ mkSymbolSorts sortMap ParsedSymbol{sortVars, argSorts = sorts, sort} =
     do
         unless (Set.size knownVars == length sortVars) $
             defError $
-                DuplicateNames (map fromJsonId sortVars)
+                DuplicateNames (map Json.getId sortVars)
         resultSort <- lift $ check sort
         argSorts <- mapM (lift . check) sorts
         pure $ SymbolSort{resultSort, argSorts}
   where
-    knownVars = Set.fromList $ map fromJsonId sortVars
+    knownVars = Set.fromList $ map Json.getId sortVars
 
     check :: Json.Sort -> Except DefinitionError Def.Sort
     check =
@@ -354,16 +354,13 @@ mkSymbolSorts sortMap ParsedSymbol{sortVars, argSorts = sorts, sort} =
 -- monomorphic name functions for different entities (avoiding field
 -- name ambiguity)
 moduleName :: ParsedModule -> Text
-moduleName ParsedModule{name = Json.Id n} = n
+moduleName ParsedModule{name} = Json.getId name
 
 sortName :: ParsedSort -> Text
-sortName ParsedSort{name} = fromJsonId name
+sortName ParsedSort{name} = Json.getId name
 
 symbolName :: ParsedSymbol -> Text
-symbolName ParsedSymbol{name} = fromJsonId name
-
-fromJsonId :: Json.Id -> Text
-fromJsonId (Json.Id n) = n
+symbolName ParsedSymbol{name} = Json.getId name
 
 ----------------------------------------
 data DefinitionError
