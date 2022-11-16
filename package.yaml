@@ -140,6 +140,7 @@ tests:
     dependencies:
     - base
     - bytestring
+    - containers
     - directory
     - filepath
     - hedgehog
@@ -149,6 +150,7 @@ tests:
     - tasty-hedgehog
     - tasty-test-reporter
     - text
+    - transformers
     ghc-options:
     - -rtsopts
     - -threaded
