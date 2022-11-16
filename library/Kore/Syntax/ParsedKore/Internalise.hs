@@ -163,7 +163,9 @@ addModule
                     internalResSort <- withExcept DefinitionSortError $ checkSort (Set.fromList paramNames) sorts sort
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
                     let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases = currentAliases, rewriteTheory = currentRewriteTheory}
-                    internalRhs <- withExcept DefinitionPatternError $ internaliseTermOrPredicate partialDefinition rhs
+                    internalRhs <-
+                        withExcept DefinitionPatternError $
+                            internaliseTermOrPredicate (Just sortVars) partialDefinition rhs
                     let rhsSort = Util.sortOfTermOrPredicate internalRhs
                     unless (fromMaybe internalResSort rhsSort == internalResSort) (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
                     return (internalName, Alias{name = internalName, params, args = internalArgs, rhs = internalRhs})
@@ -228,17 +230,19 @@ internaliseRewriteRule ::
     [Json.KorePattern] ->
     Json.KorePattern ->
     Except DefinitionError RewriteRule
-internaliseRewriteRule partialDefinition@KoreDefinition{aliases} parsedAx aliasName aliasArgs right = do
+internaliseRewriteRule partialDefinition@KoreDefinition{aliases} parsedAx@ParsedAxiom{sortVars} aliasName aliasArgs right = do
     alias <-
         withExcept DefinitionAliasError $
             Map.lookup aliasName aliases
                 `orFailWith` UnknownAlias aliasName
-    args <- traverse (withExcept DefinitionPatternError . internaliseTerm partialDefinition) aliasArgs
+    args <- traverse (withExcept DefinitionPatternError . internaliseTerm (Just sortVars) partialDefinition) aliasArgs
     result <- expandAlias alias args
     lhs <-
         Util.retractPattern result
             `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
-    rhs <- withExcept DefinitionPatternError . internalisePattern partialDefinition $ right
+    rhs <-
+        withExcept DefinitionPatternError $
+            internalisePattern (Just sortVars) partialDefinition right
     let axAttributes = extract parsedAx
     return RewriteRule{lhs, rhs, attributes = axAttributes}
 
