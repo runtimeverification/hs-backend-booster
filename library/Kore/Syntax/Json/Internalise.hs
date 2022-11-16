@@ -81,14 +81,6 @@ internaliseTermOrPredicate definition syntaxPatt =
 sortCheck :: Syntax.KorePattern -> (Internal.Sort, Internal.Sort) -> Except PatternError ()
 sortCheck pat = mapExcept (first $ PatternSortError pat) . uncurry ensureSortsAgree
 
-mkF ::
-    Syntax.Id ->
-    [Syntax.Sort] ->
-    Syntax.KorePattern ->
-    Syntax.KorePattern ->
-    Syntax.KorePattern
-mkF symbol argSorts a b = Syntax.KJApp symbol argSorts [a, b]
-
 internaliseSort :: Map Internal.SortName SortAttributes -> Syntax.KorePattern -> Syntax.Sort -> Except PatternError Internal.Sort
 internaliseSort sorts pat =
     mapExcept (first $ PatternSortError pat) . checkSort mempty sorts
@@ -243,6 +235,15 @@ internalisePredicate definition@KoreDefinition{sorts} pat = case pat of
 withAssoc :: Syntax.LeftRight -> (a -> a -> a) -> NonEmpty a -> a
 withAssoc Syntax.Left = foldl1
 withAssoc Syntax.Right = foldr1
+
+-- for use with withAssoc
+mkF ::
+    Syntax.Id ->
+    [Syntax.Sort] ->
+    Syntax.KorePattern ->
+    Syntax.KorePattern ->
+    Syntax.KorePattern
+mkF symbol argSorts a b = Syntax.KJApp symbol argSorts [a, b]
 
 ----------------------------------------
 
