@@ -2,7 +2,6 @@
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
-
 module Test.Kore.Definition.Internalise (
     test_internaliseKore,
 ) where
@@ -16,8 +15,8 @@ import System.FilePath
 import Test.Tasty
 import Test.Tasty.Golden
 
-import Kore.Syntax.ParsedKore
 import Kore.Definition.Base
+import Kore.Syntax.ParsedKore
 
 import Data.Map qualified as Map
 import Data.Text qualified as Text

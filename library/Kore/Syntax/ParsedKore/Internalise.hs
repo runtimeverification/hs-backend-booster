@@ -12,7 +12,6 @@ module Kore.Syntax.ParsedKore.Internalise (
 
 import Control.Monad.State
 import Control.Monad.Trans.Except
-import Control.Monad.Trans.Maybe (runMaybeT)
 import Data.Bifunctor (first)
 import Data.Function (on)
 import Data.List (groupBy, partition, sortOn)
@@ -164,8 +163,7 @@ addModule
                     internalResSort <- withExcept DefinitionSortError $ checkSort (Set.fromList paramNames) sorts sort
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
                     let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases = currentAliases, rewriteTheory = currentRewriteTheory}
-                    mInternalRhs <- withExcept DefinitionPatternError $ runMaybeT $ internaliseTermOrPredicate partialDefinition rhs
-                    internalRhs <- mInternalRhs `orFailWith` DefinitionPatternError (NotSupported rhs)
+                    internalRhs <- withExcept DefinitionPatternError $ internaliseTermOrPredicate partialDefinition rhs
                     let rhsSort = Util.sortOfTermOrPredicate internalRhs
                     unless (fromMaybe internalResSort rhsSort == internalResSort) (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
                     return (internalName, Alias{name = internalName, params, args = internalArgs, rhs = internalRhs})

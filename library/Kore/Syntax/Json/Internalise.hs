@@ -13,17 +13,12 @@ module Kore.Syntax.Json.Internalise (
     SortError (..),
 ) where
 
-import Control.Applicative ((<|>))
 import Control.Monad
 import Control.Monad.Extra
-import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except
-import Control.Monad.Trans.Maybe (MaybeT)
 import Data.Aeson (ToJSON (..), Value, object, (.=))
 import Data.Bifunctor
 import Data.Foldable ()
-
--- foldl1, foldr1
 import Data.List (foldl1', nub)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
@@ -72,10 +67,10 @@ internalisePattern definition p = do
 internaliseTermOrPredicate ::
     KoreDefinition ->
     Syntax.KorePattern ->
-    MaybeT (Except PatternError) Internal.TermOrPredicate
+    Except PatternError Internal.TermOrPredicate
 internaliseTermOrPredicate definition syntaxPatt =
-    (lift $ Internal.APredicate <$> internalisePredicate definition syntaxPatt)
-        <|> (lift $ Internal.TermAndPredicate <$> internalisePattern definition syntaxPatt)
+    (Internal.APredicate <$> internalisePredicate definition syntaxPatt)
+        `catchE` (const $ Internal.TermAndPredicate <$> internalisePattern definition syntaxPatt)
 
 -- check that two sorts "agree". Incomplete, see comment on ensureSortsAgree.
 sortCheck :: Syntax.KorePattern -> (Internal.Sort, Internal.Sort) -> Except PatternError ()
