@@ -2,3 +2,6 @@
 /*.cabal
 *~
 /dist-newstyle
+/.direnv
+/.build
+result*
