@@ -117,4 +117,4 @@ combine s@(Symbol s1) (Symbol s2)
 combine _ _ = None -- incompatible indexes
 
 computeTermIndex :: Term -> TermIndex
-computeTermIndex = undefined
+computeTermIndex = const None -- FIXME
