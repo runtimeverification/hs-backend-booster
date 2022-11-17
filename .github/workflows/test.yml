@@ -17,8 +17,38 @@ env:
   hpack_version: "0.34.2"
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    # Required permissions
+    permissions:
+      pull-requests: read
+    # Set job outputs to values from filter step
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      stack: ${{ steps.filter.outputs.stack }}
+      nix: ${{ steps.filter.outputs.nix }}
+    steps:
+    # For pull requests it's not necessary to checkout the code
+    - uses: dorny/paths-filter@v2
+      id: filter
+      with:
+        filters: |
+          code:
+            - 'library/**'
+            - 'executable/**'
+            - 'tools/**'
+            - 'test/**'
+            - 'test-suite/**'
+            - 'package.yaml'
+          stack:
+            - 'stack.*'
+          nix:
+            - 'flake.*'
+
   stack:
     name: 'Stack / Unit Tests'
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.stack == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Install prerequisites
@@ -57,6 +87,8 @@ jobs:
 
   cabal:
     name: 'Cabal / Unit Tests'
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -104,6 +136,8 @@ jobs:
 
   style:
     name: 'Formatting and Style'
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
