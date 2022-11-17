@@ -491,7 +491,7 @@ transitiveClosure adjacencies = toAdjacencies $ foldl' update matrix allKeys
     update :: Map (k, k) Bool -> k -> Map (k, k) Bool
     update matrix' k =
         let newPath :: k -> k -> Map (k, k) Bool -> Bool
-            newPath a b m = fromMaybe False $ liftM2 (||) (Map.lookup (a, k) m) (Map.lookup (k, b) m)
+            newPath a b m = fromMaybe False $ liftM2 (&&) (Map.lookup (a, k) m) (Map.lookup (k, b) m)
             upd m (a, b) = Map.update (Just . (|| newPath a b m)) (a, b) m
          in foldl upd matrix' $ [(x, x') | x <- allKeys, x' <- allKeys]
 
