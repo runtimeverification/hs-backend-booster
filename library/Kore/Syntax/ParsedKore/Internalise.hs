@@ -10,6 +10,7 @@ module Kore.Syntax.ParsedKore.Internalise (
     DefinitionError (..),
 ) where
 
+import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.State
 import Control.Monad.Trans.Except
 import Data.Bifunctor (first)
@@ -18,7 +19,7 @@ import Data.List (groupBy, partition, sortOn)
 import Data.List.Extra (groupSort)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -178,25 +179,13 @@ addModule
 
             let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory}
 
-            -- TODO(Ana): this should return a sum type of different kinds of information
-            -- regarding the theory: rewrite rules (which we apply), subsort relationships, other
-            -- things that are encoded into Kore as axioms
-            let internaliseRewriteTheoryData ::
-                    ParsedAxiom ->
-                    StateT s (Except DefinitionError) (Maybe RewriteRule)
-                internaliseRewriteTheoryData parsedAx@ParsedAxiom{axiom} = lift $ do
-                    case axiom of
-                        Json.KJRewrites _ left right ->
-                            case left of
-                                Json.KJAnd _ (Json.KJNot _ _) (Json.KJApp (Json.Id aliasName) _ aliasArgs) ->
-                                    Just <$> internaliseRewriteRule partialDefinition parsedAx aliasName aliasArgs right
-                                (Json.KJApp (Json.Id aliasName) _ aliasArgs) ->
-                                    Just <$> internaliseRewriteRule partialDefinition parsedAx aliasName aliasArgs right
-                                _ -> throwE (DefinitionRewriteRuleError . MalformedRewriteRule $ parsedAx)
-                        _ -> return Nothing
+            (newRewriteRules, subsortAxioms) <-
+                partitionAxioms
+                    <$> lift (mapMaybeM (internaliseAxiom partialDefinition) parsedAxioms)
 
-            newRewriteRules <- catMaybes <$> traverse internaliseRewriteTheoryData parsedAxioms
             let rewriteTheory = addToTheory newRewriteRules currentRewriteTheory
+
+            -- TODO do something with the subsort axioms
 
             pure
                 KoreDefinition
@@ -223,17 +212,84 @@ addModule
                 , [(getKey $ head d, d) | d <- dups]
                 )
 
+        partitionAxioms :: [AxiomResult] -> ([RewriteRule], [(Def.SortName, Def.SortName)])
+        partitionAxioms = go [] []
+          where
+            go rules sorts [] = (rules, sorts)
+            go rules sorts (RewriteRuleAxiom r : rest) = go (r : rules) sorts rest
+            go rules sorts (SubsortAxiom pair : rest) = go rules (pair : sorts) rest
+
+-- Result type from internalisation of different axioms
+data AxiomResult
+    = -- | Rewrite rule
+      RewriteRuleAxiom RewriteRule
+    | -- | subsort data: a pair of sorts
+      SubsortAxiom (Def.SortName, Def.SortName)
+
+-- helper type to carry relevant extracted data from a pattern (what
+-- is passed to the internalising function later)
+data AxiomData
+    = RewriteRuleAxiom' AliasName [Json.KorePattern] Json.KorePattern AxiomAttributes [Json.Id]
+    | SubsortAxiom' Json.Sort Json.Sort
+
+classifyAxiom :: ParsedAxiom -> Except DefinitionError (Maybe AxiomData)
+classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars} = case axiom of
+    -- rewrite: an actual rewrite rule
+    Json.KJRewrites _ lhs rhs
+        | Json.KJAnd _ (Json.KJNot _ _) (Json.KJApp (Json.Id aliasName) _ aliasArgs) <- lhs ->
+            pure $ Just $ RewriteRuleAxiom' aliasName aliasArgs rhs (extract parsedAx) sortVars
+        | Json.KJApp (Json.Id aliasName) _ aliasArgs <- lhs ->
+            pure $ Just $ RewriteRuleAxiom' aliasName aliasArgs rhs (extract parsedAx) sortVars
+        | otherwise ->
+            throwE $ DefinitionRewriteRuleError $ MalformedRewriteRule parsedAx
+    -- subsort axiom formulated as an existential rule
+    Json.KJExists{var, varSort = super, arg}
+        | Json.KJEquals{first = aVar, second} <- arg
+        , aVar == Json.KJEVar{name = var, sort = super}
+        , Json.KJApp{name, args} <- second
+        , Json.Id "inj" <- name
+        , [Json.KJEVar{name = _, sort = sub}] <- args ->
+            pure $ Just $ SubsortAxiom' sub super
+    -- implies: an equation
+    Json.KJImplies{} ->
+        pure Nothing -- not handled yet
+
+    -- anything else: not handled yet but not an error (this case
+    -- becomes an error if the list becomes comprehensive)
+    _ -> pure Nothing
+
+internaliseAxiom ::
+    KoreDefinition ->
+    ParsedAxiom ->
+    Except DefinitionError (Maybe AxiomResult)
+internaliseAxiom partialDefinition parsedAxiom =
+    classifyAxiom parsedAxiom >>= maybe (pure Nothing) processAxiom
+  where
+    processAxiom :: AxiomData -> Except DefinitionError (Maybe AxiomResult)
+    processAxiom = \case
+        SubsortAxiom' Json.SortApp{name = Json.Id sub} Json.SortApp{name = Json.Id super} -> do
+            when (sub == super) $
+                throwE $
+                    DefinitionSortError $
+                        GeneralError ("Bad subsort rule " <> sub <> " < " <> super)
+            pure $ Just $ SubsortAxiom (sub, super)
+        RewriteRuleAxiom' alias args rhs attribs sortVars ->
+            Just . RewriteRuleAxiom
+                <$> internaliseRewriteRule partialDefinition alias args rhs attribs sortVars
+        _ -> pure Nothing
+
 orFailWith :: Maybe a -> e -> Except e a
 mbX `orFailWith` err = maybe (throwE err) pure mbX
 
 internaliseRewriteRule ::
     KoreDefinition ->
-    ParsedAxiom ->
     AliasName ->
     [Json.KorePattern] ->
     Json.KorePattern ->
+    AxiomAttributes ->
+    [Json.Id] ->
     Except DefinitionError RewriteRule
-internaliseRewriteRule partialDefinition@KoreDefinition{aliases} parsedAx@ParsedAxiom{sortVars} aliasName aliasArgs right = do
+internaliseRewriteRule partialDefinition@KoreDefinition{aliases} aliasName aliasArgs right axAttributes sortVars = do
     alias <-
         withExcept (DefinitionAliasError aliasName) $
             Map.lookup aliasName aliases
@@ -246,7 +302,6 @@ internaliseRewriteRule partialDefinition@KoreDefinition{aliases} parsedAx@Parsed
     rhs <-
         withExcept DefinitionPatternError $
             internalisePattern (Just sortVars) partialDefinition right
-    let axAttributes = extract parsedAx
     return RewriteRule{lhs, rhs, attributes = axAttributes}
 
 defError :: DefinitionError -> StateT s (Except DefinitionError) a
