@@ -23,22 +23,32 @@
       };
       allNixpkgsFor = perSystem nixpkgsForSystem;
       nixpkgsFor = system: allNixpkgsFor.${system};
+      index-state = "2022-11-16T00:00:00Z";
 
       boosterBackendFor = compiler: pkgs: pkgs.haskell-nix.cabalProject {
         name = "hs-backend-booster";
         compiler-nix-name = compiler;
         src = ./.;
+        inherit index-state;
 
         shell = {
           withHoogle = true;
           tools = {
-            cabal = { };
-            haskell-language-server = { };
+            cabal = {
+              inherit index-state;
+            };
+            haskell-language-server = {
+              inherit index-state;
+            };
+            fourmolu = {
+              inherit index-state;
+              version = "0.8.2.0";
+            };
           };
           nativeBuildInputs = with nixpkgs.legacyPackages.${pkgs.system}; [
             nixpkgs-fmt
             hpack
-            haskellPackages.fourmolu
+            # haskellPackages.fourmolu
             zlib
           ];
           shellHook = "rm -f *.cabal && hpack";
@@ -113,26 +123,10 @@
           inherit (flakes.${defaultCompiler}) apps;
           flakes = flakesFor (nixpkgsFor system);
           pkgs = nixpkgsFor system;
-          scripts = pkgs.symlinkJoin {
-            name = "fourmolu-format";
-            paths = [ ./scripts ];
-            buildInputs = [ pkgs.makeWrapper ];
-            postBuild = ''
-              wrapProgram $out/fourmolu.sh \
-                --set PATH ${
-                  with pkgs;
-                  lib.makeBinPath [ haskellPackages.fourmolu fd findutils which gnugrep git ]
-                }
-            '';
-          };
         in
         {
           hs-backend-booster = apps."hs-backend-booster:exe:hs-backend-booster";
           rpc-client = apps."hs-backend-booster:exe:rpc-client";
-          format = {
-            type = "app";
-            program = "${scripts}/fourmolu.sh";
-          };
         } // apps // collectOutputs "apps" flakes
       );
 
