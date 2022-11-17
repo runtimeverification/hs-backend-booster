@@ -90,7 +90,7 @@ descendFrom m = do
         Just _ -> pure () -- already internalised (present in the definition)
         Nothing -> do
             let mbModule = Map.lookup m moduleMap
-            theModule <- maybe (defError $ NoSuchModule m) pure mbModule
+            theModule <- maybe (lift . throwE $ NoSuchModule m) pure mbModule
 
             -- traverse imports recursively in pre-order before
             -- dealing with the current module.
@@ -106,7 +106,7 @@ descendFrom m = do
 
             -- validate and add new module in context of the existing
             -- definition
-            (newSubsorts, newDef) <- addModule theModule def
+            (newSubsorts, newDef) <- lift $ addModule theModule def
 
             modify (updateState newDef newSubsorts)
   where
@@ -122,7 +122,7 @@ descendFrom m = do
 addModule ::
     ParsedModule ->
     KoreDefinition ->
-    StateT DefinitionState (Except DefinitionError) (Map Def.SortName (Set Def.SortName), KoreDefinition)
+    Except DefinitionError (Map Def.SortName (Set Def.SortName), KoreDefinition)
 addModule
     m@ParsedModule
         { name = Json.Id n
@@ -150,13 +150,13 @@ addModule
 
             let (newSorts, sortDups) = parsedSorts `mappedBy` sortName
             unless (null sortDups) $
-                defError $
+                throwE $
                     DuplicateSorts (concatMap snd sortDups)
             let sortCollisions :: [ParsedSort]
                 sortCollisions =
                     Map.elems $ Map.intersection newSorts currentSorts
             unless (null sortCollisions) $
-                defError $
+                throwE $
                     DuplicateSorts sortCollisions
             let sorts =
                     Map.map (\s -> (extract s, Set.singleton (sortName s))) newSorts
@@ -168,15 +168,15 @@ addModule
                 symCollisions =
                     Map.elems $ Map.intersection newSymbols currentSymbols
             unless (null symDups) $
-                defError $
+                throwE $
                     DuplicateSymbols (concatMap snd symDups)
             unless (null symCollisions) $
-                defError $
+                throwE $
                     DuplicateSymbols symCollisions
             -- internalise (in a new pass over the list)
             let internaliseSymbol ::
                     ParsedSymbol ->
-                    StateT s (Except DefinitionError) (Def.SymbolName, (SymbolAttributes, SymbolSort))
+                    Except DefinitionError (Def.SymbolName, (SymbolAttributes, SymbolSort))
                 internaliseSymbol s@ParsedSymbol{name} = do
                     info <- mkSymbolSorts sorts s
                     -- TODO(Ana): rename extract
@@ -186,9 +186,9 @@ addModule
 
             let internaliseAlias ::
                     ParsedAlias ->
-                    StateT s (Except DefinitionError) (Def.AliasName, Alias)
+                    Except DefinitionError (Def.AliasName, Alias)
                 -- TODO(Ana): do we need to handle attributes?
-                internaliseAlias palias@ParsedAlias{name, sortVars, argSorts, sort, args, rhs} = lift $ do
+                internaliseAlias palias@ParsedAlias{name, sortVars, argSorts, sort, args, rhs} = do
                     unless (length argSorts == length args) (throwE (DefinitionAliasError (Json.getId name) . WrongAliasSortCount $ palias))
                     let paramNames = Json.getId <$> sortVars
                         params = Def.SortVar <$> paramNames
@@ -214,7 +214,7 @@ addModule
 
             (newRewriteRules, subsortPairs) <-
                 partitionAxioms
-                    <$> lift (mapMaybeM (internaliseAxiom partialDefinition) parsedAxioms)
+                    <$> mapMaybeM (internaliseAxiom partialDefinition) parsedAxioms
 
             let rewriteTheory = addToTheory newRewriteRules currentRewriteTheory
 
@@ -350,9 +350,6 @@ internaliseRewriteRule partialDefinition@KoreDefinition{aliases} aliasName alias
             internalisePattern (Just sortVars) partialDefinition right
     return RewriteRule{lhs, rhs, attributes = axAttributes}
 
-defError :: DefinitionError -> StateT s (Except DefinitionError) a
-defError = lift . throwE
-
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias@Alias{name, args, rhs} currentArgs
     | length args /= length currentArgs = throwE (DefinitionAliasError name $ WrongAliasArgCount alias currentArgs)
@@ -440,14 +437,14 @@ groupByPriority axioms =
 mkSymbolSorts ::
     Map Def.SortName (SortAttributes, Set Def.SortName) ->
     ParsedSymbol ->
-    StateT s (Except DefinitionError) SymbolSort
+    Except DefinitionError SymbolSort
 mkSymbolSorts sortMap ParsedSymbol{sortVars, argSorts = sorts, sort} =
     do
         unless (Set.size knownVars == length sortVars) $
-            defError $
+            throwE $
                 DuplicateNames (map Json.getId sortVars)
-        resultSort <- lift $ check sort
-        argSorts <- mapM (lift . check) sorts
+        resultSort <- check sort
+        argSorts <- mapM check sorts
         pure $ SymbolSort{resultSort, argSorts}
   where
     knownVars = Set.fromList $ map Json.getId sortVars
