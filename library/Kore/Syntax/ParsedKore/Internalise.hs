@@ -15,7 +15,7 @@ import Control.Monad.State
 import Control.Monad.Trans.Except
 import Data.Bifunctor (first)
 import Data.Function (on)
-import Data.List (groupBy, partition, sortOn)
+import Data.List (foldl', groupBy, partition, sortOn)
 import Data.List.Extra (groupSort)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -42,9 +42,13 @@ default).
 Only very few validations are performed on the parsed data.
 -}
 buildDefinition :: Maybe Text -> ParsedDefinition -> Except DefinitionError KoreDefinition
-buildDefinition mbMainModule def@ParsedDefinition{modules} =
-    definition
-        <$> execStateT (descendFrom mainModule) startState
+buildDefinition mbMainModule def@ParsedDefinition{modules} = do
+    State{definition = d@KoreDefinition{sorts}, subsorts} <-
+        execStateT (descendFrom mainModule) startState
+    let finalSorts = addSubsortInfo sorts (transitiveClosure subsorts)
+        finalDefinition :: KoreDefinition
+        finalDefinition = d{sorts = finalSorts}
+    pure finalDefinition
   where
     mainModule = fromMaybe (moduleName $ last modules) mbMainModule
     moduleMap = Map.fromList [(moduleName m, m) | m <- modules]
@@ -54,6 +58,17 @@ buildDefinition mbMainModule def@ParsedDefinition{modules} =
             , definition = emptyKoreDefinition $ extract def
             , subsorts = Map.empty
             }
+
+    addSubsortInfo ::
+        Map Def.SortName (SortAttributes, Set Def.SortName) ->
+        Map Def.SortName (Set Def.SortName) ->
+        Map Def.SortName (SortAttributes, Set Def.SortName)
+    addSubsortInfo sortMap subsortMap =
+        -- catering for the case that some sorts might not occur in
+        -- the subsort map at all. OTOH we _should_ have S < KItem for
+        -- _every_ sort that we know.
+        Map.intersectionWith sumSecond sortMap subsortMap
+    sumSecond (a, b) b' = (a, b <> b')
 
 {- | The state while traversing the module import graph. This is
  internal only, but the definition is the result of the traversal.
@@ -143,7 +158,9 @@ addModule
             unless (null sortCollisions) $
                 defError $
                     DuplicateSorts sortCollisions
-            let sorts = Map.map extract newSorts <> currentSorts
+            let sorts =
+                    Map.map (\s -> (extract s, Set.singleton (sortName s))) newSorts
+                        <> currentSorts
 
             -- ensure parsed symbols are not duplicates and only refer
             -- to known sorts
@@ -299,11 +316,10 @@ internaliseAxiom partialDefinition parsedAxiom =
             throwE $
                 DefinitionSortError $
                     GeneralError ("Sort variable " <> sub <> " in subsort axiom")
-        SubsortAxiom' _  Json.SortVar{name = Json.Id super} ->
+        SubsortAxiom' _ Json.SortVar{name = Json.Id super} ->
             throwE $
                 DefinitionSortError $
                     GeneralError ("Sort variable " <> super <> " in subsort axiom")
-
         RewriteRuleAxiom' alias args rhs attribs sortVars ->
             Just . RewriteRuleAxiom
                 <$> internaliseRewriteRule partialDefinition alias args rhs attribs sortVars
@@ -422,7 +438,7 @@ groupByPriority axioms =
    the symbol.
 -}
 mkSymbolSorts ::
-    Map Def.SortName SortAttributes ->
+    Map Def.SortName (SortAttributes, Set Def.SortName) ->
     ParsedSymbol ->
     StateT s (Except DefinitionError) SymbolSort
 mkSymbolSorts sortMap ParsedSymbol{sortVars, argSorts = sorts, sort} =
@@ -451,6 +467,36 @@ sortName ParsedSort{name} = Json.getId name
 
 symbolName :: ParsedSymbol -> Text
 symbolName ParsedSymbol{name} = Json.getId name
+
+{- | Computes all-pairs reachability in a directed graph given as an
+   adjacency list mapping. Internally uses Warshall's algorithm but
+   converts the result back to a reachability list.
+-}
+transitiveClosure :: forall k. (Ord k) => Map k (Set.Set k) -> Map k (Set.Set k)
+transitiveClosure adjacencies = toAdjacencies $ foldl' update matrix allKeys
+  where
+    allKeys = Map.keys adjacencies
+
+    matrix :: Map (k, k) Bool
+    matrix =
+        Map.fromList
+            [ ((a, b), a == b || (maybe False (b `Set.member`) $ Map.lookup a adjacencies))
+            | a <- allKeys
+            , b <- allKeys
+            ]
+
+    toAdjacencies :: Map (k, k) Bool -> Map k (Set.Set k)
+    toAdjacencies matrix' =
+        Map.fromListWith
+            (<>)
+            [(a, Set.singleton b) | ((a, b), True) <- Map.assocs matrix']
+
+    update :: Map (k, k) Bool -> k -> Map (k, k) Bool
+    update matrix' k =
+        let newPath :: k -> k -> Map (k, k) Bool -> Bool
+            newPath a b m = maybe False id $ liftM2 (||) (Map.lookup (a, k) m) (Map.lookup (k, b) m)
+            upd m (a, b) = Map.update (Just . (|| newPath a b m)) (a, b) m
+         in foldl upd matrix' $ [(x, x') | x <- allKeys, x' <- allKeys]
 
 ----------------------------------------
 data DefinitionError
