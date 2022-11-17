@@ -52,7 +52,7 @@
         ];
       };
 
-      defaultCompiler = "ghc925";
+      defaultCompiler = "ghc924";
 
       # Get flake outputs for different GHC versions
       flakesFor = pkgs: builtins.listToAttrs
