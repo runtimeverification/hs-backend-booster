@@ -20,6 +20,7 @@ import Data.List.Extra (groupSort)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
+import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -43,11 +44,16 @@ Only very few validations are performed on the parsed data.
 buildDefinition :: Maybe Text -> ParsedDefinition -> Except DefinitionError KoreDefinition
 buildDefinition mbMainModule def@ParsedDefinition{modules} =
     definition
-        <$> execStateT (descendFrom mainModule) State{moduleMap, definition = start}
+        <$> execStateT (descendFrom mainModule) startState
   where
     mainModule = fromMaybe (moduleName $ last modules) mbMainModule
     moduleMap = Map.fromList [(moduleName m, m) | m <- modules]
-    start = emptyKoreDefinition (extract def)
+    startState =
+        State
+            { moduleMap
+            , definition = emptyKoreDefinition $ extract def
+            , subsorts = Map.empty
+            }
 
 {- | The state while traversing the module import graph. This is
  internal only, but the definition is the result of the traversal.
@@ -55,6 +61,7 @@ buildDefinition mbMainModule def@ParsedDefinition{modules} =
 data DefinitionState = State
     { moduleMap :: Map Text ParsedModule
     , definition :: KoreDefinition
+    , subsorts :: Map Def.SortName (Set Def.SortName)
     }
 
 {- | Traverses the import graph bottom up, ending in the given named
@@ -84,14 +91,23 @@ descendFrom m = do
 
             -- validate and add new module in context of the existing
             -- definition
-            newDef <- addModule theModule def
-            modify $ \s -> s{definition = newDef}
+            (newSubsorts, newDef) <- addModule theModule def
+
+            modify (updateState newDef newSubsorts)
+  where
+    updateState :: KoreDefinition -> Map Def.SortName (Set Def.SortName) -> DefinitionState -> DefinitionState
+    updateState newDef newSubsorts State{moduleMap, subsorts} =
+        State
+            { moduleMap
+            , definition = newDef
+            , subsorts = Map.unionWith (<>) subsorts newSubsorts
+            }
 
 -- | currently no validations are performed
 addModule ::
     ParsedModule ->
     KoreDefinition ->
-    StateT DefinitionState (Except DefinitionError) KoreDefinition
+    StateT DefinitionState (Except DefinitionError) (Map Def.SortName (Set Def.SortName), KoreDefinition)
 addModule
     m@ParsedModule
         { name = Json.Id n
@@ -179,16 +195,21 @@ addModule
 
             let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory}
 
-            (newRewriteRules, subsortAxioms) <-
+            (newRewriteRules, subsortPairs) <-
                 partitionAxioms
                     <$> lift (mapMaybeM (internaliseAxiom partialDefinition) parsedAxioms)
 
             let rewriteTheory = addToTheory newRewriteRules currentRewriteTheory
 
-            -- TODO do something with the subsort axioms
+            -- add subsorts to the subsort map
+            let newSubsorts =
+                    Map.fromListWith
+                        (<>)
+                        [(super, Set.singleton sub) | (sub, super) <- subsortPairs]
 
             pure
-                KoreDefinition
+                ( newSubsorts
+                , KoreDefinition
                     { attributes
                     , modules
                     , sorts
@@ -196,6 +217,7 @@ addModule
                     , aliases
                     , rewriteTheory
                     }
+                )
       where
         -- returns the
         mappedBy ::
@@ -273,10 +295,18 @@ internaliseAxiom partialDefinition parsedAxiom =
                     DefinitionSortError $
                         GeneralError ("Bad subsort rule " <> sub <> " < " <> super)
             pure $ Just $ SubsortAxiom (sub, super)
+        SubsortAxiom' Json.SortVar{name = Json.Id sub} _ ->
+            throwE $
+                DefinitionSortError $
+                    GeneralError ("Sort variable " <> sub <> " in subsort axiom")
+        SubsortAxiom' _  Json.SortVar{name = Json.Id super} ->
+            throwE $
+                DefinitionSortError $
+                    GeneralError ("Sort variable " <> super <> " in subsort axiom")
+
         RewriteRuleAxiom' alias args rhs attribs sortVars ->
             Just . RewriteRuleAxiom
                 <$> internaliseRewriteRule partialDefinition alias args rhs attribs sortVars
-        _ -> pure Nothing
 
 orFailWith :: Maybe a -> e -> Except e a
 mbX `orFailWith` err = maybe (throwE err) pure mbX
