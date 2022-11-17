@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-ambiguous-fields #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -43,9 +45,9 @@ Only very few validations are performed on the parsed data.
 -}
 buildDefinition :: Maybe Text -> ParsedDefinition -> Except DefinitionError KoreDefinition
 buildDefinition mbMainModule def@ParsedDefinition{modules} = do
-    State{definition = d@KoreDefinition{sorts}, subsorts} <-
+    State{definition = d@KoreDefinition{sorts = allSorts}, subsorts} <-
         execStateT (descendFrom mainModule) startState
-    let finalSorts = addSubsortInfo sorts (transitiveClosure subsorts)
+    let finalSorts = foldr addSubsortInfo allSorts $ Map.assocs (transitiveClosure subsorts)
         finalDefinition :: KoreDefinition
         finalDefinition = d{sorts = finalSorts}
     pure finalDefinition
@@ -60,15 +62,13 @@ buildDefinition mbMainModule def@ParsedDefinition{modules} = do
             }
 
     addSubsortInfo ::
+        (Def.SortName, Set Def.SortName) ->
         Map Def.SortName (SortAttributes, Set Def.SortName) ->
-        Map Def.SortName (Set Def.SortName) ->
         Map Def.SortName (SortAttributes, Set Def.SortName)
-    addSubsortInfo sortMap subsortMap =
-        -- catering for the case that some sorts might not occur in
-        -- the subsort map at all. OTOH we _should_ have S < KItem for
-        -- _every_ sort that we know.
-        Map.intersectionWith sumSecond sortMap subsortMap
-    sumSecond (a, b) b' = (a, b <> b')
+    addSubsortInfo (super, subs) = Map.update (\(a, b) -> Just (a, b <> subs)) super
+
+-- Some sorts do not occur in the subsort map at all (even though
+-- we _should_ have S < KItem for _every_ sort).
 
 {- | The state while traversing the module import graph. This is
  internal only, but the definition is the result of the traversal.
