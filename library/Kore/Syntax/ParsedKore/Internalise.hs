@@ -164,7 +164,7 @@ addModule
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
                     let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases = currentAliases, rewriteTheory = currentRewriteTheory}
                     internalRhs <-
-                        withExcept DefinitionPatternError $
+                        withExcept (DefinitionAliasError . InconsistentAliasPattern) $
                             internaliseTermOrPredicate (Just sortVars) partialDefinition rhs
                     let rhsSort = Util.sortOfTermOrPredicate internalRhs
                     unless (fromMaybe internalResSort rhsSort == internalResSort) (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
@@ -383,6 +383,7 @@ data AliasError
     = UnknownAlias AliasName
     | WrongAliasSortCount ParsedAlias
     | WrongAliasArgCount Alias [Def.Term]
+    | InconsistentAliasPattern [PatternError]
     deriving stock (Eq, Show)
 
 newtype RewriteRuleError

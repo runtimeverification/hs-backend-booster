@@ -13,6 +13,7 @@ module Kore.Syntax.Json.Internalise (
     SortError (..),
 ) where
 
+import Control.Applicative ((<|>))
 import Control.Monad
 import Control.Monad.Extra
 import Control.Monad.Trans.Except
@@ -69,20 +70,11 @@ internaliseTermOrPredicate ::
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     Syntax.KorePattern ->
-    Except PatternError Internal.TermOrPredicate
+    Except [PatternError] Internal.TermOrPredicate
 internaliseTermOrPredicate sortVars definition syntaxPatt =
-    (Internal.APredicate <$> internalisePredicate sortVars definition syntaxPatt)
-        `catchE` ( const $
-                    Internal.TermAndPredicate
-                        <$> internalisePattern sortVars definition syntaxPatt
-                 )
-        -- {- DEBUGGING
-        `catchE` ( const $
-                    Internal.APredicate
-                        <$> internalisePredicate sortVars definition syntaxPatt
-                 )
-
--- -}
+    Internal.APredicate <$> (withExcept (: []) $ internalisePredicate sortVars definition syntaxPatt)
+        <|> Internal.TermAndPredicate
+            <$> (withExcept (: []) $ internalisePattern sortVars definition syntaxPatt)
 
 internaliseSort ::
     Maybe [Syntax.Id] ->
