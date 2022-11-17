@@ -1,4 +1,0 @@
-{
-  "nixEnvSelector.nixFile": "${workspaceRoot}/shell.nix",
-  "nixEnvSelector.args": "--argstr ghc ghc924"
-}
