@@ -41,7 +41,7 @@
             haskellPackages.fourmolu
             zlib
           ];
-          shellHook = "hpack";
+          shellHook = "rm -f *.cabal && hpack";
         };
         modules = [
           {
