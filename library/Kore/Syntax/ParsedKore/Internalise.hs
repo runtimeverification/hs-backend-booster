@@ -21,6 +21,7 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Set qualified as Set
 import Data.Text (Text)
+import Data.Text qualified as Text
 
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Attributes.Reader
@@ -154,7 +155,7 @@ addModule
                     StateT s (Except DefinitionError) (Def.AliasName, Alias)
                 -- TODO(Ana): do we need to handle attributes?
                 internaliseAlias palias@ParsedAlias{name, sortVars, argSorts, sort, args, rhs} = lift $ do
-                    unless (length argSorts == length args) (throwE (DefinitionAliasError . WrongAliasSortCount $ palias))
+                    unless (length argSorts == length args) (throwE (DefinitionAliasError (Json.getId name) . WrongAliasSortCount $ palias))
                     let paramNames = Json.getId <$> sortVars
                         params = Def.SortVar <$> paramNames
                         argNames = Json.getId <$> args
@@ -164,13 +165,15 @@ addModule
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
                     let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases = currentAliases, rewriteTheory = currentRewriteTheory}
                     internalRhs <-
-                        withExcept (DefinitionAliasError . InconsistentAliasPattern) $
+                        withExcept (DefinitionAliasError (Json.getId name) . InconsistentAliasPattern) $
                             internaliseTermOrPredicate (Just sortVars) partialDefinition rhs
                     let rhsSort = Util.sortOfTermOrPredicate internalRhs
                     unless (fromMaybe internalResSort rhsSort == internalResSort) (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
                     return (internalName, Alias{name = internalName, params, args = internalArgs, rhs = internalRhs})
-
-            newAliases <- traverse internaliseAlias parsedAliases
+                -- filter out "antiLeft" aliases, recognised by name and argument count
+                notPriority ParsedAlias{name = Json.Id alias, args} =
+                    not $ null args && "priority" `Text.isPrefixOf` alias
+            newAliases <- traverse internaliseAlias $ filter notPriority parsedAliases
             let aliases = Map.fromList newAliases <> currentAliases
 
             let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory}
@@ -232,7 +235,7 @@ internaliseRewriteRule ::
     Except DefinitionError RewriteRule
 internaliseRewriteRule partialDefinition@KoreDefinition{aliases} parsedAx@ParsedAxiom{sortVars} aliasName aliasArgs right = do
     alias <-
-        withExcept DefinitionAliasError $
+        withExcept (DefinitionAliasError aliasName) $
             Map.lookup aliasName aliases
                 `orFailWith` UnknownAlias aliasName
     args <- traverse (withExcept DefinitionPatternError . internaliseTerm (Just sortVars) partialDefinition) aliasArgs
@@ -250,8 +253,8 @@ defError :: DefinitionError -> StateT s (Except DefinitionError) a
 defError = lift . throwE
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
-expandAlias alias@Alias{args, rhs} currentArgs
-    | length args /= length currentArgs = throwE (DefinitionAliasError $ WrongAliasArgCount alias currentArgs)
+expandAlias alias@Alias{name, args, rhs} currentArgs
+    | length args /= length currentArgs = throwE (DefinitionAliasError name $ WrongAliasArgCount alias currentArgs)
     | otherwise =
         let substitution = Map.fromList (zip args currentArgs)
          in return $ substitute substitution rhs
@@ -272,8 +275,8 @@ expandAlias alias@Alias{args, rhs} currentArgs
         case term of
             Def.AndTerm sort t1 t2 ->
                 Def.AndTerm sort (substituteInTerm substitution t1) (substituteInTerm substitution t2)
-            Def.SymbolApplication sort sorts name sargs ->
-                Def.SymbolApplication sort sorts name (substituteInTerm substitution <$> sargs)
+            Def.SymbolApplication sort sorts symname sargs ->
+                Def.SymbolApplication sort sorts symname (substituteInTerm substitution <$> sargs)
             dv@(Def.DomainValue _ _) -> dv
             v@(Def.Var var) ->
                 fromMaybe v (Map.lookup var substitution)
@@ -374,7 +377,7 @@ data DefinitionError
     | DuplicateNames [Text]
     | DefinitionSortError SortError
     | DefinitionPatternError PatternError
-    | DefinitionAliasError AliasError
+    | DefinitionAliasError Text AliasError
     | DefinitionRewriteRuleError RewriteRuleError
     | DefinitionTermOrPredicateError TermOrPredicateError
     deriving stock (Eq, Show)
