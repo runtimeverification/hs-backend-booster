@@ -12,9 +12,11 @@ module Kore.Syntax.ParsedKore.Internalise (
     DefinitionError (..),
 ) where
 
+import Control.Monad
 import Control.Monad.Extra (mapMaybeM)
-import Control.Monad.State
+import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
+import Control.Monad.Trans.State
 import Data.Bifunctor (first)
 import Data.Function (on)
 import Data.List (foldl', groupBy, partition, sortOn)
