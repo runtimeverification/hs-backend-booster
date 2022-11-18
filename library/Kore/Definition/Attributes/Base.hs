@@ -41,12 +41,11 @@ data ModuleAttributes = ModuleAttributes
   * priority (to order and group axioms by descending priority)
   * label (to implement cut-point support)
 -}
-data AxiomAttributes computed = AxiomAttributes
+data AxiomAttributes = AxiomAttributes
     { location :: Location
     , priority :: Priority -- priorities are <= 200
     , label :: Maybe Label
     , simplification :: Bool
-    , computed :: computed
     }
     deriving stock (Eq, Ord, Show)
 

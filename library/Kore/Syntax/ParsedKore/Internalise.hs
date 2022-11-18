@@ -270,7 +270,7 @@ data AxiomResult
 -- helper type to carry relevant extracted data from a pattern (what
 -- is passed to the internalising function later)
 data AxiomData
-    = RewriteRuleAxiom' AliasName [Json.KorePattern] Json.KorePattern (AxiomAttributes ()) [Json.Id]
+    = RewriteRuleAxiom' AliasName [Json.KorePattern] Json.KorePattern AxiomAttributes [Json.Id]
     | SubsortAxiom' Json.Sort Json.Sort
 
 classifyAxiom :: ParsedAxiom -> Except DefinitionError (Maybe AxiomData)
@@ -334,7 +334,7 @@ internaliseRewriteRule ::
     AliasName ->
     [Json.KorePattern] ->
     Json.KorePattern ->
-    AxiomAttributes () ->
+    AxiomAttributes ->
     [Json.Id] ->
     Except DefinitionError (RewriteRule ComputedAxiomAttributes)
 internaliseRewriteRule partialDefinition@KoreDefinition{aliases} aliasName aliasArgs right axAttributes sortVars = do
@@ -354,7 +354,7 @@ internaliseRewriteRule partialDefinition@KoreDefinition{aliases} aliasName alias
         checkSymbolIsAc _ SymbolAttributes{isAssoc, isIdem} _ = isAssoc || isIdem
         preservesDefinedness = checkTerm checkSymbolPreservesDefinedness partialDefinition rhsTerm
         containsAcSymbols = checkTerm checkSymbolIsAc partialDefinition lhsTerm
-    return RewriteRule{lhs, rhs, attributes = axAttributes{computed = ComputedAxiomAttributes{containsAcSymbols, preservesDefinedness}}}
+    return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes = ComputedAxiomAttributes{containsAcSymbols, preservesDefinedness}}
 
 checkTerm :: (Def.SymbolName -> SymbolAttributes -> SymbolSort -> Bool) -> KoreDefinition -> Def.Term -> Bool
 checkTerm check def@KoreDefinition{symbols} = \case

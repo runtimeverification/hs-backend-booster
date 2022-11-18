@@ -74,12 +74,12 @@ mkReport file KoreDefinition{modules, sorts, symbols, rewriteTheory} =
         , axiomCount = length $ concat $ concatMap Map.elems (Map.elems rewriteTheory)
         , preserveDefinednessCount =
             length $
-                filter (\rule -> rule.attributes.computed.preservesDefinedness) $
+                filter (\rule -> rule.computedAttributes.preservesDefinedness) $
                     concat $
                         concatMap Map.elems (Map.elems rewriteTheory)
         , containAcSymbolsCount =
             length $
-                filter (\rule -> rule.attributes.computed.containsAcSymbols) $
+                filter (\rule -> rule.computedAttributes.containsAcSymbols) $
                     concat $
                         concatMap Map.elems (Map.elems rewriteTheory)
         }

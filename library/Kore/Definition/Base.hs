@@ -68,7 +68,8 @@ emptyKoreDefinition attributes =
 data RewriteRule computed = RewriteRule
     { lhs :: Pattern
     , rhs :: Pattern
-    , attributes :: AxiomAttributes computed
+    , attributes :: AxiomAttributes
+    , computedAttributes :: ComputedAxiomAttributes
     }
     deriving stock (Eq, Ord, Show)
 
