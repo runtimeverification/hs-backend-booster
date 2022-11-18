@@ -28,10 +28,10 @@ import Kore.Syntax.ParsedKore.Base
 {- | A class describing all attributes we want to extract from parsed
  entities
 -}
-class HasAttributes tipe where
-    type Attributes tipe :: Type
+class HasAttributes ty where
+    type Attributes ty :: Type
 
-    extract :: tipe -> Attributes tipe
+    extract :: ty -> Attributes ty
 
 instance HasAttributes ParsedDefinition where
     type Attributes ParsedDefinition = DefinitionAttributes
@@ -44,7 +44,7 @@ instance HasAttributes ParsedModule where
     extract _ = ModuleAttributes
 
 instance HasAttributes ParsedAxiom where
-    type Attributes ParsedAxiom = AxiomAttributes
+    type Attributes ParsedAxiom = AxiomAttributes ()
 
     extract ParsedAxiom{attributes} =
         AxiomAttributes
@@ -52,6 +52,7 @@ instance HasAttributes ParsedAxiom where
             (fromMaybe 50 $ attributes .:? "priority")
             (attributes .:? "label")
             (attributes .! "simplification")
+            ()
 
 sourceName
     , locationName ::
@@ -62,12 +63,25 @@ locationName = "org'Stop'kframework'Stop'attributes'Stop'Location"
 instance HasAttributes ParsedSymbol where
     type Attributes ParsedSymbol = SymbolAttributes
 
-    extract ParsedSymbol{attributes} =
+    extract ParsedSymbol{name, attributes} =
         SymbolAttributes
-            { isFunction = attributes .! "function" || (attributes .! "functional")
-            , isTotal = (attributes .! "functional") || (attributes .! "total")
-            , isConstructor = attributes .! "constructor"
+            { symbolType =
+                if attributes .! "constructor"
+                    then Constructor
+                    else
+                        if containsOneOfAttrs ["functional", "total"]
+                            then TotalFunction
+                            else
+                                if containsOneOfAttrs ["function", "functional"]
+                                    then PartialFunction
+                                    else error $ "Invalid symbol '" <> show name <> "' attributes: " <> show attributes
+            , isIdem = attributes .! "idem"
+            , isAssoc = attributes .! "assoc"
             }
+      where
+        containsOneOfAttrs = foldr ((||) . (attributes .!)) True
+
+-- notContainsAnyOfAttrs = foldr ((&&) . not . (attributes .!)) True
 
 instance HasAttributes ParsedSort where
     type Attributes ParsedSort = SortAttributes

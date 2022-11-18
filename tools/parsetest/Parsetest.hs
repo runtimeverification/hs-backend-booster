@@ -1,3 +1,6 @@
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+
 {- | Stand-alone parser executable for testing and profiling
 
 Copyright   : (c) Runtime Verification, 2022
@@ -22,6 +25,7 @@ import System.Directory
 import System.Environment
 import System.FilePath
 
+import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
 import Kore.Syntax.ParsedKore as ParsedKore
 
@@ -68,24 +72,93 @@ mkReport file KoreDefinition{modules, sorts, symbols, rewriteTheory} =
         , sortNames = Map.keys sorts
         , symbolNames = Map.keys symbols
         , axiomCount = length $ concat $ concatMap Map.elems (Map.elems rewriteTheory)
+        , preserveDefinednessCount =
+            length $
+                filter (\rule -> rule.attributes.computed.preservesDefinedness) $
+                    concat $
+                        concatMap Map.elems (Map.elems rewriteTheory)
+        , containAcSymbolsCount =
+            length $
+                filter (\rule -> rule.attributes.computed.containsAcSymbols) $
+                    concat $
+                        concatMap Map.elems (Map.elems rewriteTheory)
         }
 
 prettify :: Report -> String
-prettify Report{modNames, sortNames, symbolNames, axiomCount} =
+prettify Report{modNames, sortNames, symbolNames, axiomCount, preserveDefinednessCount, containAcSymbolsCount} =
     Text.unpack $
         Text.unlines
             [ list "Modules" modNames
             , list "Sorts" sortNames
             , list "Symbols" symbolNames
             , "Axioms: " <> Text.pack (show axiomCount)
+            , "Axioms preserving definedness: " <> Text.pack (show preserveDefinednessCount)
+            , "Axioms containing AC symbols: " <> Text.pack (show containAcSymbolsCount)
             ]
   where
-    list header = ((header <> ": ") <>) . Text.intercalate ", "
+    list header = ((header <> ": ") <>) . Text.intercalate "\n - " . map prettifyKore
+
+    prettifyKore :: Text -> Text
+    prettifyKore s
+        | Text.null s = s
+        | "'" `Text.isPrefixOf` s =
+            let (encoded, rest) = Text.span (/= '\'') (Text.tail s)
+             in decode encoded <> prettifyKore (Text.drop 1 rest)
+        | otherwise =
+            let (notEncoded, rest) = Text.span (/= '\'') s
+             in notEncoded <> prettifyKore rest
+      where
+        decode :: Text -> Text
+        decode str
+            | Text.null str = str
+            | Just decoded <- decodePrefix str decodeMap = decoded <> (decode $ Text.drop 4 str)
+            | otherwise = error $ show str
+
+        decodeMap :: [(Text, Text)]
+        decodeMap =
+            [ ("Spce", " ")
+            , ("Bang", "!")
+            , ("Quot", "\"")
+            , ("Hash", "#")
+            , ("Dolr", "$")
+            , ("Perc", "%")
+            , ("And-", "&")
+            , ("Apos", "'")
+            , ("LPar", "(")
+            , ("RPar", ")")
+            , ("Star", "*")
+            , ("Plus", "+")
+            , ("Comm", ",")
+            , ("Hyph", "-")
+            , ("Stop", ".")
+            , ("Slsh", "/")
+            , ("Coln", ":")
+            , ("SCln", ";")
+            , ("-LT-", "<")
+            , ("Eqls", "=")
+            , ("-GT-", ">")
+            , ("Ques", "?")
+            , ("-AT-", "@")
+            , ("LSqB", "[")
+            , ("RSqB", "]")
+            , ("Bash", "\\")
+            , ("Xor-", "^")
+            , ("Unds", "_")
+            , ("BQuo", "`")
+            , ("LBra", "{")
+            , ("Pipe", "|")
+            , ("RBra", "}")
+            , ("Tild", "~")
+            ]
+        decodePrefix _ [] = Nothing
+        decodePrefix s' ((p, sub) : rest)
+            | p `Text.isPrefixOf` s' = Just sub
+            | otherwise = decodePrefix s' rest
 
 data Report = Report
     { file :: FilePath
     , modNames, sortNames, symbolNames :: [Text]
-    , axiomCount :: Int
+    , axiomCount, preserveDefinednessCount, containAcSymbolsCount :: Int
     }
     deriving stock (Eq, Show, Generic)
     deriving anyclass (NFData)

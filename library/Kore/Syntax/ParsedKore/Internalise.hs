@@ -253,7 +253,7 @@ addModule
                 , [(getKey $ head d, d) | d <- dups]
                 )
 
-        partitionAxioms :: [AxiomResult] -> ([RewriteRule], [(Def.SortName, Def.SortName)])
+        partitionAxioms :: [AxiomResult] -> ([RewriteRule ComputedAxiomAttributes], [(Def.SortName, Def.SortName)])
         partitionAxioms = go [] []
           where
             go rules sorts [] = (rules, sorts)
@@ -263,14 +263,14 @@ addModule
 -- Result type from internalisation of different axioms
 data AxiomResult
     = -- | Rewrite rule
-      RewriteRuleAxiom RewriteRule
+      RewriteRuleAxiom (RewriteRule ComputedAxiomAttributes)
     | -- | subsort data: a pair of sorts
       SubsortAxiom (Def.SortName, Def.SortName)
 
 -- helper type to carry relevant extracted data from a pattern (what
 -- is passed to the internalising function later)
 data AxiomData
-    = RewriteRuleAxiom' AliasName [Json.KorePattern] Json.KorePattern AxiomAttributes [Json.Id]
+    = RewriteRuleAxiom' AliasName [Json.KorePattern] Json.KorePattern (AxiomAttributes ()) [Json.Id]
     | SubsortAxiom' Json.Sort Json.Sort
 
 classifyAxiom :: ParsedAxiom -> Except DefinitionError (Maybe AxiomData)
@@ -334,9 +334,9 @@ internaliseRewriteRule ::
     AliasName ->
     [Json.KorePattern] ->
     Json.KorePattern ->
-    AxiomAttributes ->
+    AxiomAttributes () ->
     [Json.Id] ->
-    Except DefinitionError RewriteRule
+    Except DefinitionError (RewriteRule ComputedAxiomAttributes)
 internaliseRewriteRule partialDefinition@KoreDefinition{aliases} aliasName aliasArgs right axAttributes sortVars = do
     alias <-
         withExcept (DefinitionAliasError aliasName) $
@@ -344,13 +344,28 @@ internaliseRewriteRule partialDefinition@KoreDefinition{aliases} aliasName alias
                 `orFailWith` UnknownAlias aliasName
     args <- traverse (withExcept DefinitionPatternError . internaliseTerm (Just sortVars) partialDefinition) aliasArgs
     result <- expandAlias alias args
-    lhs <-
+    lhs@Def.Pattern{term = lhsTerm} <-
         Util.retractPattern result
             `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
-    rhs <-
+    rhs@Def.Pattern{term = rhsTerm} <-
         withExcept DefinitionPatternError $
             internalisePattern (Just sortVars) partialDefinition right
-    return RewriteRule{lhs, rhs, attributes = axAttributes}
+    let checkSymbolPreservesDefinedness _ SymbolAttributes{symbolType} _ = symbolType == Constructor || symbolType == TotalFunction
+        checkSymbolIsAc _ SymbolAttributes{isAssoc, isIdem} _ = isAssoc || isIdem
+        preservesDefinedness = checkTerm checkSymbolPreservesDefinedness partialDefinition rhsTerm
+        containsAcSymbols = checkTerm checkSymbolIsAc partialDefinition lhsTerm
+    return RewriteRule{lhs, rhs, attributes = axAttributes{computed = ComputedAxiomAttributes{containsAcSymbols, preservesDefinedness}}}
+
+checkTerm :: (Def.SymbolName -> SymbolAttributes -> SymbolSort -> Bool) -> KoreDefinition -> Def.Term -> Bool
+checkTerm check def@KoreDefinition{symbols} = \case
+    Def.AndTerm _ t1 t2 -> checkTerm check def t1 && checkTerm check def t2
+    Def.SymbolApplication _ _ symbol ts ->
+        checkSymbol symbol && foldr ((&&) . checkTerm check def) True ts
+    _ -> True
+  where
+    checkSymbol symbol = case Map.lookup symbol symbols of
+        Just (attr, symbSort) -> check symbol attr symbSort
+        Nothing -> error $ show symbol <> " symbol not found!"
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias@Alias{name, args, rhs} currentArgs
@@ -407,10 +422,10 @@ expandAlias alias@Alias{name, args, rhs} currentArgs
                 Def.Or (substituteInPredicate substitution p1) (substituteInPredicate substitution p2)
             Def.Top -> Def.Top
 
-processRewriteRulesTODO :: [RewriteRule] -> [RewriteRule]
+processRewriteRulesTODO :: [RewriteRule computed] -> [RewriteRule computed]
 processRewriteRulesTODO = id
 
-addToTheory :: [RewriteRule] -> RewriteTheory -> RewriteTheory
+addToTheory :: [RewriteRule ComputedAxiomAttributes] -> RewriteTheory -> RewriteTheory
 addToTheory axioms theory =
     let processedRewriteRules = processRewriteRulesTODO axioms
         newTheory =
@@ -419,7 +434,7 @@ addToTheory axioms theory =
                 $ processedRewriteRules
      in Map.unionWith (Map.unionWith (<>)) theory newTheory
 
-groupByTermIndex :: [RewriteRule] -> Map Def.TermIndex [RewriteRule]
+groupByTermIndex :: [RewriteRule computed] -> Map Def.TermIndex [RewriteRule computed]
 groupByTermIndex axioms =
     let withTermIndexes = do
             axiom@RewriteRule{lhs} <- axioms
@@ -427,7 +442,7 @@ groupByTermIndex axioms =
             return (termIndex, axiom)
      in Map.fromAscList . groupSort $ withTermIndexes
 
-groupByPriority :: [RewriteRule] -> Map Priority [RewriteRule]
+groupByPriority :: [RewriteRule computed] -> Map Priority [RewriteRule computed]
 groupByPriority axioms =
     Map.fromAscList . groupSort $ [(extractPriority ax, ax) | ax <- axioms]
 

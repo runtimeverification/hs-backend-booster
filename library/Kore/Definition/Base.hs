@@ -42,7 +42,7 @@ data KoreDefinition = KoreDefinition
     deriving (Eq, Show)
 
 -- | Optimized for lookup by term-index
-type RewriteTheory = Map TermIndex (Map Priority [RewriteRule])
+type RewriteTheory = Map TermIndex (Map Priority [RewriteRule ComputedAxiomAttributes])
 
 -- | Sort information related to a symbol: result and argument sorts
 data SymbolSort = SymbolSort
@@ -65,14 +65,14 @@ emptyKoreDefinition attributes =
         , rewriteTheory = Map.empty
         }
 
-data RewriteRule = RewriteRule
+data RewriteRule computed = RewriteRule
     { lhs :: Pattern
     , rhs :: Pattern
-    , attributes :: AxiomAttributes
+    , attributes :: AxiomAttributes computed
     }
     deriving stock (Eq, Ord, Show)
 
-extractPriority :: RewriteRule -> Priority
+extractPriority :: RewriteRule computed -> Priority
 extractPriority RewriteRule{attributes} = priority attributes
 
 type AliasName = Text
