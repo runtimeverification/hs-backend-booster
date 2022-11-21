@@ -7,6 +7,7 @@ module Kore.Pattern.Unify (
 ) where
 
 import Control.Monad
+import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
@@ -32,10 +33,24 @@ data UnificationResult
     = -- | equal structure (constructors) after substitution (substitution goes both ways)
       UnificationSuccess Substitution
     | -- | different constructors or domain values, or sort mismatch
-      UnificationFailed
+      UnificationFailed FailReason
     | -- | (other) cases that are unresolved (offending case in head position).
       UnificationRemainder (NonEmpty (Term, Term))
     | InternalError String
+    deriving stock (Eq, Show)
+
+-- | Additional information to explain why a unification has failed
+data FailReason
+    = -- | Unificand sorts differ
+      DifferentSorts Term Term
+    | -- | (Domain) values differ
+      DifferentValues Term Term
+    | -- | Symbols differ
+      DifferentSymbols Term Term
+    | -- | Variable would refer to itself
+      VariableRecursion Variable Term
+    | -- | Variable reassigned
+      VariableConflict Variable Term Term
     deriving stock (Eq, Show)
 
 type Substitution = Map Variable Term
@@ -88,35 +103,27 @@ unify1 ::
     StateT UnificationState (Except UnificationResult) ()
 -- two domain values: have to fully agree
 unify1
-    (DomainValue s1 t1)
-    (DomainValue s2 t2) =
+    d1@(DomainValue s1 t1)
+    d2@(DomainValue s2 t2) =
         do
             subsorts <- gets uSubsorts
             unless (sortsAgree subsorts s1 s2) $
-                lift $
-                    throwE UnificationFailed -- (DifferentSorts s1 s2)
+                failWith (DifferentSorts d1 d2)
             unless (t1 == t2) $
-                lift $
-                    throwE UnificationFailed -- (DifferentValues t1 t2)
+                failWith (DifferentValues d1 d2)
 
 -- two symbol applications: fail if names differ, recurse
 unify1
-    t1@(SymbolApplication s1 argSorts1 symName1 args1)
-    t2@(SymbolApplication s2 argSorts2 symName2 args2) =
+    t1@(SymbolApplication s1 _argSorts1 symName1 args1)
+    t2@(SymbolApplication s2 _argSorts2 symName2 args2) =
         do
             subsorts <- gets uSubsorts
             unless (sortsAgree subsorts s1 s2) $
-                lift $
-                    throwE UnificationFailed -- (DifferentSorts s1 s2)
-                    -- lengths will be equal (checked upon internalisation)
-            let argSortsAgree = zipWith (sortsAgree subsorts) argSorts1 argSorts2
-            unless (and argSortsAgree) $
-                lift $
-                    throwE UnificationFailed -- (DifferentSorts ?? ??)
+                failWith (DifferentSorts t1 t2)
+            -- argument sorts have been checked upon internalisation
             unless (symName1 == symName2) $
-                lift $
-                    throwE UnificationFailed -- (DifferentSymbols symName1 symName2)
-                    -- no function evaluation, only constructors are matched.
+                failWith (DifferentSymbols t1 t2)
+            -- no function evaluation, only constructors are matched.
             symbols <- gets uSymbols
             unless (maybe False isConstructor $ Map.lookup symName1 symbols) $
                 returnAsRemainder t1 t2
@@ -145,8 +152,7 @@ unify1
             subsorts <- gets uSubsorts
             let termSort = sortOfTerm term2
             unless (sortsAgree subsorts variableSort termSort) $
-                lift $
-                    throwE UnificationFailed -- (DifferentSorts variableSort termSort)
+                failWith (DifferentSorts (Var var) term2)
             bindVariable var term2
 
 -- term2 variable (not target), term1 not a variable: add binding
@@ -157,8 +163,7 @@ unify1
             subsorts <- gets uSubsorts
             let termSort = sortOfTerm term1
             unless (sortsAgree subsorts variableSort termSort) $
-                lift $
-                    throwE UnificationFailed -- (DifferentSorts variableSort termSort)
+                failWith (DifferentSorts term1 (Var var))
             bindVariable var term1
 
 -- Remaining other cases: mix of DomainValue and SymbolApplication (either side)
@@ -171,6 +176,9 @@ unify1
     t1@DomainValue{}
     t2@SymbolApplication{} =
         returnAsRemainder t1 t2
+
+failWith :: FailReason -> StateT s (Except UnificationResult) ()
+failWith = lift . throwE . UnificationFailed
 
 enqueueProblem :: Monad m => Term -> Term -> StateT UnificationState m ()
 enqueueProblem term1 term2 =
@@ -194,15 +202,15 @@ bindVariable var term = do
                 bindVariable var2 (Var var)
         -- regular case
         _other -> do
-            when (var `Set.member` Map.keysSet currentSubst) $ do
+            let mbOldTerm = Map.lookup var currentSubst
+            whenJust mbOldTerm $ \oldTerm ->
                 -- TODO the term in the binding could be _equivalent_
                 -- (not necessarily syntactically equal) to term'
-                lift $ throwE UnificationFailed -- (VariableConflict var)
+                failWith $ VariableConflict var oldTerm term
             let -- apply existing substitutions to term
                 term' = substituteInTerm currentSubst term
             when (var `Set.member` freeVariables term') $
-                lift $
-                    throwE UnificationFailed -- (VariableRecursion var term)
+                failWith (VariableRecursion var term)
             let -- substitute in existing substitution terms
                 currentSubst' = Map.map (substituteInTerm $ Map.singleton var term') currentSubst
             let newSubst = Map.insert var term' currentSubst'
