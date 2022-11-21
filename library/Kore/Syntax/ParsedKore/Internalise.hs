@@ -253,7 +253,6 @@ addModule
                 , [(getKey $ head d, d) | d <- dups]
                 )
 
-
         partitionAxioms :: [AxiomResult] -> ([RewriteRule], [(Def.SortName, Def.SortName)])
         partitionAxioms = go [] []
           where

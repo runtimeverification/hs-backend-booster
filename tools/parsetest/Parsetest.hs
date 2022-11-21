@@ -109,7 +109,7 @@ prettify Report{modNames, sortNames, symbolNames, axiomCount, preserveDefinednes
              in notEncoded <> prettifyKore rest
       where
         decode :: Text -> Text
-        decode s 
+        decode s
             | Text.null s = s
             | Text.length code < 4 = error $ "Bad character code  " <> show code
             | Nothing <- mbChar = error $ "Unknown character code  " <> show code
@@ -119,41 +119,42 @@ prettify Report{modNames, sortNames, symbolNames, axiomCount, preserveDefinednes
             mbChar = Map.lookup code decodeMap
 
 decodeMap :: Map.Map Text Text
-decodeMap = Map.fromList
-            [ ("Spce", " ")
-            , ("Bang", "!")
-            , ("Quot", "\"")
-            , ("Hash", "#")
-            , ("Dolr", "$")
-            , ("Perc", "%")
-            , ("And-", "&")
-            , ("Apos", "'")
-            , ("LPar", "(")
-            , ("RPar", ")")
-            , ("Star", "*")
-            , ("Plus", "+")
-            , ("Comm", ",")
-            , ("Hyph", "-")
-            , ("Stop", ".")
-            , ("Slsh", "/")
-            , ("Coln", ":")
-            , ("SCln", ";")
-            , ("-LT-", "<")
-            , ("Eqls", "=")
-            , ("-GT-", ">")
-            , ("Ques", "?")
-            , ("-AT-", "@")
-            , ("LSqB", "[")
-            , ("RSqB", "]")
-            , ("Bash", "\\")
-            , ("Xor-", "^")
-            , ("Unds", "_")
-            , ("BQuo", "`")
-            , ("LBra", "{")
-            , ("Pipe", "|")
-            , ("RBra", "}")
-            , ("Tild", "~")
-            ]
+decodeMap =
+    Map.fromList
+        [ ("Spce", " ")
+        , ("Bang", "!")
+        , ("Quot", "\"")
+        , ("Hash", "#")
+        , ("Dolr", "$")
+        , ("Perc", "%")
+        , ("And-", "&")
+        , ("Apos", "'")
+        , ("LPar", "(")
+        , ("RPar", ")")
+        , ("Star", "*")
+        , ("Plus", "+")
+        , ("Comm", ",")
+        , ("Hyph", "-")
+        , ("Stop", ".")
+        , ("Slsh", "/")
+        , ("Coln", ":")
+        , ("SCln", ";")
+        , ("-LT-", "<")
+        , ("Eqls", "=")
+        , ("-GT-", ">")
+        , ("Ques", "?")
+        , ("-AT-", "@")
+        , ("LSqB", "[")
+        , ("RSqB", "]")
+        , ("Bash", "\\")
+        , ("Xor-", "^")
+        , ("Unds", "_")
+        , ("BQuo", "`")
+        , ("LBra", "{")
+        , ("Pipe", "|")
+        , ("RBra", "}")
+        , ("Tild", "~")
+        ]
 
 data Report = Report
     { file :: FilePath
