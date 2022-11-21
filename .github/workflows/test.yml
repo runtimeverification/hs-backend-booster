@@ -25,7 +25,8 @@ jobs:
     steps:
       - name: 'Install prerequisites'
         run: |
-          sudo apt install --yes z3
+          apt-get update
+          apt-get install --yes z3
 
       - uses: actions/checkout@v3
         with:
@@ -69,7 +70,8 @@ jobs:
 
       - name: 'Install prerequisites'
         run: |
-          sudo apt install --yes z3
+          apt-get update
+          apt-get install --yes curl z3
           curl -sSL https://github.com/sol/hpack/releases/download/${{ env.hpack_version }}/hpack_linux.gz | gunzip -c > hpack && chmod +x hpack
 
       - name: 'Run Hpack'
