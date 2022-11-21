@@ -118,15 +118,17 @@ unify1
     t2@(SymbolApplication s2 _argSorts2 symName2 args2) =
         do
             subsorts <- gets uSubsorts
+            -- argument sorts have been checked upon internalisation
             unless (sortsAgree subsorts s1 s2) $
                 failWith (DifferentSorts t1 t2)
-            -- argument sorts have been checked upon internalisation
+            -- If we have functions, pass - only constructors are matched.
+            symbols <- gets uSymbols
+            let isConstr sym = maybe False isConstructor $ Map.lookup sym symbols
+            unless (isConstr symName1 && isConstr symName2) $
+                returnAsRemainder t1 t2
+            -- constructors must be the same
             unless (symName1 == symName2) $
                 failWith (DifferentSymbols t1 t2)
-            -- no function evaluation, only constructors are matched.
-            symbols <- gets uSymbols
-            unless (maybe False isConstructor $ Map.lookup symName1 symbols) $
-                returnAsRemainder t1 t2
             zipWithM_ enqueueProblem args1 args2
 
 -- and-term in pattern: must unify with both arguments
