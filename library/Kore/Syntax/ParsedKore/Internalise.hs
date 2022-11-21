@@ -253,7 +253,8 @@ addModule
                 , [(getKey $ head d, d) | d <- dups]
                 )
 
-        partitionAxioms :: [AxiomResult] -> ([RewriteRule ComputedAxiomAttributes], [(Def.SortName, Def.SortName)])
+
+        partitionAxioms :: [AxiomResult] -> ([RewriteRule], [(Def.SortName, Def.SortName)])
         partitionAxioms = go [] []
           where
             go rules sorts [] = (rules, sorts)
@@ -263,7 +264,7 @@ addModule
 -- Result type from internalisation of different axioms
 data AxiomResult
     = -- | Rewrite rule
-      RewriteRuleAxiom (RewriteRule ComputedAxiomAttributes)
+      RewriteRuleAxiom RewriteRule
     | -- | subsort data: a pair of sorts
       SubsortAxiom (Def.SortName, Def.SortName)
 
@@ -336,7 +337,7 @@ internaliseRewriteRule ::
     Json.KorePattern ->
     AxiomAttributes ->
     [Json.Id] ->
-    Except DefinitionError (RewriteRule ComputedAxiomAttributes)
+    Except DefinitionError RewriteRule
 internaliseRewriteRule partialDefinition@KoreDefinition{aliases} aliasName aliasArgs right axAttributes sortVars = do
     alias <-
         withExcept (DefinitionAliasError aliasName) $
@@ -422,10 +423,10 @@ expandAlias alias@Alias{name, args, rhs} currentArgs
                 Def.Or (substituteInPredicate substitution p1) (substituteInPredicate substitution p2)
             Def.Top -> Def.Top
 
-processRewriteRulesTODO :: [RewriteRule computed] -> [RewriteRule computed]
+processRewriteRulesTODO :: [RewriteRule] -> [RewriteRule]
 processRewriteRulesTODO = id
 
-addToTheory :: [RewriteRule ComputedAxiomAttributes] -> RewriteTheory -> RewriteTheory
+addToTheory :: [RewriteRule] -> RewriteTheory -> RewriteTheory
 addToTheory axioms theory =
     let processedRewriteRules = processRewriteRulesTODO axioms
         newTheory =
@@ -434,7 +435,7 @@ addToTheory axioms theory =
                 $ processedRewriteRules
      in Map.unionWith (Map.unionWith (<>)) theory newTheory
 
-groupByTermIndex :: [RewriteRule computed] -> Map Def.TermIndex [RewriteRule computed]
+groupByTermIndex :: [RewriteRule] -> Map Def.TermIndex [RewriteRule]
 groupByTermIndex axioms =
     let withTermIndexes = do
             axiom@RewriteRule{lhs} <- axioms
@@ -442,7 +443,7 @@ groupByTermIndex axioms =
             return (termIndex, axiom)
      in Map.fromAscList . groupSort $ withTermIndexes
 
-groupByPriority :: [RewriteRule computed] -> Map Priority [RewriteRule computed]
+groupByPriority :: [RewriteRule] -> Map Priority [RewriteRule]
 groupByPriority axioms =
     Map.fromAscList . groupSort $ [(extractPriority ax, ax) | ax <- axioms]
 
