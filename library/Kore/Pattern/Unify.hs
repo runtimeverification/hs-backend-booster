@@ -131,7 +131,10 @@ unify1
             unless (symName1 == symName2) $
                 failWith (DifferentSymbols t1 t2)
             unless (length args1 == length args2) $
-                lift $ throwE $ InternalError $ "Argument counts differ for same constructor" <> show (t1, t2)
+                lift $
+                    throwE $
+                        InternalError $
+                            "Argument counts differ for same constructor" <> show (t1, t2)
             zipWithM_ enqueueProblem args1 args2
 
 -- and-term in pattern: must unify with both arguments
@@ -153,13 +156,12 @@ unify1
 unify1
     (Var var1@(Variable varSort1 varName1))
     (Var var2@(Variable varSort2 varName2))
-    -- same variable (same sort!)
-    | var1 == var2 =
-          pure ()
-    -- sorts differ, names equal: error!
-    | varName1 == varName2 && varSort1 /= varSort2 =
-          failWith $ DifferentSorts (Var var1) (Var var2)
-
+        -- same variable (same sort!)
+        | var1 == var2 =
+            pure ()
+        -- sorts differ, names equal: error!
+        | varName1 == varName2 && varSort1 /= varSort2 =
+            failWith $ DifferentSorts (Var var1) (Var var2)
 -- term1 variable (target): introduce a new binding
 unify1
     (Var var@Variable{variableSort})

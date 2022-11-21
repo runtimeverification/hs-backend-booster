@@ -13,8 +13,8 @@ import Data.Set qualified as Set
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Kore.Definition.Base
 import Kore.Definition.Attributes.Base
+import Kore.Definition.Base
 import Kore.Pattern.Base
 import Kore.Pattern.Unify
 
@@ -30,27 +30,27 @@ constructors =
     testGroup
         "from story description"
         [ test
-              "same constructors, one variable argument"
-              (app "con1" someSort [someSort] [var "X" someSort])
-              (app "con1" someSort [someSort] [var "Y" someSort])
-              (success [("X", someSort, var "Y" someSort)])
+            "same constructors, one variable argument"
+            (app "con1" someSort [someSort] [var "X" someSort])
+            (app "con1" someSort [someSort] [var "Y" someSort])
+            (success [("X", someSort, var "Y" someSort)])
         , test
-              "same constructors, same argument"
-              (app "con1" someSort [someSort] [var "X" someSort])
-              (app "con1" someSort [someSort] [var "X" someSort])
-              (success [])
+            "same constructors, same argument"
+            (app "con1" someSort [someSort] [var "X" someSort])
+            (app "con1" someSort [someSort] [var "X" someSort])
+            (success [])
         , let v1 = var "X" someSort
               v2 = var "X" anotherSort
            in test
-                  "same constructors, argument variables differ in sorts"
-                  (app "con1" someSort [someSort] [v1])
-                  (app "con1" someSort [someSort] [v2])
-              (failed $ DifferentSorts v1 v2)
+                "same constructors, argument variables differ in sorts"
+                (app "con1" someSort [someSort] [v1])
+                (app "con1" someSort [someSort] [v2])
+                (failed $ DifferentSorts v1 v2)
         , test
-              "same constructor, var./term argument"
-              (app "con1" someSort [someSort] [var "X" someSort])
-              (app "con1" someSort [someSort] [app "f1" someSort [someSort] [var "Y" someSort]])
-              (success [("X", someSort, app "f1" someSort [someSort] [var "Y" someSort])])
+            "same constructor, var./term argument"
+            (app "con1" someSort [someSort] [var "X" someSort])
+            (app "con1" someSort [someSort] [app "f1" someSort [someSort] [var "Y" someSort]])
+            (success [("X", someSort, app "f1" someSort [someSort] [var "Y" someSort])])
         , let t1 = app "con1" someSort [someSort] [var "X" someSort]
               t2 = app "con2" someSort [someSort] [var "Y" someSort]
            in test "different constructors" t1 t2 $ failed (DifferentSymbols t1 t2)
@@ -104,7 +104,7 @@ test name term1 term2 expected =
     simpleSortInfo other = error $ "Sort info: " <> show other <> " not supported"
 
     (SortApp sub []) `subsortOf` (SortApp super []) =
-        (sub, (SortAttributes{argCount = 0}, Set.fromList [sub, super] ))
+        (sub, (SortAttributes{argCount = 0}, Set.fromList [sub, super]))
     other1 `subsortOf` other2 =
         error $ "subSortOf: " <> show (other1, other2) <> " not supported"
 
@@ -123,10 +123,10 @@ dummyDefinition ::
     KoreDefinition
 dummyDefinition sorts symbols =
     KoreDefinition
-    { attributes = DefinitionAttributes
-    , modules = Map.singleton "AMODULE" ModuleAttributes
-    , sorts = Map.fromList sorts
-    , symbols = Map.fromList symbols
-    , aliases = Map.empty
-    , rewriteTheory = Map.empty
-    }
+        { attributes = DefinitionAttributes
+        , modules = Map.singleton "AMODULE" ModuleAttributes
+        , sorts = Map.fromList sorts
+        , symbols = Map.fromList symbols
+        , aliases = Map.empty
+        , rewriteTheory = Map.empty
+        }
