@@ -77,7 +77,7 @@ data Position = Position
 Any non-free constructors will be known by name (they are built-in) so
 this information is not stored in an attribute.
 -}
-data SymbolType = PartialFunction | TotalFunction | Constructor
+data SymbolType = PartialFunction | TotalFunction | Constructor | SortInjection
     deriving stock (Eq, Show)
 
 data SymbolAttributes = SymbolAttributes

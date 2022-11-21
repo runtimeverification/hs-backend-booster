@@ -350,17 +350,17 @@ internaliseRewriteRule partialDefinition@KoreDefinition{aliases} aliasName alias
     rhs@Def.Pattern{term = rhsTerm} <-
         withExcept DefinitionPatternError $
             internalisePattern (Just sortVars) partialDefinition right
-    let checkSymbolPreservesDefinedness _ SymbolAttributes{symbolType} _ = symbolType == Constructor || symbolType == TotalFunction
+    let checkSymbolPreservesDefinedness _ SymbolAttributes{symbolType} _ = symbolType /= PartialFunction
         checkSymbolIsAc _ SymbolAttributes{isAssoc, isIdem} _ = isAssoc || isIdem
-        preservesDefinedness = checkTerm checkSymbolPreservesDefinedness partialDefinition rhsTerm
-        containsAcSymbols = checkTerm checkSymbolIsAc partialDefinition lhsTerm
+        preservesDefinedness = checkTermSymbols checkSymbolPreservesDefinedness partialDefinition rhsTerm
+        containsAcSymbols = checkTermSymbols checkSymbolIsAc partialDefinition lhsTerm
     return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes = ComputedAxiomAttributes{containsAcSymbols, preservesDefinedness}}
 
-checkTerm :: (Def.SymbolName -> SymbolAttributes -> SymbolSort -> Bool) -> KoreDefinition -> Def.Term -> Bool
-checkTerm check def@KoreDefinition{symbols} = \case
-    Def.AndTerm _ t1 t2 -> checkTerm check def t1 && checkTerm check def t2
+checkTermSymbols :: (Def.SymbolName -> SymbolAttributes -> SymbolSort -> Bool) -> KoreDefinition -> Def.Term -> Bool
+checkTermSymbols check def@KoreDefinition{symbols} = \case
+    Def.AndTerm _ t1 t2 -> checkTermSymbols check def t1 && checkTermSymbols check def t2
     Def.SymbolApplication _ _ symbol ts ->
-        checkSymbol symbol && foldr ((&&) . checkTerm check def) True ts
+        checkSymbol symbol && foldr ((&&) . checkTermSymbols check def) True ts
     _ -> True
   where
     checkSymbol symbol = case Map.lookup symbol symbols of

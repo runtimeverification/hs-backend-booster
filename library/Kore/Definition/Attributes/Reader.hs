@@ -67,20 +67,28 @@ instance HasAttributes ParsedSymbol where
             { symbolType =
                 if attributes .! "constructor"
                     then Constructor
-                    else
-                        if containsOneOfAttrs ["functional", "total"]
-                            then TotalFunction
-                            else
-                                if containsOneOfAttrs ["function", "functional"]
-                                    then PartialFunction
-                                    else error $ "Invalid symbol '" <> show name <> "' attributes: " <> show attributes
-            , isIdem = attributes .! "idem"
-            , isAssoc = attributes .! "assoc"
+                    else 
+                        if attributes .! "sortInjection"
+                        then SortInjection
+                        else       
+                            if containsAllOfAttrs ["function", "functional"]
+                                then TotalFunction
+                                else
+                                    if attributes .! "function"
+                                        then PartialFunction
+                                        else error $ "Invalid symbol '" <> show name <> "' attributes: " <> show attributes
+            , isIdem = 
+                if containsAllOfAttrs ["sortInjection", "idem"]
+                    then error "Sort injection cannot be an AC constructor"
+                    else attributes .! "idem"
+
+            , isAssoc = 
+                if containsAllOfAttrs ["sortInjection", "assoc"]
+                    then error "Sort injection cannot be an AC constructor"
+                    else attributes .! "assoc"
             }
       where
-        containsOneOfAttrs = foldr ((||) . (attributes .!)) True
-
--- notContainsAnyOfAttrs = foldr ((&&) . not . (attributes .!)) True
+        containsAllOfAttrs = foldr ((&&) . (attributes .!)) True
 
 instance HasAttributes ParsedSort where
     type Attributes ParsedSort = SortAttributes
