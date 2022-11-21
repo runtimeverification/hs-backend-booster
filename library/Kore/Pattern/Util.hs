@@ -8,11 +8,14 @@ module Kore.Pattern.Util (
     retractPattern,
     substituteInTerm,
     substituteInPredicate,
+    freeVariables,
 ) where
 
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
+import Data.Set (Set)
+import Data.Set qualified as Set
 
 import Kore.Pattern.Base
 
@@ -42,6 +45,7 @@ substituteInTerm substitution term =
         v@(Var var) ->
             fromMaybe v (Map.lookup var substitution)
 
+substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
 substituteInPredicate substitution predicate =
     case predicate of
         AndPredicate p1 p2 ->
@@ -67,3 +71,12 @@ substituteInPredicate substitution predicate =
         Or p1 p2 ->
             Or (substituteInPredicate substitution p1) (substituteInPredicate substitution p2)
         Top -> Top
+
+freeVariables :: Term -> Set Variable
+freeVariables = \case
+    AndTerm _ t1 t2 ->
+        freeVariables t1 <> freeVariables t2
+    SymbolApplication _sort _sorts _symname sargs ->
+        Set.unions $ map freeVariables sargs
+    DomainValue _ _ -> Set.empty
+    Var var -> Set.singleton var

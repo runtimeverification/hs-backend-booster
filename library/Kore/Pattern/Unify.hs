@@ -23,7 +23,7 @@ import Data.Set qualified as Set
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
 import Kore.Pattern.Base
-import Kore.Pattern.Util (sortOfTerm, substituteInTerm)
+import Kore.Pattern.Util (freeVariables, sortOfTerm, substituteInTerm)
 
 --
 data UnificationResult
@@ -212,10 +212,6 @@ returnAsRemainder t1 t2 = do
     lift $ throwE $ UnificationRemainder $ (t1, t2) :| toList remainder
 
 ---- TODO TODO TODO ------------------------------------
-
--- in Pattern.Util, and maybe in a CoFree soon?
-freeVariables :: Term -> Set Variable
-freeVariables = undefined
 
 sortsAgree :: SortTable -> Sort -> Sort -> Bool
 sortsAgree = undefined
