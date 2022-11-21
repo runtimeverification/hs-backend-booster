@@ -109,13 +109,16 @@ prettify Report{modNames, sortNames, symbolNames, axiomCount, preserveDefinednes
              in notEncoded <> prettifyKore rest
       where
         decode :: Text -> Text
-        decode str
-            | Text.null str = str
-            | Just decoded <- decodePrefix str decodeMap = decoded <> (decode $ Text.drop 4 str)
-            | otherwise = error $ show str
+        decode s 
+            | length code < 4 = error $ "Bad character code  " <> show code
+            | Nothing <- mbChar = error $ "Unknown character code  " <> show code
+            | Just c <- mbChar = c <> decodeChars rest
+          where
+            (code, rest) = splitAt 4 s
+            mbChar = Map.lookup code decodeMap
 
-        decodeMap :: [(Text, Text)]
-        decodeMap =
+decodeMap :: Map Text Text
+decodeMap = Map.fromList
             [ ("Spce", " ")
             , ("Bang", "!")
             , ("Quot", "\"")
