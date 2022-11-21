@@ -28,7 +28,7 @@ import Kore.Pattern.Util (freeVariables, sortOfTerm, substituteInTerm)
 
 import Kore.Syntax.Json.Internalise (matchSorts) -- temporary
 
---
+-- | Result of a unification (a substitution or an indication of what went wrong)
 data UnificationResult
     = -- | equal structure (constructors) after substitution (substitution goes both ways)
       UnificationSuccess Substitution
@@ -93,7 +93,8 @@ unification = do
     queue <- gets uQueue
     case queue of
         Empty -> pure () -- done
-        (term1, term2) :<| _ -> do
+        (term1, term2) :<| rest -> do
+            modify $ \s -> s{uQueue = rest}
             unify1 term1 term2
             unification
 
@@ -129,6 +130,8 @@ unify1
             -- constructors must be the same
             unless (symName1 == symName2) $
                 failWith (DifferentSymbols t1 t2)
+            unless (length args1 == length args2) $
+                lift $ throwE $ InternalError $ "Argument counts differ for same constructor" <> show (t1, t2)
             zipWithM_ enqueueProblem args1 args2
 
 -- and-term in pattern: must unify with both arguments
