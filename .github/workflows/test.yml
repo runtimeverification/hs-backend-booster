@@ -20,6 +20,7 @@ jobs:
   changes:
     name: 'Filter bad files'
     runs-on: [self-hosted, linux, flyweight]
+    container: ubuntu:jammy
     # Set job outputs to values from filter step
     outputs:
       code: ${{ steps.filter.outputs.code }}
@@ -51,6 +52,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.stack == 'true' }}
     runs-on: [self-hosted, linux, normal]
+    container: ubuntu:jammy
     steps:
       - name: 'Install prerequisites'
         run: |
@@ -91,6 +93,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: [self-hosted, linux, normal]
+    container: ubuntu:jammy
     steps:
       - uses: actions/checkout@v3
         with:
@@ -192,6 +195,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: [self-hosted, linux, flyweight]
+    container: ubuntu:jammy
     steps:
       - uses: actions/checkout@v3
         with:
