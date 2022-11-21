@@ -168,6 +168,7 @@ jobs:
       - name: 'Download prerequisites'
         # this could be cached but is probably fast anyway
         run: |
+          sudo apt-get install --yes curl
           curl -sSL https://github.com/fourmolu/fourmolu/releases/download/v${{ env.fourmolu_version }}/fourmolu-${{ env.fourmolu_version }}-linux-x86_64 -o fourmolu && chmod +x fourmolu && ./fourmolu --version
           curl -sSL https://github.com/ndmitchell/hlint/releases/download/v${{ env.hlint_version }}/hlint-${{ env.hlint_version }}-x86_64-linux.tar.gz | tar xvz hlint-${{ env.hlint_version }}/hlint
 
