@@ -149,6 +149,17 @@ unify1
             enqueueProblem term1 t2a
             enqueueProblem term1 t2b
 
+-- twice the exact same variable: verify sorts are equal
+unify1
+    (Var var1@(Variable varSort1 varName1))
+    (Var var2@(Variable varSort2 varName2))
+    -- same variable (same sort!)
+    | var1 == var2 =
+          pure ()
+    -- sorts differ, names equal: error!
+    | varName1 == varName2 && varSort1 /= varSort2 =
+          failWith $ DifferentSorts (Var var1) (Var var2)
+
 -- term1 variable (target): introduce a new binding
 unify1
     (Var var@Variable{variableSort})
