@@ -25,6 +25,8 @@ import Kore.Definition.Base
 import Kore.Pattern.Base
 import Kore.Pattern.Util (freeVariables, sortOfTerm, substituteInTerm)
 
+import Kore.Syntax.Json.Internalise (matchSorts) -- temporary
+
 --
 data UnificationResult
     = -- | equal structure (constructors) after substitution (substitution goes both ways)
@@ -211,7 +213,6 @@ returnAsRemainder t1 t2 = do
     remainder <- gets uQueue
     lift $ throwE $ UnificationRemainder $ (t1, t2) :| toList remainder
 
----- TODO TODO TODO ------------------------------------
-
+-- FIXME use sort utilities (currently stub code living in Kore.Syntax.Json.Internalise)
 sortsAgree :: SortTable -> Sort -> Sort -> Bool
-sortsAgree = undefined
+sortsAgree _ s1 s2 = either (const False) (const True) $ runExcept $ matchSorts s1 s2
