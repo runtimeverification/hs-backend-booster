@@ -17,40 +17,9 @@ env:
   hpack_version: '0.34.2'
 
 jobs:
-  changes:
-    name: 'Filter bad files'
-    runs-on: [self-hosted, linux, flyweight]
-    container: ubuntu:jammy
-    # Set job outputs to values from filter step
-    outputs:
-      code: ${{ steps.filter.outputs.code }}
-      stack: ${{ steps.filter.outputs.stack }}
-      nix: ${{ steps.filter.outputs.nix }}
-    steps:
-    # For pull requests it's not necessary to checkout the code
-    - name: 'Check out code'
-      uses: actions/checkout@v3
-      if: ${{ github.event_name == 'push' }}
-    - uses: dorny/paths-filter@v2
-      id: filter
-      with:
-        filters: |
-          code:
-            - 'library/**'
-            - 'executable/**'
-            - 'tools/**'
-            - 'test/**'
-            - 'test-suite/**'
-            - 'package.yaml'
-          stack:
-            - 'stack.*'
-          nix:
-            - 'flake.*'
 
   stack:
     name: 'Stack / Unit Tests'
-    needs: changes
-    # if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.stack == 'true' }}
     runs-on: [self-hosted, linux, normal]
     container: ubuntu:jammy
     steps:
@@ -90,8 +59,6 @@ jobs:
 
   cabal:
     name: 'Cabal / Unit Tests'
-    needs: changes
-    # if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: [self-hosted, linux, normal]
     container: ubuntu:jammy
     steps:
@@ -139,8 +106,6 @@ jobs:
 
   # nix-build:
   #   name: 'Nix / Unit Tests'
-  #   needs: changes
-  #   if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.nix == 'true' }}
   #   strategy:
   #     fail-fast: false
   #     matrix:
@@ -192,8 +157,6 @@ jobs:
 
   style:
     name: 'Formatting and Style'
-    needs: changes
-    # if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: [self-hosted, linux, flyweight]
     container: ubuntu:jammy
     steps:
