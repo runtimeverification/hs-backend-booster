@@ -21,90 +21,86 @@ jobs:
   stack:
     name: 'Stack / Unit Tests'
     runs-on: [self-hosted, linux, normal]
-    container: ubuntu:jammy
     steps:
-      - name: 'Install prerequisites'
-        run: |
-          apt-get update
-          apt-get install --yes z3
 
-      - uses: actions/checkout@v3
+      - name: 'Checkout Code'
+        uses: actions/checkout@v3
         with:
           # Check out pull request HEAD instead of merge commit.
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: 'Cache Stack root'
-        uses: actions/cache@v2
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker
         with:
-          path: ~/.stack
-          key: stack-1-${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
-          restore-keys: |
-            stack-1-${{ runner.os }}-
-
-      - uses: haskell/actions/setup@v2
-        id: setup-haskell-stack
-        with:
-          ghc-version: ${{ env.ghc_version }}
-          enable-stack: true
-
-      - name: 'Build dependencies'
-        run: |
-          stack build --test --only-dependencies
-          if [ -n "$(git status --porcelain)" ]; then
-            git diff
-            exit 1
-          fi
+          tag: hs-booster-ci-stack-unit-ubuntu-jammy-${{ github.sha }}
+          os: ubuntu
+          distro: jammy
 
       - name: 'Run unit tests'
-        run: stack test --pedantic
+        run: docker exec -t hs-booster-ci-stack-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'stack test --pedantic'
+
+      - name: 'Tear down Docker'
+        if: always()
+        run: |
+          docker stop --time=0 hs-booster-ci-stack-unit-ubuntu-jammy-${GITHUB_SHA}
 
   cabal:
     name: 'Cabal / Unit Tests'
     runs-on: [self-hosted, linux, normal]
     container: ubuntu:jammy
     steps:
-      - uses: actions/checkout@v3
+
+      - 'Checkout Code'
+        uses: actions/checkout@v3
         with:
           # Check out pull request HEAD instead of merge commit.
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: 'Install prerequisites'
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker
+        with:
+          tag: hs-booster-ci-cabal-unit-ubuntu-jammy-${{ github.sha }}
+          os: ubuntu
+          distro: jammy
+
+      - name: 'hpack'
         run: |
-          apt-get update
-          apt-get install --yes curl z3
-          curl -sSL https://github.com/sol/hpack/releases/download/${{ env.hpack_version }}/hpack_linux.gz | gunzip -c > hpack && chmod +x hpack
+          docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'curl -sSL https://github.com/sol/hpack/releases/download/${{ env.hpack_version }}/hpack_linux.gz | gunzip -c > hpack && chmod +x hpack'
+          docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c './hpack'
 
-      - name: 'Run Hpack'
-        run: ./hpack
+      # - name: 'Cache Cabal package database and store'
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: |
+      #       ~/.cabal/packages
+      #       ~/.cabal/store
+      #     key: cabal-1-${{ runner.os }}-ghc-${{ env.ghc_version }}-${{ hashFiles('hs-backend-booster.cabal') }}
+      #     restore-keys: |
+      #       cabal-1-${{ runner.os }}-ghc-${{ env.ghc_version }}-
+      #       cabal-1-${{ runner.os }}-ghc-
+      #       cabal-1-
 
-      - name: 'Cache Cabal package database and store'
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cabal/packages
-            ~/.cabal/store
-          key: cabal-1-${{ runner.os }}-ghc-${{ env.ghc_version }}-${{ hashFiles('hs-backend-booster.cabal') }}
-          restore-keys: |
-            cabal-1-${{ runner.os }}-ghc-${{ env.ghc_version }}-
-            cabal-1-${{ runner.os }}-ghc-
-            cabal-1-
-
-      - uses: haskell/actions/setup@v2
-        id: setup-haskell-cabal
-        with:
-          ghc-version: ${{ env.ghc_version }}
-          cabal-version: '3.6'
+      # - uses: haskell/actions/setup@v2
+      #   id: setup-haskell-cabal
+      #   with:
+      #     ghc-version: ${{ env.ghc_version }}
+      #     cabal-version: '3.6'
 
       - name: 'Install tools'
         run: |
-          cabal install happy
-          cabal install alex
+          docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'cabal install happy'
+          docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'cabal install alex'
 
       - name: 'Run unit tests'
-        run: cabal v2-test --enable-tests --test-show-details=direct
+        run: docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'cabal v2-test --enable-tests --test-show-details=direct'
 
       - name: 'Configure with profiling'
-        run: cabal v2-configure --enable-profiling -f-threaded
+        run: docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'cabal v2-configure --enable-profiling -f-threaded'
+
+      - name: 'Tear down Docker'
+        if: always()
+        run: |
+          docker stop --time=0 hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA}
 
   # nix-build:
   #   name: 'Nix / Unit Tests'
@@ -162,24 +158,33 @@ jobs:
     runs-on: [self-hosted, linux, flyweight]
     container: ubuntu:jammy
     steps:
-      - uses: actions/checkout@v3
+
+      - 'Checkout Code'
+        uses: actions/checkout@v3
         with:
           # Check out pull request HEAD instead of merge commit.
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: 'Download prerequisites'
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker
+        with:
+          tag: hs-booster-ci-formatting-style-ubuntu-jammy-${{ github.sha }}
+          os: ubuntu
+          distro: jammy
+
+      - name: 'Install fourmolu'
         # this could be cached but is probably fast anyway
         run: |
-          apt-get update
-          apt-get install --yes curl git
           curl -sSL https://github.com/fourmolu/fourmolu/releases/download/v${{ env.fourmolu_version }}/fourmolu-${{ env.fourmolu_version }}-linux-x86_64 -o fourmolu && chmod +x fourmolu && ./fourmolu --version
           curl -sSL https://github.com/ndmitchell/hlint/releases/download/v${{ env.hlint_version }}/hlint-${{ env.hlint_version }}-x86_64-linux.tar.gz | tar xvz hlint-${{ env.hlint_version }}/hlint
 
       - name: 'Check formatting'
-        run: |
-          PATH=$PWD:$PATH scripts/fourmolu.sh
-          echo 'Checking diff'
-          git diff --exit-code
+        run: docker exec -t hs-booster-ci-formatting-style-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'PATH=$PWD:$PATH scripts/fourmolu.sh && git diff'
 
       - name: 'Run hlint'
-        run: hlint-${{ env.hlint_version }}/hlint -g -j
+        run: docker exec -t hs-booster-ci-formatting-style-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'hlint-${{ env.hlint_version }}/hlint -g -j'
+
+      - name: 'Tear down Docker'
+        if: always()
+        run: |
+          docker stop --time=0 hs-booster-ci-formatting-style-ubuntu-jammy-${GITHUB_SHA}
