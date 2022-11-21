@@ -11,12 +11,16 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Either.Extra
+import Data.Foldable (toList)
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Maybe (listToMaybe)
+import Data.Sequence (Seq (..))
+import Data.Sequence qualified as Seq
 import Data.Set (Set)
 import Data.Set qualified as Set
 
+import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
 import Kore.Pattern.Base
 import Kore.Pattern.Util (sortOfTerm, substituteInTerm)
@@ -27,8 +31,8 @@ data UnificationResult
       UnificationSuccess Substitution
     | -- | different constructors or domain values, or sort mismatch
       UnificationFailed
-    | -- | (other) cases that are not resolved. FIXME use NonEmpty, put the problematic one (causing it to stop) first
-      UnificationRemainder (Set (Term, Term))
+    | -- | (other) cases that are unresolved (offending case in head position).
+      UnificationRemainder (NonEmpty (Term, Term))
     | InternalError String
     deriving stock (Eq, Show)
 
@@ -41,32 +45,38 @@ type Substitution = Map Variable Term
    prefers to replace its variables if given a choice.
 -}
 unifyTerms :: KoreDefinition -> Term -> Term -> UnificationResult
-unifyTerms KoreDefinition{sorts} term1 term2 =
+unifyTerms KoreDefinition{symbols, sorts} term1 term2 =
     let runUnification :: UnificationState -> UnificationResult
         runUnification =
             fromEither
                 . runExcept
                 . fmap (UnificationSuccess . uSubstitution)
                 . execStateT unification
-        targets = freeVariables term1
-        subsorts = Map.map snd sorts
-     in runUnification $ State Map.empty targets [(term1, term2)] subsorts
+     in runUnification
+            State
+                { uSubstitution = Map.empty
+                , uTargetVars = freeVariables term1
+                , uQueue = Seq.singleton (term1, term2)
+                , uSubsorts = Map.map snd sorts
+                , uSymbols = Map.map fst symbols
+                }
 
 data UnificationState = State
     { uSubstitution :: Substitution
     , uTargetVars :: Set Variable
-    , uProblems :: [(Term, Term)] -- FIXME should be a sequence not a list
+    , uQueue :: Seq (Term, Term) -- work queue (breadth-first term traversal)
     , uSubsorts :: SortTable
+    , uSymbols :: Map SymbolName SymbolAttributes
     }
 
 type SortTable = Map SortName (Set SortName)
 
 unification :: StateT UnificationState (Except UnificationResult) ()
 unification = do
-    mbNext <- gets $ listToMaybe . uProblems
-    case mbNext of
-        Nothing -> pure () -- done
-        Just (term1, term2) -> do
+    queue <- gets uQueue
+    case queue of
+        Empty -> pure () -- done
+        (term1, term2) :<| _ -> do
             unify1 term1 term2
             unification
 
@@ -105,7 +115,8 @@ unify1
                 lift $
                     throwE UnificationFailed -- (DifferentSymbols symName1 symName2)
                     -- no function evaluation, only constructors are matched.
-            unless (isConstructor symName1) $
+            symbols <- gets uSymbols
+            unless (maybe False isConstructor $ Map.lookup symName1 symbols) $
                 returnAsRemainder t1 t2
             zipWithM_ enqueueProblem args1 args2
 
@@ -161,7 +172,7 @@ unify1
 
 enqueueProblem :: Monad m => Term -> Term -> StateT UnificationState m ()
 enqueueProblem term1 term2 =
-    modify $ \s@State{uProblems} -> s{uProblems = uProblems ++ [(term1, term2)]} -- FIXME
+    modify $ \s@State{uQueue} -> s{uQueue = uQueue :|> (term1, term2)}
 
 {- | Binds a variable to a term to add to the resulting unifier.
 
@@ -197,8 +208,8 @@ bindVariable var term = do
 
 returnAsRemainder :: Term -> Term -> StateT UnificationState (Except UnificationResult) ()
 returnAsRemainder t1 t2 = do
-    remainder <- gets uProblems
-    lift $ throwE $ UnificationRemainder $ Set.fromList $ (t1, t2) : remainder
+    remainder <- gets uQueue
+    lift $ throwE $ UnificationRemainder $ (t1, t2) :| toList remainder
 
 ---- TODO TODO TODO ------------------------------------
 
@@ -208,6 +219,3 @@ freeVariables = undefined
 
 sortsAgree :: SortTable -> Sort -> Sort -> Bool
 sortsAgree = undefined
-
-isConstructor :: SymbolName -> Bool
-isConstructor = undefined -- FIXME needs KoreDefinition symbol table
