@@ -31,32 +31,32 @@ constructors =
         "from story description"
         [ test
             "same constructors, one variable argument"
-            (app "con1" someSort [someSort] [var "X" someSort])
-            (app "con1" someSort [someSort] [var "Y" someSort])
+            (app someSort [someSort] "con1" [var "X" someSort])
+            (app someSort [someSort] "con1" [var "Y" someSort])
             (success [("X", someSort, var "Y" someSort)])
         , test
             "same constructors, same argument"
-            (app "con1" someSort [someSort] [var "X" someSort])
-            (app "con1" someSort [someSort] [var "X" someSort])
+            (app someSort [someSort] "con1" [var "X" someSort])
+            (app someSort [someSort] "con1" [var "X" someSort])
             (success [])
         , let v1 = var "X" someSort
               v2 = var "X" anotherSort
            in test
                 "same constructors, argument variables differ in sorts"
-                (app "con1" someSort [someSort] [v1])
-                (app "con1" someSort [someSort] [v2])
+                (app someSort [someSort] "con1" [v1])
+                (app someSort [someSort] "con1" [v2])
                 (failed $ DifferentSorts v1 v2)
         , test
             "same constructor, var./term argument"
-            (app "con1" someSort [someSort] [var "X" someSort])
-            (app "con1" someSort [someSort] [app "f1" someSort [someSort] [var "Y" someSort]])
-            (success [("X", someSort, app "f1" someSort [someSort] [var "Y" someSort])])
-        , let t1 = app "con1" someSort [someSort] [var "X" someSort]
-              t2 = app "con2" someSort [someSort] [var "Y" someSort]
+            (app someSort [someSort] "con1" [var "X" someSort])
+            (app someSort [someSort] "con1" [app someSort [someSort] "f1" [var "Y" someSort]])
+            (success [("X", someSort, app someSort [someSort] "f1" [var "Y" someSort])])
+        , let t1 = app someSort [someSort] "con1" [var "X" someSort]
+              t2 = app someSort [someSort] "con2" [var "Y" someSort]
            in test "different constructors" t1 t2 $ failed (DifferentSymbols t1 t2)
-        , let t1 = app "f1" someSort [someSort] [var "X" someSort]
-              t2 = app "f1" someSort [someSort] [var "Y" someSort]
-           in test "Functions" t1 t2 $ remainder [(t1, t2)]
+        , let t1 = app someSort [someSort] "con1" [var "X" someSort]
+              t2 = app someSort [someSort] "f1" [var "Y" someSort]
+           in test "Constructor and function" t1 t2 $ remainder [(t1, t2)]
         ]
 
 ----------------------------------------
@@ -64,8 +64,8 @@ someSort, anotherSort :: Sort
 someSort = SortApp "SomeSort" []
 anotherSort = SortApp "AnotherSort" []
 
-app :: SymbolName -> Sort -> [Sort] -> [Term] -> Term
-app n resultSort argSorts args = SymbolApplication resultSort argSorts n args
+app :: Sort -> [Sort] -> SymbolName -> [Term] -> Term
+app = SymbolApplication
 
 var :: VarName -> Sort -> Term
 var variableName variableSort = Var $ Variable{variableSort, variableName}
@@ -109,13 +109,11 @@ test name term1 term2 expected =
         error $ "subSortOf: " <> show (other1, other2) <> " not supported"
 
     constructor n sort argSorts =
-        (n, (SymbolAttributes False False True, symSort sort argSorts))
+        (n, (SymbolAttributes False False True, SymbolSort sort argSorts))
     function n sort argSorts =
-        (n, (SymbolAttributes True True False, symSort sort argSorts))
+        (n, (SymbolAttributes True True False, SymbolSort sort argSorts))
     partialFunction n sort argSorts =
-        (n, (SymbolAttributes True False False, symSort sort argSorts))
-
-    symSort s argSorts = SymbolSort s argSorts
+        (n, (SymbolAttributes True False False, SymbolSort sort argSorts))
 
 dummyDefinition ::
     [(SortName, (SortAttributes, Set SortName))] ->
