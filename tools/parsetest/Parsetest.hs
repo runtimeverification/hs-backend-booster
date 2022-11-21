@@ -99,25 +99,26 @@ prettify Report{modNames, sortNames, symbolNames, axiomCount, preserveDefinednes
     list header = ((header <> ": ") <>) . Text.intercalate "\n - " . map prettifyKore
 
     prettifyKore :: Text -> Text
-    prettifyKore s
-        | Text.null s = s
-        | "'" `Text.isPrefixOf` s =
-            let (encoded, rest) = Text.span (/= '\'') (Text.tail s)
+    prettifyKore str
+        | Text.null str = str
+        | "'" `Text.isPrefixOf` str =
+            let (encoded, rest) = Text.span (/= '\'') (Text.tail str)
              in decode encoded <> prettifyKore (Text.drop 1 rest)
         | otherwise =
-            let (notEncoded, rest) = Text.span (/= '\'') s
+            let (notEncoded, rest) = Text.span (/= '\'') str
              in notEncoded <> prettifyKore rest
       where
         decode :: Text -> Text
         decode s 
-            | length code < 4 = error $ "Bad character code  " <> show code
+            | Text.null s = s
+            | Text.length code < 4 = error $ "Bad character code  " <> show code
             | Nothing <- mbChar = error $ "Unknown character code  " <> show code
-            | Just c <- mbChar = c <> decodeChars rest
+            | Just c <- mbChar = c <> decode rest
           where
-            (code, rest) = splitAt 4 s
+            (code, rest) = Text.splitAt 4 s
             mbChar = Map.lookup code decodeMap
 
-decodeMap :: Map Text Text
+decodeMap :: Map.Map Text Text
 decodeMap = Map.fromList
             [ ("Spce", " ")
             , ("Bang", "!")
@@ -153,10 +154,6 @@ decodeMap = Map.fromList
             , ("RBra", "}")
             , ("Tild", "~")
             ]
-        decodePrefix _ [] = Nothing
-        decodePrefix s' ((p, sub) : rest)
-            | p `Text.isPrefixOf` s' = Just sub
-            | otherwise = decodePrefix s' rest
 
 data Report = Report
     { file :: FilePath
