@@ -1,4 +1,4 @@
-name: "Build + Test"
+name: 'Build + Test'
 on:
   pull_request:
   push:
@@ -11,13 +11,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ghc_version: "9.2.5"
-  hlint_version: "3.4.1"
-  fourmolu_version: "0.8.2.0"
-  hpack_version: "0.34.2"
+  ghc_version: '9.2.5'
+  hlint_version: '3.4.1'
+  fourmolu_version: '0.8.2.0'
+  hpack_version: '0.34.2'
 
 jobs:
   changes:
+    name: 'Filter bad files'
     runs-on: [self-hosted, linux, flyweight]
     # Set job outputs to values from filter step
     outputs:
@@ -26,7 +27,7 @@ jobs:
       nix: ${{ steps.filter.outputs.nix }}
     steps:
     # For pull requests it's not necessary to checkout the code
-    - name: Check out code
+    - name: 'Check out code'
       uses: actions/checkout@v3
       if: ${{ github.event_name == 'push' }}
     - uses: dorny/paths-filter@v2
@@ -51,7 +52,7 @@ jobs:
     if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.stack == 'true' }}
     runs-on: [self-hosted, linux, normal]
     steps:
-      - name: Install prerequisites
+      - name: 'Install prerequisites'
         run: |
           sudo apt install --yes z3
 
@@ -60,7 +61,7 @@ jobs:
           # Check out pull request HEAD instead of merge commit.
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Cache Stack root
+      - name: 'Cache Stack root'
         uses: actions/cache@v2
         with:
           path: ~/.stack
@@ -74,7 +75,7 @@ jobs:
           ghc-version: ${{ env.ghc_version }}
           enable-stack: true
 
-      - name: Build dependencies
+      - name: 'Build dependencies'
         run: |
           stack build --test --only-dependencies
           if [ -n "$(git status --porcelain)" ]; then
@@ -82,7 +83,7 @@ jobs:
             exit 1
           fi
 
-      - name: Run unit tests
+      - name: 'Run unit tests'
         run: stack test --pedantic
 
   cabal:
@@ -96,15 +97,15 @@ jobs:
           # Check out pull request HEAD instead of merge commit.
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Install prerequisites
+      - name: 'Install prerequisites'
         run: |
           sudo apt install --yes z3
           curl -sSL https://github.com/sol/hpack/releases/download/${{ env.hpack_version }}/hpack_linux.gz | gunzip -c > hpack && chmod +x hpack
 
-      - name: Run Hpack
+      - name: 'Run Hpack'
         run: ./hpack
 
-      - name: Cache Cabal package database and store
+      - name: 'Cache Cabal package database and store'
         uses: actions/cache@v3
         with:
           path: |
@@ -120,17 +121,17 @@ jobs:
         id: setup-haskell-cabal
         with:
           ghc-version: ${{ env.ghc_version }}
-          cabal-version: "3.6"
+          cabal-version: '3.6'
 
-      - name: Install tools
+      - name: 'Install tools'
         run: |
           cabal install happy
           cabal install alex
 
-      - name: Run unit tests
+      - name: 'Run unit tests'
         run: cabal v2-test --enable-tests --test-show-details=direct
 
-      - name: Configure with profiling
+      - name: 'Configure with profiling'
         run: cabal v2-configure --enable-profiling -f-threaded
 
   # nix-build:
@@ -149,7 +150,7 @@ jobs:
   #           os: self-macos-12
   #   runs-on: ${{ matrix.runner }}
   #   steps:
-  #     - name: Check out code
+  #     - name: 'Check out code'
   #       uses: actions/checkout@v2.3.4
   #       with:
   #         # Check out pull request HEAD instead of merge commit.
@@ -177,13 +178,13 @@ jobs:
   #         name: k-framework
   #         authToken: '${{ secrets.CACHIX_PUBLIC_TOKEN }}'
 
-  #     - name: Build executables
+  #     - name: 'Build executables'
   #       run: |
   #         GC_DONT_GC=1 nix build .#hs-backend-booster:exe:hs-backend-booster
   #         GC_DONT_GC=1 nix build .#hs-backend-booster:exe:parsetest
   #         GC_DONT_GC=1 nix build .#hs-backend-booster:exe:rpc-client
 
-  #     - name: Run unit tests
+  #     - name: 'Run unit tests'
   #       run: GC_DONT_GC=1 nix build .#hs-backend-booster:test:test-suite
 
   style:
@@ -197,17 +198,17 @@ jobs:
           # Check out pull request HEAD instead of merge commit.
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Download prerequisites
+      - name: 'Download prerequisites'
         # this could be cached but is probably fast anyway
         run: |
           curl -sSL https://github.com/fourmolu/fourmolu/releases/download/v${{ env.fourmolu_version }}/fourmolu-${{ env.fourmolu_version }}-linux-x86_64 -o fourmolu && chmod +x fourmolu && ./fourmolu --version
           curl -sSL https://github.com/ndmitchell/hlint/releases/download/v${{ env.hlint_version }}/hlint-${{ env.hlint_version }}-x86_64-linux.tar.gz | tar xvz hlint-${{ env.hlint_version }}/hlint
 
-      - name: Check formatting
+      - name: 'Check formatting'
         run: |
           PATH=$PWD:$PATH scripts/fourmolu.sh
-          echo "Checking diff"
+          echo 'Checking diff'
           git diff --exit-code
 
-      - name: Run hlint
+      - name: 'Run hlint'
         run: hlint-${{ env.hlint_version }}/hlint -g -j
