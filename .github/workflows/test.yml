@@ -50,7 +50,7 @@ jobs:
   stack:
     name: 'Stack / Unit Tests'
     needs: changes
-    if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.stack == 'true' }}
+    # if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.stack == 'true' }}
     runs-on: [self-hosted, linux, normal]
     container: ubuntu:jammy
     steps:
@@ -91,7 +91,7 @@ jobs:
   cabal:
     name: 'Cabal / Unit Tests'
     needs: changes
-    if: ${{ needs.changes.outputs.code == 'true' }}
+    # if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: [self-hosted, linux, normal]
     container: ubuntu:jammy
     steps:
@@ -193,7 +193,7 @@ jobs:
   style:
     name: 'Formatting and Style'
     needs: changes
-    if: ${{ needs.changes.outputs.code == 'true' }}
+    # if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: [self-hosted, linux, flyweight]
     container: ubuntu:jammy
     steps:
