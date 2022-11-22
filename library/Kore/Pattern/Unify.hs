@@ -170,17 +170,11 @@ unify1
                 returnAsRemainder (Var var) term2
             bindVariable var term2
 
--- term2 variable (not target), term1 not a variable: add binding
+-- term2 variable (not target), term1 not a variable: swap arguments (won't recurse)
 unify1
     term1
-    (Var var@Variable{variableSort}) =
-        do
-            subsorts <- gets uSubsorts
-            let termSort = sortOfTerm term1
-            unless (sortsAgree subsorts variableSort termSort) $
-                returnAsRemainder term1 (Var var)
-            bindVariable var term1
-
+    v@Var{} =
+        unify1 v term1
 -- Remaining other cases: mix of DomainValue and SymbolApplication (either side)
 -- The remaining unification problems are returned
 unify1
