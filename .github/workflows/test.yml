@@ -67,10 +67,11 @@ jobs:
 
       - name: 'Cache Stack root'
         uses: actions/cache@v3
-        path: stack-cache
-        key: stack-1-${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
-        restore-keys: |
-          stack-1-${{ runner.os }}-
+        with:
+          path: stack-cache
+          key: stack-1-${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+          restore-keys: |
+            stack-1-${{ runner.os }}-
 
       - name: 'Set up Docker'
         uses: ./.github/actions/with-docker
