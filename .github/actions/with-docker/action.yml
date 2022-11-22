@@ -7,7 +7,7 @@ inputs:
   subdir:
     description: 'Subdirectory where code is cloned.'
     required: false
-    default: ""
+    default: ''
   os:
     description: 'OS to setup Docker for.'
     required: true
@@ -18,6 +18,10 @@ inputs:
     description: 'Hardcode the path of the dockerfile to use.'
     required: false
     default: .github/workflows/Dockerfile
+  docker-run-args:
+    description: 'Extra arguments to pass to docker run.'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -30,6 +34,7 @@ runs:
       BASE_OS: ${{ inputs.os }}
       BASE_DISTRO: ${{ inputs.distro }}
       DOCKERFILE: ${{ inputs.dockerfile }}
+      DOCKER_RUN_ARGS: ${{ inputs.docker-run-args }}
     run: |
       set -euxo pipefail
 
@@ -73,4 +78,5 @@ runs:
           -v "$(pwd):/opt/workspace"         \
           -v "/etc/passwd:/etc/passwd:ro"    \
           -v "/etc/group:/etc/group:ro"      \
+          "${DOCKER_RUN_ARGS[@]}"            \
           runtimeverification/${TAG_NAME}
