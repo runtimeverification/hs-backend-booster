@@ -41,13 +41,13 @@ constructors =
             (app someSort [someSort] "con1" [var "X" someSort])
             (app someSort [someSort] "con1" [var "X" someSort])
             (success [])
-        , let v1 = var "X" someSort
-              v2 = var "X" differentSort
+        , let v = var "X" someSort
+              d = dv differentSort ""
            in test
-                "same constructors, argument variables differ in sorts"
-                (app someSort [someSort] "con1" [v1])
-                (app someSort [someSort] "con1" [v2])
-                (failed $ DifferentSorts v1 v2)
+                "same constructors, arguments differ in sorts"
+                (app someSort [someSort] "con1" [v])
+                (app someSort [someSort] "con1" [d])
+                (remainder [(v, d)])
         , test
             "same constructor, var./term argument"
             (app someSort [someSort] "con1" [var "X" someSort])
@@ -66,7 +66,10 @@ functions =
     testGroup
         "Functions (should not unify)"
         [ let f = app someSort [someSort] "f1" [dv someSort ""]
-           in test "same function (but not unifying)" f f $ remainder [(f, f)]
+           in test "exact same function (but not unifying)" f f $ remainder [(f, f)]
+        , let f1 = app someSort [someSort] "f1" [dv someSort ""]
+              f2 = app someSort [someSort] "f2" [dv someSort ""]
+           in test "different functions" f1 f2 $ remainder [(f1, f2)]
         ]
 
 varsAndValues :: TestTree
@@ -77,34 +80,45 @@ varsAndValues =
            in test "identical variables" v v (success [])
         , let v1 = var "X" someSort
               v2 = var "Y" someSort
-           in test "two variables (same sort)" v1 v2 $ success [("X", someSort, v2)]
+           in test "two variables (same sort)" v1 v2 $
+                success [("X", someSort, v2)]
         , let v1 = var "X" someSort
               v2 = var "Y" aSubsort
-           in test "two variables (v2 subsort v1)" v1 v2 $ success [("X", someSort, v2)]
-        , let v = var "X" someSort
-              d = dv someSort ""
-           in test "var and domain value (same sort)" v d $ success [("X", someSort, d)]
+           in test "two variables (v2 subsort v1)" v1 v2 $
+                -- TODO could be allowed once subsorts are considered while checking
+                remainder [(v1, v2)]
+        , let v1 = var "X" aSubsort
+              v2 = var "Y" someSort
+           in test "two variables (v1 subsort v2)" v1 v2 $
+                remainder [(v1, v2)]
+        , let v1 = var "X" someSort
+              v2 = var "X" differentSort
+           in test "same variable name, different sort" v1 v2 $
+                failed (VariableConflict (Variable someSort "X") v1 v2)
         , let d1 = dv someSort "1"
               d2 = dv someSort "1"
-           in test "same domain values (same sort)" d1 d2 $ success []
+           in test "same domain values (same sort)" d1 d2 $
+                success []
         , let d1 = dv someSort "1"
               d2 = dv someSort "2"
-           in test "different domain values (same sort)" d1 d2 $ failed (DifferentValues d1 d2)
-        ]
-
-_failing :: TestTree
-_failing =
-    testGroup
-        "currently failing to detect sort difference"
-        [ let v1 = var "X" aSubsort
-              v2 = var "Y" someSort
-           in test "two variables (v1 subsort v2)" v1 v2 (failed $ DifferentSorts v1 v2)
-        , let v = var "X" someSort
-              d = dv differentSort ""
-           in test "var and domain value (different sort)" v d $ failed (DifferentSorts v d)
+           in test "different domain values (same sort)" d1 d2 $
+                failed (DifferentValues d1 d2)
+        , let d1 = dv someSort "1"
+              d2 = dv differentSort "2"
+           in test "different domain values (different sort)" d1 d2 $
+                failed (DifferentValues d1 d2)
         , let d1 = dv someSort "1"
               d2 = dv differentSort "1"
-           in test "same domain values, different sort" d1 d2 $ failed (DifferentSorts d1 d2)
+           in test "same domain values, different sort" d1 d2 $
+                remainder [(d1, d2)]
+        , let v = var "X" someSort
+              d = dv someSort ""
+           in test "var and domain value (same sort)" v d $
+                success [("X", someSort, d)]
+        , let v = var "X" someSort
+              d = dv differentSort ""
+           in test "var and domain value (different sort)" v d $
+                remainder [(v, d)]
         ]
 
 ----------------------------------------

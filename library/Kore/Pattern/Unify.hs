@@ -26,8 +26,6 @@ import Kore.Definition.Base
 import Kore.Pattern.Base
 import Kore.Pattern.Util (freeVariables, sortOfTerm, substituteInTerm)
 
-import Kore.Syntax.Json.Internalise (matchSorts) -- temporary
-
 -- | Result of a unification (a substitution or an indication of what went wrong)
 data UnificationResult
     = -- | equal structure (constructors) after substitution (substitution goes both ways)
@@ -41,13 +39,12 @@ data UnificationResult
 
 -- | Additional information to explain why a unification has failed
 data FailReason
-    = -- | Unificand sorts differ
-      DifferentSorts Term Term
-    | -- | (Domain) values differ
+    = -- | (Domain) values differ
       DifferentValues Term Term
     | -- | Symbols differ
       DifferentSymbols Term Term
-    | -- | Variable would refer to itself
+    | -- | Variable would refer to itself. FIXME should not happen at
+      -- all. Need to rename rule variables to avoid it.
       VariableRecursion Variable Term
     | -- | Variable reassigned
       VariableConflict Variable Term Term
@@ -108,10 +105,10 @@ unify1
     d2@(DomainValue s2 t2) =
         do
             subsorts <- gets uSubsorts
-            unless (sortsAgree subsorts s1 s2) $
-                failWith (DifferentSorts d1 d2)
             unless (t1 == t2) $
                 failWith (DifferentValues d1 d2)
+            unless (sortsAgree subsorts s1 s2) $
+                returnAsRemainder d1 d2
 
 -- two symbol applications: fail if names differ, recurse
 unify1
@@ -121,7 +118,7 @@ unify1
             subsorts <- gets uSubsorts
             -- argument sorts have been checked upon internalisation
             unless (sortsAgree subsorts s1 s2) $
-                failWith (DifferentSorts t1 t2)
+                returnAsRemainder t1 t2
             -- If we have functions, pass - only constructors are matched.
             symbols <- gets uSymbols
             let isConstr sym = maybe False isConstructor $ Map.lookup sym symbols
@@ -158,10 +155,10 @@ unify1
     (Var var2@(Variable varSort2 varName2))
         -- same variable (same sort!)
         | var1 == var2 =
-            pure ()
-        -- sorts differ, names equal: error!
+            pure () -- QQ should we record substitution var1 -> var1 for information?
         | varName1 == varName2 && varSort1 /= varSort2 =
-            failWith $ DifferentSorts (Var var1) (Var var2)
+            -- sorts differ, names equal: error!
+            failWith $ VariableConflict var1 (Var var1) (Var var2)
 -- term1 variable (target): introduce a new binding
 unify1
     (Var var@Variable{variableSort})
@@ -170,7 +167,7 @@ unify1
             subsorts <- gets uSubsorts
             let termSort = sortOfTerm term2
             unless (sortsAgree subsorts variableSort termSort) $
-                failWith (DifferentSorts (Var var) term2)
+                returnAsRemainder (Var var) term2
             bindVariable var term2
 
 -- term2 variable (not target), term1 not a variable: add binding
@@ -181,7 +178,7 @@ unify1
             subsorts <- gets uSubsorts
             let termSort = sortOfTerm term1
             unless (sortsAgree subsorts variableSort termSort) $
-                failWith (DifferentSorts term1 (Var var))
+                returnAsRemainder term1 (Var var)
             bindVariable var term1
 
 -- Remaining other cases: mix of DomainValue and SymbolApplication (either side)
@@ -239,6 +236,19 @@ returnAsRemainder t1 t2 = do
     remainder <- gets uQueue
     lift $ throwE $ UnificationRemainder $ (t1, t2) :| toList remainder
 
--- FIXME use sort utilities (currently stub code living in Kore.Syntax.Json.Internalise)
+{- | Checks that 's2' can be used for 's1', i.e., is a subsort.
+
+ Current implementation only checks sort equality, and does not
+ handle sort variables. Result 'False' must mean _indeterminate
+ unification_, not failing unification!
+-}
 sortsAgree :: SortTable -> Sort -> Sort -> Bool
-sortsAgree _ s1 s2 = either (const False) (const True) $ runExcept $ matchSorts s1 s2
+-- do not consider variables (we would need to carry a sort
+-- variable substitution in the state to check consistency)
+sortsAgree _ SortVar{} _ = False
+sortsAgree _ _ SortVar{} = False
+-- only accept syntactically equal sorts
+sortsAgree st (SortApp sort1 args1) (SortApp sort2 args2) =
+    sort1 == sort2
+        && length args1 == length args2
+        && and (zipWith (sortsAgree st) args1 args2)
