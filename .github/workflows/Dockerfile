@@ -31,7 +31,7 @@ RUN curl -sSL https://github.com/ndmitchell/hlint/releases/download/v${HLINT_VER
     && mv hlint-${HLINT_VERSION}/hlint /usr/bin/hlint                                                                                                                   \
     && chmod +x /usr/bin/hlint
 
-RUN     curl https://downloads.haskell.org/~cabal/cabal-install-3.6.2.0/cabal-install-${CABAL_VERSION}-x86_64-linux-deb10.tar.xz | tar xvz cabal \
+RUN     curl https://downloads.haskell.org/~cabal/cabal-install-3.6.2.0/cabal-install-${CABAL_VERSION}-x86_64-linux-deb10.tar.xz | xzcat | tar xv cabal \
     && mv cabal /usr/bin/cabal \
     && chmod +x /usr/bin/cabal
 
