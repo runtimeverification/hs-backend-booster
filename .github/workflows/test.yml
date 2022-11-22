@@ -143,7 +143,7 @@ jobs:
           fourmolu: ${{ env.fourmolu_version }}
           hlint: ${{ env.hlint_version }}
           hpack: ${{ env.hpack_version }}
-          ghc: ${{ env.ghc-version }}
+          ghc: ${{ env.ghc_version }}
 
       - name: 'Check formatting'
         run: docker exec -t hs-booster-ci-formatting-style-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c './scripts/fourmolu.sh && git diff'
