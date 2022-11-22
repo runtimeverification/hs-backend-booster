@@ -125,7 +125,7 @@ jobs:
 
   style:
     name: 'Formatting and Style'
-    runs-on: [self-hosted, linux, flyweight]
+    runs-on: [self-hosted, linux, normal]
     steps:
 
       - name: 'Checkout Code'
