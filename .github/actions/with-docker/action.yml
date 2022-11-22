@@ -69,6 +69,7 @@ runs:
           --cpuset-cpus 0-7
 
       docker run                             \
+          --cpuset-cpus 0-7                  \
           --name ${TAG_NAME}                 \
           --rm -it                           \
           --detach                           \
