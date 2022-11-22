@@ -60,6 +60,7 @@ runs:
           --build-arg BASE_OS=${BASE_OS}                              \
           --build-arg BASE_DISTRO=${BASE_DISTRO}                      \
           --build-arg HPACK_VERSION=${HPACK_VERSION}                  \
+          --build-arg HLINT_VERSION=${HLINT_VERSION}                  \
           --build-arg FOURMOLU_VERSION=${FOURMOLU_VERSION}            \
           --build-arg USER=${USER} --build-arg USER_ID=${USER_ID}     \
           --build-arg GROUP=${GROUP} --build-arg GROUP_ID=${GROUP_ID}
