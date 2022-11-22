@@ -1,11 +1,16 @@
 ARG BASE_OS
 ARG BASE_DISTRO
+ARG HPACK_VERSION
+ARG FOURMOLU_VERSION
+ARG HLINT_VERSION
 FROM ${BASE_OS}:${BASE_DISTRO}
 
 ENV TZ America/Chicago
 ENV DEBIAN_FRONTEND=noninteractive
 
-ARG LLVM_VERSION
+ARG HPACK_VERSION
+ARG FOURMOLU_VERSION
+ARG HLINT_VERSION
 
 RUN    apt-get update        \
     && apt-get install --yes \
@@ -15,6 +20,13 @@ RUN    apt-get update        \
         z3
 
 RUN curl -sSL https://get.haskellstack.org/ | sh
+RUN    curl -sSL https://github.com/sol/hpack/releases/download/${HPACK_VERSION}/hpack_linux.gz | gunzip -c > /usr/bin/hpack \
+    && chmod +x /usr/bin/hpack
+RUN    curl -sSL https://github.com/fourmolu/fourmolu/releases/download/v${FOURMOLU_VERSION}/fourmolu-${FOURMOLU_VERSION}-linux-x86_64 -o /usr/bin/fourmolu \
+    && chmod +x /usr/bin/fourmolu                                                                                                                           \
+    && fourmolu --version
+RUN curl -sSL https://github.com/ndmitchell/hlint/releases/download/v${HLINT_VERSION}/hlint-${HLINT_VERSION}-x86_64-linux.tar.gz | tar xvz /usr/bin/hlint \
+    && chmod +x /usr/bin/hlint
 
 RUN locale-gen en_US.UTF-8
 ENV LANG en_US.UTF-8
