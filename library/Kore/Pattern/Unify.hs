@@ -104,10 +104,9 @@ unify1
     d1@(DomainValue s1 t1)
     d2@(DomainValue s2 t2) =
         do
-            subsorts <- gets uSubsorts
             unless (t1 == t2) $
                 failWith (DifferentValues d1 d2)
-            unless (sortsAgree subsorts s1 s2) $
+            unless (s1 == s2) $ -- sorts must be exactly the same for DVs
                 returnAsRemainder d1 d2
 
 -- two symbol applications: fail if names differ, recurse
