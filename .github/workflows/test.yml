@@ -49,7 +49,7 @@ jobs:
     runs-on: [self-hosted, linux, normal]
     steps:
 
-      - 'Checkout Code'
+      - name: 'Checkout Code'
         uses: actions/checkout@v3
         with:
           # Check out pull request HEAD instead of merge commit.
@@ -109,7 +109,7 @@ jobs:
     runs-on: [self-hosted, linux, flyweight]
     steps:
 
-      - 'Checkout Code'
+      - name: 'Checkout Code'
         uses: actions/checkout@v3
         with:
           # Check out pull request HEAD instead of merge commit.
