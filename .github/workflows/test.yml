@@ -79,6 +79,7 @@ jobs:
           restore-keys: |
             cabal-tmp-${{ runner.os }}-ghc-${{ env.ghc_version }}-
 
+      # FIXME should be removed!
       - name: 'Cache Stack root'
         uses: actions/cache@v3
         with:
