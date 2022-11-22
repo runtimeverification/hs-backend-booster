@@ -38,6 +38,7 @@ jobs:
           fourmolu: ${{ env.fourmolu_version }}
           hlint: ${{ env.hlint_version }}
           hpack: ${{ env.hpack_version }}
+          ghc: ${{ env.ghc_version }}
 
       - name: 'Run unit tests'
         run: docker exec -t hs-booster-ci-stack-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'stack test --pedantic'
@@ -87,6 +88,7 @@ jobs:
           fourmolu: ${{ env.fourmolu_version }}
           hlint: ${{ env.hlint_version }}
           hpack: ${{ env.hpack_version }}
+          ghc: ${{ env.ghc_version }}
 
       - name: 'debug info'
         run: |

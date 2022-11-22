@@ -3,7 +3,9 @@ ARG BASE_DISTRO
 ARG HPACK_VERSION
 ARG FOURMOLU_VERSION
 ARG HLINT_VERSION
-FROM ${BASE_OS}:${BASE_DISTRO}
+ARG GHC_VERSION
+
+FROM haskell:${GHC_VERSION}-slim-buster
 
 ENV TZ America/Chicago
 ENV DEBIAN_FRONTEND=noninteractive
@@ -11,7 +13,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 ARG HPACK_VERSION
 ARG FOURMOLU_VERSION
 ARG HLINT_VERSION
-ARG CABAL_VERSION=3.6.2.0
 
 RUN    apt-get update        \
     && apt-get install --yes \
@@ -21,7 +22,6 @@ RUN    apt-get update        \
         git                  \
         z3
 
-RUN curl -sSL https://get.haskellstack.org/ | sh
 RUN    curl -sSL https://github.com/sol/hpack/releases/download/${HPACK_VERSION}/hpack_linux.gz | gunzip -c > /usr/bin/hpack \
     && chmod +x /usr/bin/hpack
 RUN    curl -sSL https://github.com/fourmolu/fourmolu/releases/download/v${FOURMOLU_VERSION}/fourmolu-${FOURMOLU_VERSION}-linux-x86_64 -o /usr/bin/fourmolu \
@@ -30,10 +30,6 @@ RUN    curl -sSL https://github.com/fourmolu/fourmolu/releases/download/v${FOURM
 RUN curl -sSL https://github.com/ndmitchell/hlint/releases/download/v${HLINT_VERSION}/hlint-${HLINT_VERSION}-x86_64-linux.tar.gz | tar xvz hlint-${HLINT_VERSION}/hlint \
     && mv hlint-${HLINT_VERSION}/hlint /usr/bin/hlint                                                                                                                   \
     && chmod +x /usr/bin/hlint
-
-RUN     curl https://downloads.haskell.org/~cabal/cabal-install-3.6.2.0/cabal-install-${CABAL_VERSION}-x86_64-linux-deb10.tar.xz | xzcat | tar xv cabal \
-    && mv cabal /usr/bin/cabal \
-    && chmod +x /usr/bin/cabal
 
 RUN locale-gen en_US.UTF-8
 ENV LANG en_US.UTF-8

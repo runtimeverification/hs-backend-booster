@@ -44,6 +44,7 @@ runs:
       BASE_DISTRO: ${{ inputs.distro }}
       HLINT_VERSION: ${{ inputs.hlint }}
       HPACK_VERSION: ${{ inputs.hpack }}
+      GHC_VERSION: ${{ inputs.ghc }}
       FOURMOLU_VERSION: ${{ inputs.fourmolu }}
       DOCKERFILE: ${{ inputs.dockerfile }}
       DOCKER_RUN_ARGS: ${{ inputs.docker-run-args }}
@@ -61,6 +62,7 @@ runs:
           --build-arg BASE_DISTRO=${BASE_DISTRO}                      \
           --build-arg HPACK_VERSION=${HPACK_VERSION}                  \
           --build-arg HLINT_VERSION=${HLINT_VERSION}                  \
+          --build-arg GHC_VERSION=${GHC_VERSION}                      \
           --build-arg FOURMOLU_VERSION=${FOURMOLU_VERSION}            \
           --build-arg USER=${USER} --build-arg USER_ID=${USER_ID}     \
           --build-arg GROUP=${GROUP} --build-arg GROUP_ID=${GROUP_ID}
