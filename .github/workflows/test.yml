@@ -64,17 +64,19 @@ jobs:
           path: |
             cabal-cache/packages
             cabal-cache/store
-          key: cabal-1-${{ runner.os }}-ghc-${{ env.ghc_version }}-${{ hashFiles('hs-backend-booster.cabal') }}
+          key: cabal-tmp-${{ runner.os }}-ghc-${{ env.ghc_version }}-${{ hashFiles('package.yaml') }}
           restore-keys: |
-            cabal-1-${{ runner.os }}-ghc-${{ env.ghc_version }}-
+            cabal-tmp-${{ runner.os }}-ghc-${{ env.ghc_version }}-
 
       - name: 'Cache Stack root'
         uses: actions/cache@v3
         with:
           path: stack-cache
-          key: stack-1-${{ runner.os }}-${{ hashFiles('stack.yaml.lock') }}
+          key: stack-tmp-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('stack.yaml.lock') }}
           restore-keys: |
-            stack-1-${{ runner.os }}-
+            stack-tmp-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
+            stack-tmp-${{ runner.os }}-${{ hashFiles('stack.yaml') }}
+            stack-tmp-${{ runner.os }}
 
       - name: 'Set up Docker'
         uses: ./.github/actions/with-docker
@@ -86,21 +88,23 @@ jobs:
           hlint: ${{ env.hlint_version }}
           hpack: ${{ env.hpack_version }}
           docker-run-args: |
-            -v cabal-cache/packages:/opt/workspace/.cabal/packages
-            -v cabal-cache/store:/opt/workspace/.cabal/store
-            -v stack-cache:/opt/workspace/.stack
+            -v ${PWD}/cabal-cache/packages:/opt/workspace/.cabal/packages
+            -v ${PWD}/cabal-cache/store:/opt/workspace/.cabal/store
+            -v ${PWD}/stack-cache:/opt/workspace/.stack
 
-      - name: 'hpack and tools'
+      - name: 'Run hpack'
         run: |
           docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'hpack'
-          docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'cabal install happy'
-          docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'cabal install alex'
 
-      - name: 'Run unit tests'
-        run: docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'cabal v2-test --enable-tests --test-show-details=direct'
+      - name: 'Build and run unit tests'
+        run: |
+          docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} \
+            /bin/bash -c 'cabal --store-dir /opt/workspace/.cabal/store --v2-test --enable-tests --test-show-details=direct'
 
       - name: 'Configure with profiling'
-        run: docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'cabal v2-configure --enable-profiling -f-threaded'
+        run: |
+          docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} \
+            /bin/bash -c 'cabal --store-dir /opt/workspace/.cabal/store v2-configure --enable-profiling -f-threaded'
 
       - name: 'Tear down Docker'
         if: always()
