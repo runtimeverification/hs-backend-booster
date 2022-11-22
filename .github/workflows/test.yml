@@ -88,9 +88,9 @@ jobs:
           hlint: ${{ env.hlint_version }}
           hpack: ${{ env.hpack_version }}
           docker-run-args: |
-            -v ${PWD}/cabal-cache/packages:/opt/workspace/.cabal/packages
-            -v ${PWD}/cabal-cache/store:/opt/workspace/.cabal/store
-            -v ${PWD}/stack-cache:/opt/workspace/.stack
+            -v $(pwd)/cabal-cache/packages:/opt/workspace/.cabal/packages
+            -v $(pwd)/cabal-cache/store:/opt/workspace/.cabal/store
+            -v $(pwd)/stack-cache:/opt/workspace/.stack
 
       - name: 'Run hpack'
         run: |
