@@ -99,7 +99,7 @@ jobs:
       - name: 'Build and run unit tests'
         run: |
           docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} \
-            /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store --v2-test --enable-tests --test-show-details=direct'
+            /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store v2-test --enable-tests --test-show-details=direct'
 
       - name: 'Configure with profiling'
         run: |
