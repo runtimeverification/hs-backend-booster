@@ -35,11 +35,16 @@ ARG GROUP_ID=$USER_ID
 RUN groupadd -g $GROUP_ID $GROUP && useradd -m -u $USER_ID -s /bin/sh -g $GROUP $USER
 
 USER $USER:$GROUP
-ENV PATH $PATH:$HOME/.cabal.bin
+ENV PATH $PATH:/home/$USER/.cabal/bin
 
-RUN    cabal update \
-    && cabal install hlint-${HLINT_VERSION} hpack-${HPACK_VERSION} fourmolu-${FOURMOLU_VERSION} \
-    && set -x \
-    && hlint --version \
-    && hpack --version \
+RUN    cd $HOME \
+    && cabal update
+RUN    cd $HOME \
+    && cabal install hlint-${HLINT_VERSION} \
+    && hlint --version
+RUN    cd $HOME \
+    && cabal install hpack-${HPACK_VERSION} \
+    && hpack --version
+RUN    cd $HOME \
+    && cabal install fourmolu-${FOURMOLU_VERSION} \
     && fourmolu --version \
