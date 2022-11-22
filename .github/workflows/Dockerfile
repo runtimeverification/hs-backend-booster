@@ -11,6 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ARG HPACK_VERSION
 ARG FOURMOLU_VERSION
 ARG HLINT_VERSION
+ARG CABAL_VERSION=3.6.2.0
 
 RUN    apt-get update        \
     && apt-get install --yes \
@@ -29,6 +30,10 @@ RUN    curl -sSL https://github.com/fourmolu/fourmolu/releases/download/v${FOURM
 RUN curl -sSL https://github.com/ndmitchell/hlint/releases/download/v${HLINT_VERSION}/hlint-${HLINT_VERSION}-x86_64-linux.tar.gz | tar xvz hlint-${HLINT_VERSION}/hlint \
     && mv hlint-${HLINT_VERSION}/hlint /usr/bin/hlint                                                                                                                   \
     && chmod +x /usr/bin/hlint
+
+RUN     curl https://downloads.haskell.org/~cabal/cabal-install-3.6.2.0/cabal-install-${CABAL_VERSION}-x86_64-linux-deb10.tar.xz | tar xvz cabal \
+    && mv cabal /usr/bin/cabal \
+    && chmod +x /usr/bin/cabal
 
 RUN locale-gen en_US.UTF-8
 ENV LANG en_US.UTF-8
