@@ -1,6 +1,3 @@
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-
 {- | Stand-alone parser executable for testing and profiling
 
 Copyright   : (c) Runtime Verification, 2022

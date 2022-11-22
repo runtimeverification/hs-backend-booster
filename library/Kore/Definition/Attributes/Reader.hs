@@ -71,23 +71,21 @@ instance HasAttributes ParsedSymbol where
                         if attributes .! "sortInjection"
                             then SortInjection
                             else
-                                if containsAllOfAttrs ["function", "functional"]
+                                if attributes .! "functional" || attributes .! "total"
                                     then TotalFunction
                                     else
                                         if attributes .! "function"
                                             then PartialFunction
                                             else error $ "Invalid symbol '" <> show name <> "' attributes: " <> show attributes
             , isIdem =
-                if containsAllOfAttrs ["sortInjection", "idem"]
+                if attributes .! "sortInjection" && attributes .! "idem"
                     then error "Sort injection cannot be an AC constructor"
                     else attributes .! "idem"
             , isAssoc =
-                if containsAllOfAttrs ["sortInjection", "assoc"]
+                if attributes .! "sortInjection" && attributes .! "assoc"
                     then error "Sort injection cannot be an AC constructor"
                     else attributes .! "assoc"
             }
-      where
-        containsAllOfAttrs = foldr ((&&) . (attributes .!)) True
 
 instance HasAttributes ParsedSort where
     type Attributes ParsedSort = SortAttributes
