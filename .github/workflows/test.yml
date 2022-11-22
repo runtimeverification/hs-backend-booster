@@ -29,6 +29,16 @@ jobs:
           # Check out pull request HEAD instead of merge commit.
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: 'Cache Stack root'
+        uses: actions/cache@v3
+        with:
+          path: stack-cache
+          key: stack-tmp-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('stack.yaml.lock') }}
+          restore-keys: |
+            stack-tmp-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
+            stack-tmp-${{ runner.os }}-${{ hashFiles('stack.yaml') }}
+            stack-tmp-${{ runner.os }}
+
       - name: 'Set up Docker'
         uses: ./.github/actions/with-docker
         with:
@@ -41,7 +51,7 @@ jobs:
           ghc: ${{ env.ghc_version }}
 
       - name: 'Run unit tests'
-        run: docker exec -t hs-booster-ci-stack-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'stack test --pedantic'
+        run: docker exec -t hs-booster-ci-stack-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'stack --system-ghc --stack-root $(pwd)/stack-cache test --pedantic'
 
       - name: 'Tear down Docker'
         if: always()
