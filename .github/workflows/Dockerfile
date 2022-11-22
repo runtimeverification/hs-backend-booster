@@ -15,6 +15,7 @@ ARG HLINT_VERSION
 RUN    apt-get update        \
     && apt-get install --yes \
         curl                 \
+        libtinfo-dev         \
         locales              \
         git                  \
         z3
