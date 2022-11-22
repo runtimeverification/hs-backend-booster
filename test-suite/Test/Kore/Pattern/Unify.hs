@@ -25,6 +25,7 @@ test_unification =
         [ constructors
         , functions
         , varsAndValues
+        , andTerms
         ]
 
 constructors :: TestTree
@@ -119,6 +120,46 @@ varsAndValues =
               d = dv differentSort ""
            in test "var and domain value (different sort)" v d $
                 remainder [(v, d)]
+        ]
+
+andTerms :: TestTree
+andTerms =
+    testGroup
+        "And-terms on either side"
+        [ let d = dv someSort "a"
+              fa = app someSort [someSort] "f1" [d]
+              fb = app someSort [someSort] "f1" [dv someSort "b"]
+           in test
+                  "And-term on the left, remainder returns both pairs"
+                  (AndTerm someSort fa fb)
+                  d
+                  (remainder [(fa, d), (fb, d)])
+        , let d = dv someSort "a"
+              fa = app someSort [someSort] "f1" [d]
+              fb = app someSort [someSort] "f1" [dv someSort "b"]
+           in test
+                  "And-term on the right, remainder returns both pairs"
+                  d
+                  (AndTerm someSort fa fb)
+                  (remainder [(d, fa), (d, fb)])
+        , let da = dv someSort "a"
+              db = dv someSort "b"
+              ca = app someSort [someSort] "con1" [da]
+              cb = app someSort [someSort] "con1" [db]
+           in test
+                  "And-term on the left, one pair resolves"
+                  (AndTerm someSort ca da)
+                  cb
+                  (remainder [(da, cb), (da, db)])
+        , let da = dv someSort "a"
+              db = dv someSort "b"
+              ca = app someSort [someSort] "con1" [da]
+              cb = app someSort [someSort] "con1" [db]
+           in test
+                  "And-term on the right, one pair resolves"
+                  ca
+                  (AndTerm someSort cb da)
+                  (remainder [(ca, da), (da, db)])
         ]
 
 ----------------------------------------
