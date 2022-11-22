@@ -129,7 +129,7 @@ jobs:
           hpack: ${{ env.hpack_version }}
 
       - name: 'Check formatting'
-        run: docker exec -t hs-booster-ci-formatting-style-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'PATH=$PWD:$PATH scripts/fourmolu.sh && git diff'
+        run: docker exec -t hs-booster-ci-formatting-style-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c './scripts/fourmolu.sh && git diff'
 
       - name: 'Run hlint'
         run: docker exec -t hs-booster-ci-formatting-style-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'hlint -g -j'
