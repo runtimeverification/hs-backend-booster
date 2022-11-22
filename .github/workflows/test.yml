@@ -87,10 +87,6 @@ jobs:
           fourmolu: ${{ env.fourmolu_version }}
           hlint: ${{ env.hlint_version }}
           hpack: ${{ env.hpack_version }}
-          docker-run-args: |
-            -v $(pwd)/cabal-cache/packages:/opt/workspace/.cabal/packages
-            -v $(pwd)/cabal-cache/store:/opt/workspace/.cabal/store
-            -v $(pwd)/stack-cache:/opt/workspace/.stack
 
       - name: 'Run hpack'
         run: |
@@ -99,12 +95,12 @@ jobs:
       - name: 'Build and run unit tests'
         run: |
           docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} \
-            /bin/bash -c 'cabal --store-dir /opt/workspace/.cabal/store --v2-test --enable-tests --test-show-details=direct'
+            /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store --v2-test --enable-tests --test-show-details=direct'
 
       - name: 'Configure with profiling'
         run: |
           docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} \
-            /bin/bash -c 'cabal --store-dir /opt/workspace/.cabal/store v2-configure --enable-profiling -f-threaded'
+            /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store v2-configure --enable-profiling -f-threaded'
 
       - name: 'Tear down Docker'
         if: always()
