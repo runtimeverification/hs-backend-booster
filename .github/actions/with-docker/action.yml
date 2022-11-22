@@ -65,11 +65,9 @@ runs:
           --build-arg GHC_VERSION=${GHC_VERSION}                      \
           --build-arg FOURMOLU_VERSION=${FOURMOLU_VERSION}            \
           --build-arg USER=${USER} --build-arg USER_ID=${USER_ID}     \
-          --build-arg GROUP=${GROUP} --build-arg GROUP_ID=${GROUP_ID} \
-          --cpuset-cpus 0-7
+          --build-arg GROUP=${GROUP} --build-arg GROUP_ID=${GROUP_ID}
 
       docker run                             \
-          --cpuset-cpus 0-7                  \
           --name ${TAG_NAME}                 \
           --rm -it                           \
           --detach                           \
