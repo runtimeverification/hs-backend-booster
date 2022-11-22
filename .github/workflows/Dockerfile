@@ -10,8 +10,11 @@ ARG LLVM_VERSION
 RUN    apt-get update        \
     && apt-get install --yes \
         curl                 \
+        locales              \
         git                  \
         z3
+
+RUN curl -sSL https://get.haskellstack.org/ | sh
 
 RUN locale-gen en_US.UTF-8
 ENV LANG en_US.UTF-8
