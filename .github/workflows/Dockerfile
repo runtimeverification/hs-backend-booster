@@ -25,8 +25,8 @@ RUN    curl -sSL https://github.com/sol/hpack/releases/download/${HPACK_VERSION}
 RUN    curl -sSL https://github.com/fourmolu/fourmolu/releases/download/v${FOURMOLU_VERSION}/fourmolu-${FOURMOLU_VERSION}-linux-x86_64 -o /usr/bin/fourmolu \
     && chmod +x /usr/bin/fourmolu                                                                                                                           \
     && fourmolu --version
-RUN curl -sSL https://github.com/ndmitchell/hlint/releases/download/v${HLINT_VERSION}/hlint-${HLINT_VERSION}-x86_64-linux.tar.gz | tar xvz /hlint-${HLINT_VERSION}/hlint \
-    && mv /hlint-${HLINT_VERSION}/hlint /usr/bin/hlint                                                                                                                   \
+RUN curl -sSL https://github.com/ndmitchell/hlint/releases/download/v${HLINT_VERSION}/hlint-${HLINT_VERSION}-x86_64-linux.tar.gz | tar xvz hlint-${HLINT_VERSION}/hlint \
+    && mv hlint-${HLINT_VERSION}/hlint /usr/bin/hlint                                                                                                                   \
     && chmod +x /usr/bin/hlint
 
 RUN locale-gen en_US.UTF-8
