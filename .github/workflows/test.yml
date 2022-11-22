@@ -175,8 +175,8 @@ jobs:
       - name: 'Install fourmolu'
         # this could be cached but is probably fast anyway
         run: |
-          curl -sSL https://github.com/fourmolu/fourmolu/releases/download/v${{ env.fourmolu_version }}/fourmolu-${{ env.fourmolu_version }}-linux-x86_64 -o fourmolu && chmod +x fourmolu && ./fourmolu --version
-          curl -sSL https://github.com/ndmitchell/hlint/releases/download/v${{ env.hlint_version }}/hlint-${{ env.hlint_version }}-x86_64-linux.tar.gz | tar xvz hlint-${{ env.hlint_version }}/hlint
+          docker exec -t hs-booster-ci-formatting-style-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'curl -sSL https://github.com/fourmolu/fourmolu/releases/download/v${{ env.fourmolu_version }}/fourmolu-${{ env.fourmolu_version }}-linux-x86_64 -o fourmolu && chmod +x fourmolu && ./fourmolu --version'
+          docker exec -t hs-booster-ci-formatting-style-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'curl -sSL https://github.com/ndmitchell/hlint/releases/download/v${{ env.hlint_version }}/hlint-${{ env.hlint_version }}-x86_64-linux.tar.gz | tar xvz hlint-${{ env.hlint_version }}/hlint'
 
       - name: 'Check formatting'
         run: docker exec -t hs-booster-ci-formatting-style-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'PATH=$PWD:$PATH scripts/fourmolu.sh && git diff'
