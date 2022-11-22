@@ -47,7 +47,6 @@ jobs:
   cabal:
     name: 'Cabal / Unit Tests'
     runs-on: [self-hosted, linux, normal]
-    container: ubuntu:jammy
     steps:
 
       - 'Checkout Code'
@@ -156,7 +155,6 @@ jobs:
   style:
     name: 'Formatting and Style'
     runs-on: [self-hosted, linux, flyweight]
-    container: ubuntu:jammy
     steps:
 
       - 'Checkout Code'
