@@ -69,7 +69,7 @@ unifyTerms KoreDefinition{symbols, sorts} term1 term2 =
         freeVars1 = freeVariables term1
         freeVars2 = freeVariables term2
         sharedVars = freeVars1 `Set.intersection` freeVars2
-     in if (not $ Set.null sharedVars)
+     in if not $ Set.null sharedVars
             then UnificationRemainder $ NE.singleton (term1, term2)
             else
                 runUnification
