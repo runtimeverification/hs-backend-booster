@@ -104,9 +104,11 @@ descendFrom m = do
 
             -- build the module's context from imports
             defMap <- gets definitionMap
-            let def =
-                    foldl (mergeDefs) (emptyKoreDefinition definitionAttributes) $
-                        map (`expectPresent` defMap) imported
+            def <-
+                foldM
+                    (\d1 d2 -> lift (mergeDefs d1 d2))
+                    (emptyKoreDefinition definitionAttributes)
+                    $ map (`expectPresent` defMap) imported
 
             -- validate and add new module in context of the existing
             -- definition
@@ -125,36 +127,36 @@ descendFrom m = do
             , subsorts = Map.unionWith (<>) prior.subsorts newSubsorts
             }
 
--- | Merges kore definitions, but collisions are forbidden (calls 'error' on collisions)
-mergeDefs :: KoreDefinition -> KoreDefinition -> KoreDefinition
+-- | Merges kore definitions, but collisions are forbidden (DefinitionError on collisions)
+mergeDefs :: KoreDefinition -> KoreDefinition -> Except DefinitionError KoreDefinition
 mergeDefs k1 k2
     | k1.attributes /= k2.attributes =
-        error $ "Definition attributes differ: " <> show (k1.attributes, k2.attributes)
+        throwE $ DefinitionAttributeError [k1.attributes, k2.attributes]
     | otherwise =
-        KoreDefinition
-            { attributes = k1.attributes
-            , modules = mergeDisjoint modules k1 k2
-            , sorts = mergeDisjoint sorts k1 k2
-            , symbols = mergeDisjoint symbols k1 k2
-            , aliases = mergeDisjoint aliases k1 k2
-            , rewriteTheory = mergeAxioms k1 k2
-            }
+        KoreDefinition k1.attributes
+            <$> mergeDisjoint modules k1 k2
+            <*> mergeDisjoint sorts k1 k2
+            <*> mergeDisjoint symbols k1 k2
+            <*> mergeDisjoint aliases k1 k2
+            <*> pure (mergeTheories k1 k2)
   where
-    mergeAxioms :: KoreDefinition -> KoreDefinition -> RewriteTheory
-    mergeAxioms m1 m2 =
+    mergeTheories :: KoreDefinition -> KoreDefinition -> RewriteTheory
+    mergeTheories m1 m2 =
         Map.unionWith (Map.unionWith (<>)) (rewriteTheory m1) (rewriteTheory m2)
 
     mergeDisjoint ::
-        (Ord k, Show k) =>
-        (KoreDefinition -> Map k a) ->
+        (KoreDefinition -> Map Text a) ->
         KoreDefinition ->
         KoreDefinition ->
-        Map k a
-    mergeDisjoint selector m1 m2 =
-        Map.unionWithKey
-            (\k _ _ -> error ("Duplicate key " <> show k))
-            (selector m1)
-            (selector m2)
+        Except DefinitionError (Map Text a)
+    mergeDisjoint selector m1 m2
+        | not (null duplicates) =
+            throwE $ DuplicateNames $ Set.toList duplicates
+        | otherwise =
+            pure $ Map.union (selector m1) (selector m2)
+      where
+        duplicates =
+            Map.keysSet (selector m1) `Set.intersection` Map.keysSet (selector m2)
 
 {- | Adds a module to the given definition, returning a subsort map
  and the new definition. Some validations are performed, e.g., name
@@ -510,6 +512,7 @@ data DefinitionError
     | DuplicateSymbols [ParsedSymbol]
     | DuplicateAliases [ParsedAlias]
     | DuplicateNames [Text]
+    | DefinitionAttributeError [DefinitionAttributes]
     | DefinitionSortError SortError
     | DefinitionPatternError PatternError
     | DefinitionAliasError Text AliasError
