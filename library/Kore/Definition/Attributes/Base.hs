@@ -9,11 +9,14 @@ module Kore.Definition.Attributes.Base (
     DefinitionAttributes (..),
     ModuleAttributes (..),
     AxiomAttributes (..),
+    ComputedAxiomAttributes (..),
+    SymbolType (..),
     SymbolAttributes (..),
     SortAttributes (..),
     Label,
     Location (..),
     Position (..),
+    Priority,
 ) where
 
 import Data.Text (Text)
@@ -40,44 +43,44 @@ data ModuleAttributes = ModuleAttributes
 -}
 data AxiomAttributes = AxiomAttributes
     { location :: Location
-    , priority :: Word8 -- priorities are <= 200
+    , priority :: Priority -- priorities are <= 200
     , label :: Maybe Label
     , simplification :: Bool
     }
-    deriving (Eq, Ord, Show)
+    deriving stock (Eq, Ord, Show)
+
+data ComputedAxiomAttributes = ComputedAxiomAttributes
+    { containsAcSymbols, preservesDefinedness :: Bool
+    }
+    deriving stock (Eq, Ord, Show)
 
 type Label = Text
+type Priority = Word8
 
 data Location = Location
     { file :: FilePath
     , position :: Position
     }
-    deriving (Eq, Ord, Show)
+    deriving stock (Eq, Ord, Show)
 
 data Position = Position
     { line :: Int
     , column :: Int
     }
-    deriving (Eq, Ord, Show)
+    deriving stock (Eq, Ord, Show)
 
-{- | Things needed for booster rewrite engine:
-  * function flag (won't evaluate)
-  * total-function flag (for preserve-definedness pass)
-  * constructor flag (constructors are indexed)
+data SymbolType = PartialFunction | TotalFunction | Constructor | SortInjection
+    deriving stock (Eq, Show)
 
-Any non-free constructors will be known by name (they are built-in) so
-this information is not stored in an attribute.
--}
 data SymbolAttributes = SymbolAttributes
-    { isFunction :: Bool
-    , isTotal :: Bool
-    , isConstructor :: Bool
+    { symbolType :: SymbolType
+    , isIdem, isAssoc :: Bool
     }
-    deriving (Eq, Show)
+    deriving stock (Eq, Show)
 
 newtype SortAttributes = SortAttributes
     { argCount :: Int
     }
     -- none needed
 
-    deriving (Eq, Show)
+    deriving stock (Eq, Show)

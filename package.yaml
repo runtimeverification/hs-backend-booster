@@ -33,6 +33,7 @@ default-extensions:
   LambdaCase
   MultiParamTypeClasses
   NamedFieldPuns
+  OverloadedRecordDot
   OverloadedStrings
   ScopedTypeVariables
   StandaloneDeriving
@@ -69,7 +70,6 @@ library:
   - gitrev
   - json-rpc
   - monad-logger
-  - mtl
   - optparse-applicative
   - prettyprinter
   - regex-base
@@ -81,6 +81,9 @@ library:
   - transformers
   - unliftio
   source-dirs: library
+  build-tools:
+    - happy
+    - alex
 
 executables:
   hs-backend-booster:
@@ -99,7 +102,6 @@ executables:
   rpc-client:
     source-dirs: tools/rpc-client
     main: RpcClient
-    main-is: RpcClient.main
     dependencies:
       - aeson
       - aeson-pretty
@@ -140,6 +142,7 @@ tests:
     dependencies:
     - base
     - bytestring
+    - containers
     - directory
     - filepath
     - hedgehog
@@ -147,8 +150,10 @@ tests:
     - tasty
     - tasty-golden
     - tasty-hedgehog
+    - tasty-hunit
     - tasty-test-reporter
     - text
+    - transformers
     ghc-options:
     - -rtsopts
     - -threaded

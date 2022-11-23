@@ -12,11 +12,12 @@ import Control.Concurrent.STM.TChan (newTChan, readTChan, writeTChan)
 import Control.Exception (mask)
 import Control.Monad (forever)
 import Control.Monad.Catch (catch)
+import Control.Monad.IO.Class
 import Control.Monad.Logger.CallStack (LogLevel, MonadLoggerIO)
 import Control.Monad.Logger.CallStack qualified as Log
-import Control.Monad.Reader (ask, liftIO, runReaderT)
 import Control.Monad.STM (atomically)
 import Control.Monad.Trans.Except (runExcept)
+import Control.Monad.Trans.Reader (ask, runReaderT)
 import Data.Aeson (toJSON)
 import Data.Aeson.Encode.Pretty as Json
 import Data.Aeson.Types (Value (..))
@@ -58,7 +59,7 @@ respond def@KoreDefinition{} =
             -- internalise given constrained term
             let cterm :: KorePattern
                 KoreJson{term = cterm} = startState
-                internalised = runExcept $ internalisePattern def cterm
+                internalised = runExcept $ internalisePattern Nothing def cterm
 
             case internalised of
                 Left patternError -> do

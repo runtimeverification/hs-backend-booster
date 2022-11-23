@@ -16,54 +16,11 @@ module Kore.Definition.Base (
 ) where
 
 import Data.Map.Strict as Map (Map, empty)
-import Data.Map.Strict qualified as Map
 import Data.Set (Set)
-import Data.Set qualified as Set
 import Data.Text (Text)
 
 import Kore.Definition.Attributes.Base
 import Kore.Pattern.Base
-
-{- | Index data allowing for a quick lookup of potential axioms.
-
-A @Term@ is indexed by inspecting the top term component of the
-head of the K cell. Only constructor and (other) symbol
-applications are indexed, all other terms have index @Anything@.
-
-In particular, function applications are treated as opaque, like
-variables.
-
-Also, non-free constructors won't get any index, any rules headed by
-those can be ignored.
-
-Rather than making the term indexing function partial, we introduce a
-unique bottom element @None@ to the index type (to make it a lattice).
-This can then handle @AndTerm@ by indexing both arguments and
-combining them.
-
-NB we derive an 'Ord' instance (for Data.Map) which does not reflect
-the fact that different symbols (and likewise different constructors)
-are incompatible.
--}
-data TermIndex
-    = None -- bottom element
-    | Symbol SymbolName
-    | Anything -- top element
-    -- should we have  | Value Sort ?? (see Term type)
-    deriving stock (Eq, Ord, Show)
-
--- | Combines two indexes (an "infimum" function on the index lattice)
-combine :: TermIndex -> TermIndex -> TermIndex
-combine None _ = None
-combine _ None = None
-combine x Anything = x
-combine Anything x = x
-combine s@(Symbol s1) (Symbol s2)
-    | s1 == s2 = s
---     | otherwise = None -- redundant
-combine _ _ = None -- incompatible indexes
-
-----------------------------------------
 
 {- | A Kore definition is constructed from a main module with its
    transitive imports.
@@ -77,60 +34,15 @@ data type, but rather by its construction from a @ParsedDefinition@.
 data KoreDefinition = KoreDefinition
     { attributes :: DefinitionAttributes
     , modules :: Map Text ModuleAttributes
-    , sorts :: Map SortName SortAttributes -- TODO store a lattice of subsorts?
+    , sorts :: Map SortName (SortAttributes, Set SortName)
     , symbols :: Map SymbolName (SymbolAttributes, SymbolSort) -- constructors and functions
-    , axioms :: Map TermIndex [Set Axiom] -- grouped by decreasing priority
+    , aliases :: Map AliasName Alias
+    , rewriteTheory :: RewriteTheory
     }
     deriving stock (Eq, Show)
 
--- | semigroup instance where collisions are forbidden (calls 'error' on collisions)
-instance Semigroup KoreDefinition where
-    (<>) k1@KoreDefinition{attributes = att1} k2@KoreDefinition{attributes = att2}
-        | att1 /= att2 = error $ "Definition attributes differ: " <> show (att1, att2)
-        | otherwise =
-            KoreDefinition
-                { attributes = att1 -- assume attributes are the same
-                , modules = mergeDisjoint modules k1 k2
-                , sorts = mergeDisjoint sorts k1 k2
-                , symbols = mergeDisjoint symbols k1 k2
-                , axioms = mergeAxioms k1 k2
-                }
-      where
-        mergeAxioms :: KoreDefinition -> KoreDefinition -> Map TermIndex [Set Axiom]
-        mergeAxioms m1 m2 =
-            Map.unionWith mergePrioritySets (axioms m1) (axioms m2)
-
-        -- assuming both argument lists are sorted in _decreasing
-        -- priority of axioms_, sets are homogenous wrt. priority, and
-        -- there are no empty sets in the list
-        mergePrioritySets :: [Set Axiom] -> [Set Axiom] -> [Set Axiom]
-        mergePrioritySets axioms1 axioms2 =
-            merge withPrio1 withPrio2
-          where
-            getPriority = priority . axiomAttributes . head . Set.toList
-            withPrio1 = [(getPriority s, s) | s <- axioms1]
-            withPrio2 = [(getPriority s, s) | s <- axioms2]
-
-            merge :: (Ord k, Ord a) => [(k, Set a)] -> [(k, Set a)] -> [Set a]
-            merge [] as = map snd as
-            merge as [] = map snd as
-            merge a1@((p1, as1) : rest1) a2@((p2, as2) : rest2)
-                | p1 < p2 = as1 : merge rest1 a2
-                | p1 == p2 = Set.union as1 as2 : merge rest1 rest2
-                | p1 > p2 = as2 : merge a1 rest2
-                | otherwise = error "GHC unable to see that the above cases are exhaustive"
-
-        mergeDisjoint ::
-            (Ord k, Show k) =>
-            (KoreDefinition -> Map k a) ->
-            KoreDefinition ->
-            KoreDefinition ->
-            Map k a
-        mergeDisjoint selector m1 m2 =
-            Map.unionWithKey
-                (\k _ _ -> error ("Duplicate key " <> show k))
-                (selector m1)
-                (selector m2)
+-- | Optimized for lookup by term-index
+type RewriteTheory = Map TermIndex (Map Priority [RewriteRule])
 
 -- | Sort information related to a symbol: result and argument sorts
 data SymbolSort = SymbolSort
@@ -149,15 +61,27 @@ emptyKoreDefinition attributes =
         , modules = Map.empty
         , sorts = Map.empty
         , symbols = Map.empty
-        , axioms = Map.empty
+        , aliases = Map.empty
+        , rewriteTheory = Map.empty
         }
 
-data Axiom = Axiom
+data RewriteRule = RewriteRule
     { lhs :: Pattern
     , rhs :: Pattern
     , attributes :: AxiomAttributes
+    , computedAttributes :: ComputedAxiomAttributes
     }
-    deriving (Eq, Ord, Show)
+    deriving stock (Eq, Ord, Show)
 
-axiomAttributes :: Axiom -> AxiomAttributes
-axiomAttributes Axiom{attributes} = attributes
+extractPriority :: RewriteRule -> Priority
+extractPriority RewriteRule{attributes} = priority attributes
+
+type AliasName = Text
+
+data Alias = Alias
+    { name :: AliasName
+    , params :: [Sort]
+    , args :: [Variable]
+    , rhs :: TermOrPredicate
+    }
+    deriving stock (Eq, Show)
