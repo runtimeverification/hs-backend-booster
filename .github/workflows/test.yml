@@ -42,7 +42,7 @@ jobs:
       - name: 'Set up Docker'
         uses: ./.github/actions/with-docker
         with:
-          tag: hs-booster-ci-stack-unit-ubuntu-jammy-${{ github.sha }}
+          tag: hs-booster-ci-stack-unit-buster-${{ github.run_id }}
           os: ubuntu
           distro: jammy
           fourmolu: ${{ env.fourmolu_version }}
@@ -51,12 +51,12 @@ jobs:
           ghc: ${{ env.ghc_version }}
 
       - name: 'Run unit tests'
-        run: docker exec -t hs-booster-ci-stack-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'stack --system-ghc --stack-root $(pwd)/stack-cache test --pedantic'
+        run: docker exec -t hs-booster-ci-stack-unit-buster-${{ github.run_id }} /bin/bash -c 'stack --system-ghc --stack-root $(pwd)/stack-cache test --pedantic'
 
       - name: 'Tear down Docker'
         if: always()
         run: |
-          docker stop --time=0 hs-booster-ci-stack-unit-ubuntu-jammy-${GITHUB_SHA}
+          docker stop --time=0 hs-booster-ci-stack-unit-buster-${{ github.run_id }}
 
   cabal:
     name: 'Cabal / Unit Tests'
@@ -82,7 +82,7 @@ jobs:
       - name: 'Set up Docker'
         uses: ./.github/actions/with-docker
         with:
-          tag: hs-booster-ci-cabal-unit-ubuntu-jammy-${{ github.sha }}
+          tag: hs-booster-ci-cabal-unit-buster-${{ github.run_id }}
           os: ubuntu
           distro: jammy
           fourmolu: ${{ env.fourmolu_version }}
@@ -92,22 +92,22 @@ jobs:
 
       - name: 'Run hpack'
         run: |
-          docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'hpack'
+          docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} /bin/bash -c 'hpack'
 
       - name: 'Build and run unit tests'
         run: |
-          docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} \
+          docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} \
             /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store v2-test --enable-tests --test-show-details=direct'
 
       - name: 'Configure with profiling'
         run: |
-          docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} \
+          docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} \
             /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store v2-configure --enable-profiling -f-threaded'
 
       - name: 'Tear down Docker'
         if: always()
         run: |
-          docker stop --time=0 hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA}
+          docker stop --time=0 hs-booster-ci-cabal-unit-buster-${{ github.run_id }}
 
   style:
     name: 'Formatting and Style'
@@ -123,7 +123,7 @@ jobs:
       - name: 'Set up Docker'
         uses: ./.github/actions/with-docker
         with:
-          tag: hs-booster-ci-formatting-style-ubuntu-jammy-${{ github.sha }}
+          tag: hs-booster-ci-formatting-style-buster-${{ github.run_id }}
           os: ubuntu
           distro: jammy
           fourmolu: ${{ env.fourmolu_version }}
@@ -132,12 +132,12 @@ jobs:
           ghc: ${{ env.ghc_version }}
 
       - name: 'Check formatting'
-        run: docker exec -t hs-booster-ci-formatting-style-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c './scripts/fourmolu.sh && git diff'
+        run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/fourmolu.sh && git diff'
 
       - name: 'Run hlint'
-        run: docker exec -t hs-booster-ci-formatting-style-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'hlint -g -j'
+        run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c 'hlint -g -j'
 
       - name: 'Tear down Docker'
         if: always()
         run: |
-          docker stop --time=0 hs-booster-ci-formatting-style-ubuntu-jammy-${GITHUB_SHA}
+          docker stop --time=0 hs-booster-ci-formatting-style-buster-${{ github.run_id }}
