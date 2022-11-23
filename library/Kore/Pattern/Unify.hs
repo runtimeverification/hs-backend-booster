@@ -161,9 +161,9 @@ unify1
 unify1
     (Var var1@(Variable varSort1 varName1))
     (Var var2@(Variable varSort2 varName2))
-        -- same variable (same sort!)
+        -- same variable: forbidden!
         | var1 == var2 =
-            pure () -- QQ should we record substitution var1 -> var1 for information?
+            lift $ throwE $ InternalError $ "Shared variable: " <> show var1
         | varName1 == varName2 && varSort1 /= varSort2 =
             -- sorts differ, names equal: error!
             failWith $ VariableConflict var1 (Var var1) (Var var2)
