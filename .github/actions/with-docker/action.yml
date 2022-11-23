@@ -23,6 +23,9 @@ inputs:
   fourmolu:
     description: 'fourmolu version to use.'
     required: true
+  ghc:
+    description: 'ghc version to use (determine base image)'
+    required: true
   dockerfile:
     description: 'Hardcode the path of the dockerfile to use.'
     required: false
