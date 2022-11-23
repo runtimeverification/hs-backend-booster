@@ -13,7 +13,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Either.Extra
 import Data.Foldable (toList)
-import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.List.NonEmpty as NE (NonEmpty ((:|)), singleton)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Sequence (Seq (..))
@@ -66,14 +66,20 @@ unifyTerms KoreDefinition{symbols, sorts} term1 term2 =
                 . runExcept
                 . fmap (UnificationSuccess . uSubstitution)
                 . execStateT unification
-     in runUnification
-            State
-                { uSubstitution = Map.empty
-                , uTargetVars = freeVariables term1
-                , uQueue = Seq.singleton (term1, term2)
-                , uSubsorts = Map.map snd sorts
-                , uSymbols = Map.map fst symbols
-                }
+        freeVars1 = freeVariables term1
+        freeVars2 = freeVariables term2
+        sharedVars = freeVars1 `Set.intersection` freeVars2
+     in if (not $ Set.null sharedVars)
+            then UnificationRemainder $ NE.singleton (term1, term2)
+            else
+                runUnification
+                    State
+                        { uSubstitution = Map.empty
+                        , uTargetVars = freeVars1
+                        , uQueue = Seq.singleton (term1, term2)
+                        , uSubsorts = Map.map snd sorts
+                        , uSymbols = Map.map fst symbols
+                        }
 
 data UnificationState = State
     { uSubstitution :: Substitution

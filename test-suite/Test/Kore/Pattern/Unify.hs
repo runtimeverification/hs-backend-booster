@@ -37,11 +37,15 @@ constructors =
             (app someSort [someSort] "con1" [var "X" someSort])
             (app someSort [someSort] "con1" [var "Y" someSort])
             (success [("X", someSort, var "Y" someSort)])
-        , test
-            "same constructors, same argument variable"
-            (app someSort [someSort] "con1" [var "X" someSort])
-            (app someSort [someSort] "con1" [var "X" someSort])
-            (success [])
+        , let cX = app someSort [someSort] "con1" [var "X" someSort]
+           in test "same constructors, same variable (shared var)" cX cX $
+                remainder [(cX, cX)]
+        , let x = var "X" someSort
+              y = var "Y" someSort
+              cxx = app someSort [someSort] "con3" [x, x]
+              cxy = app someSort [someSort] "con3" [x, y]
+           in test "same constructors, one shared variable" cxx cxy $
+                remainder [(cxx, cxy)]
         , let v = var "X" someSort
               d = dv differentSort ""
            in test
@@ -78,7 +82,7 @@ varsAndValues =
     testGroup
         "Variables and Domain Values"
         [ let v = var "X" someSort
-           in test "identical variables" v v (success [])
+           in test "identical variables" v v (remainder [(v, v)])
         , let v1 = var "X" someSort
               v2 = var "Y" someSort
            in test "two variables (same sort)" v1 v2 $
