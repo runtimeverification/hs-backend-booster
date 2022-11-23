@@ -33,11 +33,11 @@ jobs:
         uses: actions/cache@v3
         with:
           path: stack-cache
-          key: stack-tmp-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('stack.yaml.lock') }}
+          key: stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('stack.yaml.lock') }}
           restore-keys: |
-            stack-tmp-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
-            stack-tmp-${{ runner.os }}-${{ hashFiles('stack.yaml') }}
-            stack-tmp-${{ runner.os }}
+            stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
+            stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}
+            stack-2-${{ runner.os }}
 
       - name: 'Set up Docker'
         uses: ./.github/actions/with-docker
@@ -75,20 +75,9 @@ jobs:
           path: |
             cabal-cache/packages
             cabal-cache/store
-          key: cabal-tmp-${{ runner.os }}-ghc-${{ env.ghc_version }}-${{ hashFiles('package.yaml') }}
+          key: cabal-2-${{ runner.os }}-ghc-${{ env.ghc_version }}-${{ hashFiles('package.yaml') }}
           restore-keys: |
-            cabal-tmp-${{ runner.os }}-ghc-${{ env.ghc_version }}-
-
-      # FIXME should be removed!
-      - name: 'Cache Stack root'
-        uses: actions/cache@v3
-        with:
-          path: stack-cache
-          key: stack-tmp-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('stack.yaml.lock') }}
-          restore-keys: |
-            stack-tmp-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
-            stack-tmp-${{ runner.os }}-${{ hashFiles('stack.yaml') }}
-            stack-tmp-${{ runner.os }}
+            cabal-2-${{ runner.os }}-ghc-${{ env.ghc_version }}-
 
       - name: 'Set up Docker'
         uses: ./.github/actions/with-docker
@@ -100,10 +89,6 @@ jobs:
           hlint: ${{ env.hlint_version }}
           hpack: ${{ env.hpack_version }}
           ghc: ${{ env.ghc_version }}
-
-      - name: 'debug info'
-        run: |
-          docker exec -t hs-booster-ci-cabal-unit-ubuntu-jammy-${GITHUB_SHA} /bin/bash -c 'ls -R'
 
       - name: 'Run hpack'
         run: |
