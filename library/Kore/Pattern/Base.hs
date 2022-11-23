@@ -8,7 +8,6 @@ module Kore.Pattern.Base (
 ) where
 
 import Data.Text (Text)
-import Control.Applicative (Alternative(..))
 
 {- | A term consists of an AST of constructors and function calls, as
    well as domain values (tokens and built-in types) and (element)
@@ -115,58 +114,3 @@ combine s@(Symbol s1) (Symbol s2)
     | s1 == s2 = s
 --     | otherwise = None -- redundant
 combine _ _ = None -- incompatible indexes
-
-computeTermIndex :: Term -> TermIndex
-computeTermIndex = 
-    getTermIndex . fmap lookForTopTerm . lookForKCell
-  where
-    getTermIndex :: Maybe Term -> TermIndex
-    getTermIndex Nothing = None
-    getTermIndex (Just term) =
-        case term of
-            SymbolApplication _ _ symbolName children ->
-                undefined
-            _ -> undefined 
-
-    -- it is assumed there is only one K cell
-    lookForKCell :: Term -> Maybe Term
-    lookForKCell =
-        \case
-            kCell@(SymbolApplication _ _ symbolName children)
-                | symbolName == "Lbl'-LT-'k'-GT-'" ->
-                    Just kCell    
-                | otherwise -> 
-                    foldr (<|>) empty $ lookForKCell <$> children
-            AndTerm _ t1 t2 ->
-                lookForKCell t1 <|> lookForKCell t2
-            DomainValue _ _ -> Nothing
-            Var _ -> Nothing
-
-    -- this assumes that the top kseq is already normalized into right-assoc form
-    lookForTopTerm :: Term -> Term
-    lookForTopTerm =
-        \case
-            SymbolApplication _ _ symbolName children
-                | symbolName == "kseq" ->
-                    let firstChild = getKSeqFirst children
-                     in stripAwaySortInjections firstChild
-                | otherwise ->
-                    error "lookForTopTerm: the first child of the K cell isn't a kseq"
-            term -> term
-
-    -- this assumes that sort injections are well-formed (have a single argument)
-    stripAwaySortInjections :: Term -> Term
-    stripAwaySortInjections =
-        \case
-            term@(SymbolApplication _ _ symbolName children)
-                | symbolName == "inj" ->
-                    stripAwaySortInjections (getInjChild children)
-                | otherwise -> term
-            term -> term
-    
-    getKSeqFirst [] = error "lookForTopTerm: empty KSeq!"
-    getKSeqFirst (x : _) = x
-
-    getInjChild [] = error "stripAwaySortInjections: injection with 0 children"
-    getInjChild [x] = x
-    getInjChild _ = error "stripAwaySortInjections: injection with multiple children"
