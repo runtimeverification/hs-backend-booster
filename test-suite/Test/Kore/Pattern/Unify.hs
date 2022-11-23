@@ -230,8 +230,8 @@ testDefinition =
         error $ "subSortOf: " <> show (other1, other2) <> " not supported"
 
     constructor n sort argSorts =
-        (n, (SymbolAttributes False False True, SymbolSort sort argSorts))
+        (n, (SymbolAttributes Constructor False False, SymbolSort sort argSorts))
     function n sort argSorts =
-        (n, (SymbolAttributes True True False, SymbolSort sort argSorts))
+        (n, (SymbolAttributes TotalFunction False False, SymbolSort sort argSorts))
     partialFunction n sort argSorts =
-        (n, (SymbolAttributes True False False, SymbolSort sort argSorts))
+        (n, (SymbolAttributes PartialFunction False False, SymbolSort sort argSorts))

@@ -132,6 +132,9 @@ unify1
                         InternalError $
                             "Argument counts differ for same constructor" <> show (t1, t2)
             zipWithM_ enqueueProblem args1 args2
+      where
+        isConstructor :: SymbolAttributes -> Bool
+        isConstructor = (== Constructor) . (.symbolType)
 
 -- and-term in pattern: must unify with both arguments
 unify1
