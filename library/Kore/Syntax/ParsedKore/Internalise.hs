@@ -49,12 +49,13 @@ buildDefinition :: Maybe Text -> ParsedDefinition -> Except DefinitionError Kore
 buildDefinition mbMainModule def@ParsedDefinition{modules} = do
     endState <- execStateT (descendFrom mainModule) startState
     let mainDef = expectPresent mainModule endState.definitionMap
-        finalSorts = foldr addSubsortInfo mainDef.sorts $
-                         Map.assocs (transitiveClosure endState.subsorts)
+        finalSorts =
+            foldr addSubsortInfo mainDef.sorts $
+                Map.assocs (transitiveClosure endState.subsorts)
     pure (mainDef{sorts = finalSorts} :: KoreDefinition)
   where
-    mainModule = fromMaybe (moduleName $ last modules) mbMainModule
-    moduleMap = Map.fromList [(moduleName m, m) | m <- modules]
+    mainModule = fromMaybe (last modules).name.getId mbMainModule
+    moduleMap = Map.fromList [(m.name.getId, m) | m <- modules]
     startState =
         State
             { moduleMap
@@ -118,19 +119,20 @@ descendFrom m = do
         Map Def.SortName (Set Def.SortName) ->
         DefinitionState ->
         DefinitionState
-    updateState newDef newSubsorts prior@State{definitionMap, subsorts} =
+    updateState newDef newSubsorts prior =
         prior
-            { definitionMap = Map.insert m newDef definitionMap
-            , subsorts = Map.unionWith (<>) subsorts newSubsorts
+            { definitionMap = Map.insert m newDef prior.definitionMap
+            , subsorts = Map.unionWith (<>) prior.subsorts newSubsorts
             }
 
 -- | Merges kore definitions, but collisions are forbidden (calls 'error' on collisions)
 mergeDefs :: KoreDefinition -> KoreDefinition -> KoreDefinition
-mergeDefs k1@KoreDefinition{attributes = att1} k2@KoreDefinition{attributes = att2}
-    | att1 /= att2 = error $ "Definition attributes differ: " <> show (att1, att2)
+mergeDefs k1 k2
+    | k1.attributes /= k2.attributes =
+        error $ "Definition attributes differ: " <> show (k1.attributes, k2.attributes)
     | otherwise =
-          KoreDefinition
-            { attributes = att1
+        KoreDefinition
+            { attributes = k1.attributes
             , modules = mergeDisjoint modules k1 k2
             , sorts = mergeDisjoint sorts k1 k2
             , symbols = mergeDisjoint symbols k1 k2
@@ -150,13 +152,14 @@ mergeDefs k1@KoreDefinition{attributes = att1} k2@KoreDefinition{attributes = at
         Map k a
     mergeDisjoint selector m1 m2 =
         Map.unionWithKey
-        (\k _ _ -> error ("Duplicate key " <> show k))
-        (selector m1)
-        (selector m2)
+            (\k _ _ -> error ("Duplicate key " <> show k))
+            (selector m1)
+            (selector m2)
 
--- | Adds a module to the given definition, returning a subsort map
--- and the new definition. Some validations are performed, e.g., name
--- collisions are forbidden.
+{- | Adds a module to the given definition, returning a subsort map
+ and the new definition. Some validations are performed, e.g., name
+ collisions are forbidden.
+-}
 addModule ::
     ParsedModule ->
     KoreDefinition ->
@@ -186,7 +189,7 @@ addModule
             -- ensure sorts are unique and only refer to known other sorts
             -- TODO, will need sort attributes to determine sub-sorts
 
-            let (newSorts, sortDups) = parsedSorts `mappedBy` sortName
+            let (newSorts, sortDups) = parsedSorts `mappedBy` (.name.getId)
             unless (null sortDups) $
                 throwE $
                     DuplicateSorts (concatMap snd sortDups)
@@ -197,12 +200,12 @@ addModule
                 throwE $
                     DuplicateSorts sortCollisions
             let sorts =
-                    Map.map (\s -> (extract s, Set.singleton (sortName s))) newSorts
+                    Map.map (\s -> (extract s, Set.singleton (s.name.getId))) newSorts
                         <> currentSorts
 
             -- ensure parsed symbols are not duplicates and only refer
             -- to known sorts
-            let (newSymbols, symDups) = parsedSymbols `mappedBy` symbolName
+            let (newSymbols, symDups) = parsedSymbols `mappedBy` (.name.getId)
                 symCollisions =
                     Map.elems $ Map.intersection newSymbols currentSymbols
             unless (null symDups) $
@@ -215,10 +218,10 @@ addModule
             let internaliseSymbol ::
                     ParsedSymbol ->
                     Except DefinitionError (Def.SymbolName, (SymbolAttributes, SymbolSort))
-                internaliseSymbol s@ParsedSymbol{name} = do
+                internaliseSymbol s = do
                     info <- mkSymbolSorts sorts s
                     -- TODO(Ana): rename extract
-                    pure (Json.getId name, (extract s, info))
+                    pure (s.name.getId, (extract s, info))
             newSymbols' <- mapM internaliseSymbol parsedSymbols
             let symbols = Map.fromList newSymbols' <> currentSymbols
 
@@ -243,8 +246,9 @@ addModule
                     unless (fromMaybe internalResSort rhsSort == internalResSort) (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
                     return (internalName, Alias{name = internalName, params, args = internalArgs, rhs = internalRhs})
                 -- filter out "antiLeft" aliases, recognised by name and argument count
-                notPriority ParsedAlias{name = Json.Id alias, args} =
-                    not $ null args && "priority" `Text.isPrefixOf` alias
+                notPriority :: ParsedAlias -> Bool
+                notPriority alias =
+                    not $ null alias.args && "priority" `Text.isPrefixOf` alias.name.getId
             newAliases <- traverse internaliseAlias $ filter notPriority parsedAliases
             let aliases = Map.fromList newAliases <> currentAliases
 
@@ -373,42 +377,43 @@ internaliseRewriteRule ::
     AxiomAttributes ->
     [Json.Id] ->
     Except DefinitionError RewriteRule
-internaliseRewriteRule partialDefinition@KoreDefinition{aliases} aliasName aliasArgs right axAttributes sortVars = do
+internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes sortVars = do
     alias <-
         withExcept (DefinitionAliasError aliasName) $
-            Map.lookup aliasName aliases
+            Map.lookup aliasName partialDefinition.aliases
                 `orFailWith` UnknownAlias aliasName
     args <- traverse (withExcept DefinitionPatternError . internaliseTerm (Just sortVars) partialDefinition) aliasArgs
     result <- expandAlias alias args
-    lhs@Def.Pattern{term = lhsTerm} <-
+    lhs <-
         Util.retractPattern result
             `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
-    rhs@Def.Pattern{term = rhsTerm} <-
+    rhs <-
         withExcept DefinitionPatternError $
             internalisePattern (Just sortVars) partialDefinition right
     let checkSymbolPreservesDefinedness _ SymbolAttributes{symbolType} _ = symbolType /= PartialFunction
         checkSymbolIsAc _ SymbolAttributes{isAssoc, isIdem} _ = isAssoc || isIdem
-        preservesDefinedness = checkTermSymbols checkSymbolPreservesDefinedness partialDefinition rhsTerm
-        containsAcSymbols = checkTermSymbols checkSymbolIsAc partialDefinition lhsTerm
+        preservesDefinedness = checkTermSymbols checkSymbolPreservesDefinedness partialDefinition rhs.term
+        containsAcSymbols = checkTermSymbols checkSymbolIsAc partialDefinition lhs.term
     return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes = ComputedAxiomAttributes{containsAcSymbols, preservesDefinedness}}
 
 checkTermSymbols :: (Def.SymbolName -> SymbolAttributes -> SymbolSort -> Bool) -> KoreDefinition -> Def.Term -> Bool
-checkTermSymbols check def@KoreDefinition{symbols} = \case
+checkTermSymbols check def = \case
     Def.AndTerm _ t1 t2 -> checkTermSymbols check def t1 && checkTermSymbols check def t2
     Def.SymbolApplication _ _ symbol ts ->
         checkSymbol symbol && foldr ((&&) . checkTermSymbols check def) True ts
     _ -> True
   where
-    checkSymbol symbol = case Map.lookup symbol symbols of
+    checkSymbol symbol = case Map.lookup symbol def.symbols of
         Just (attr, symbSort) -> check symbol attr symbSort
         Nothing -> error $ show symbol <> " symbol not found!"
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
-expandAlias alias@Alias{name, args, rhs} currentArgs
-    | length args /= length currentArgs = throwE (DefinitionAliasError name $ WrongAliasArgCount alias currentArgs)
+expandAlias alias currentArgs
+    | length alias.args /= length currentArgs =
+        throwE (DefinitionAliasError alias.name $ WrongAliasArgCount alias currentArgs)
     | otherwise =
-        let substitution = Map.fromList (zip args currentArgs)
-         in return $ substitute substitution rhs
+        let substitution = Map.fromList (zip alias.args currentArgs)
+         in return $ substitute substitution alias.rhs
   where
     substitute substitution termOrPredicate =
         case termOrPredicate of
@@ -437,14 +442,14 @@ addToTheory axioms theory =
 groupByTermIndex :: [RewriteRule] -> Map Def.TermIndex [RewriteRule]
 groupByTermIndex axioms =
     let withTermIndexes = do
-            axiom@RewriteRule{lhs} <- axioms
-            let termIndex = Def.computeTermIndex (Def.term lhs)
+            axiom <- axioms
+            let termIndex = Def.computeTermIndex axiom.lhs.term
             return (termIndex, axiom)
      in Map.fromAscList . groupSort $ withTermIndexes
 
 groupByPriority :: [RewriteRule] -> Map Priority [RewriteRule]
 groupByPriority axioms =
-    Map.fromAscList . groupSort $ [(extractPriority ax, ax) | ax <- axioms]
+    Map.fromAscList . groupSort $ [(ax.attributes.priority, ax) | ax <- axioms]
 
 {- | Checks if a given parsed symbol uses only sorts from the provided
    sort map, and whether they are consistent (wrt. sort parameter
@@ -455,32 +460,21 @@ mkSymbolSorts ::
     Map Def.SortName (SortAttributes, Set Def.SortName) ->
     ParsedSymbol ->
     Except DefinitionError SymbolSort
-mkSymbolSorts sortMap ParsedSymbol{sortVars, argSorts = sorts, sort} =
+mkSymbolSorts sortMap sym =
     do
-        unless (Set.size knownVars == length sortVars) $
+        unless (Set.size knownVars == length sym.sortVars) $
             throwE $
-                DuplicateNames (map Json.getId sortVars)
-        resultSort <- check sort
-        argSorts <- mapM check sorts
+                DuplicateNames (map (.getId) sym.sortVars)
+        resultSort <- check sym.sort
+        argSorts <- mapM check sym.argSorts
         pure $ SymbolSort{resultSort, argSorts}
   where
-    knownVars = Set.fromList $ map Json.getId sortVars
+    knownVars = Set.fromList $ map (.getId) sym.sortVars
 
     check :: Json.Sort -> Except DefinitionError Def.Sort
     check =
         mapExcept (first DefinitionSortError)
             . checkSort knownVars sortMap
-
--- monomorphic name functions for different entities (avoiding field
--- name ambiguity)
-moduleName :: ParsedModule -> Text
-moduleName ParsedModule{name} = Json.getId name
-
-sortName :: ParsedSort -> Text
-sortName ParsedSort{name} = Json.getId name
-
-symbolName :: ParsedSymbol -> Text
-symbolName ParsedSymbol{name} = Json.getId name
 
 {- | Computes all-pairs reachability in a directed graph given as an
    adjacency list mapping. Using a naive algorithm because the subsort
