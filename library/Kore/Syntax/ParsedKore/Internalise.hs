@@ -402,8 +402,8 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
 checkTermSymbols :: (Def.SymbolName -> SymbolAttributes -> SymbolSort -> Bool) -> KoreDefinition -> Def.Term -> Bool
 checkTermSymbols check def = \case
     Def.AndTerm _ t1 t2 -> checkTermSymbols check def t1 && checkTermSymbols check def t2
-    Def.SymbolApplication _ _ symbol ts ->
-        checkSymbol symbol && foldr ((&&) . checkTermSymbols check def) True ts
+    Def.SymbolApplication symbol ts ->
+        checkSymbol symbol.name && foldr ((&&) . checkTermSymbols check def) True ts
     _ -> True
   where
     checkSymbol symbol = case Map.lookup symbol def.symbols of
@@ -540,17 +540,17 @@ data TermOrPredicateError
 computeTermIndex :: KoreDefinition -> Def.Term -> Def.TermIndex
 computeTermIndex definition config =
     case lookForKCell config of
-        Just (Def.SymbolApplication _ _ _ children) ->
+        Just (Def.SymbolApplication _ children) ->
             getTermIndex (lookForTopTerm (head children))
         _ -> Def.Anything
   where
     getTermIndex :: Def.Term -> Def.TermIndex
     getTermIndex term =
         case term of
-            (Def.SymbolApplication _ _ symbolName _)
-                | (Just (attrs, _)) <- Map.lookup symbolName definition.symbols ->
+            (Def.SymbolApplication symbol _)
+                | (Just (attrs, _)) <- Map.lookup symbol.name definition.symbols ->
                     case attrs.symbolType of
-                        Constructor -> Def.TopSymbol symbolName
+                        Constructor -> Def.TopSymbol symbol.name
                         _ -> Def.Anything
                 | otherwise -> error "TODO: Impossible, but we need to somehow encode that the symbol exists in the definition"
             _ -> Def.Anything
@@ -559,8 +559,8 @@ computeTermIndex definition config =
     lookForKCell :: Def.Term -> Maybe Def.Term
     lookForKCell =
         \case
-            kCell@(Def.SymbolApplication _ _ symbolName children)
-                | symbolName == "Lbl'-LT-'k'-GT-'" ->
+            kCell@(Def.SymbolApplication symbol children)
+                | symbol.name == "Lbl'-LT-'k'-GT-'" ->
                     Just kCell
                 | otherwise ->
                     asum $ lookForKCell <$> children
@@ -573,22 +573,22 @@ computeTermIndex definition config =
     lookForTopTerm :: Def.Term -> Def.Term
     lookForTopTerm =
         \case
-            Def.SymbolApplication _ _ symbolName children
-                | symbolName == "kseq" ->
+            Def.SymbolApplication symbol children
+                | symbol.name == "kseq" ->
                     let firstChild = getKSeqFirst children
                      in stripAwaySortInjections firstChild
                 | otherwise ->
-                    error ("lookForTopTerm: the first child of the K cell isn't a kseq" <> show symbolName)
+                    error ("lookForTopTerm: the first child of the K cell isn't a kseq" <> show symbol.name)
             term -> term
 
     -- this assumes that sort injections are well-formed (have a single argument)
     stripAwaySortInjections :: Def.Term -> Def.Term
     stripAwaySortInjections =
         \case
-            term@(Def.SymbolApplication _ _ symbolName children)
-                | symbolName == "inj" ->
-                    stripAwaySortInjections (getInjChild children)
-                | otherwise -> term
+            term@(Def.SymbolApplication symbol children) ->
+                if Util.isSortInjection symbol
+                    then stripAwaySortInjections (getInjChild children)
+                    else term
             term -> term
 
     getKSeqFirst [] = error "lookForTopTerm: empty KSeq"

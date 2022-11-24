@@ -8,6 +8,7 @@ module Kore.Pattern.Base (
 ) where
 
 import Data.Text (Text)
+import Kore.Definition.Attributes.Base (SymbolAttributes)
 
 {- | A term consists of an AST of constructors and function calls, as
    well as domain values (tokens and built-in types) and (element)
@@ -19,7 +20,7 @@ import Data.Text (Text)
 -}
 data Term
     = AndTerm Sort Term Term -- used in #as patterns
-    | SymbolApplication Sort [Sort] SymbolName [Term]
+    | SymbolApplication Symbol [Term]
     | DomainValue Sort Text
     | Var Variable
     deriving stock (Eq, Ord, Show)
@@ -75,6 +76,14 @@ data Variable = Variable
     , variableName :: VarName
     }
     deriving (Eq, Ord, Show)
+
+data Symbol = Symbol
+    { name :: SymbolName
+    , argSorts :: [Sort]
+    , resultSort :: Sort
+    , attributes :: SymbolAttributes
+    }
+    deriving stock (Eq, Ord, Show)
 
 {- | Index data allowing for a quick lookup of potential axioms.
 

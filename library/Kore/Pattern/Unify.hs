@@ -117,20 +117,20 @@ unify1
 
 -- two symbol applications: fail if names differ, recurse
 unify1
-    t1@(SymbolApplication s1 _argSorts1 symName1 args1)
-    t2@(SymbolApplication s2 _argSorts2 symName2 args2) =
+    t1@(SymbolApplication symbol1 args1)
+    t2@(SymbolApplication symbol2 args2) =
         do
             subsorts <- gets uSubsorts
             -- argument sorts have been checked upon internalisation
-            unless (sortsAgree subsorts s1 s2) $
+            unless (sortsAgree subsorts symbol1.resultSort symbol2.resultSort) $
                 returnAsRemainder t1 t2
             -- If we have functions, pass - only constructors are matched.
             symbols <- gets uSymbols
             let isConstr sym = maybe False isConstructor $ Map.lookup sym symbols
-            unless (isConstr symName1 && isConstr symName2) $
+            unless (isConstr symbol1.name && isConstr symbol2.name) $
                 returnAsRemainder t1 t2
             -- constructors must be the same
-            unless (symName1 == symName2) $
+            unless (symbol1.name == symbol2.name) $
                 failWith (DifferentSymbols t1 t2)
             unless (length args1 == length args2) $
                 lift $

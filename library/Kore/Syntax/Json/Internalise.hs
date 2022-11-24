@@ -104,7 +104,8 @@ internaliseTerm sortVars definition@KoreDefinition{sorts, symbols} pat =
             let variableName = Syntax.getId name
             pure $ Internal.Var Internal.Variable{variableSort, variableName}
         symPatt@Syntax.KJApp{name, sorts = appSorts, args} -> do
-            (_, SymbolSort{resultSort, argSorts}) <-
+            -- TODO: factor out into internaliseSymbol?
+            (attributes, SymbolSort{resultSort, argSorts}) <-
                 maybe (throwE $ UnknownSymbol name symPatt) pure $
                     Map.lookup (Syntax.getId name) symbols
             internalAppSorts <- mapM internaliseSort' appSorts
@@ -118,7 +119,14 @@ internaliseTerm sortVars definition@KoreDefinition{sorts, symbols} pat =
             -- finalSort is the symbol result sort with
             -- variables substituted using the arg.sort match
             let finalSort = applySubst sortSubst resultSort
-            Internal.SymbolApplication finalSort internalAppSorts (Syntax.getId name)
+                internalisedSymbol =
+                    Internal.Symbol
+                        { name = name.getId
+                        , resultSort = finalSort
+                        , argSorts = internalAppSorts
+                        , attributes
+                        }
+            Internal.SymbolApplication internalisedSymbol
                 <$> mapM recursion args
         Syntax.KJString{value} ->
             pure $ Internal.DomainValue (Internal.SortApp "SortString" []) value

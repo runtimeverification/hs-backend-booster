@@ -82,10 +82,3 @@ data Alias = Alias
     , rhs :: TermOrPredicate
     }
     deriving stock (Eq, Show)
-
-data Symbol = Symbol
-    { name :: SymbolName
-    , argSorts :: [Sort]
-    , sort :: Sort
-    , attributes :: SymbolAttributes
-    }
