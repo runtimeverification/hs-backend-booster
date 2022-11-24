@@ -12,6 +12,7 @@ module Kore.Definition.Util (
 
 import Control.DeepSeq (NFData (..))
 import Data.Map qualified as Map
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC.Generics (Generic)
@@ -22,6 +23,7 @@ import Kore.Definition.Base
 data Summary = Summary
     { file :: FilePath
     , modNames, sortNames, symbolNames :: [Text]
+    , subSorts :: Map.Map Text [Text]
     , axiomCount, preserveDefinednessCount, containAcSymbolsCount :: Int
     }
     deriving stock (Eq, Show, Generic)
@@ -34,6 +36,7 @@ mkSummary file KoreDefinition{modules, sorts, symbols, rewriteTheory} =
         , modNames = Map.keys modules
         , sortNames = Map.keys sorts
         , symbolNames = Map.keys symbols
+        , subSorts = Map.map (Set.toList . snd) sorts
         , axiomCount = length $ concat $ concatMap Map.elems (Map.elems rewriteTheory)
         , preserveDefinednessCount =
             length $
@@ -48,9 +51,9 @@ mkSummary file KoreDefinition{modules, sorts, symbols, rewriteTheory} =
         }
 
 prettySummary :: Summary -> String
-prettySummary Summary{modNames, sortNames, symbolNames, axiomCount, preserveDefinednessCount, containAcSymbolsCount} =
+prettySummary Summary{modNames, sortNames, symbolNames, subSorts, axiomCount, preserveDefinednessCount, containAcSymbolsCount} =
     Text.unpack $
-        Text.unlines
+        Text.unlines $
             [ list "Modules" modNames
             , list "Sorts" sortNames
             , list "Symbols" symbolNames
@@ -58,6 +61,7 @@ prettySummary Summary{modNames, sortNames, symbolNames, axiomCount, preserveDefi
             , "Axioms preserving definedness: " <> Text.pack (show preserveDefinednessCount)
             , "Axioms containing AC symbols: " <> Text.pack (show containAcSymbolsCount)
             ]
+                <> ("Subsorts:" : map (("- " <>) . uncurry list) (Map.assocs subSorts))
   where
     list header = ((header <> ": ") <>) . Text.intercalate "\n - " . map decodeLabel'
     decodeLabel' = either error id . decodeLabel
