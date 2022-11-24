@@ -99,7 +99,7 @@ are incompatible.
 -}
 data TermIndex
     = None -- bottom element
-    | Symbol SymbolName
+    | TopSymbol SymbolName
     | Anything -- top element
     -- should we have  | Value Sort ?? (see Term type)
     deriving (Eq, Ord, Show)
@@ -110,7 +110,7 @@ combine None _ = None
 combine _ None = None
 combine x Anything = x
 combine Anything x = x
-combine s@(Symbol s1) (Symbol s2)
+combine s@(TopSymbol s1) (TopSymbol s2)
     | s1 == s2 = s
 --     | otherwise = None -- redundant
 combine _ _ = None -- incompatible indexes

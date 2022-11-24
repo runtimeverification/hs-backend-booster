@@ -550,7 +550,7 @@ computeTermIndex definition config =
             (Def.SymbolApplication _ _ symbolName _)
                 | (Just (attrs, _)) <- Map.lookup symbolName definition.symbols ->
                     case attrs.symbolType of
-                        Constructor -> Def.Symbol symbolName
+                        Constructor -> Def.TopSymbol symbolName
                         _ -> Def.Anything
                 | otherwise -> error "TODO: Impossible, but we need to somehow encode that the symbol exists in the definition"
             _ -> Def.Anything
