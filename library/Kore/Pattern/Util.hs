@@ -9,8 +9,10 @@ module Kore.Pattern.Util (
     substituteInTerm,
     substituteInPredicate,
     freeVariables,
-    isConstructor,
-    isSortInjection,
+    isConstructorSymbol,
+    isSortInjectionSymbol,
+    isDefinedSymbol,
+    checkSymbolIsAc,
 ) where
 
 import Data.Map (Map)
@@ -84,14 +86,26 @@ freeVariables = \case
     DomainValue _ _ -> Set.empty
     Var var -> Set.singleton var
 
-isConstructor :: Symbol -> Bool
-isConstructor symbol =
+isConstructorSymbol :: Symbol -> Bool
+isConstructorSymbol symbol =
     case symbol.attributes.symbolType of
         Constructor -> True
         _ -> False
 
-isSortInjection :: Symbol -> Bool
-isSortInjection symbol =
+isSortInjectionSymbol :: Symbol -> Bool
+isSortInjectionSymbol symbol =
     case symbol.attributes.symbolType of
         SortInjection -> True
         _ -> False
+
+isDefinedSymbol :: Symbol -> Bool
+isDefinedSymbol symbol =
+    case symbol.attributes.symbolType of
+        Constructor -> True
+        TotalFunction -> True
+        SortInjection -> True
+        PartialFunction -> False
+
+checkSymbolIsAc :: Symbol -> Bool
+checkSymbolIsAc symbol =
+    symbol.attributes.isAssoc || symbol.attributes.isIdem

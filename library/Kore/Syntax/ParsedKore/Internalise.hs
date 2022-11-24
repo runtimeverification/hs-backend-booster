@@ -217,15 +217,7 @@ addModule
             unless (null symCollisions) $
                 throwE $
                     DuplicateSymbols symCollisions
-            -- internalise (in a new pass over the list)
-            let internaliseSymbol ::
-                    ParsedSymbol ->
-                    Except DefinitionError (Def.SymbolName, (SymbolAttributes, SymbolSort))
-                internaliseSymbol s = do
-                    info <- mkSymbolSorts sorts s
-                    -- TODO(Ana): rename extract
-                    pure (s.name.getId, (extract s, info))
-            newSymbols' <- mapM internaliseSymbol parsedSymbols
+            newSymbols' <- traverse (internaliseSymbol sorts) parsedSymbols
             let symbols = Map.fromList newSymbols' <> currentSymbols
 
             let internaliseAlias ::
@@ -393,22 +385,25 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
     rhs <-
         withExcept DefinitionPatternError $
             internalisePattern (Just sortVars) partialDefinition right
-    let checkSymbolPreservesDefinedness _ SymbolAttributes{symbolType} _ = symbolType /= PartialFunction
-        checkSymbolIsAc _ SymbolAttributes{isAssoc, isIdem} _ = isAssoc || isIdem
-        preservesDefinedness = checkTermSymbols checkSymbolPreservesDefinedness partialDefinition rhs.term
-        containsAcSymbols = checkTermSymbols checkSymbolIsAc partialDefinition lhs.term
-    return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes = ComputedAxiomAttributes{containsAcSymbols, preservesDefinedness}}
+    let preservesDefinedness =
+            checkTermSymbols Util.isDefinedSymbol partialDefinition rhs.term
+        containsAcSymbols =
+            checkTermSymbols Util.checkSymbolIsAc partialDefinition lhs.term
+        computedAttributes =
+            ComputedAxiomAttributes {preservesDefinedness, containsAcSymbols}
+    return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes}
 
-checkTermSymbols :: (Def.SymbolName -> SymbolAttributes -> SymbolSort -> Bool) -> KoreDefinition -> Def.Term -> Bool
+checkTermSymbols :: (Def.Symbol -> Bool) -> KoreDefinition -> Def.Term -> Bool
 checkTermSymbols check def = \case
     Def.AndTerm _ t1 t2 -> checkTermSymbols check def t1 && checkTermSymbols check def t2
     Def.SymbolApplication symbol ts ->
         checkSymbol symbol.name && foldr ((&&) . checkTermSymbols check def) True ts
     _ -> True
   where
-    checkSymbol symbol = case Map.lookup symbol def.symbols of
-        Just (attr, symbSort) -> check symbol attr symbSort
-        Nothing -> error $ show symbol <> " symbol not found!"
+    checkSymbol symbolName =
+        case Map.lookup symbolName def.symbols of
+            Just symbol -> check symbolName symbol.attributes symbol.resultSort
+            Nothing -> error $ show symbolName <> " symbol not found!"
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
@@ -454,30 +449,26 @@ groupByPriority :: [RewriteRule] -> Map Priority [RewriteRule]
 groupByPriority axioms =
     Map.fromAscList . groupSort $ [(ax.attributes.priority, ax) | ax <- axioms]
 
-{- | Checks if a given parsed symbol uses only sorts from the provided
-   sort map, and whether they are consistent (wrt. sort parameter
-   count), and returns a @SymbolSort@ (sort information record) for
-   the symbol.
--}
-mkSymbolSorts ::
+            
+internaliseSymbol ::
     Map Def.SortName (SortAttributes, Set Def.SortName) ->
     ParsedSymbol ->
-    Except DefinitionError SymbolSort
-mkSymbolSorts sortMap sym =
-    do
-        unless (Set.size knownVars == length sym.sortVars) $
-            throwE $
-                DuplicateNames (map (.getId) sym.sortVars)
-        resultSort <- check sym.sort
-        argSorts <- mapM check sym.argSorts
-        pure $ SymbolSort{resultSort, argSorts}
+    Except DefinitionError (Def.SymbolName, Def.Symbol) 
+internaliseSymbol definition parsedSymbol = do
+    unless (Set.size knownVars == length parsedSymbol.sortVars) $
+        throwE $
+            DuplicateNames (map (.getId) parsedSymbol.sortVars)
+    resultSort <- check parsedSymbol.sort
+    argSorts <- mapM check parsedSymbol.argSorts
+    -- TODO(Ana): rename extract
+    pure (parsedSymbol.name, Def.Symbol {})
   where
-    knownVars = Set.fromList $ map (.getId) sym.sortVars
+    knownVars = Set.fromList $ map (.getId) parsedSymbol.sortVars
 
     check :: Json.Sort -> Except DefinitionError Def.Sort
     check =
         mapExcept (first DefinitionSortError)
-            . checkSort knownVars sortMap
+            . checkSort knownVars definition.sorts
 
 {- | Computes all-pairs reachability in a directed graph given as an
    adjacency list mapping. Using a naive algorithm because the subsort
@@ -586,7 +577,7 @@ computeTermIndex definition config =
     stripAwaySortInjections =
         \case
             term@(Def.SymbolApplication symbol children) ->
-                if Util.isSortInjection symbol
+                if Util.isSortInjectionSymbol symbol
                     then stripAwaySortInjections (getInjChild children)
                     else term
             term -> term
