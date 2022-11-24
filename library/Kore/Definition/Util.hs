@@ -65,7 +65,12 @@ prettySummary Summary{modNames, sortNames, symbolNames, subSorts, axiomCount, pr
   where
     list header [] = header <> ": -"
     list header [x] = header <> ": " <> decodeLabel' x
-    list header xs = header <> ":" <> Text.concat (map (("\n  - " <>) . decodeLabel') xs)
+    list header xs =
+        header
+            <> ": "
+            <> Text.pack (show $ length xs)
+            <> Text.concat (map (("\n  - " <>) . decodeLabel') xs)
+
     decodeLabel' = either error id . decodeLabel
 
 decodeLabel :: Text -> Either String Text
