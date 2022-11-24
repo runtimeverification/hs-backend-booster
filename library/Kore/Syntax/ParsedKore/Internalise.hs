@@ -10,6 +10,7 @@ data needed internally from the parsed entities.
 module Kore.Syntax.ParsedKore.Internalise (
     buildDefinition,
     DefinitionError (..),
+    computeTermIndex,
 ) where
 
 import Control.Applicative (Alternative (..), asum)

@@ -14,6 +14,7 @@ module Kore.Pattern.Util (
     isDefinedSymbol,
     checkSymbolIsAc,
     checkTermSymbols,
+    isBottom,
 ) where
 
 import Data.Foldable (fold)
@@ -85,3 +86,6 @@ checkTermSymbols :: (Symbol -> Bool) -> Term -> Bool
 checkTermSymbols check = cata $ \case
     SymbolApplicationF symbol ts -> check symbol && and ts
     other -> and other
+
+isBottom :: Pattern -> Bool
+isBottom = any (== Bottom) . constraints
