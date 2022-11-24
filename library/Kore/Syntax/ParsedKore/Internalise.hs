@@ -12,9 +12,9 @@ module Kore.Syntax.ParsedKore.Internalise (
     DefinitionError (..),
 ) where
 
+import Control.Applicative (Alternative (..))
 import Control.Monad
 import Control.Monad.Extra (mapMaybeM)
-import Control.Applicative (Alternative(..))
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
@@ -538,7 +538,7 @@ data TermOrPredicateError
     deriving stock (Eq, Show)
 
 computeTermIndex :: KoreDefinition -> Def.Term -> Def.TermIndex
-computeTermIndex definition = 
+computeTermIndex definition =
     getTermIndex . fmap lookForTopTerm . lookForKCell
   where
     getTermIndex :: Maybe Def.Term -> Def.TermIndex
@@ -559,8 +559,8 @@ computeTermIndex definition =
         \case
             kCell@(Def.SymbolApplication _ _ symbolName children)
                 | symbolName == "Lbl'-LT-'k'-GT-'" ->
-                    Just kCell    
-                | otherwise -> 
+                    Just kCell
+                | otherwise ->
                     foldr (<|>) empty $ lookForKCell <$> children
             Def.AndTerm _ t1 t2 ->
                 lookForKCell t1 <|> lookForKCell t2
@@ -588,7 +588,7 @@ computeTermIndex definition =
                     stripAwaySortInjections (getInjChild children)
                 | otherwise -> term
             term -> term
-    
+
     getKSeqFirst [] = error "lookForTopTerm: empty KSeq"
     getKSeqFirst (x : _) = x
 
