@@ -12,7 +12,7 @@ module Kore.Syntax.ParsedKore.Internalise (
     DefinitionError (..),
 ) where
 
-import Control.Applicative (Alternative (..))
+import Control.Applicative (Alternative (..), asum)
 import Control.Monad
 import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.Class
@@ -561,7 +561,7 @@ computeTermIndex definition =
                 | symbolName == "Lbl'-LT-'k'-GT-'" ->
                     Just kCell
                 | otherwise ->
-                    foldr (<|>) empty $ lookForKCell <$> children
+                    asum $ lookForKCell <$> children
             Def.AndTerm _ t1 t2 ->
                 lookForKCell t1 <|> lookForKCell t2
             Def.DomainValue _ _ -> Nothing
