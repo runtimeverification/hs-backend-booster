@@ -538,12 +538,14 @@ data TermOrPredicateError
     deriving stock (Eq, Show)
 
 computeTermIndex :: KoreDefinition -> Def.Term -> Def.TermIndex
-computeTermIndex definition =
-    getTermIndex . fmap lookForTopTerm . lookForKCell
+computeTermIndex definition config =
+    case lookForKCell config of
+        Just (Def.SymbolApplication _ _ _ children) ->
+            getTermIndex (lookForTopTerm (head children))
+        _ -> Def.Anything
   where
-    getTermIndex :: Maybe Def.Term -> Def.TermIndex
-    getTermIndex Nothing = Def.Anything
-    getTermIndex (Just term) =
+    getTermIndex :: Def.Term -> Def.TermIndex
+    getTermIndex term =
         case term of
             (Def.SymbolApplication _ _ symbolName _)
                 | (Just (attrs, _)) <- Map.lookup symbolName definition.symbols ->
@@ -576,7 +578,7 @@ computeTermIndex definition =
                     let firstChild = getKSeqFirst children
                      in stripAwaySortInjections firstChild
                 | otherwise ->
-                    error "lookForTopTerm: the first child of the K cell isn't a kseq"
+                    error ("lookForTopTerm: the first child of the K cell isn't a kseq" <> show symbolName)
             term -> term
 
     -- this assumes that sort injections are well-formed (have a single argument)
