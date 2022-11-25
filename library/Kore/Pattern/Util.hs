@@ -88,4 +88,4 @@ checkTermSymbols check = cata $ \case
     other -> and other
 
 isBottom :: Pattern -> Bool
-isBottom = any (== Bottom) . constraints
+isBottom = (Bottom `elem`) . constraints
