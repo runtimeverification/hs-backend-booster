@@ -204,7 +204,7 @@ internalisePredicate sortVars definition@KoreDefinition{sorts} pat = case pat of
     Syntax.KJCeil{arg} ->
         Internal.Ceil <$> internaliseTerm sortVars definition arg
     Syntax.KJFloor{} -> notSupported
-    Syntax.KJEquals{sort, argSort, first = arg1, second = arg2} -> do
+    Syntax.KJEquals{argSort, first = arg1, second = arg2} -> do
         -- distinguish term and predicate equality
         is1Term <- isTermM arg1
         is2Term <- isTermM arg2
@@ -212,11 +212,10 @@ internalisePredicate sortVars definition@KoreDefinition{sorts} pat = case pat of
             (True, True) -> do
                 a <- internaliseTerm sortVars definition arg1
                 b <- internaliseTerm sortVars definition arg2
-                s <- lookupInternalSort' sort
                 argS <- lookupInternalSort' argSort
                 -- check that argS and sorts of a and b "agree"
                 mapM_ sortCheck [(sortOfTerm a, argS), (sortOfTerm b, argS)]
-                pure $ Internal.EqualsTerm s a b
+                pure $ Internal.EqualsTerm a b
             (False, False) ->
                 Internal.EqualsPredicate
                     <$> recursion arg1
@@ -227,8 +226,9 @@ internalisePredicate sortVars definition@KoreDefinition{sorts} pat = case pat of
         a <- internaliseTerm sortVars definition arg1
         b <- internaliseTerm sortVars definition arg2
         s <- lookupInternalSort' sort
-        -- TODO check that s and sorts of a and b agree
-        pure $ Internal.In s a b
+        -- check that `sort` and sorts of a and b agree
+        mapM_ sortCheck [(sortOfTerm a, s), (sortOfTerm b, s)]
+        pure $ Internal.In a b
     Syntax.KJNext{} -> notSupported
     Syntax.KJRewrites{} -> notSupported -- should only occur in claims!
     Syntax.KJDV{} -> term

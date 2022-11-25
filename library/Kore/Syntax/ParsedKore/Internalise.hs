@@ -20,7 +20,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Bifunctor (first)
 import Data.Function (on)
-import Data.Functor.Foldable (cata, para, embed)
+import Data.Functor.Foldable (para, embed)
 import Data.List (foldl', groupBy, partition, sortOn)
 import Data.List.Extra (groupSort)
 import Data.Map.Strict (Map)

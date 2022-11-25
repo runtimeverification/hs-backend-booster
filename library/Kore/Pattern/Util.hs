@@ -48,8 +48,8 @@ substituteInTerm substitution = cata $ \case
 
 substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
 substituteInPredicate substitution = cata $ \case
-    EqualsTermF sort t1 t2 ->
-        EqualsTerm sort (substituteInTerm substitution t1) (substituteInTerm substitution t2)
+    EqualsTermF t1 t2 ->
+        EqualsTerm (substituteInTerm substitution t1) (substituteInTerm substitution t2)
     other -> embed other
 
 freeVariables :: Term -> Set Variable

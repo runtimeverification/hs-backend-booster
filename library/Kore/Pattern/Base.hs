@@ -69,13 +69,13 @@ data Predicate
     = AndPredicate Predicate Predicate
     | Bottom
     | Ceil Term
-    | EqualsTerm Sort Term Term
+    | EqualsTerm Term Term
     | EqualsPredicate Predicate Predicate -- I remember running into this one a few times, but I'm not sure if it was an integration test or a unit test
     | Exists VarName Predicate
     | Forall VarName Predicate -- do we need forall?
     | Iff Predicate Predicate
     | Implies Predicate Predicate
-    | In Sort Term Term
+    | In Term Term
     | Not Predicate
     | Or Predicate Predicate
     | Top

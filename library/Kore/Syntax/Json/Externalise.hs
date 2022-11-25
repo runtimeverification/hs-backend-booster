@@ -64,9 +64,9 @@ externalisePredicate sort =
                     , sort
                     , arg = externaliseTerm term
                     }
-            Internal.EqualsTerm termSort t1 t2 ->
+            Internal.EqualsTerm t1 t2 ->
                 Syntax.KJEquals
-                    { argSort = externaliseSort termSort
+                    { argSort = externaliseSort $ sortOfTerm t1
                     , sort
                     , first = externaliseTerm t1
                     , second = externaliseTerm t2
@@ -83,9 +83,9 @@ externalisePredicate sort =
                 Syntax.KJIff{sort, first = recursion p1, second = recursion p2}
             Internal.Implies p1 p2 ->
                 Syntax.KJImplies{sort, first = recursion p1, second = recursion p2}
-            Internal.In termSort t1 t2 ->
+            Internal.In t1 t2 ->
                 Syntax.KJIn
-                    { argSort = externaliseSort termSort
+                    { argSort = externaliseSort $ sortOfTerm t1
                     , sort
                     , first = externaliseTerm t1
                     , second = externaliseTerm t2
