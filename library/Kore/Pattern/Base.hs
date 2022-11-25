@@ -7,7 +7,9 @@ module Kore.Pattern.Base (
     module Kore.Pattern.Base,
 ) where
 
+import Control.DeepSeq (NFData (..))
 import Data.Text (Text)
+import GHC.Generics (Generic)
 import Kore.Definition.Attributes.Base (SymbolAttributes)
 
 {- | A term consists of an AST of constructors and function calls, as
@@ -111,7 +113,8 @@ data TermIndex
     | TopSymbol SymbolName
     | Anything -- top element
     -- should we have  | Value Sort ?? (see Term type)
-    deriving (Eq, Ord, Show)
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
 
 -- | Combines two indexes (an "infimum" function on the index lattice)
 combine :: TermIndex -> TermIndex -> TermIndex
