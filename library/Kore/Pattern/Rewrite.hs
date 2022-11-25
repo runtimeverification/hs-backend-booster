@@ -3,6 +3,7 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Kore.Pattern.Rewrite (
+    performRewrite,
     rewriteStep,
     RewriteFailed (..),
     RuleFailed (..),
@@ -10,12 +11,14 @@ module Kore.Pattern.Rewrite (
 ) where
 
 import Control.Monad
+import Control.Monad.Logger.CallStack
 import Control.Monad.Trans.Except
 import Data.Either
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
+import Data.Text (Text, pack)
 
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
@@ -33,8 +36,8 @@ import Kore.Syntax.ParsedKore.Internalise (computeTermIndex) -- FIXME move this 
   failed), or a rewritten pattern with a new term and possibly new
   additional constraints.
 -}
-rewriteStep :: KoreDefinition -> Pattern -> Except RewriteFailed RewriteResult
-rewriteStep def pat = do
+rewriteStep :: KoreDefinition -> [Text] -> [Text] -> Pattern -> Except RewriteFailed RewriteResult
+rewriteStep def cutLabels terminalLabels pat = do
     let termIdx = computeTermIndex pat.term
     when (termIdx == None) $ throwE TermIndexIsNone
 
@@ -50,7 +53,7 @@ rewriteStep def pat = do
   where
     processGroups :: [[RewriteRule]] -> Except RewriteFailed RewriteResult
     processGroups [] =
-        throwE NoApplicableRules
+        pure $ RewriteStuck pat
     processGroups (rules : rest) = do
         -- try all rules of the priority group
         let (failures, results) =
@@ -74,10 +77,22 @@ rewriteStep def pat = do
                 DefinednessUnclear maybeUndefined
 
         -- simplify and filter out bottom states
-        let finalResults = filter (not . isBottom) $ map (simplifyPattern . snd) results
-        if null finalResults
-            then processGroups rest
-            else pure $ RewriteResult $ NE.fromList finalResults
+        let finalResults = filter (not . isBottom . simplifyPattern . snd) results
+
+        let hasLabelIn :: RewriteRule -> [Text] -> Bool
+            hasLabelIn _ _ = False -- FIXME
+        case finalResults of
+            [] ->
+                processGroups rest
+            [(r, x)]
+                | r `hasLabelIn` cutLabels ->
+                    pure $ RewriteCutPoint pat x
+                | r `hasLabelIn` terminalLabels ->
+                    pure $ RewriteTerminal x
+                | otherwise ->
+                    pure $ RewriteSingle x
+            rxs ->
+                pure $ RewriteBranch $ NE.fromList $ map snd rxs
 
 {- | Tries to apply one rewrite rule:
 
@@ -164,7 +179,62 @@ isUncertain RewriteSortError{} = True
 isUncertain UnificationIsNotMatch{} = True
 isUncertain ConstraintIsBottom{} = False
 
-newtype RewriteResult
-    = RewriteResult (NonEmpty Pattern)
+-- | Different rewrite results (returned from RPC execute endpoint)
+data RewriteResult
+    = -- | single result (internal use, not returned)
+      RewriteSingle Pattern
+    | -- | branch point
+      RewriteBranch (NonEmpty Pattern)
+    | -- | no rules could be applied, config is stuck
+      RewriteStuck Pattern
+    | -- | cut point rule, return current (lhs) and single next state
+      RewriteCutPoint Pattern Pattern
+    | -- | terminal rule, return rhs (final state reached)
+      RewriteTerminal Pattern
+    | -- | unable to handle the current case with this rewriter
+      -- (signalled by exceptions)
+      RewriteAborted Pattern
     deriving stock (Eq, Show)
-    deriving newtype (Semigroup)
+
+{- | Interface for RPC execute: Rewrite given term as long as there is
+   exactly one result in each step.
+
+  * multiple results: a branch point, return current and all results
+  * RewriteStuck: config simplified to #Bottom, return current as stuck
+  * RewriteCutPoint: a cut-point rule was applied, return lhs and rhs
+  * RewriteTerminal: a terminal rule was applied, return rhs
+
+  * RewriteFailed: rewriter cannot handle the case, return current
+
+  The actions are logged at the custom log level '"Rewrite"'.
+-}
+performRewrite ::
+    forall io.
+    MonadLoggerIO io =>
+    KoreDefinition ->
+    -- | cut point rule labels
+    [Text] ->
+    -- | terminal rule labels
+    [Text] ->
+    Pattern ->
+    io RewriteResult
+performRewrite def cutLabels terminalLabels pat = do
+    logRewrite $ "Rewriting pattern " <> pack (show pat)
+    doSteps 0 pat
+  where
+    logRewrite = logOther (LevelOther "Rewrite")
+
+    doSteps :: Int -> Pattern -> io RewriteResult
+    doSteps counter pat' = do
+        let res = runExcept $ rewriteStep def cutLabels terminalLabels pat'
+        case res of
+            Right (RewriteSingle single) ->
+                doSteps (counter + 1) single
+            Right other -> do
+                logRewrite $ "Stopped after " <> pack (show counter) <> " steps:"
+                logRewrite $ pack (show other)
+                pure other
+            Left failure -> do
+                logRewrite $ "Aborted after " <> pack (show counter) <> " steps:"
+                logRewrite $ pack (show failure)
+                pure $ RewriteAborted pat'
