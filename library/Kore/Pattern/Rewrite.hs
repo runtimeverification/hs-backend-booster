@@ -80,7 +80,7 @@ rewriteStep def cutLabels terminalLabels pat = do
         let finalResults = filter (not . isBottom . simplifyPattern . snd) results
 
         let hasLabelIn :: RewriteRule -> [Text] -> Bool
-            hasLabelIn _ _ = False -- FIXME
+            hasLabelIn = elem . fromMaybe "" . (.ruleLabel) . (.attributes)
         case finalResults of
             [] ->
                 processGroups rest

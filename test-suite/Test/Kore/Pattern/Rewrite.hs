@@ -122,11 +122,11 @@ inj =
         }
 
 rule :: Maybe Text -> Pattern -> Pattern -> Priority -> RewriteRule
-rule label lhs rhs priority =
+rule ruleLabel lhs rhs priority =
     RewriteRule
         { lhs
         , rhs
-        , attributes = AxiomAttributes{location, priority, label, simplification = False}
+        , attributes = AxiomAttributes{location, priority, ruleLabel, simplification = False}
         , computedAttributes = ComputedAxiomAttributes False True
         }
   where
@@ -180,9 +180,9 @@ definednessUnclear =
             withf = termInKCell "ConfigVar" $ app f2 [d]
         pcon4 `failsWith` DefinednessUnclear [(rule4, withf)]
 rewriteStuck =
-    testCase "con1 app does not unify with con3 app" $
-        (termInKCell "ConfigVar" $ app con3 [d])
-            `failsWith` NoApplicableRules
+    testCase "con3 app is stuck (no rules apply)" $ do
+        let con3App = termInKCell "ConfigVar" $ app con3 [d, d]
+        runExcept (rewriteStep def [] [] con3App) @?= Right (RewriteStuck con3App)
 rulePriority =
     testCase "con1 rewrites to a branch when higher priority does not apply" $ do
         let d2 = dv someSort "otherThing"
@@ -193,12 +193,12 @@ rulePriority =
 
 rewritesTo :: Pattern -> Pattern -> IO ()
 p1 `rewritesTo` p2 =
-    runExcept (rewriteStep def p1) @?= Right (RewriteResult $ NE.singleton p2)
+    runExcept (rewriteStep def [] [] p1) @?= Right (RewriteSingle p2)
 
 branchesTo :: Pattern -> [Pattern] -> IO ()
 p `branchesTo` ps =
-    runExcept (rewriteStep def p) @?= Right (RewriteResult $ NE.fromList ps)
+    runExcept (rewriteStep def [] [] p) @?= Right (RewriteBranch $ NE.fromList ps)
 
 failsWith :: Pattern -> RewriteFailed -> IO ()
 failsWith p err =
-    runExcept (rewriteStep def p) @?= Left err
+    runExcept (rewriteStep def [] [] p) @?= Left err
