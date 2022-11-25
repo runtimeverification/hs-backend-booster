@@ -253,7 +253,7 @@ addModule
                 partitionAxioms
                     <$> mapMaybeM (internaliseAxiom partialDefinition) parsedAxioms
 
-            let rewriteTheory = addToTheory partialDefinition newRewriteRules currentRewriteTheory
+            let rewriteTheory = addToTheory newRewriteRules currentRewriteTheory
 
             -- add subsorts to the subsort map
             let newSubsorts =
@@ -390,20 +390,15 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
         containsAcSymbols =
             checkTermSymbols Util.checkSymbolIsAc partialDefinition lhs.term
         computedAttributes =
-            ComputedAxiomAttributes {preservesDefinedness, containsAcSymbols}
+            ComputedAxiomAttributes{preservesDefinedness, containsAcSymbols}
     return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes}
 
 checkTermSymbols :: (Def.Symbol -> Bool) -> KoreDefinition -> Def.Term -> Bool
 checkTermSymbols check def = \case
     Def.AndTerm _ t1 t2 -> checkTermSymbols check def t1 && checkTermSymbols check def t2
     Def.SymbolApplication symbol ts ->
-        checkSymbol symbol.name && foldr ((&&) . checkTermSymbols check def) True ts
+        check symbol && foldr ((&&) . checkTermSymbols check def) True ts
     _ -> True
-  where
-    checkSymbol symbolName =
-        case Map.lookup symbolName def.symbols of
-            Just symbol -> check symbolName symbol.attributes symbol.resultSort
-            Nothing -> error $ show symbolName <> " symbol not found!"
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
@@ -428,20 +423,20 @@ expandAlias alias currentArgs
 processRewriteRulesTODO :: [RewriteRule] -> [RewriteRule]
 processRewriteRulesTODO = id
 
-addToTheory :: KoreDefinition -> [RewriteRule] -> RewriteTheory -> RewriteTheory
-addToTheory definition axioms theory =
+addToTheory :: [RewriteRule] -> RewriteTheory -> RewriteTheory
+addToTheory axioms theory =
     let processedRewriteRules = processRewriteRulesTODO axioms
         newTheory =
             Map.map groupByPriority
-                . groupByTermIndex definition
+                . groupByTermIndex
                 $ processedRewriteRules
      in Map.unionWith (Map.unionWith (<>)) theory newTheory
 
-groupByTermIndex :: KoreDefinition -> [RewriteRule] -> Map Def.TermIndex [RewriteRule]
-groupByTermIndex definition axioms =
+groupByTermIndex :: [RewriteRule] -> Map Def.TermIndex [RewriteRule]
+groupByTermIndex axioms =
     let withTermIndexes = do
             axiom <- axioms
-            let termIndex = computeTermIndex definition axiom.lhs.term
+            let termIndex = computeTermIndex axiom.lhs.term
             return (termIndex, axiom)
      in Map.fromAscList . groupSort $ withTermIndexes
 
@@ -449,26 +444,28 @@ groupByPriority :: [RewriteRule] -> Map Priority [RewriteRule]
 groupByPriority axioms =
     Map.fromAscList . groupSort $ [(ax.attributes.priority, ax) | ax <- axioms]
 
-            
 internaliseSymbol ::
     Map Def.SortName (SortAttributes, Set Def.SortName) ->
     ParsedSymbol ->
-    Except DefinitionError (Def.SymbolName, Def.Symbol) 
-internaliseSymbol definition parsedSymbol = do
+    Except DefinitionError (Def.SymbolName, Def.Symbol)
+internaliseSymbol sorts parsedSymbol = do
     unless (Set.size knownVars == length parsedSymbol.sortVars) $
         throwE $
             DuplicateNames (map (.getId) parsedSymbol.sortVars)
     resultSort <- check parsedSymbol.sort
     argSorts <- mapM check parsedSymbol.argSorts
+    let name = parsedSymbol.name.getId
+        attributes = extract parsedSymbol
+        internalSymbol = Def.Symbol{name, resultSort, argSorts, attributes}
     -- TODO(Ana): rename extract
-    pure (parsedSymbol.name, Def.Symbol {})
+    pure (name, internalSymbol)
   where
     knownVars = Set.fromList $ map (.getId) parsedSymbol.sortVars
 
     check :: Json.Sort -> Except DefinitionError Def.Sort
     check =
         mapExcept (first DefinitionSortError)
-            . checkSort knownVars definition.sorts
+            . checkSort knownVars sorts
 
 {- | Computes all-pairs reachability in a directed graph given as an
    adjacency list mapping. Using a naive algorithm because the subsort
@@ -528,8 +525,8 @@ data TermOrPredicateError
     | TOPNotSupported Def.TermOrPredicate
     deriving stock (Eq, Show)
 
-computeTermIndex :: KoreDefinition -> Def.Term -> Def.TermIndex
-computeTermIndex definition config =
+computeTermIndex :: Def.Term -> Def.TermIndex
+computeTermIndex config =
     case lookForKCell config of
         Just (Def.SymbolApplication _ children) ->
             getTermIndex (lookForTopTerm (head children))
@@ -538,12 +535,10 @@ computeTermIndex definition config =
     getTermIndex :: Def.Term -> Def.TermIndex
     getTermIndex term =
         case term of
-            (Def.SymbolApplication symbol _)
-                | (Just (attrs, _)) <- Map.lookup symbol.name definition.symbols ->
-                    case attrs.symbolType of
-                        Constructor -> Def.TopSymbol symbol.name
-                        _ -> Def.Anything
-                | otherwise -> error "TODO: Impossible, but we need to somehow encode that the symbol exists in the definition"
+            Def.SymbolApplication symbol _ ->
+                case symbol.attributes.symbolType of
+                    Constructor -> Def.TopSymbol symbol.name
+                    _ -> Def.Anything
             _ -> Def.Anything
 
     -- it is assumed there is only one K cell

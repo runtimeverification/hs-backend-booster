@@ -118,7 +118,7 @@ internaliseTerm sortVars definition@KoreDefinition{sorts, symbols} pat =
             -- finalSort is the symbol result sort with
             -- variables substituted using the arg.sort match
             let finalSort = applySubst sortSubst symbol.resultSort
-                internalisedSymbol = symbol { Internal.resultSort = finalSort }
+                internalisedSymbol = symbol{Internal.resultSort = finalSort}
             Internal.SymbolApplication internalisedSymbol
                 <$> mapM recursion args
         Syntax.KJString{value} ->

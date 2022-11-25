@@ -212,12 +212,12 @@ testDefinition =
                 ]
         , symbols =
             Map.fromList
-                [ constructor "con1" someSort [someSort]
-                , constructor "con2" someSort [someSort]
-                , constructor "con3" someSort [someSort, someSort]
-                , constructor "con4" aSubsort [someSort, aSubsort]
-                , function "f1" someSort [someSort]
-                , partialFunction "f2" someSort [someSort]
+                [ ("con1", con1)
+                , ("con2", con2)
+                , ("con3", con3)
+                , ("con4", con4)
+                , ("f1", f1)
+                , ("f2", f2)
                 ]
         , aliases = Map.empty
         , rewriteTheory = Map.empty
@@ -230,13 +230,6 @@ testDefinition =
         (sub, (SortAttributes{argCount = 0}, Set.fromList [sub, super]))
     other1 `subsortOf` other2 =
         error $ "subSortOf: " <> show (other1, other2) <> " not supported"
-
-    constructor n sort argSorts =
-        (n, (SymbolAttributes Constructor False False, SymbolSort sort argSorts))
-    function n sort argSorts =
-        (n, (SymbolAttributes TotalFunction False False, SymbolSort sort argSorts))
-    partialFunction n sort argSorts =
-        (n, (SymbolAttributes PartialFunction False False, SymbolSort sort argSorts))
 
 app :: Symbol -> [Term] -> Term
 app = SymbolApplication
