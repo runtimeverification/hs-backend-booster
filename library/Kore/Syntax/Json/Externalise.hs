@@ -35,9 +35,9 @@ externalisePattern Internal.Pattern{term = term, constraints} =
 
 externaliseTerm :: Internal.Term -> Syntax.KorePattern
 externaliseTerm = \case
-    Internal.AndTerm sort first' second' ->
+    Internal.AndTerm first' second' ->
         Syntax.KJAnd
-            (externaliseSort sort)
+            (externaliseSort $ sortOfTerm second')
             (externaliseTerm first')
             (externaliseTerm second')
     Internal.SymbolApplication symbol args ->

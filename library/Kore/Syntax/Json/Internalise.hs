@@ -56,8 +56,7 @@ internalisePattern sortVars definition p = do
     andTerm _ [] = error "BUG: andTerm called with empty term list"
     andTerm pat ts = do
         let sortList = nub $ map sortOfTerm ts
-            andSort = head sortList
-            resultTerm = foldl1' (Internal.AndTerm andSort) ts
+            resultTerm = foldl1' Internal.AndTerm ts
         -- check resulting terms for consistency and sorts
         -- TODO needs to consider sub-sorts instead (set must be
         -- consistent) if this code becomes order-sorted
@@ -126,14 +125,13 @@ internaliseTerm sortVars definition@KoreDefinition{sorts, symbols} pat =
         Syntax.KJTop{} -> predicate
         Syntax.KJBottom{} -> predicate
         Syntax.KJNot{} -> predicate
-        Syntax.KJAnd{sort, first = arg1, second = arg2} -> do
+        Syntax.KJAnd{first = arg1, second = arg2} -> do
             -- analysed beforehand, expecting this to operate on terms
             a <- recursion arg1
             b <- recursion arg2
-            resultSort <- lookupInternalSort' sort
             -- TODO check that both a and b are of sort "resultSort"
             -- Which is a unification problem if this involves variables.
-            pure $ Internal.AndTerm resultSort a b
+            pure $ Internal.AndTerm a b
         Syntax.KJOr{} -> predicate
         Syntax.KJImplies{} -> predicate
         Syntax.KJIff{} -> predicate
