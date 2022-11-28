@@ -152,10 +152,8 @@ jobs:
       volumes:
           - nixstore:/nix
     steps:
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16
-          cache: 'npm'
+      - run: |
+          nix-env -iA nixpkgs.node
       - name: 'Install Cachix'
         uses: cachix/cachix-action@v10
         with:
