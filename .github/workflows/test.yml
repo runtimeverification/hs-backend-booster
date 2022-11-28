@@ -150,7 +150,7 @@ jobs:
     container:
       image: nixos/nix:2.7.0
       volumes:
-          - nixstore:/nix/store
+          - nixstore:/nix
     steps:
       # - name: 'Set up nix'
       #   run: |
