@@ -148,10 +148,19 @@ jobs:
     name: 'Nix / Unit Tests'
     runs-on: [self-hosted, linux, normal]
     container:
-      image: nixos/nix:2.7.0
+      image: ubuntu:latest
       volumes:
           - nixstore:/nix
     steps:
+      - name: Install Node
+        uses: actions/setup-node@v3
+        with: 
+          node-version: 16
+      - name: Install Deb Deps
+        run: | 
+          apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            curl
+
       - name: 'Set up nix'
         run: |
           # curl -L https://nixos.org/nix/install | sh
