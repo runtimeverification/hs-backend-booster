@@ -83,5 +83,5 @@ checkSymbolIsAc symbol =
 
 checkTermSymbols :: (Symbol -> Bool) -> Term -> Bool
 checkTermSymbols check = cata $ \case
-    SymbolApplicationF symbol ts -> check symbol && foldr (&&) True ts
-    other -> foldr (&&) True other
+    SymbolApplicationF symbol ts -> check symbol && and ts
+    other -> and other
