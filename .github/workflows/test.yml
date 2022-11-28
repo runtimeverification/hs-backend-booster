@@ -151,7 +151,6 @@ jobs:
       image: nixos/nix
       volumes:
           - nixstore:/nix
-      options: --user github-runner
     steps:
       # - name: Install Node
       #   uses: actions/setup-node@v3
