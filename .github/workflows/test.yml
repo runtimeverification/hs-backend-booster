@@ -148,7 +148,7 @@ jobs:
     name: 'Nix / Unit Tests'
     runs-on: [self-hosted, linux, normal]
     container:
-      image: ubuntu:22.04
+      image: nixos/nix:2.7.0
       volumes:
           - nixstore:/nix/store
     steps:
@@ -169,15 +169,16 @@ jobs:
         uses: cachix/install-nix-action@v18
         with:
           extra_nix_config: |
+            access-token = github.com=${{ secrets.GITHUB_TOKEN }}
             substituters = http://cache.nixos.org https://cache.iog.io
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
 
       - name: 'Install Cachix'
-        if: ${{ !startsWith(matrix.os, 'self') }}
         uses: cachix/cachix-action@v10
         with:
           name: k-framework
           signingKey: '${{ secrets.CACHIX_PUBLIC_KEY }}'
+
       - name: Build executables
         run: |
           nix build .#hs-backend-booster:exe:hs-backend-booster
