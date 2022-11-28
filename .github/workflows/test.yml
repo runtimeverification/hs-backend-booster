@@ -151,7 +151,6 @@ jobs:
       image: nixos/nix
       volumes:
           - nixstore:/nix
-          - actions/workflows/nix.conf:/etc/nix/nix.conf
 
     steps:
       # - name: Install Node
@@ -165,9 +164,9 @@ jobs:
 
       - name: 'Set up nix'
         run: |
-          # echo experimental-features = nix-command flakes | tee -a /etc/nix/nix.conf
-          # echo substituters = https://cache.nixos.org/ https://runtimeverification.cachix.org https://cache.iog.io | tee -a /etc/nix/nix.conf
-          # echo trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= runtimeverification.cachix.org-1:z2UVwHPthsW4qRSfcnG3veR/MFdZp8HS0f8kgacAjvA= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+          echo experimental-features = nix-command flakes | tee -a /etc/nix/nix.conf
+          echo substituters = https://cache.nixos.org/ https://runtimeverification.cachix.org https://cache.iog.io | tee -a /etc/nix/nix.conf
+          echo trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= runtimeverification.cachix.org-1:z2UVwHPthsW4qRSfcnG3veR/MFdZp8HS0f8kgacAjvA= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
           nix show-config
           echo "$USER"
 
