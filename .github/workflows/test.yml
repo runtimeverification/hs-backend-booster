@@ -160,10 +160,10 @@ jobs:
       #     nix show-config
       #     echo "$USER"
 
-      - name: 'Check out code'
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
+      # - name: 'Check out code'
+      #   uses: actions/checkout@v3
+      #   with:
+      #     ref: ${{ github.event.pull_request.head.sha }}
 
       - name: 'Install Nix'
         uses: cachix/install-nix-action@v18
@@ -175,9 +175,6 @@ jobs:
 
       - name: 'Install Cachix'
         uses: cachix/cachix-action@v10
-        with:
-          name: k-framework
-          signingKey: '${{ secrets.CACHIX_PUBLIC_KEY }}'
 
       - name: Build executables
         run: |
