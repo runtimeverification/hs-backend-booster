@@ -13,8 +13,8 @@ import Data.Text (Text)
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Kore.Definition.Base
 import Kore.Definition.Attributes.Base
+import Kore.Definition.Base
 import Kore.Pattern.Base
 import Kore.Pattern.Rewrite
 import Test.Kore.Fixture
@@ -25,8 +25,7 @@ test_rewrite =
         "Rewriting"
         [ errorCases
         , rewriteSuccess
-        , unifyFailed
-        , unifyIndeterminate
+        , unifyNotMatch
         , definednessUnclear
         , rewriteStuck
         , rulePriority
@@ -38,22 +37,34 @@ def :: KoreDefinition
 def =
     testDefinition
         { rewriteTheory =
-              mkTheory
+            mkTheory
                 [
-                 (TopSymbol "con1",
-                     [( 42
-                      , termInKCell "RuleVar" (app con1 [varX])
-                      , termInKCell "RuleVar" (app f1 [varX])
-                      , Just "con1-f1"
-                      )
-                     ]
-                 )
+                    ( TopSymbol "con1"
+                    ,
+                        [
+                            ( 42
+                            , termInKCell "RuleVar" (app con1 [varX])
+                            , termInKCell "RuleVar" (app f1 [varX])
+                            , Just "con1-f1"
+                            )
+                        ]
+                    )
+                ,
+                    ( TopSymbol "con3"
+                    ,
+                        [
+                            ( 42
+                            , termInKCell "RuleVar" (app con3 [dv someSort "otherThing", varY])
+                            , termInKCell "RuleVar" (app con1 [dv someSort "somethingElse"])
+                            , Just "con3-con1"
+                            )
+                        ]
+                    )
                 ]
         }
   where
     varX = var "X" someSort
     varY = var "Y" someSort
-
 
 termInKCell :: Text -> Term -> Pattern
 termInKCell varName = flip Pattern [] . withinKCell varName
@@ -67,44 +78,43 @@ withinKCell restVar term =
 kCell, kseq :: Symbol
 kCell =
     Symbol
-    { name = "Lbl'-LT-'k'-GT-'"
-    , resultSort = kSort -- bogus
-    , argSorts = [kSort]
-    , attributes = asConstructor
-    }
-
+        { name = "Lbl'-LT-'k'-GT-'"
+        , resultSort = kSort -- bogus
+        , argSorts = [kSort]
+        , attributes = asConstructor
+        }
 kseq =
     Symbol
-    { name = "kseq"
-    , resultSort = kSort
-    , argSorts = [kItemSort, kSort]
-    , attributes = asConstructor
-    }
+        { name = "kseq"
+        , resultSort = kSort
+        , argSorts = [kItemSort, kSort]
+        , attributes = asConstructor
+        }
 
 kSort, kItemSort :: Sort
 kSort = SortApp "SortK" []
 kItemSort = SortApp "SortKItem" []
 
 injKItem :: Term -> Term
-injKItem = app inj . (:[])
+injKItem = app inj . (: [])
 
 inj :: Symbol
 inj =
     Symbol
-    { name = "inj"
-    , resultSort = SortVar "Target"
-    , argSorts = [SortVar "Source"]
-    , attributes = SymbolAttributes SortInjection False False
-    }
+        { name = "inj"
+        , resultSort = SortVar "Target"
+        , argSorts = [SortVar "Source"]
+        , attributes = SymbolAttributes SortInjection False False
+        }
 
 rule :: Maybe Text -> Pattern -> Pattern -> Priority -> RewriteRule
 rule label lhs rhs priority =
     RewriteRule
-    { lhs
-    , rhs
-    , attributes = AxiomAttributes {location, priority, label, simplification = False}
-    , computedAttributes = ComputedAxiomAttributes False True
-    }
+        { lhs
+        , rhs
+        , attributes = AxiomAttributes{location, priority, label, simplification = False}
+        , computedAttributes = ComputedAxiomAttributes False True
+        }
   where
     location = Location "no-file" $ Position 0 0
 
@@ -112,11 +122,10 @@ mkTheory :: [(TermIndex, [(Priority, Pattern, Pattern, Maybe Text)])] -> Rewrite
 mkTheory = Map.map mkPriorityGroups . Map.fromList
   where
     mkPriorityGroups tuples =
-        Map.unionsWith (<>) $
-            map (Map.fromList)
-                [ [(prio, [rule label lhs rhs prio])]
-                | (prio, lhs, rhs, label) <- tuples
-                ]
+        Map.unionsWith (<>)
+            [ Map.fromList [(prio, [rule label lhs rhs prio])]
+            | (prio, lhs, rhs, label) <- tuples
+            ]
 
 d :: Term
 d = dv someSort "thing"
@@ -124,8 +133,7 @@ d = dv someSort "thing"
 ----------------------------------------
 errorCases
     , rewriteSuccess
-    , unifyFailed
-    , unifyIndeterminate
+    , unifyNotMatch
     , definednessUnclear
     , rewriteStuck
     , rulePriority ::
@@ -141,10 +149,28 @@ errorCases =
 rewriteSuccess =
     testCase "con1 app rewrites to f1 app" $
         (termInKCell "ConfigVar" $ app con1 [d]) `rewritesTo` (termInKCell "ConfigVar" $ app f1 [d])
-unifyFailed = dummy
-unifyIndeterminate = dummy
+unifyNotMatch =
+    testCase "Indeterminate case when subject has variables" $ do
+        let subst =
+                Map.fromList
+                    [ (Variable someSort "X", dv someSort "otherThing")
+                    , (Variable someSort "Y", d)
+                    , (Variable kItemSort "RuleVar", var "ConfigVar" kItemSort)
+                    ]
+            rule3 =
+                rule
+                    (Just "con3-con1")
+                    (termInKCell "RuleVar" (app con3 [dv someSort "otherThing", var "Y" someSort]))
+                    (termInKCell "RuleVar" (app con1 [dv someSort "somethingElse"]))
+                    42
+        (termInKCell "ConfigVar" $ app con3 [var "X" someSort, d])
+            `failsWith` RuleApplicationUncertain
+                [UnificationIsNotMatch rule3 subst]
 definednessUnclear = dummy
-rewriteStuck = dummy
+rewriteStuck =
+    testCase "con1 app does not unify with con3 app" $
+        (termInKCell "ConfigVar" $ app con3 [d])
+            `failsWith` NoApplicableRules
 rulePriority = dummy
 
 rewritesTo :: Pattern -> Pattern -> IO ()
@@ -156,4 +182,5 @@ failsWith p err =
     runExcept (rewriteStep def p) @?= Left err
 
 ----------------------------------------
-dummy = testGroup "dummy" []
+dummy :: TestTree
+dummy = testGroup "FIXME implement me" []
