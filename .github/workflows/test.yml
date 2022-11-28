@@ -152,21 +152,20 @@ jobs:
       volumes:
           - nixstore:/nix
     steps:
-      - name: 'Install Cachix'
+      - name: 'Set up nix'
         run: |
-          nix-env -iA cachix -f https://cachix.org/api/v1/install
-          cachix use runtimeverification
+          echo experimental-features = nix-command flakes | tee -a /etc/nix/nix.conf
+          echo substituters = https://cache.nixos.org/ https://runtimeverification.cachix.org https://cache.iog.io | tee -a /etc/nix/nix.conf
+          echo trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= runtimeverification.cachix.org-1:z2UVwHPthsW4qRSfcnG3veR/MFdZp8HS0f8kgacAjvA= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+           
       - name: Build executables
         run: |
-          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:hs-backend-booster \
-            --extra-experimental-features 'nix-command flakes' \
-            --option extra-substituters https://cache.iog.io
-            --option extra-trusted-public-keys hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
-          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:parsetest --extra-experimental-features 'nix-command flakes'
-          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:rpc-client --extra-experimental-features 'nix-command flakes'
+          nix build .#hs-backend-booster:exe:hs-backend-booster
+          nix build .#hs-backend-booster:exe:parsetest
+          nix build .#hs-backend-booster:exe:rpc-client
 
       - name: Run unit tests
-        run: GC_DONT_GC=1 nix build .#hs-backend-booster:test:test-suite --extra-experimental-features 'nix-command flakes'
+        run: nix build .#hs-backend-booster:test:test-suite
 
 
 
