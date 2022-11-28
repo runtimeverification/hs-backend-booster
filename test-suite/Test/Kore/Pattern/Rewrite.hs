@@ -39,44 +39,44 @@ def =
     testDefinition
         { rewriteTheory =
             mkTheory
-                [
-                    ( TopSymbol "con1"
-                    ,
-                        [ rule
-                            (Just "con1-f1")
-                            (termInKCell "RuleVar" (app con1 [varX]))
-                            (termInKCell "RuleVar" (app f1 [varX]))
-                            42
-                        ]
-                    )
-                ,
-                    ( TopSymbol "con3"
-                    ,
-                        [ rule
-                            (Just "con3-con1")
-                            (termInKCell "RuleVar" (app con3 [dv someSort "otherThing", varY]))
-                            (termInKCell "RuleVar" (app con1 [dv someSort "somethingElse"]))
-                            42
-                        ]
-                    )
-                ,
-                    ( TopSymbol "con4"
-                    ,
-                        [ ( rule
-                                (Just "con4-f2-partial")
-                                (termInKCell "RuleVar" (app con4 [varY]))
-                                (termInKCell "RuleVar" (app f2 [varY]))
-                                42
-                          )
-                            { computedAttributes = ComputedAxiomAttributes False False
-                            }
-                        ]
-                    )
+                [ (TopSymbol "con1", [rule1, rule2])
+                , (TopSymbol "con3", [rule3])
+                , (TopSymbol "con4", [rule4])
                 ]
         }
-  where
-    varX = var "X" someSort
-    varY = var "Y" someSort
+
+varX, varY :: Term
+varX = var "X" someSort
+varY = var "Y" someSort
+
+rule1, rule2, rule3, rule4 :: RewriteRule
+rule1 =
+    rule
+        (Just "con1-f1")
+        (termInKCell "RuleVar" (app con1 [d]))
+        (termInKCell "RuleVar" (app f1 [d]))
+        42
+rule2 =
+    rule
+        (Just "con1-f2")
+        (termInKCell "RuleVar" (app con1 [varX]))
+        (termInKCell "RuleVar" (app con4 [varX, varX]))
+        52
+rule3 =
+    rule
+        (Just "con3-con1")
+        (termInKCell "RuleVar" (app con3 [dv someSort "otherThing", varY]))
+        (termInKCell "RuleVar" (app con1 [dv someSort "somethingElse"]))
+        42
+rule4 =
+    ( rule
+        (Just "con4-f2-partial")
+        (termInKCell "RuleVar" (app con4 [varX, varY]))
+        (termInKCell "RuleVar" (app f2 [varY]))
+        42
+    )
+        { computedAttributes = ComputedAxiomAttributes False False
+        }
 
 termInKCell :: Text -> Term -> Pattern
 termInKCell varName = flip Pattern [] . withinKCell varName
@@ -169,21 +169,23 @@ unifyNotMatch =
                     , (Variable someSort "Y", d)
                     , (Variable kItemSort "RuleVar", var "ConfigVar" kItemSort)
                     ]
-            rule3 =
-                rule
-                    (Just "con3-con1")
-                    (termInKCell "RuleVar" (app con3 [dv someSort "otherThing", var "Y" someSort]))
-                    (termInKCell "RuleVar" (app con1 [dv someSort "somethingElse"]))
-                    42
         (termInKCell "ConfigVar" $ app con3 [var "X" someSort, d])
             `failsWith` RuleApplicationUncertain
                 [UnificationIsNotMatch rule3 subst]
-definednessUnclear = dummy
+definednessUnclear =
+    testCase "con4 rewrite to f2 might become undefined" $ do
+        let pcon4 = termInKCell "ConfigVar" $ app con4 [d, d]
+            withf = termInKCell "ConfigVar" $ app f2 [d]
+        pcon4 `failsWith` DefinednessUnclear [(rule4, withf)]
 rewriteStuck =
     testCase "con1 app does not unify with con3 app" $
         (termInKCell "ConfigVar" $ app con3 [d])
             `failsWith` NoApplicableRules
-rulePriority = dummy
+rulePriority =
+    testCase "con1 rewrite to f2 rule applies with lower priority" $ do
+        let d2 = dv someSort "otherThing"
+        (termInKCell "ConfigVar" $ app con1 [d2])
+            `rewritesTo` (termInKCell "ConfigVar" $ app con4 [d2, d2])
 
 rewritesTo :: Pattern -> Pattern -> IO ()
 p1 `rewritesTo` p2 =
@@ -192,7 +194,3 @@ p1 `rewritesTo` p2 =
 failsWith :: Pattern -> RewriteFailed -> IO ()
 failsWith p err =
     runExcept (rewriteStep def p) @?= Left err
-
-----------------------------------------
-dummy :: TestTree
-dummy = testGroup "FIXME implement me" []
