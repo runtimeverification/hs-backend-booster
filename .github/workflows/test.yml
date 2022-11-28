@@ -148,7 +148,7 @@ jobs:
     name: 'Nix / Unit Tests'
     runs-on: [self-hosted, linux, normal]
     container:
-      image: nixos/nix:2.7.0
+      image: ubuntu:22.04
       volumes:
           - nixstore:/nix
     steps:
