@@ -158,12 +158,12 @@ jobs:
           cachix use runtimeverification
       - name: Build executables
         run: |
-          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:hs-backend-booster --extra-experimental-features nix-command
-          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:parsetest --extra-experimental-features nix-command
-          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:rpc-client --extra-experimental-features nix-command
+          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:hs-backend-booster --extra-experimental-features 'nix-command flakes'
+          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:parsetest --extra-experimental-features 'nix-command flakes'
+          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:rpc-client --extra-experimental-features 'nix-command flakes'
 
       - name: Run unit tests
-        run: GC_DONT_GC=1 nix build .#hs-backend-booster:test:test-suite --extra-experimental-features nix-command
+        run: GC_DONT_GC=1 nix build .#hs-backend-booster:test:test-suite --extra-experimental-features 'nix-command flakes'
 
 
 
