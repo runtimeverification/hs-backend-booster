@@ -8,6 +8,7 @@ module Test.Kore.Pattern.Rewrite (
 
 import Control.Monad.Trans.Except
 import Data.List.NonEmpty qualified as NE
+import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
 import Test.Tasty
@@ -41,23 +42,34 @@ def =
                 [
                     ( TopSymbol "con1"
                     ,
-                        [
-                            ( 42
-                            , termInKCell "RuleVar" (app con1 [varX])
-                            , termInKCell "RuleVar" (app f1 [varX])
-                            , Just "con1-f1"
-                            )
+                        [ rule
+                            (Just "con1-f1")
+                            (termInKCell "RuleVar" (app con1 [varX]))
+                            (termInKCell "RuleVar" (app f1 [varX]))
+                            42
                         ]
                     )
                 ,
                     ( TopSymbol "con3"
                     ,
-                        [
-                            ( 42
-                            , termInKCell "RuleVar" (app con3 [dv someSort "otherThing", varY])
-                            , termInKCell "RuleVar" (app con1 [dv someSort "somethingElse"])
-                            , Just "con3-con1"
-                            )
+                        [ rule
+                            (Just "con3-con1")
+                            (termInKCell "RuleVar" (app con3 [dv someSort "otherThing", varY]))
+                            (termInKCell "RuleVar" (app con1 [dv someSort "somethingElse"]))
+                            42
+                        ]
+                    )
+                ,
+                    ( TopSymbol "con4"
+                    ,
+                        [ ( rule
+                                (Just "con4-f2-partial")
+                                (termInKCell "RuleVar" (app con4 [varY]))
+                                (termInKCell "RuleVar" (app f2 [varY]))
+                                42
+                          )
+                            { computedAttributes = ComputedAxiomAttributes False False
+                            }
                         ]
                     )
                 ]
@@ -118,14 +130,14 @@ rule label lhs rhs priority =
   where
     location = Location "no-file" $ Position 0 0
 
-mkTheory :: [(TermIndex, [(Priority, Pattern, Pattern, Maybe Text)])] -> RewriteTheory
+mkTheory :: [(TermIndex, [RewriteRule])] -> RewriteTheory
 mkTheory = Map.map mkPriorityGroups . Map.fromList
   where
-    mkPriorityGroups tuples =
-        Map.unionsWith (<>)
-            [ Map.fromList [(prio, [rule label lhs rhs prio])]
-            | (prio, lhs, rhs, label) <- tuples
-            ]
+    mkPriorityGroups :: [RewriteRule] -> Map Priority [RewriteRule]
+    mkPriorityGroups rules =
+        Map.unionsWith
+            (<>)
+            [Map.fromList [(r.attributes.priority, [r])] | r <- rules]
 
 d :: Term
 d = dv someSort "thing"
