@@ -142,19 +142,38 @@ jobs:
         run: |
           docker stop --time=0 hs-booster-ci-formatting-style-buster-${{ github.run_id }}
 
-  nix-build:
+
+
+  nix-build-linux:
+    name: 'Nix / Unit Tests'
+    runs-on: [self-hosted, linux, normal, github-runner-19]
+    container:
+      image: nixos/nix:2.7.0
+      volumes:
+          - nixstore:/nix
+    steps:
+      - name: 'Install Cachix'
+        uses: cachix/cachix-action@v10
+        with:
+          name: k-framework
+          authToken: '${{ secrets.CACHIX_PUBLIC_TOKEN }}'
+      - name: Build executables
+        run: |
+          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:hs-backend-booster
+          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:parsetest
+          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:rpc-client
+
+      - name: Run unit tests
+        run: GC_DONT_GC=1 nix build .#hs-backend-booster:test:test-suite
+
+
+
+
+  nix-build-m1:
     name: 'Nix / Unit Tests'
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runner: [self-hosted, linux, normal]
-            os: ubuntu-latest
-          # - runner: macos-12 FIXME need to run on self-hosted runners
-          #   os: macos-12
-          - runner: MacM1
-            os: self-macos-12
-    runs-on: ${{ matrix.runner }}
+    runs-on: MacM1
     steps:
       - name: Check out code
         uses: actions/checkout@v2.3.4
@@ -163,7 +182,6 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: 'Upgrade bash'
-        if: ${{ contains(matrix.os, 'macos') }}
         run: brew install bash
 
       - name: Build executables
