@@ -13,7 +13,7 @@ module Kore.Pattern.Util (
     isSortInjectionSymbol,
     isDefinedSymbol,
     checkSymbolIsAc,
-    checkTermSymbols
+    checkTermSymbols,
 ) where
 
 import Data.Foldable (fold)
@@ -80,7 +80,6 @@ isDefinedSymbol symbol =
 checkSymbolIsAc :: Symbol -> Bool
 checkSymbolIsAc symbol =
     symbol.attributes.isAssoc || symbol.attributes.isIdem
-
 
 checkTermSymbols :: (Symbol -> Bool) -> Term -> Bool
 checkTermSymbols check = cata $ \case

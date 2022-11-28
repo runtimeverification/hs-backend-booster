@@ -20,7 +20,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Bifunctor (first)
 import Data.Function (on)
-import Data.Functor.Foldable (para, embed)
+import Data.Functor.Foldable (embed, para)
 import Data.List (foldl', groupBy, partition, sortOn)
 import Data.List.Extra (groupSort)
 import Data.Map.Strict (Map)
@@ -394,8 +394,6 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
             ComputedAxiomAttributes{preservesDefinedness, containsAcSymbols}
     return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes}
 
-
-
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
     | length alias.args /= length currentArgs =
@@ -538,7 +536,7 @@ computeTermIndex config =
             _ -> Def.Anything
 
     -- it is assumed there is only one K cell
-    -- Note: para is variant of cata in which recursive positions also include the original sub-tree, 
+    -- Note: para is variant of cata in which recursive positions also include the original sub-tree,
     -- in addition to the result of folding that sub-tree.
     lookForKCell :: Def.Term -> Maybe Def.Term
     lookForKCell = para $ \case

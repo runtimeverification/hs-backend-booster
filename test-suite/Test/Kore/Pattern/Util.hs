@@ -1,6 +1,6 @@
 module Test.Kore.Pattern.Util (
-  test_subst
- ) where
+    test_subst,
+) where
 
 import Data.Map qualified as Map
 import Test.Tasty
@@ -18,13 +18,13 @@ test_subst =
             "con1(X)[con1(Y)/X]"
             (Map.fromList [(Variable someSort "X", (app con1 [var "Y" someSort]))])
             (app con1 [var "X" someSort])
-            (app con1 [(app con1 [var "Y" someSort])]),
-          test
+            (app con1 [(app con1 [var "Y" someSort])])
+        , test
             "con1(X)/\\con1(X)[con1(Y)/X]"
             (Map.fromList [(Variable someSort "X", (app con1 [var "Y" someSort]))])
             (AndTerm (app con1 [var "X" someSort]) (app con1 [var "X" someSort]))
-            (AndTerm (app con1 [(app con1 [var "Y" someSort])]) (app con1 [(app con1 [var "Y" someSort])])),
-          test
+            (AndTerm (app con1 [(app con1 [var "Y" someSort])]) (app con1 [(app con1 [var "Y" someSort])]))
+        , test
             "con1(X)/\\con1(Y)[con1(Y)/X]"
             (Map.fromList [(Variable someSort "X", (app con1 [var "Y" someSort]))])
             (AndTerm (app con1 [var "X" someSort]) (app con1 [var "Y" someSort]))
