@@ -39,7 +39,7 @@ def =
     testDefinition
         { rewriteTheory =
             mkTheory
-                [ (TopSymbol "con1", [rule1, rule2])
+                [ (TopSymbol "con1", [rule1, rule2, rule1'])
                 , (TopSymbol "con3", [rule3])
                 , (TopSymbol "con4", [rule4])
                 ]
@@ -49,19 +49,25 @@ varX, varY :: Term
 varX = var "X" someSort
 varY = var "Y" someSort
 
-rule1, rule2, rule3, rule4 :: RewriteRule
+rule1, rule1', rule2, rule3, rule4 :: RewriteRule
 rule1 =
     rule
         (Just "con1-f1")
         (termInKCell "RuleVar" (app con1 [d]))
         (termInKCell "RuleVar" (app f1 [d]))
         42
+rule1' =
+    rule
+        (Just "con1-f1")
+        (termInKCell "RuleVar" (app con1 [varX]))
+        (termInKCell "RuleVar" (app f1 [varX]))
+        50
 rule2 =
     rule
         (Just "con1-f2")
         (termInKCell "RuleVar" (app con1 [varX]))
         (termInKCell "RuleVar" (app con4 [varX, varX]))
-        52
+        50
 rule3 =
     rule
         (Just "con3-con1")
@@ -102,10 +108,6 @@ kseq =
         , argSorts = [kItemSort, kSort]
         , attributes = asConstructor
         }
-
-kSort, kItemSort :: Sort
-kSort = SortApp "SortK" []
-kItemSort = SortApp "SortKItem" []
 
 injKItem :: Term -> Term
 injKItem = app inj . (: [])
@@ -182,14 +184,20 @@ rewriteStuck =
         (termInKCell "ConfigVar" $ app con3 [d])
             `failsWith` NoApplicableRules
 rulePriority =
-    testCase "con1 rewrite to f2 rule applies with lower priority" $ do
+    testCase "con1 rewrites to a branch when higher priority does not apply" $ do
         let d2 = dv someSort "otherThing"
         (termInKCell "ConfigVar" $ app con1 [d2])
-            `rewritesTo` (termInKCell "ConfigVar" $ app con4 [d2, d2])
+            `branchesTo` [ termInKCell "ConfigVar" $ app con4 [d2, d2]
+                         , termInKCell "ConfigVar" $ app f1 [d2]
+                         ]
 
 rewritesTo :: Pattern -> Pattern -> IO ()
 p1 `rewritesTo` p2 =
     runExcept (rewriteStep def p1) @?= Right (RewriteResult $ NE.singleton p2)
+
+branchesTo :: Pattern -> [Pattern] -> IO ()
+p `branchesTo` ps =
+    runExcept (rewriteStep def p) @?= Right (RewriteResult $ NE.fromList ps)
 
 failsWith :: Pattern -> RewriteFailed -> IO ()
 failsWith p err =

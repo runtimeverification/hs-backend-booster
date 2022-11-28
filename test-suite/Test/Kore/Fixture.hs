@@ -14,10 +14,12 @@ import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
 import Kore.Pattern.Base
 
-someSort, aSubsort, differentSort :: Sort
+someSort, aSubsort, differentSort, kSort, kItemSort :: Sort
 someSort = SortApp "SomeSort" []
 aSubsort = SortApp "AnotherSort" []
 differentSort = SortApp "DifferentSort" []
+kSort = SortApp "SortK" []
+kItemSort = SortApp "SortKItem" []
 
 testDefinition :: KoreDefinition
 testDefinition =
@@ -26,9 +28,11 @@ testDefinition =
         , modules = Map.singleton "AMODULE" ModuleAttributes
         , sorts =
             Map.fromList
-                [ simpleSortInfo someSort
-                , aSubsort `subsortOf` someSort
-                , simpleSortInfo differentSort
+                [ someSort `withSubsorts` [aSubsort]
+                , aSubsort `withSubsorts` []
+                , differentSort `withSubsorts` []
+                , kItemSort `withSubsorts` [someSort, aSubsort, differentSort]
+                , kSort `withSubsorts` []
                 ]
         , symbols =
             Map.fromList
@@ -43,13 +47,11 @@ testDefinition =
         , rewriteTheory = Map.empty
         }
   where
-    simpleSortInfo (SortApp n []) = (n, (SortAttributes{argCount = 0}, Set.singleton n))
-    simpleSortInfo other = error $ "Sort info: " <> show other <> " not supported"
-
-    (SortApp sub []) `subsortOf` (SortApp super []) =
-        (sub, (SortAttributes{argCount = 0}, Set.fromList [sub, super]))
-    other1 `subsortOf` other2 =
-        error $ "subSortOf: " <> show (other1, other2) <> " not supported"
+    super `withSubsorts` subs =
+        (getName super, (SortAttributes{argCount = 0}, Set.fromList (getName super : map getName subs)))
+    -- sort variables and sort applications with arguments cause an error
+    getName (SortApp n []) = n
+    getName other = error $ "subSortOf: " <> show other <> " not supported"
 
 var :: VarName -> Sort -> Term
 var variableName variableSort = Var $ Variable{variableSort, variableName}
