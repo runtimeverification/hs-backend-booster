@@ -149,8 +149,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ubuntu:22.04
-      volumes:
-          - nixstore:/nix
+      # volumes:
+      #     - nixstore:/nix
     steps:
       # - name: 'Set up nix'
       #   run: |
