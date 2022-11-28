@@ -158,7 +158,10 @@ jobs:
           cachix use runtimeverification
       - name: Build executables
         run: |
-          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:hs-backend-booster --extra-experimental-features 'nix-command flakes'
+          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:hs-backend-booster \
+            --extra-experimental-features 'nix-command flakes' \
+            --option extra-substituters https://cache.iog.io
+            --option extra-trusted-public-keys hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
           GC_DONT_GC=1 nix build .#hs-backend-booster:exe:parsetest --extra-experimental-features 'nix-command flakes'
           GC_DONT_GC=1 nix build .#hs-backend-booster:exe:rpc-client --extra-experimental-features 'nix-command flakes'
 
