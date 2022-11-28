@@ -158,14 +158,14 @@ jobs:
     #   trusted-public-keys: cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= runtimeverification.cachix.org-1:z2UVwHPthsW4qRSfcnG3veR/MFdZp8HS0f8kgacAjvA= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
 
     steps:
-      - name: Install Node
-        uses: actions/setup-node@v3
-        with: 
-          node-version: 16
-      - name: Install Deb Deps
-        run: | 
-          apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            curl
+      # - name: Install Node
+        # uses: actions/setup-node@v3
+        # with: 
+        #   node-version: 16
+      # - name: Install Deb Deps
+      #   run: | 
+      #     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+      #       curl
 
       # - name: 'Set up nix'
       #   run: |
