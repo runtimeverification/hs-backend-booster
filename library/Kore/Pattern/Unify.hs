@@ -23,7 +23,7 @@ import Data.Set qualified as Set
 
 import Kore.Definition.Base
 import Kore.Pattern.Base
-import Kore.Pattern.Util (freeVariables, isConstructorSymbol, sortOfTerm, substituteInTerm)
+import Kore.Pattern.Util (freeVariables, isConstructorSymbol, isSortInjectionSymbol, sortOfTerm, substituteInTerm)
 
 -- | Result of a unification (a substitution or an indication of what went wrong)
 data UnificationResult
@@ -121,8 +121,10 @@ unify1
             -- argument sorts have been checked upon internalisation
             unless (sortsAgree subsorts symbol1.resultSort symbol2.resultSort) $
                 returnAsRemainder t1 t2
-            -- If we have functions, pass - only constructors are matched.
-            unless (isConstructorSymbol symbol1 && isConstructorSymbol symbol2) $
+            -- If we have functions, pass - only constructors and sort injections are matched.
+            let bothInjections = isSortInjectionSymbol symbol1 && isSortInjectionSymbol symbol2
+                bothConstructors = isConstructorSymbol symbol1 && isConstructorSymbol symbol2
+            unless (bothInjections || bothConstructors) $
                 returnAsRemainder t1 t2
             -- constructors must be the same
             unless (symbol1.name == symbol2.name) $
