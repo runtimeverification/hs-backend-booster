@@ -146,7 +146,7 @@ jobs:
 
   nix-build-linux:
     name: 'Nix / Unit Tests'
-    runs-on: [self-hosted, linux, normal]
+    runs-on: ubuntu-latest
     container:
       image: ubuntu:22.04
       volumes:
