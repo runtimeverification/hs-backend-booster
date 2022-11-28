@@ -164,6 +164,7 @@ jobs:
 
       - name: 'Set up nix'
         run: |
+          mkdir /etc/nix
           touch /etc/nix/nix.conf
           echo experimental-features = nix-command flakes | tee -a /etc/nix/nix.conf
           echo substituters = https://cache.nixos.org/ https://runtimeverification.cachix.org https://cache.iog.io | tee -a /etc/nix/nix.conf
