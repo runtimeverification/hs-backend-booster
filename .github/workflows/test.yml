@@ -162,7 +162,7 @@ jobs:
       #     echo "$USER"
       - name: 'Install Nix'
         if: ${{ !startsWith(matrix.os, 'self') }}
-        uses: cachix/install-nix-action@master
+        uses: cachix/install-nix-action@v18
         with:
           extra_nix_config: |
             substituters = http://cache.nixos.org https://cache.iog.io
