@@ -421,10 +421,6 @@ expandAlias alias currentArgs
                             Util.substituteInPredicate substitution <$> constraints
                         }
 
--- TODO: fix
-processRewriteRulesTODO :: [RewriteRule] -> [RewriteRule]
-processRewriteRulesTODO = id
-
 addToTheory :: [RewriteRule] -> RewriteTheory -> RewriteTheory
 addToTheory axioms theory =
     let processedRewriteRules = processRewriteRulesTODO axioms
