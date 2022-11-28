@@ -151,8 +151,8 @@ jobs:
       image: nixos/nix
       volumes:
           - nixstore:/nix
-          - "/etc/group:/etc/group:ro"
-          - "/etc/passwd:/etc/passwd:ro"
+          - "/etc/group:/etc/group"
+          - "/etc/passwd:/etc/passwd"
       options: --user github-runner
     env:
       trusted-public-keys: cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= runtimeverification.cachix.org-1:z2UVwHPthsW4qRSfcnG3veR/MFdZp8HS0f8kgacAjvA= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
