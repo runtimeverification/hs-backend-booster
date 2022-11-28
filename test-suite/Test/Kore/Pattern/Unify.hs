@@ -8,15 +8,12 @@ module Test.Kore.Pattern.Unify (
 
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
-import Data.Set qualified as Set
-import Data.Text (Text)
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Kore.Definition.Attributes.Base
-import Kore.Definition.Base
 import Kore.Pattern.Base
 import Kore.Pattern.Unify
+import Test.Kore.Fixture
 
 test_unification :: TestTree
 test_unification =
@@ -168,12 +165,6 @@ andTerms =
 
 ----------------------------------------
 
-var :: VarName -> Sort -> Term
-var variableName variableSort = Var $ Variable{variableSort, variableName}
-
-dv :: Sort -> Text -> Term
-dv = DomainValue
-
 success :: [(VarName, Sort, Term)] -> UnificationResult
 success assocs =
     UnificationSuccess $
@@ -188,97 +179,6 @@ failed = UnificationFailed
 remainder :: [(Term, Term)] -> UnificationResult
 remainder = UnificationRemainder . NE.fromList
 
-----------------------------------------
--- Test fixture
 test :: String -> Term -> Term -> UnificationResult -> TestTree
 test name term1 term2 expected =
     testCase name $ unifyTerms testDefinition term1 term2 @?= expected
-
-someSort, aSubsort, differentSort :: Sort
-someSort = SortApp "SomeSort" []
-aSubsort = SortApp "AnotherSort" []
-differentSort = SortApp "DifferentSort" []
-
-testDefinition :: KoreDefinition
-testDefinition =
-    KoreDefinition
-        { attributes = DefinitionAttributes
-        , modules = Map.singleton "AMODULE" ModuleAttributes
-        , sorts =
-            Map.fromList
-                [ simpleSortInfo someSort
-                , aSubsort `subsortOf` someSort
-                , simpleSortInfo differentSort
-                ]
-        , symbols =
-            Map.fromList
-                [ ("con1", con1)
-                , ("con2", con2)
-                , ("con3", con3)
-                , ("con4", con4)
-                , ("f1", f1)
-                , ("f2", f2)
-                ]
-        , aliases = Map.empty
-        , rewriteTheory = Map.empty
-        }
-  where
-    simpleSortInfo (SortApp n []) = (n, (SortAttributes{argCount = 0}, Set.singleton n))
-    simpleSortInfo other = error $ "Sort info: " <> show other <> " not supported"
-
-    (SortApp sub []) `subsortOf` (SortApp super []) =
-        (sub, (SortAttributes{argCount = 0}, Set.fromList [sub, super]))
-    other1 `subsortOf` other2 =
-        error $ "subSortOf: " <> show (other1, other2) <> " not supported"
-
-app :: Symbol -> [Term] -> Term
-app = SymbolApplication
-
-asTotalFunction, asPartialFunction, asConstructor :: SymbolAttributes
-asTotalFunction = SymbolAttributes TotalFunction False False
-asPartialFunction = SymbolAttributes PartialFunction False False
-asConstructor = SymbolAttributes Constructor False False
-
-con1, con2, con3, con4, f1, f2 :: Symbol
-con1 =
-    Symbol
-        { name = "con1"
-        , resultSort = someSort
-        , argSorts = [someSort]
-        , attributes = asConstructor
-        }
-con2 =
-    Symbol
-        { name = "con2"
-        , resultSort = someSort
-        , argSorts = [someSort]
-        , attributes = asConstructor
-        }
-con3 =
-    Symbol
-        { name = "con3"
-        , resultSort = someSort
-        , argSorts = [someSort, someSort]
-        , attributes = asConstructor
-        }
-con4 =
-    Symbol
-        { name = "con4"
-        , resultSort = aSubsort
-        , argSorts = [someSort, someSort]
-        , attributes = asConstructor
-        }
-f1 =
-    Symbol
-        { name = "f1"
-        , resultSort = someSort
-        , argSorts = [someSort]
-        , attributes = asTotalFunction
-        }
-f2 =
-    Symbol
-        { name = "f2"
-        , resultSort = someSort
-        , argSorts = [someSort]
-        , attributes = asPartialFunction
-        }
