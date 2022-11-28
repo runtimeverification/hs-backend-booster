@@ -76,7 +76,7 @@ prettySummary
                 , "Axioms containing AC symbols: " <> Text.pack (show containAcSymbolsCount)
                 ]
                     <> ("Subsorts:" : map (("- " <>) . uncurry (list decodeLabel')) (Map.assocs subSorts))
-                    <> ("Axioms grouped by term index:" : map (("- " <>) . uncurry (list prettyTermIndexTODO)) (Map.assocs termIndexes'))
+                    <> ("Axioms grouped by term index:" : map (("- " <>) . uncurry (list (Text.pack . show))) (Map.assocs termIndexes'))
       where
         list _ header [] = header <> ": -"
         list f header [x] = header <> ": " <> f x
@@ -88,10 +88,11 @@ prettySummary
 
         decodeLabel' = either error id . decodeLabel
         termIndexes' =
-            Map.mapKeys (Text.pack . show) $
-                Map.map (fmap (Text.pack . const "TODO fix location attribute")) termIndexes
+            Map.mapKeys prettyTermIndex termIndexes
 
-        prettyTermIndexTODO = Text.pack . show
+        prettyTermIndex Anything = "Anything"
+        prettyTermIndex (TopSymbol sym) = decodeLabel' sym
+        prettyTermIndex None = "None"
 
 decodeLabel :: Text -> Either String Text
 decodeLabel str

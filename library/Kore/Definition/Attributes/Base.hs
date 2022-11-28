@@ -60,7 +60,7 @@ type Label = Text
 type Priority = Word8
 
 data Location = Location
-    { file :: FilePath
+    { file :: Text
     , position :: Position
     }
     deriving stock (Eq, Ord, Show, Generic)
