@@ -152,13 +152,10 @@ jobs:
       volumes:
           - nixstore:/nix
     steps:
-      - run: |
-          nix-env -iA nixpkgs.nodejs
       - name: 'Install Cachix'
-        uses: cachix/cachix-action@v10
-        with:
-          name: k-framework
-          authToken: '${{ secrets.CACHIX_PUBLIC_TOKEN }}'
+        run: |
+          nix-env -iA cachix -f https://cachix.org/api/v1/install
+          cachix use runtimeverification
       - name: Build executables
         run: |
           GC_DONT_GC=1 nix build .#hs-backend-booster:exe:hs-backend-booster
