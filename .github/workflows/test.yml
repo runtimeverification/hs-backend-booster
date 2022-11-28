@@ -147,10 +147,10 @@ jobs:
   nix-build-linux:
     name: 'Nix / Unit Tests'
     runs-on: ubuntu-latest
-    # container:
-    #   image: ubuntu:22.04
-      # volumes:
-      #     - nixstore:/nix
+    container:
+      image: nixos/nix:2.7.0
+      volumes:
+          - nixstore:/nix
     steps:
       # - name: 'Set up nix'
       #   run: |
