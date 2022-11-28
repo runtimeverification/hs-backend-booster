@@ -66,7 +66,7 @@
       # Get flake outputs for different GHC versions
       flakesFor = pkgs: builtins.listToAttrs
         (
-          lib.lists.forEach [ defaultCompiler "ghc924" "ghc8107" ]
+          lib.lists.forEach [ defaultCompiler "ghc924"]
             (compiler: lib.attrsets.nameValuePair
               compiler
               ((boosterBackendFor compiler pkgs).flake { })
