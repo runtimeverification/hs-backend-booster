@@ -273,6 +273,7 @@ addModule
                     }
                 )
       where
+        -- TODO(Ana): docs missing, use of 'head' function
         -- returns the
         mappedBy ::
             forall a k.
@@ -530,7 +531,7 @@ computeTermIndex :: Def.Term -> Def.TermIndex
 computeTermIndex config =
     case lookForKCell config of
         Just (Def.SymbolApplication _ children) ->
-            getTermIndex (lookForTopTerm (head children))
+            getTermIndex (lookForTopTerm (getFirstKCellElem children))
         _ -> Def.Anything
   where
     getTermIndex :: Def.Term -> Def.TermIndex
@@ -584,3 +585,6 @@ computeTermIndex config =
     getInjChild [] = error "stripAwaySortInjections: injection with 0 children"
     getInjChild [x] = x
     getInjChild _ = error "stripAwaySortInjections: injection with multiple children"
+
+    getFirstKCellElem [] = error "computeTermIndex: empty K cell"
+    getFirstKCellElem (x : _) = x

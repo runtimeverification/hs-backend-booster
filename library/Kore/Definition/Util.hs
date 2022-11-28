@@ -75,9 +75,12 @@ prettySummary
                 , "Axioms preserving definedness: " <> Text.pack (show preserveDefinednessCount)
                 , "Axioms containing AC symbols: " <> Text.pack (show containAcSymbolsCount)
                 ]
-                    <> ("Subsorts:" : map (("- " <>) . uncurry (list decodeLabel')) (Map.assocs subSorts))
-                    <> ("Axioms grouped by term index:" : map (("- " <>) . uncurry (list (Text.pack . show))) (Map.assocs termIndexes'))
+                    <> ("Subsorts:" : tableView decodeLabel' subSorts)
+                    <> ("Axioms grouped by term index:" : tableView justShow termIndexes')
       where
+        tableView elemShower table =
+            map (("- " <>) . uncurry (list elemShower)) (Map.assocs table)
+
         list _ header [] = header <> ": -"
         list f header [x] = header <> ": " <> f x
         list f header xs =
@@ -87,12 +90,15 @@ prettySummary
                 <> Text.concat (map (("\n  - " <>) . f) xs)
 
         decodeLabel' = either error id . decodeLabel
+
         termIndexes' =
             Map.mapKeys prettyTermIndex termIndexes
 
         prettyTermIndex Anything = "Anything"
         prettyTermIndex (TopSymbol sym) = decodeLabel' sym
         prettyTermIndex None = "None"
+
+        justShow = Text.pack . show
 
 decodeLabel :: Text -> Either String Text
 decodeLabel str
