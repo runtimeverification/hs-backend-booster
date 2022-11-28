@@ -153,7 +153,7 @@ jobs:
           - nixstore:/nix
     steps:
       - run: |
-          nix-env -iA nixpkgs.node
+          nix-env -iA nixpkgs.nodejs
       - name: 'Install Cachix'
         uses: cachix/cachix-action@v10
         with:
