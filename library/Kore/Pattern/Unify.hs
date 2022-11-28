@@ -240,8 +240,8 @@ returnAsRemainder t1 t2 = do
 sortsAgree :: SortTable -> Sort -> Sort -> Bool
 -- do not consider variables (we would need to carry a sort
 -- variable substitution in the state to check consistency)
-sortsAgree _ SortVar{} _ = False
-sortsAgree _ _ SortVar{} = False
+sortsAgree _ SortVar{} _ = True
+sortsAgree _ _ SortVar{} = True
 -- only accept syntactically equal sorts
 sortsAgree st (SortApp sort1 args1) (SortApp sort2 args2) =
     sort1 == sort2
