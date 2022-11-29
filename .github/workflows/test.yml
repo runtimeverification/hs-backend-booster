@@ -161,11 +161,6 @@ jobs:
           distro: jammy
           dockerfile: .github/workflows/Dockerfile.nix
 
-      - name: Install Node
-        uses: actions/setup-node@v3
-        with: 
-          node-version: 16
-
       # - name: 'Set up nix'
       #   run: |
       #     touch /etc/nix/nix.conf
@@ -179,6 +174,11 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+
+      # - name: Install Node
+      #   uses: actions/setup-node@v2
+      #   with: 
+      #     node-version: 15
 
       - name: 'Install Nix'
         uses: cachix/install-nix-action@v18
