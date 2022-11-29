@@ -116,11 +116,13 @@ varsAndValues =
               v2 = var "Y" aSubsort
            in test "two variables (v2 subsort v1)" v1 v2 $
                 -- TODO could be allowed once subsorts are considered while checking
-                (sortErr $ IncompatibleSorts [someSort, aSubsort])
+                sortErr $
+                    IncompatibleSorts [someSort, aSubsort]
         , let v1 = var "X" aSubsort
               v2 = var "Y" someSort
            in test "two variables (v1 subsort v2)" v1 v2 $
-                (sortErr $ IncompatibleSorts [aSubsort, someSort])
+                sortErr $
+                    IncompatibleSorts [aSubsort, someSort]
         , let v1 = var "X" someSort
               v2 = var "X" differentSort
            in test "same variable name, different sort" v1 v2 $
@@ -148,7 +150,8 @@ varsAndValues =
         , let v = var "X" someSort
               d = dv differentSort ""
            in test "var and domain value (different sort)" v d $
-                (sortErr $ IncompatibleSorts [someSort, differentSort])
+                sortErr $
+                    IncompatibleSorts [someSort, differentSort]
         ]
 
 andTerms :: TestTree

@@ -258,7 +258,7 @@ matchSorts patSort subjSort = do
                     sortError $
                         InconsistentSortVariable v [s, subjSort']
             | otherwise ->
-                if (v `Set.member` sortVarsIn subjSort')
+                if v `Set.member` sortVarsIn subjSort'
                     then -- ensure subjSort does not contain v
                         sortError $ SortVariableRecursion v subjSort'
                     else addBinding v subjSort
