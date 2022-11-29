@@ -162,12 +162,12 @@ jobs:
           echo trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= | tee -a /etc/nix/nix.conf
       - name: 'Set up cachix'
         run: |
-          nix build github:cachix/cachix -o cachix
-          ./cachix use runtimeverification
+          # nix build github:cachix/cachix -o cachix
+          # ./cachix use runtimeverification
 
       - name: Build executables
         run: |
-          ./cachix watch-exec runtimeverification -- nix build .#hs-backend-booster:exe:hs-backend-booster
+          # ./cachix watch-exec runtimeverification -- nix build .#hs-backend-booster:exe:hs-backend-booster
           nix build .#hs-backend-booster:exe:parsetest
           nix build .#hs-backend-booster:exe:rpc-client
 
