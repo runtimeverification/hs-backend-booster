@@ -16,12 +16,6 @@ RUN    apt-get update        \
         nix
 
 
-
-RUN locale-gen en_US.UTF-8
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV LC_ALL en_US.UTF-8
-
 # install hpack and hlint from binary packages
 RUN    curl -sSL https://github.com/sol/hpack/releases/download/${HPACK_VERSION}/hpack_linux.gz | gunzip -c > /usr/bin/hpack \
     && chmod +x /usr/bin/hpack \
