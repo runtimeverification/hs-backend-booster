@@ -146,18 +146,24 @@ jobs:
 
   nix-build-linux:
     name: 'Nix / Unit Tests'
-    runs-on: ubuntu-latest
-    # [self-hosted, linux, normal]
+    runs-on: [self-hosted, linux, normal]
     # container:
     #   image: nixos/nix:2.7.0
     #   volumes:
     #       - nixstore:/nix
 
     steps:
-      # - name: Install Node
-        # uses: actions/setup-node@v3
-        # with: 
-        #   node-version: 16
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker
+        with:
+          tag: nix-build-linux-${{ github.run_id }}
+          os: ubuntu
+          distro: jammy
+
+      - name: Install Node
+        uses: actions/setup-node@v3
+        with: 
+          node-version: 16
 
       # - name: 'Set up nix'
       #   run: |
