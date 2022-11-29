@@ -152,6 +152,8 @@ jobs:
       volumes:
           - nixstore:/nix
       options: --privileged
+      env:
+        CACHIX_AUTH_TOKEN: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
     steps:
       - name: 'Set up nix'
         run: |
