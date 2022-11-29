@@ -274,7 +274,7 @@ addModule
                     }
                 )
       where
-        -- Uses 'getKey' to construct a finite mapping from the list, 
+        -- Uses 'getKey' to construct a finite mapping from the list,
         -- returning elements that yield the same key separately.
         mappedBy ::
             forall a k.
