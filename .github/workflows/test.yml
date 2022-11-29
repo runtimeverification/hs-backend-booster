@@ -162,7 +162,7 @@ jobs:
           tag: nix-build-linux-${{ github.run_id }}
           os: ubuntu
           distro: jammy
-          dockerfile: .github/workflows/nix2.Dockerfile
+          dockerfile: ./.github/workflows/nix2.Dockerfile
           cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
       # - name: Install Node
