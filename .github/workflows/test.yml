@@ -1,8 +1,8 @@
 name: 'Build + Test'
 on:
   pull_request:
-  push:
-    branches: ['main']
+  # push:
+  #   branches: ['main']
 
 concurrency:
   # head_ref is defined for PRs only, so we use run_id (unique) for
@@ -144,8 +144,6 @@ jobs:
   #       if: always()
   #       run: |
   #         docker stop --time=0 hs-booster-ci-formatting-style-buster-${{ github.run_id }}
-
-
 
   nix-build-linux:
     name: 'Nix / Unit Tests'
