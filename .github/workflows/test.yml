@@ -143,7 +143,6 @@ jobs:
           docker stop --time=0 hs-booster-ci-formatting-style-buster-${{ github.run_id }}
 
 
-
   nix-build-linux:
     name: 'Nix / Unit Tests'
     runs-on: [self-hosted, linux, normal]
