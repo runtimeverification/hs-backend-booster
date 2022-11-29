@@ -97,6 +97,8 @@ applyRule def pat rule = do
     subst <- case unified of
         UnificationFailed reason ->
             throwE $ RewriteUnificationFailed reason
+        UnificationSortError sortError ->
+            throwE $ RewriteSortError sortError
         UnificationRemainder remainder ->
             throwE $ RewriteUnificationUnclear rule remainder
         UnificationSuccess substitution ->
@@ -147,6 +149,8 @@ data RuleFailed
       RewriteUnificationFailed FailReason
     | -- | The rule's LHS term and the pattern term do not unify with certainty
       RewriteUnificationUnclear RewriteRule (NonEmpty (Term, Term))
+    | -- | A sort error occurred during unification
+      RewriteSortError SortError
     | -- | The unification did not produce a matching substitution
       UnificationIsNotMatch RewriteRule Substitution
     | -- | A constraint of the rule simplifies to Bottom (when substituted)
@@ -156,6 +160,7 @@ data RuleFailed
 isUncertain :: RuleFailed -> Bool
 isUncertain RewriteUnificationFailed{} = False
 isUncertain RewriteUnificationUnclear{} = True
+isUncertain RewriteSortError{} = True
 isUncertain UnificationIsNotMatch{} = True
 isUncertain ConstraintIsBottom{} = False
 

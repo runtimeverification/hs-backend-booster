@@ -33,15 +33,16 @@ sorts =
         [ test "one sort variable in argument" (app con1 [varX]) (app con1 [dSome]) $
             success [("X", sVar, dSome)]
         , test "sort inconsistency in arguments" (app con3 [varX, varY]) (app con3 [dSome, dSub]) $
-            remainder [(varY, dSub)] -- FIXME error does not reveal failure reason
+            sortErr $
+                InconsistentSortVariable "sort me!" [someSort, aSubsort]
         , test "sort variable used twice" (app con3 [varX, varY]) (app con3 [dSome, dSome]) $
             success [("X", sVar, dSome), ("Y", sVar, dSome)]
         , test "several sort variables" (app con3 [varX, varZ]) (app con3 [dSome, dSub]) $
             success [("X", sVar, dSome), ("Z", sVar2, dSub)]
         , test "sort variable in subject" (app con3 [varX, dSub]) (app con3 [dSome, varZ]) $
-            remainder [(dSub, varZ)]
-        , test "same sort variable in both" (app con1 [varX]) (app con1 [varX]) $
-            remainder [(app con1 [varX], app con1 [varX])] -- FIXME error does not tell problem
+            success [("X", sVar, dSome), ("Z", sVar2, dSub)]
+        , test "same sort variable in both" (app con1 [varX]) (app con1 [varY]) $
+            success [("X", sVar, varY)]
         ]
   where
     sVar = SortVar "sort me!"
@@ -76,7 +77,7 @@ constructors =
                 "same constructors, arguments differ in sorts"
                 (app con1 [v])
                 (app con1 [d])
-                (remainder [(v, d)])
+                (sortErr $ IncompatibleSorts [someSort, differentSort])
         , test
             "same constructor, var./term argument"
             (app con1 [var "X" someSort])
@@ -115,11 +116,11 @@ varsAndValues =
               v2 = var "Y" aSubsort
            in test "two variables (v2 subsort v1)" v1 v2 $
                 -- TODO could be allowed once subsorts are considered while checking
-                remainder [(v1, v2)]
+                (sortErr $ IncompatibleSorts [someSort, aSubsort])
         , let v1 = var "X" aSubsort
               v2 = var "Y" someSort
            in test "two variables (v1 subsort v2)" v1 v2 $
-                remainder [(v1, v2)]
+                (sortErr $ IncompatibleSorts [aSubsort, someSort])
         , let v1 = var "X" someSort
               v2 = var "X" differentSort
            in test "same variable name, different sort" v1 v2 $
@@ -147,7 +148,7 @@ varsAndValues =
         , let v = var "X" someSort
               d = dv differentSort ""
            in test "var and domain value (different sort)" v d $
-                remainder [(v, d)]
+                (sortErr $ IncompatibleSorts [someSort, differentSort])
         ]
 
 andTerms :: TestTree
@@ -205,6 +206,9 @@ failed = UnificationFailed
 
 remainder :: [(Term, Term)] -> UnificationResult
 remainder = UnificationRemainder . NE.fromList
+
+sortErr :: SortError -> UnificationResult
+sortErr = UnificationSortError
 
 test :: String -> Term -> Term -> UnificationResult -> TestTree
 test name term1 term2 expected =
