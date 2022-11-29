@@ -163,7 +163,9 @@ jobs:
           echo trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= | tee -a /etc/nix/nix.conf
       - name: 'Set up cachix'
         run: |
-          nix profile install github:cachix/cachix
+          if ! command -v cachix &> /dev/null; then
+              nix profile install github:cachix/cachix
+          fi
           cachix use runtimeverification
 
       - name: Build executables
