@@ -147,21 +147,21 @@ jobs:
 
   nix-build-linux:
     name: 'Nix / Unit Tests'
-    runs-on: [self-hosted, linux, normal]
+    runs-on: [self-hosted, linux, normal, github-runner-18]
     # container:
     #   image: nixos/nix:2.7.0
     #   volumes:
     #       - nixstore:/nix
 
     steps:
-      - name: 'Set up Docker'
-        uses: ./.github/actions/with-docker
-        with:
-          tag: nix-build-linux-${{ github.run_id }}
-          os: ubuntu
-          distro: jammy
-          dockerfile: .github/workflows/Dockerfile.nix
-          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
+      # - name: 'Set up Docker'
+      #   uses: ./.github/actions/with-docker
+      #   with:
+      #     tag: nix-build-linux-${{ github.run_id }}
+      #     os: ubuntu
+      #     distro: jammy
+      #     dockerfile: .github/workflows/Dockerfile.nix
+      #     cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
       # - name: Install Node
       #   uses: actions/setup-node@v3
@@ -207,10 +207,10 @@ jobs:
       - name: Run unit tests
         run: nix build .#hs-backend-booster:test:test-suite
       
-      - name: 'Tear down Docker'
-        if: always()
-        run: |
-          docker stop --time=0 nix-build-linux-${{ github.run_id }}
+      # - name: 'Tear down Docker'
+      #   if: always()
+      #   run: |
+      #     docker stop --time=0 nix-build-linux-${{ github.run_id }}
 
 
   # nix-build-m1:
