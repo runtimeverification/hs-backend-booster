@@ -18,132 +18,132 @@ env:
 
 jobs:
 
-  stack:
-    name: 'Stack / Unit Tests'
-    runs-on: [self-hosted, linux, normal]
-    steps:
+  # stack:
+  #   name: 'Stack / Unit Tests'
+  #   runs-on: [self-hosted, linux, normal]
+  #   steps:
 
-      - name: 'Checkout Code'
-        uses: actions/checkout@v3
-        with:
-          # Check out pull request HEAD instead of merge commit.
-          ref: ${{ github.event.pull_request.head.sha }}
+  #     - name: 'Checkout Code'
+  #       uses: actions/checkout@v3
+  #       with:
+  #         # Check out pull request HEAD instead of merge commit.
+  #         ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: 'Cache Stack root'
-        uses: actions/cache@v3
-        with:
-          path: stack-cache
-          key: stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('stack.yaml.lock') }}
-          restore-keys: |
-            stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
-            stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}
-            stack-2-${{ runner.os }}
+  #     - name: 'Cache Stack root'
+  #       uses: actions/cache@v3
+  #       with:
+  #         path: stack-cache
+  #         key: stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('stack.yaml.lock') }}
+  #         restore-keys: |
+  #           stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
+  #           stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}
+  #           stack-2-${{ runner.os }}
 
-      - name: 'Set up Docker'
-        uses: ./.github/actions/with-docker
-        with:
-          tag: hs-booster-ci-stack-unit-buster-${{ github.run_id }}
-          os: ubuntu
-          distro: jammy
-          fourmolu: ${{ env.fourmolu_version }}
-          hlint: ${{ env.hlint_version }}
-          hpack: ${{ env.hpack_version }}
-          ghc: ${{ env.ghc_version }}
-          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
+  #     - name: 'Set up Docker'
+  #       uses: ./.github/actions/with-docker
+  #       with:
+  #         tag: hs-booster-ci-stack-unit-buster-${{ github.run_id }}
+  #         os: ubuntu
+  #         distro: jammy
+  #         fourmolu: ${{ env.fourmolu_version }}
+  #         hlint: ${{ env.hlint_version }}
+  #         hpack: ${{ env.hpack_version }}
+  #         ghc: ${{ env.ghc_version }}
+  #         cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
-      - name: 'Run unit tests'
-        run: docker exec -t hs-booster-ci-stack-unit-buster-${{ github.run_id }} /bin/bash -c 'stack --system-ghc --stack-root $(pwd)/stack-cache test --pedantic'
+  #     - name: 'Run unit tests'
+  #       run: docker exec -t hs-booster-ci-stack-unit-buster-${{ github.run_id }} /bin/bash -c 'stack --system-ghc --stack-root $(pwd)/stack-cache test --pedantic'
 
-      - name: 'Tear down Docker'
-        if: always()
-        run: |
-          docker stop --time=0 hs-booster-ci-stack-unit-buster-${{ github.run_id }}
+  #     - name: 'Tear down Docker'
+  #       if: always()
+  #       run: |
+  #         docker stop --time=0 hs-booster-ci-stack-unit-buster-${{ github.run_id }}
 
-  cabal:
-    name: 'Cabal / Unit Tests'
-    runs-on: [self-hosted, linux, normal]
-    steps:
+  # cabal:
+  #   name: 'Cabal / Unit Tests'
+  #   runs-on: [self-hosted, linux, normal]
+  #   steps:
 
-      - name: 'Checkout Code'
-        uses: actions/checkout@v3
-        with:
-          # Check out pull request HEAD instead of merge commit.
-          ref: ${{ github.event.pull_request.head.sha }}
+  #     - name: 'Checkout Code'
+  #       uses: actions/checkout@v3
+  #       with:
+  #         # Check out pull request HEAD instead of merge commit.
+  #         ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: 'Cache Cabal package database and store'
-        uses: actions/cache@v3
-        with:
-          path: |
-            cabal-cache/packages
-            cabal-cache/store
-          key: cabal-2-${{ runner.os }}-ghc-${{ env.ghc_version }}-${{ hashFiles('package.yaml') }}
-          restore-keys: |
-            cabal-2-${{ runner.os }}-ghc-${{ env.ghc_version }}-
+  #     - name: 'Cache Cabal package database and store'
+  #       uses: actions/cache@v3
+  #       with:
+  #         path: |
+  #           cabal-cache/packages
+  #           cabal-cache/store
+  #         key: cabal-2-${{ runner.os }}-ghc-${{ env.ghc_version }}-${{ hashFiles('package.yaml') }}
+  #         restore-keys: |
+  #           cabal-2-${{ runner.os }}-ghc-${{ env.ghc_version }}-
 
-      - name: 'Set up Docker'
-        uses: ./.github/actions/with-docker
-        with:
-          tag: hs-booster-ci-cabal-unit-buster-${{ github.run_id }}
-          os: ubuntu
-          distro: jammy
-          fourmolu: ${{ env.fourmolu_version }}
-          hlint: ${{ env.hlint_version }}
-          hpack: ${{ env.hpack_version }}
-          ghc: ${{ env.ghc_version }}
-          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
+  #     - name: 'Set up Docker'
+  #       uses: ./.github/actions/with-docker
+  #       with:
+  #         tag: hs-booster-ci-cabal-unit-buster-${{ github.run_id }}
+  #         os: ubuntu
+  #         distro: jammy
+  #         fourmolu: ${{ env.fourmolu_version }}
+  #         hlint: ${{ env.hlint_version }}
+  #         hpack: ${{ env.hpack_version }}
+  #         ghc: ${{ env.ghc_version }}
+  #         cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
-      - name: 'Run hpack'
-        run: |
-          docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} /bin/bash -c 'hpack'
+  #     - name: 'Run hpack'
+  #       run: |
+  #         docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} /bin/bash -c 'hpack'
 
-      - name: 'Build and run unit tests'
-        run: |
-          docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} \
-            /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store v2-test --enable-tests --test-show-details=direct'
+  #     - name: 'Build and run unit tests'
+  #       run: |
+  #         docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} \
+  #           /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store v2-test --enable-tests --test-show-details=direct'
 
-      - name: 'Configure with profiling'
-        run: |
-          docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} \
-            /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store v2-configure --enable-profiling -f-threaded'
+  #     - name: 'Configure with profiling'
+  #       run: |
+  #         docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} \
+  #           /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store v2-configure --enable-profiling -f-threaded'
 
-      - name: 'Tear down Docker'
-        if: always()
-        run: |
-          docker stop --time=0 hs-booster-ci-cabal-unit-buster-${{ github.run_id }}
+  #     - name: 'Tear down Docker'
+  #       if: always()
+  #       run: |
+  #         docker stop --time=0 hs-booster-ci-cabal-unit-buster-${{ github.run_id }}
 
-  style:
-    name: 'Formatting and Style'
-    runs-on: [self-hosted, linux, normal]
-    steps:
+  # style:
+  #   name: 'Formatting and Style'
+  #   runs-on: [self-hosted, linux, normal]
+  #   steps:
 
-      - name: 'Checkout Code'
-        uses: actions/checkout@v3
-        with:
-          # Check out pull request HEAD instead of merge commit.
-          ref: ${{ github.event.pull_request.head.sha }}
+  #     - name: 'Checkout Code'
+  #       uses: actions/checkout@v3
+  #       with:
+  #         # Check out pull request HEAD instead of merge commit.
+  #         ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: 'Set up Docker'
-        uses: ./.github/actions/with-docker
-        with:
-          tag: hs-booster-ci-formatting-style-buster-${{ github.run_id }}
-          os: ubuntu
-          distro: jammy
-          fourmolu: ${{ env.fourmolu_version }}
-          hlint: ${{ env.hlint_version }}
-          hpack: ${{ env.hpack_version }}
-          ghc: ${{ env.ghc_version }}
-          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
+  #     - name: 'Set up Docker'
+  #       uses: ./.github/actions/with-docker
+  #       with:
+  #         tag: hs-booster-ci-formatting-style-buster-${{ github.run_id }}
+  #         os: ubuntu
+  #         distro: jammy
+  #         fourmolu: ${{ env.fourmolu_version }}
+  #         hlint: ${{ env.hlint_version }}
+  #         hpack: ${{ env.hpack_version }}
+  #         ghc: ${{ env.ghc_version }}
+  #         cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
-      - name: 'Check formatting'
-        run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/fourmolu.sh && git diff --exit-code'
+  #     - name: 'Check formatting'
+  #       run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/fourmolu.sh && git diff --exit-code'
 
-      - name: 'Run hlint'
-        run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c 'hlint -g -j'
+  #     - name: 'Run hlint'
+  #       run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c 'hlint -g -j'
 
-      - name: 'Tear down Docker'
-        if: always()
-        run: |
-          docker stop --time=0 hs-booster-ci-formatting-style-buster-${{ github.run_id }}
+  #     - name: 'Tear down Docker'
+  #       if: always()
+  #       run: |
+  #         docker stop --time=0 hs-booster-ci-formatting-style-buster-${{ github.run_id }}
 
 
 
