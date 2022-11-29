@@ -164,7 +164,7 @@ jobs:
       - name: 'Set up cachix'
         run: |
           if ! command -v cachix &> /dev/null; then
-              nix profile install github:cachix/cachix
+              nix shell github:cachix/cachix
           fi
           cachix use runtimeverification
 
