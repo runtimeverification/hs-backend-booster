@@ -49,6 +49,7 @@ jobs:
           hlint: ${{ env.hlint_version }}
           hpack: ${{ env.hpack_version }}
           ghc: ${{ env.ghc_version }}
+          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
       - name: 'Run unit tests'
         run: docker exec -t hs-booster-ci-stack-unit-buster-${{ github.run_id }} /bin/bash -c 'stack --system-ghc --stack-root $(pwd)/stack-cache test --pedantic'
@@ -89,6 +90,7 @@ jobs:
           hlint: ${{ env.hlint_version }}
           hpack: ${{ env.hpack_version }}
           ghc: ${{ env.ghc_version }}
+          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
       - name: 'Run hpack'
         run: |
@@ -130,6 +132,7 @@ jobs:
           hlint: ${{ env.hlint_version }}
           hpack: ${{ env.hpack_version }}
           ghc: ${{ env.ghc_version }}
+          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
       - name: 'Check formatting'
         run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/fourmolu.sh && git diff --exit-code'
@@ -143,37 +146,77 @@ jobs:
           docker stop --time=0 hs-booster-ci-formatting-style-buster-${{ github.run_id }}
 
 
+
   nix-build-linux:
-    name: 'Nix / Unit Tests linux'
+    name: 'Nix / Unit Tests'
     runs-on: [self-hosted, linux, normal]
     # container:
     #   image: nixos/nix:2.7.0
     #   volumes:
     #       - nixstore:/nix
-    #   env:
-    #     CACHIX_AUTH_TOKEN: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
+
     steps:
       - name: 'Set up Docker'
-        uses: ./.github/actions/with-docker-nix
+        uses: ./.github/actions/with-docker
         with:
-          tag: hs-booster-ci-nix-buster-${{ github.run_id }}
+          tag: nix-build-linux-${{ github.run_id }}
           os: ubuntu
           distro: jammy
-          cachix_token: ${{ secrets.CACHIX_PRIVATE_TOKEN }}
+          dockerfile: .github/workflows/nix.Dockerfile
+          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
+
+      # - name: Install Node
+      #   uses: actions/setup-node@v3
+      #   with: 
+      #     node-version: 16
+
+      # - name: 'Set up nix'
+      #   run: |
+      #     touch /etc/nix/nix.conf
+      #     echo experimental-features = nix-command flakes | tee -a /etc/nix/nix.conf
+      #     echo substituters = https://cache.nixos.org/ https://runtimeverification.cachix.org https://cache.iog.io | tee -a /etc/nix/nix.conf
+      #     echo trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= runtimeverification.cachix.org-1:z2UVwHPthsW4qRSfcnG3veR/MFdZp8HS0f8kgacAjvA= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+      #     nix show-config
+      #     echo "$USER"
+
+      - name: 'Check out code'
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # - name: 'Install Nix'
+      #   uses: cachix/install-nix-action@v18
+      #   with:
+      #     extra_nix_config: |
+      #       access-token = github.com=${{ secrets.GITHUB_TOKEN }}
+      #       substituters = http://cache.nixos.org https://cache.iog.io
+      #       trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+
+      # - name: 'Install Cachix'
+      # #   run: |
+      # #     nix-env -iA cachix -f https://cachix.org/api/v1/install
+      #   uses: cachix/cachix-action@v10
+      #   with:
+      #     name: k-framework
+      #     signingKey: '${{ secrets.CACHIX_PUBLIC_KEY }}'
 
       - name: Build executables
         run: |
-          # ./cachix watch-exec runtimeverification -- nix build .#hs-backend-booster:exe:hs-backend-booster
+          nix build .#hs-backend-booster:exe:hs-backend-booster
           nix build .#hs-backend-booster:exe:parsetest
           nix build .#hs-backend-booster:exe:rpc-client
 
       - name: Run unit tests
         run: nix build .#hs-backend-booster:test:test-suite
-
+      
+      - name: 'Tear down Docker'
+        if: always()
+        run: |
+          docker stop --time=0 nix-build-linux-${{ github.run_id }}
 
 
   nix-build-m1:
-    name: 'Nix / Unit Tests M1'
+    name: 'Nix / Unit Tests'
     strategy:
       fail-fast: false
     runs-on: MacM1

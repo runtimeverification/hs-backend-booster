@@ -23,6 +23,9 @@ inputs:
   fourmolu:
     description: 'fourmolu version to use.'
     required: true
+  cachix_auth_token:
+    description: 'Cachix auth token'
+    required: true
   ghc:
     description: 'ghc version to use (determine base image)'
     required: true
@@ -49,6 +52,7 @@ runs:
       HPACK_VERSION: ${{ inputs.hpack }}
       GHC_VERSION: ${{ inputs.ghc }}
       FOURMOLU_VERSION: ${{ inputs.fourmolu }}
+      CACHIX_AUTH_TOKEN: ${{ inputs.cachix_auth_token }}
       DOCKERFILE: ${{ inputs.dockerfile }}
       DOCKER_RUN_ARGS: ${{ inputs.docker-run-args }}
     run: |
@@ -67,6 +71,7 @@ runs:
           --build-arg HLINT_VERSION=${HLINT_VERSION}                  \
           --build-arg GHC_VERSION=${GHC_VERSION}                      \
           --build-arg FOURMOLU_VERSION=${FOURMOLU_VERSION}            \
+          --build-arg CACHIX_AUTH_TOKEN=${CACHIX_AUTH_TOKEN}          \
           --build-arg USER=${USER} --build-arg USER_ID=${USER_ID}     \
           --build-arg GROUP=${GROUP} --build-arg GROUP_ID=${GROUP_ID}
 
@@ -79,5 +84,6 @@ runs:
           -v "$(pwd):/opt/workspace"         \
           -v "/etc/passwd:/etc/passwd:ro"    \
           -v "/etc/group:/etc/group:ro"      \
+          -v nixstore:/nix                   \
           ${DOCKER_RUN_ARGS}                 \
           runtimeverification/${TAG_NAME}
