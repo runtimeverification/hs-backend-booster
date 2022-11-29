@@ -274,8 +274,8 @@ addModule
                     }
                 )
       where
-        -- TODO(Ana): docs missing, use of 'head' function
-        -- returns the
+        -- Uses 'getKey' to construct a finite mapping from the list, 
+        -- returning elements that yield the same key separately.
         mappedBy ::
             forall a k.
             (Ord k) =>
