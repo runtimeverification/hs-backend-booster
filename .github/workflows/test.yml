@@ -162,7 +162,7 @@ jobs:
           tag: nix-build-linux-${{ github.run_id }}
           os: ubuntu
           distro: jammy
-          dockerfile: .github/workflows/nix.Dockerfile
+          dockerfile: .github/workflows/nix2.Dockerfile
           cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
       # - name: Install Node
@@ -215,26 +215,26 @@ jobs:
           docker stop --time=0 nix-build-linux-${{ github.run_id }}
 
 
-  nix-build-m1:
-    name: 'Nix / Unit Tests'
-    strategy:
-      fail-fast: false
-    runs-on: MacM1
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v2.3.4
-        with:
-          # Check out pull request HEAD instead of merge commit.
-          ref: ${{ github.event.pull_request.head.sha }}
+  # nix-build-m1:
+  #   name: 'Nix / Unit Tests'
+  #   strategy:
+  #     fail-fast: false
+  #   runs-on: MacM1
+  #   steps:
+  #     - name: Check out code
+  #       uses: actions/checkout@v2.3.4
+  #       with:
+  #         # Check out pull request HEAD instead of merge commit.
+  #         ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: 'Upgrade bash'
-        run: brew install bash
+  #     - name: 'Upgrade bash'
+  #       run: brew install bash
 
-      - name: Build executables
-        run: |
-          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:hs-backend-booster
-          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:parsetest
-          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:rpc-client
+  #     - name: Build executables
+  #       run: |
+  #         GC_DONT_GC=1 nix build .#hs-backend-booster:exe:hs-backend-booster
+  #         GC_DONT_GC=1 nix build .#hs-backend-booster:exe:parsetest
+  #         GC_DONT_GC=1 nix build .#hs-backend-booster:exe:rpc-client
 
-      - name: Run unit tests
-        run: GC_DONT_GC=1 nix build .#hs-backend-booster:test:test-suite
+  #     - name: Run unit tests
+  #       run: GC_DONT_GC=1 nix build .#hs-backend-booster:test:test-suite
