@@ -22,12 +22,14 @@ ARG USER_ID=1000
 ARG GROUP_ID=$USER_ID
 RUN groupadd -g $GROUP_ID $GROUP && useradd -m -u $USER_ID -s /bin/sh -g $GROUP $USER
 
-USER $USER:$GROUP
 
 RUN    mkdir -p /etc/nix && touch /etc/nix/nix.conf
 RUN    echo experimental-features = nix-command flakes | tee -a /etc/nix/nix.conf \
     && echo substituters = https://cache.nixos.org/ https://cache.iog.io | tee -a /etc/nix/nix.conf \
     && echo trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= | tee -a /etc/nix/nix.conf
+
+USER $USER:$GROUP
+
 RUN    nix-env -iA cachix -f https://cachix.org/api/v1/install \
     && cachix use runtimeverification
 
