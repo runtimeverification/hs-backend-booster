@@ -157,6 +157,11 @@ jobs:
     #       - nixstore:/nix
 
     steps:
+      - name: 'Check out code'
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+ 
       - name: 'Set up Docker'
         uses: ./.github/actions/with-docker
         with:
@@ -180,11 +185,6 @@ jobs:
       #     nix show-config
       #     echo "$USER"
 
-      - name: 'Check out code'
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
       # - name: 'Install Nix'
       #   uses: cachix/install-nix-action@v18
       #   with:
@@ -203,12 +203,12 @@ jobs:
 
       - name: Build executables
         run: |
-          nix build .#hs-backend-booster:exe:hs-backend-booster
-          nix build .#hs-backend-booster:exe:parsetest
-          nix build .#hs-backend-booster:exe:rpc-client
+          docker exec -t nix-build-linux-${{ github.run_id }} /bin/bash -c "nix build .#hs-backend-booster:exe:hs-backend-booster
+          docker exec -t nix-build-linux-${{ github.run_id }} /bin/bash -c "nix build .#hs-backend-booster:exe:parsetest
+          docker exec -t nix-build-linux-${{ github.run_id }} /bin/bash -c "nix build .#hs-backend-booster:exe:rpc-client
 
       - name: Run unit tests
-        run: nix build .#hs-backend-booster:test:test-suite
+        run: docker exec -t nix-build-linux-${{ github.run_id }} /bin/bash -c "nix build .#hs-backend-booster:test:test-suite
       
       - name: 'Tear down Docker'
         if: always()
