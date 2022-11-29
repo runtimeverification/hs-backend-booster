@@ -1,8 +1,8 @@
 name: 'Build + Test'
 on:
   pull_request:
-  # push:
-  #   branches: ['main']
+  push:
+    branches: ['main']
 
 concurrency:
   # head_ref is defined for PRs only, so we use run_id (unique) for
@@ -18,185 +18,156 @@ env:
 
 jobs:
 
-  # stack:
-  #   name: 'Stack / Unit Tests'
-  #   runs-on: [self-hosted, linux, normal]
-  #   steps:
+  stack:
+    name: 'Stack / Unit Tests'
+    runs-on: [self-hosted, linux, normal]
+    steps:
 
-  #     - name: 'Checkout Code'
-  #       uses: actions/checkout@v3
-  #       with:
-  #         # Check out pull request HEAD instead of merge commit.
-  #         ref: ${{ github.event.pull_request.head.sha }}
+      - name: 'Checkout Code'
+        uses: actions/checkout@v3
+        with:
+          # Check out pull request HEAD instead of merge commit.
+          ref: ${{ github.event.pull_request.head.sha }}
 
-  #     - name: 'Cache Stack root'
-  #       uses: actions/cache@v3
-  #       with:
-  #         path: stack-cache
-  #         key: stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('stack.yaml.lock') }}
-  #         restore-keys: |
-  #           stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
-  #           stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}
-  #           stack-2-${{ runner.os }}
+      - name: 'Cache Stack root'
+        uses: actions/cache@v3
+        with:
+          path: stack-cache
+          key: stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('stack.yaml.lock') }}
+          restore-keys: |
+            stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
+            stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}
+            stack-2-${{ runner.os }}
 
-  #     - name: 'Set up Docker'
-  #       uses: ./.github/actions/with-docker
-  #       with:
-  #         tag: hs-booster-ci-stack-unit-buster-${{ github.run_id }}
-  #         os: ubuntu
-  #         distro: jammy
-  #         fourmolu: ${{ env.fourmolu_version }}
-  #         hlint: ${{ env.hlint_version }}
-  #         hpack: ${{ env.hpack_version }}
-  #         ghc: ${{ env.ghc_version }}
-  #         cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker
+        with:
+          tag: hs-booster-ci-stack-unit-buster-${{ github.run_id }}
+          os: ubuntu
+          distro: jammy
+          fourmolu: ${{ env.fourmolu_version }}
+          hlint: ${{ env.hlint_version }}
+          hpack: ${{ env.hpack_version }}
+          ghc: ${{ env.ghc_version }}
+          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
-  #     - name: 'Run unit tests'
-  #       run: docker exec -t hs-booster-ci-stack-unit-buster-${{ github.run_id }} /bin/bash -c 'stack --system-ghc --stack-root $(pwd)/stack-cache test --pedantic'
+      - name: 'Run unit tests'
+        run: docker exec -t hs-booster-ci-stack-unit-buster-${{ github.run_id }} /bin/bash -c 'stack --system-ghc --stack-root $(pwd)/stack-cache test --pedantic'
 
-  #     - name: 'Tear down Docker'
-  #       if: always()
-  #       run: |
-  #         docker stop --time=0 hs-booster-ci-stack-unit-buster-${{ github.run_id }}
+      - name: 'Tear down Docker'
+        if: always()
+        run: |
+          docker stop --time=0 hs-booster-ci-stack-unit-buster-${{ github.run_id }}
 
-  # cabal:
-  #   name: 'Cabal / Unit Tests'
-  #   runs-on: [self-hosted, linux, normal]
-  #   steps:
+  cabal:
+    name: 'Cabal / Unit Tests'
+    runs-on: [self-hosted, linux, normal]
+    steps:
 
-  #     - name: 'Checkout Code'
-  #       uses: actions/checkout@v3
-  #       with:
-  #         # Check out pull request HEAD instead of merge commit.
-  #         ref: ${{ github.event.pull_request.head.sha }}
+      - name: 'Checkout Code'
+        uses: actions/checkout@v3
+        with:
+          # Check out pull request HEAD instead of merge commit.
+          ref: ${{ github.event.pull_request.head.sha }}
 
-  #     - name: 'Cache Cabal package database and store'
-  #       uses: actions/cache@v3
-  #       with:
-  #         path: |
-  #           cabal-cache/packages
-  #           cabal-cache/store
-  #         key: cabal-2-${{ runner.os }}-ghc-${{ env.ghc_version }}-${{ hashFiles('package.yaml') }}
-  #         restore-keys: |
-  #           cabal-2-${{ runner.os }}-ghc-${{ env.ghc_version }}-
+      - name: 'Cache Cabal package database and store'
+        uses: actions/cache@v3
+        with:
+          path: |
+            cabal-cache/packages
+            cabal-cache/store
+          key: cabal-2-${{ runner.os }}-ghc-${{ env.ghc_version }}-${{ hashFiles('package.yaml') }}
+          restore-keys: |
+            cabal-2-${{ runner.os }}-ghc-${{ env.ghc_version }}-
 
-  #     - name: 'Set up Docker'
-  #       uses: ./.github/actions/with-docker
-  #       with:
-  #         tag: hs-booster-ci-cabal-unit-buster-${{ github.run_id }}
-  #         os: ubuntu
-  #         distro: jammy
-  #         fourmolu: ${{ env.fourmolu_version }}
-  #         hlint: ${{ env.hlint_version }}
-  #         hpack: ${{ env.hpack_version }}
-  #         ghc: ${{ env.ghc_version }}
-  #         cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker
+        with:
+          tag: hs-booster-ci-cabal-unit-buster-${{ github.run_id }}
+          os: ubuntu
+          distro: jammy
+          fourmolu: ${{ env.fourmolu_version }}
+          hlint: ${{ env.hlint_version }}
+          hpack: ${{ env.hpack_version }}
+          ghc: ${{ env.ghc_version }}
+          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
-  #     - name: 'Run hpack'
-  #       run: |
-  #         docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} /bin/bash -c 'hpack'
+      - name: 'Run hpack'
+        run: |
+          docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} /bin/bash -c 'hpack'
 
-  #     - name: 'Build and run unit tests'
-  #       run: |
-  #         docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} \
-  #           /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store v2-test --enable-tests --test-show-details=direct'
+      - name: 'Build and run unit tests'
+        run: |
+          docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} \
+            /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store v2-test --enable-tests --test-show-details=direct'
 
-  #     - name: 'Configure with profiling'
-  #       run: |
-  #         docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} \
-  #           /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store v2-configure --enable-profiling -f-threaded'
+      - name: 'Configure with profiling'
+        run: |
+          docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} \
+            /bin/bash -c 'cabal --store-dir /opt/workspace/cabal-cache/store v2-configure --enable-profiling -f-threaded'
 
-  #     - name: 'Tear down Docker'
-  #       if: always()
-  #       run: |
-  #         docker stop --time=0 hs-booster-ci-cabal-unit-buster-${{ github.run_id }}
+      - name: 'Tear down Docker'
+        if: always()
+        run: |
+          docker stop --time=0 hs-booster-ci-cabal-unit-buster-${{ github.run_id }}
 
-  # style:
-  #   name: 'Formatting and Style'
-  #   runs-on: [self-hosted, linux, normal]
-  #   steps:
+  style:
+    name: 'Formatting and Style'
+    runs-on: [self-hosted, linux, normal]
+    steps:
 
-  #     - name: 'Checkout Code'
-  #       uses: actions/checkout@v3
-  #       with:
-  #         # Check out pull request HEAD instead of merge commit.
-  #         ref: ${{ github.event.pull_request.head.sha }}
+      - name: 'Checkout Code'
+        uses: actions/checkout@v3
+        with:
+          # Check out pull request HEAD instead of merge commit.
+          ref: ${{ github.event.pull_request.head.sha }}
 
-  #     - name: 'Set up Docker'
-  #       uses: ./.github/actions/with-docker
-  #       with:
-  #         tag: hs-booster-ci-formatting-style-buster-${{ github.run_id }}
-  #         os: ubuntu
-  #         distro: jammy
-  #         fourmolu: ${{ env.fourmolu_version }}
-  #         hlint: ${{ env.hlint_version }}
-  #         hpack: ${{ env.hpack_version }}
-  #         ghc: ${{ env.ghc_version }}
-  #         cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker
+        with:
+          tag: hs-booster-ci-formatting-style-buster-${{ github.run_id }}
+          os: ubuntu
+          distro: jammy
+          fourmolu: ${{ env.fourmolu_version }}
+          hlint: ${{ env.hlint_version }}
+          hpack: ${{ env.hpack_version }}
+          ghc: ${{ env.ghc_version }}
+          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
-  #     - name: 'Check formatting'
-  #       run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/fourmolu.sh && git diff --exit-code'
+      - name: 'Check formatting'
+        run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/fourmolu.sh && git diff --exit-code'
 
-  #     - name: 'Run hlint'
-  #       run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c 'hlint -g -j'
+      - name: 'Run hlint'
+        run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c 'hlint -g -j'
 
-  #     - name: 'Tear down Docker'
-  #       if: always()
-  #       run: |
-  #         docker stop --time=0 hs-booster-ci-formatting-style-buster-${{ github.run_id }}
+      - name: 'Tear down Docker'
+        if: always()
+        run: |
+          docker stop --time=0 hs-booster-ci-formatting-style-buster-${{ github.run_id }}
 
   nix-build-linux:
     name: 'Nix / Unit Tests'
     runs-on: [self-hosted, linux, normal, github-runner-18]
-    # container:
-    #   image: nixos/nix:2.7.0
-    #   volumes:
-    #       - nixstore:/nix
 
     steps:
-      # - name: 'Set up Docker'
-      #   uses: ./.github/actions/with-docker
-      #   with:
-      #     tag: nix-build-linux-${{ github.run_id }}
-      #     os: ubuntu
-      #     distro: jammy
-      #     dockerfile: .github/workflows/Dockerfile.nix
-      #     cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker
+        with:
+          tag: nix-build-linux-${{ github.run_id }}
+          os: ubuntu
+          distro: jammy
+          dockerfile: .github/workflows/Dockerfile.nix
+          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
-      # - name: Install Node
-      #   uses: actions/setup-node@v3
-      #   with: 
-      #     node-version: 16
-
-      # - name: 'Set up nix'
-      #   run: |
-      #     touch /etc/nix/nix.conf
-      #     echo experimental-features = nix-command flakes | tee -a /etc/nix/nix.conf
-      #     echo substituters = https://cache.nixos.org/ https://runtimeverification.cachix.org https://cache.iog.io | tee -a /etc/nix/nix.conf
-      #     echo trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= runtimeverification.cachix.org-1:z2UVwHPthsW4qRSfcnG3veR/MFdZp8HS0f8kgacAjvA= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
-      #     nix show-config
-      #     echo "$USER"
+      - name: Install Node
+        uses: actions/setup-node@v3
+        with: 
+          node-version: 16
 
       - name: 'Check out code'
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-
-      # - name: 'Install Nix'
-      #   uses: cachix/install-nix-action@v18
-      #   with:
-      #     extra_nix_config: |
-      #       access-token = github.com=${{ secrets.GITHUB_TOKEN }}
-      #       substituters = http://cache.nixos.org https://cache.iog.io
-      #       trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
-
-      # - name: 'Install Cachix'
-      # #   run: |
-      # #     nix-env -iA cachix -f https://cachix.org/api/v1/install
-      #   uses: cachix/cachix-action@v10
-      #   with:
-      #     name: k-framework
-      #     signingKey: '${{ secrets.CACHIX_PUBLIC_KEY }}'
 
       - name: Build executables
         run: |
@@ -206,33 +177,27 @@ jobs:
 
       - name: Run unit tests
         run: nix build .#hs-backend-booster:test:test-suite
-      
-      # - name: 'Tear down Docker'
-      #   if: always()
-      #   run: |
-      #     docker stop --time=0 nix-build-linux-${{ github.run_id }}
 
+  nix-build-m1:
+    name: 'Nix / Unit Tests'
+    strategy:
+      fail-fast: false
+    runs-on: MacM1
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2.3.4
+        with:
+          # Check out pull request HEAD instead of merge commit.
+          ref: ${{ github.event.pull_request.head.sha }}
 
-  # nix-build-m1:
-  #   name: 'Nix / Unit Tests'
-  #   strategy:
-  #     fail-fast: false
-  #   runs-on: MacM1
-  #   steps:
-  #     - name: Check out code
-  #       uses: actions/checkout@v2.3.4
-  #       with:
-  #         # Check out pull request HEAD instead of merge commit.
-  #         ref: ${{ github.event.pull_request.head.sha }}
+      - name: 'Upgrade bash'
+        run: brew install bash
 
-  #     - name: 'Upgrade bash'
-  #       run: brew install bash
+      - name: Build executables
+        run: |
+          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:hs-backend-booster
+          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:parsetest
+          GC_DONT_GC=1 nix build .#hs-backend-booster:exe:rpc-client
 
-  #     - name: Build executables
-  #       run: |
-  #         GC_DONT_GC=1 nix build .#hs-backend-booster:exe:hs-backend-booster
-  #         GC_DONT_GC=1 nix build .#hs-backend-booster:exe:parsetest
-  #         GC_DONT_GC=1 nix build .#hs-backend-booster:exe:rpc-client
-
-  #     - name: Run unit tests
-  #       run: GC_DONT_GC=1 nix build .#hs-backend-booster:test:test-suite
+      - name: Run unit tests
+        run: GC_DONT_GC=1 nix build .#hs-backend-booster:test:test-suite
