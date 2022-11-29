@@ -159,6 +159,7 @@ jobs:
           tag: nix-build-linux-${{ github.run_id }}
           os: ubuntu
           distro: jammy
+          dockerfile: .github/workflows/Dockerfile.nix
 
       - name: Install Node
         uses: actions/setup-node@v3
