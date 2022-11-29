@@ -146,24 +146,20 @@ jobs:
   nix-build-linux:
     name: 'Nix / Unit Tests linux'
     runs-on: [self-hosted, linux, normal]
-    container:
-      image: nixos/nix:2.7.0
-      volumes:
-          - nixstore:/nix
-      env:
-        CACHIX_AUTH_TOKEN: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
+    # container:
+    #   image: nixos/nix:2.7.0
+    #   volumes:
+    #       - nixstore:/nix
+    #   env:
+    #     CACHIX_AUTH_TOKEN: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
     steps:
-      - name: 'Set up nix'
-        run: |
-          rm -f /etc/nix/nix.conf
-          touch /etc/nix/nix.conf
-          echo experimental-features = nix-command flakes | tee -a /etc/nix/nix.conf
-          echo substituters = https://cache.nixos.org/ https://cache.iog.io | tee -a /etc/nix/nix.conf
-          echo trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= | tee -a /etc/nix/nix.conf
-      - name: 'Set up cachix'
-        run: |
-          nix build github:cachix/cachix -o cachix
-          # ./cachix use runtimeverification
+      - name: 'Set up Docker'
+        uses: ./.github/actions/with-docker-nix
+        with:
+          tag: hs-booster-ci-nix-buster-${{ github.run_id }}
+          os: ubuntu
+          distro: jammy
+          cachix_token: ${{ secrets.CACHIX_PRIVATE_TOKEN }}
 
       - name: Build executables
         run: |
