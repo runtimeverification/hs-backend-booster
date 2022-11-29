@@ -7,7 +7,7 @@ module Kore.Pattern.Unify (
 ) where
 
 import Control.Monad
-import Control.Monad.Extra (whenJust)
+import Control.Monad.Extra (unlessM, whenJust)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
@@ -16,6 +16,7 @@ import Data.Foldable (toList)
 import Data.List.NonEmpty as NE (NonEmpty ((:|)), singleton)
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Sequence (Seq (..))
 import Data.Sequence qualified as Seq
 import Data.Set (Set)
@@ -77,6 +78,7 @@ unifyTerms KoreDefinition{sorts} term1 term2 =
                         , uTargetVars = freeVars1
                         , uQueue = Seq.singleton (term1, term2)
                         , uSubsorts = Map.map snd sorts
+                        , uSortSubst = Map.empty
                         }
 
 data UnificationState = State
@@ -84,6 +86,7 @@ data UnificationState = State
     , uTargetVars :: Set Variable
     , uQueue :: Seq (Term, Term) -- work queue (breadth-first term traversal)
     , uSubsorts :: SortTable
+    , uSortSubst :: Map VarName Sort -- sort variable substitution
     }
 
 type SortTable = Map SortName (Set SortName)
@@ -117,9 +120,8 @@ unify1
     t1@(SymbolApplication symbol1 args1)
     t2@(SymbolApplication symbol2 args2) =
         do
-            subsorts <- gets uSubsorts
             -- argument sorts have been checked upon internalisation
-            unless (sortsAgree subsorts symbol1.resultSort symbol2.resultSort) $
+            unlessM (matchSorts symbol1.resultSort symbol2.resultSort) $
                 returnAsRemainder t1 t2
             -- If we have functions, pass - only constructors and sort injections are matched.
             let bothInjections = isSortInjectionSymbol symbol1 && isSortInjectionSymbol symbol2
@@ -165,17 +167,19 @@ unify1
     (Var var@Variable{variableSort})
     term2 =
         do
-            subsorts <- gets uSubsorts
             let termSort = sortOfTerm term2
-            unless (sortsAgree subsorts variableSort termSort) $
+            unlessM (matchSorts variableSort termSort) $
                 returnAsRemainder (Var var) term2
             bindVariable var term2
 
--- term2 variable (not target), term1 not a variable: swap arguments (won't recurse)
+-- term2 variable (not target), term1 not a variable: introduce new binding
 unify1
     term1
-    v@Var{} =
-        unify1 v term1
+    (Var var@Variable{variableSort}) =
+        do
+            unlessM (matchSorts (sortOfTerm term1) variableSort) $
+                returnAsRemainder term1 (Var var)
+            bindVariable var term1
 -- Remaining other cases: mix of DomainValue and SymbolApplication (either side)
 -- The remaining unification problems are returned
 unify1
@@ -231,12 +235,54 @@ returnAsRemainder t1 t2 = do
     remainder <- gets uQueue
     lift $ throwE $ UnificationRemainder $ (t1, t2) :| toList remainder
 
-{- | Checks that 's2' can be used for 's1', i.e., is a subsort.
+{- | Matches a subject sort to a pattern sort, ensuring that the subject
+   sort can be used in place of the pattern sort, i.e., is a subsort.
 
- Current implementation only checks sort equality, and does not
- handle sort variables. Result 'False' must mean _indeterminate
- unification_, not failing unification!
+The current implementation only checks sort equality. Result 'False'
+must mean _indeterminate unification_, not failing unification!
+
+Sort variables occurring in the first argument (pattern) will be
+substituted, adding to the sort substitution in the unification
+state. If a variable use is inconsistent, the sorts disagree, caller
+must stop unification with an _indeterminate_ result.
+
+Variables in the second argument (subject) make the sorts disagree,
+unless the same variable occurs in the exact same position in the
+first argument (pattern).
 -}
+matchSorts :: Sort -> Sort -> StateT UnificationState (Except e) Bool
+matchSorts patSort subjSort = do
+    sortSubst <- gets uSortSubst
+    let subjSort' = substituteWith sortSubst subjSort
+    case (patSort, subjSort') of
+        (SortApp sort1 args1, SortApp sort2 args2) -> do
+            if (sort1 == sort2 && length args1 == length args2)
+                then and <$> zipWithM matchSorts args1 args2
+                else pure False
+        (SortVar v, SortApp _ _)
+            | Just s <- Map.lookup v sortSubst -> do
+                pure $ s == subjSort' -- ensure no conflict
+            | otherwise ->
+                if (v `Set.member` sortVarsIn subjSort')
+                    then -- ensure subjSort does not contain v
+                        pure False
+                    else do
+                        -- add (v, subjSort') to sort substitution, accept
+                        modify $ \s -> s{uSortSubst = Map.insert v subjSort' sortSubst}
+                        pure True
+        (_, SortVar _) ->
+            pure False -- variables not expected in subject sorts
+  where
+    substituteWith :: Map VarName Sort -> Sort -> Sort
+    substituteWith subst (SortApp n args) =
+        SortApp n $ map (substituteWith subst) args
+    substituteWith subst v@(SortVar n) =
+        fromMaybe v $ Map.lookup n subst
+
+    sortVarsIn :: Sort -> Set VarName
+    sortVarsIn (SortVar n) = Set.singleton n
+    sortVarsIn (SortApp _ args) = Set.unions $ map sortVarsIn args
+
 sortsAgree :: SortTable -> Sort -> Sort -> Bool
 -- do not consider variables (we would need to carry a sort
 -- variable substitution in the state to check consistency)

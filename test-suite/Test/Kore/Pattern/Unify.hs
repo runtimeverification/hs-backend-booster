@@ -23,7 +23,34 @@ test_unification =
         , functions
         , varsAndValues
         , andTerms
+        , sorts
         ]
+
+sorts :: TestTree
+sorts =
+    testGroup
+        "sort variables"
+        [ test "one sort variable in argument" (app con1 [varX]) (app con1 [dSome]) $
+            success [("X", sVar, dSome)]
+        , test "sort inconsistency in arguments" (app con3 [varX, varY]) (app con3 [dSome, dSub]) $
+            remainder [(varY, dSub)] -- FIXME error does not reveal failure reason
+        , test "sort variable used twice" (app con3 [varX, varY]) (app con3 [dSome, dSome]) $
+            success [("X", sVar, dSome), ("Y", sVar, dSome)]
+        , test "several sort variables" (app con3 [varX, varZ]) (app con3 [dSome, dSub]) $
+            success [("X", sVar, dSome), ("Z", sVar2, dSub)]
+        , test "sort variable in subject" (app con3 [varX, dSub]) (app con3 [dSome, varZ]) $
+            remainder [(dSub, varZ)]
+        , test "same sort variable in both" (app con1 [varX]) (app con1 [varX]) $
+            remainder [(app con1 [varX], app con1 [varX])] -- FIXME error does not tell problem
+        ]
+  where
+    sVar = SortVar "sort me!"
+    sVar2 = SortVar "me, too!"
+    varX = var "X" sVar
+    varY = var "Y" sVar
+    varZ = var "Z" sVar2
+    dSome = dv someSort "some sort"
+    dSub = dv aSubsort "a subsort"
 
 constructors :: TestTree
 constructors =
