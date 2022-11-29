@@ -15,16 +15,6 @@ RUN    apt-get update        \
         xz-utils             \
         nix
 
-
-# install hpack and hlint from binary packages
-RUN    curl -sSL https://github.com/sol/hpack/releases/download/${HPACK_VERSION}/hpack_linux.gz | gunzip -c > /usr/bin/hpack \
-    && chmod +x /usr/bin/hpack \
-    && hpack --version
-RUN curl -sSL https://github.com/ndmitchell/hlint/releases/download/v${HLINT_VERSION}/hlint-${HLINT_VERSION}-x86_64-linux.tar.gz | tar xvz hlint-${HLINT_VERSION}/hlint \
-    && mv hlint-${HLINT_VERSION}/hlint /usr/bin/hlint \
-    && chmod +x /usr/bin/hlint \
-    && hlint --version
-
 # The image is built specifically for an environment with this user/group
 ARG USER=github-user
 ARG GROUP=$USER
