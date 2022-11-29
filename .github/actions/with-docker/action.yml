@@ -63,7 +63,7 @@ runs:
       GROUP=$(id -gn)
       GROUP_ID=$(id -g)
 
-      docker build . --file ${SUBDIR}/${DOCKERFILE}                   \
+      docker build . --file ${SUBDIR}${DOCKERFILE}                   \
           --tag runtimeverification/${TAG_NAME}                       \
           --build-arg BASE_OS=${BASE_OS}                              \
           --build-arg BASE_DISTRO=${BASE_DISTRO}                      \
