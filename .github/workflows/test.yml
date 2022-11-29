@@ -157,6 +157,8 @@ jobs:
     steps:
       - name: 'Set up nix'
         run: |
+          rm -f /etc/nix/nix.conf
+          touch /etc/nix/nix.conf
           cat /etc/nix/nix.conf
           echo experimental-features = nix-command flakes | tee -a /etc/nix/nix.conf
           echo substituters = https://cache.nixos.org/ https://cache.iog.io | tee -a /etc/nix/nix.conf
