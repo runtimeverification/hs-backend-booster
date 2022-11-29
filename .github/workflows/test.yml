@@ -146,7 +146,7 @@ jobs:
 
   nix-build-linux:
     name: 'Nix / Unit Tests'
-    runs-on: [self-hosted, linux, normal, github-runner-19]
+    runs-on: [self-hosted, linux, normal]
     container:
       image: nixos/nix:2.7.0
       volumes:
