@@ -151,6 +151,7 @@ jobs:
       image: nixos/nix:2.7.0
       volumes:
           - nixstore:/nix
+      options: --privileged
     steps:
       - name: 'Set up nix'
         run: |
