@@ -5,6 +5,7 @@ FROM $BASE_OS:$BASE_DISTRO
 
 ENV TZ America/Chicago
 ENV DEBIAN_FRONTEND=noninteractive
+VOLUME ["/nix"]
 
 RUN    apt-get update        \
     && apt-get install --yes \
