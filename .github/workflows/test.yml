@@ -160,6 +160,10 @@ jobs:
           os: ubuntu
           distro: jammy
           dockerfile: .github/workflows/Dockerfile.nix
+          fourmolu: ${{ env.fourmolu_version }}
+          hlint: ${{ env.hlint_version }}
+          hpack: ${{ env.hpack_version }}
+          ghc: ${{ env.ghc_version }}
 
       # - name: 'Set up nix'
       #   run: |
