@@ -144,13 +144,12 @@ jobs:
 
 
   nix-build-linux:
-    name: 'Nix / Unit Tests'
+    name: 'Nix / Unit Tests linux'
     runs-on: [self-hosted, linux, normal]
     container:
       image: nixos/nix:2.7.0
       volumes:
           - nixstore:/nix
-      options: --privileged
       env:
         CACHIX_AUTH_TOKEN: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
     steps:
@@ -164,7 +163,7 @@ jobs:
       - name: 'Set up cachix'
         run: |
           if ! command -v cachix &> /dev/null; then
-              nix shell github:cachix/cachix
+              HOME=/root nix shell github:cachix/cachix
           fi
           cachix use runtimeverification
 
@@ -180,7 +179,7 @@ jobs:
 
 
   nix-build-m1:
-    name: 'Nix / Unit Tests'
+    name: 'Nix / Unit Tests M1'
     strategy:
       fail-fast: false
     runs-on: MacM1
