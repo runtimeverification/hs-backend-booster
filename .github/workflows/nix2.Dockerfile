@@ -12,8 +12,7 @@ RUN    apt-get update        \
     && apt-get install --yes \
         curl                 \
         git                  \
-        xz-utils             \
-        nix
+        xz-utils
 
 # The image is built specifically for an environment with this user/group
 ARG USER=github-user
@@ -22,6 +21,8 @@ ARG USER_ID=1000
 ARG GROUP_ID=$USER_ID
 RUN groupadd -g $GROUP_ID $GROUP && useradd -m -u $USER_ID -s /bin/sh -g $GROUP $USER
 
+
+RUN    bash <(curl -L https://nixos.org/nix/install)
 
 RUN    mkdir -p /etc/nix && touch /etc/nix/nix.conf
 RUN    echo experimental-features = nix-command flakes | tee -a /etc/nix/nix.conf \
