@@ -11,6 +11,7 @@ module Kore.Pattern.Util (
     freeVariables,
     isConstructorSymbol,
     isSortInjectionSymbol,
+    isFunctionSymbol,
     isDefinedSymbol,
     checkSymbolIsAc,
     checkTermSymbols,
@@ -68,6 +69,13 @@ isSortInjectionSymbol :: Symbol -> Bool
 isSortInjectionSymbol symbol =
     case symbol.attributes.symbolType of
         SortInjection -> True
+        _ -> False
+
+isFunctionSymbol :: Symbol -> Bool
+isFunctionSymbol symbol =
+    case symbol.attributes.symbolType of
+        TotalFunction -> True
+        PartialFunction -> True
         _ -> False
 
 isDefinedSymbol :: Symbol -> Bool
