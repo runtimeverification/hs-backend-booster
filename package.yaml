@@ -79,8 +79,9 @@ library:
   - stm
   - stm-conduit
   - template-haskell
-  - text
+  - text >= 2
   - transformers
+  - unix
   - unliftio
   source-dirs: library
   build-tools:
@@ -130,6 +131,16 @@ executables:
       - hs-backend-booster
       - text
       - transformers
+    ghc-options:
+    - -rtsopts
+  dltest:
+    source-dirs: tools/dltest
+    main: Dltest.hs
+    dependencies:
+      - base
+      - directory
+      - hs-backend-booster
+      - unix
     ghc-options:
     - -rtsopts
 
