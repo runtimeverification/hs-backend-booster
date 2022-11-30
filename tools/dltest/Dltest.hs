@@ -8,24 +8,21 @@ module Main (
 ) where
 
 import Data.List (isPrefixOf, partition)
-import System.Environment ( getArgs )
+import Kore.Definition.Attributes.Base
 import Kore.LLVM.Internal as LLVM
 import Kore.Pattern.Base
-import Kore.Definition.Attributes.Base
-
-
+import System.Environment (getArgs)
 
 main :: IO ()
 main = do
     (_opts, args) <- partition ("-" `isPrefixOf`) <$> getArgs
     case args of
-      [] -> putStrLn "Provide a path to the shared library"
-      [lib] -> LLVM.runLLVM lib $ do
-        api <- LLVM.ask
-        test <- LLVM.marshallTerm $ app f1 [app con1 [app f1 []], app con2 [], app f2 []]
-        api.koreCompositePattern.dump test
-      _ -> putStrLn "Too many arguments"
-
+        [] -> putStrLn "Provide a path to the shared library"
+        [lib] -> LLVM.runLLVM lib $ do
+            api <- LLVM.ask
+            test <- LLVM.marshallTerm $ app f1 [app con1 [app f1 []], app con2 [], app f2 []]
+            api.koreCompositePattern.dump test
+        _ -> putStrLn "Too many arguments"
 
 app :: Symbol -> [Term] -> Term
 app = SymbolApplication
@@ -34,10 +31,8 @@ asTotalFunction, asConstructor :: SymbolAttributes
 asTotalFunction = SymbolAttributes TotalFunction False False
 asConstructor = SymbolAttributes Constructor False False
 
-
 someSort :: Sort
 someSort = SortApp "SomeSort" []
-
 
 con1, con2, f1, f2 :: Symbol
 con1 =
