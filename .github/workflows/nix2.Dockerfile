@@ -30,6 +30,7 @@ RUN    echo experimental-features = nix-command flakes | tee -a /etc/nix/nix.con
 
 USER $USER:$GROUP
 
-RUN    nix-env -iA cachix -f https://cachix.org/api/v1/install \
-    && cachix use runtimeverification
+RUN    nix-env -iA cachix -f https://cachix.org/api/v1/install
+
+RUN    cachix use runtimeverification
 
