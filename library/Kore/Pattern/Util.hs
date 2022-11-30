@@ -8,6 +8,7 @@ module Kore.Pattern.Util (
     retractPattern,
     substituteInTerm,
     substituteInPredicate,
+    modifyVariables,
     freeVariables,
     isConstructorSymbol,
     isSortInjectionSymbol,
@@ -53,6 +54,24 @@ substituteInPredicate substitution = cata $ \case
     EqualsTermF t1 t2 ->
         EqualsTerm (substituteInTerm substitution t1) (substituteInTerm substitution t2)
     other -> embed other
+
+modifyVariables :: (VarName -> VarName) -> Pattern -> Pattern
+modifyVariables f p =
+    Pattern
+        { term = modifyT p.term
+        , constraints = map modifyP p.constraints
+        }
+  where
+    modifyT :: Term -> Term
+    modifyT = cata $ \case
+        VarF v@Variable{variableName} ->
+            Var v{variableName = f variableName}
+        other -> embed other
+    modifyP :: Predicate -> Predicate
+    modifyP = cata $ \case
+        EqualsTermF t1 t2 ->
+            EqualsTerm (modifyT t1) (modifyT t2)
+        other -> embed other
 
 freeVariables :: Term -> Set Variable
 freeVariables = cata $ \case

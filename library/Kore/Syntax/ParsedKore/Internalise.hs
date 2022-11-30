@@ -382,12 +382,17 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
                 `orFailWith` UnknownAlias aliasName
     args <- traverse (withExcept DefinitionPatternError . internaliseTerm (Just sortVars) partialDefinition) aliasArgs
     result <- expandAlias alias args
+
+    -- prefix all variables in lhs and rhs with "Rule#" to avoid
+    -- name clashes with patterns from the user
     lhs <-
-        Util.retractPattern result
-            `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
+        fmap (Util.modifyVariables ("Rule#" <>)) $
+            Util.retractPattern result
+                `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
     rhs <-
-        withExcept DefinitionPatternError $
-            internalisePattern (Just sortVars) partialDefinition right
+        fmap (Util.modifyVariables ("Rule#" <>)) $
+            withExcept DefinitionPatternError $
+                internalisePattern (Just sortVars) partialDefinition right
     let preservesDefinedness =
             Util.checkTermSymbols Util.isDefinedSymbol rhs.term
         containsAcSymbols =
