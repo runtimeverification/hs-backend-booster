@@ -62,15 +62,16 @@ constructors =
             (app con1 [var "X" someSort])
             (app con1 [var "Y" someSort])
             (success [("X", someSort, var "Y" someSort)])
-        , let cX = app con1 [var "X" someSort]
+        , let x = var "X" someSort
+              cX = app con1 [x]
            in test "same constructors, same variable (shared var)" cX cX $
-                remainder [(cX, cX)]
+                remainder [(x, x)]
         , let x = var "X" someSort
               y = var "Y" someSort
               cxx = app con3 [x, x]
               cxy = app con3 [x, y]
            in test "same constructors, one shared variable" cxx cxy $
-                remainder [(cxx, cxy)]
+                remainder [(x, x)]
         , let v = var "X" someSort
               d = dv differentSort ""
            in test

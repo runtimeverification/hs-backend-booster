@@ -13,7 +13,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Either.Extra
 import Data.Foldable (toList)
-import Data.List.NonEmpty as NE (NonEmpty ((:|)), singleton)
+import Data.List.NonEmpty as NE (NonEmpty ((:|)), fromList)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
@@ -72,7 +72,10 @@ unifyTerms KoreDefinition{sorts} term1 term2 =
         freeVars2 = freeVariables term2
         sharedVars = freeVars1 `Set.intersection` freeVars2
      in if not $ Set.null sharedVars
-            then UnificationRemainder $ NE.singleton (term1, term2)
+            then
+                UnificationRemainder $
+                    NE.fromList
+                        [(Var v, Var v) | v <- Set.toList sharedVars]
             else
                 runUnification
                     State
