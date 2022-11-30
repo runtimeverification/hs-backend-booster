@@ -50,7 +50,6 @@ jobs:
           hlint: ${{ env.hlint_version }}
           hpack: ${{ env.hpack_version }}
           ghc: ${{ env.ghc_version }}
-          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
       - name: 'Run unit tests'
         run: docker exec -t hs-booster-ci-stack-unit-buster-${{ github.run_id }} /bin/bash -c 'stack --system-ghc --stack-root $(pwd)/stack-cache test --pedantic'
@@ -91,7 +90,6 @@ jobs:
           hlint: ${{ env.hlint_version }}
           hpack: ${{ env.hpack_version }}
           ghc: ${{ env.ghc_version }}
-          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
       - name: 'Run hpack'
         run: |
@@ -133,7 +131,6 @@ jobs:
           hlint: ${{ env.hlint_version }}
           hpack: ${{ env.hpack_version }}
           ghc: ${{ env.ghc_version }}
-          cachix_auth_token: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
 
       - name: 'Check formatting'
         run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/fourmolu.sh && git diff --exit-code'
@@ -156,6 +153,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Build executables
+        env:
+          CACHIX_AUTH_TOKEN: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
         run: |
           cachix watch-exec runtimeverification -- nix build .#hs-backend-booster:exe:hs-backend-booster
           nix build .#hs-backend-booster:exe:parsetest
