@@ -234,8 +234,8 @@ returnAsRemainder t1 t2 = do
 {- | Matches a subject sort to a pattern sort, ensuring that the subject
    sort can be used in place of the pattern sort, i.e., is a subsort.
 
-The current implementation only checks sort equality. Result 'False'
-must mean _indeterminate unification_, not failing unification!
+The current implementation only checks sort equality, failure must be
+interpreted as _indeterminate unification_, not failing unification!
 
 Sort variables will be substituted, adding to the sort substitution in
 the unification state. If a variable use is inconsistent, the sorts
