@@ -157,7 +157,7 @@ jobs:
 
       - name: Build executables
         run: |
-          nix build .#hs-backend-booster:exe:hs-backend-booster
+          cachix watch-exec runtimeverification -- nix build .#hs-backend-booster:exe:hs-backend-booster
           nix build .#hs-backend-booster:exe:parsetest
           nix build .#hs-backend-booster:exe:rpc-client
 
