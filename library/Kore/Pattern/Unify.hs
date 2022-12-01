@@ -36,6 +36,7 @@ data UnificationResult
       UnificationRemainder (NonEmpty (Term, Term))
     | -- | sort error (inconsistent variable use)
       UnificationSortError SortError
+    | InternalError String
     deriving stock (Eq, Show)
 
 -- | Additional information to explain why a unification has failed
@@ -49,7 +50,6 @@ data FailReason
       VariableRecursion Variable Term
     | -- | Variable reassigned
       VariableConflict Variable Term Term
-    | InternalError String
     deriving stock (Eq, Show)
 
 type Substitution = Map Variable Term
@@ -133,7 +133,7 @@ unify1
             unless (symbol1.name == symbol2.name) $
                 failWith (DifferentSymbols t1 t2)
             unless (length args1 == length args2) $
-                lift . throwE . UnificationFailed $
+                lift . throwE $
                     InternalError $
                         "Argument counts differ for same constructor" <> show (t1, t2)
             zipWithM_ enqueueProblem args1 args2
@@ -159,7 +159,7 @@ unify1
     (Var var2@(Variable varSort2 varName2))
         -- same variable: forbidden!
         | var1 == var2 =
-            lift . throwE . UnificationFailed $ InternalError $ "Shared variable: " <> show var1
+            lift . throwE $ InternalError $ "Shared variable: " <> show var1
         | varName1 == varName2 && varSort1 /= varSort2 =
             -- sorts differ, names equal: error!
             failWith $ VariableConflict var1 (Var var1) (Var var2)
