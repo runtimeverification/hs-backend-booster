@@ -213,7 +213,7 @@ p1 `rewritesTo` p2 =
 
 branchesTo :: Pattern -> [Pattern] -> IO ()
 p `branchesTo` ps =
-    runExcept (rewriteStep def [] [] p) @?= Right (RewriteBranch $ NE.fromList ps)
+    runExcept (rewriteStep def [] [] p) @?= Right (RewriteBranch p $ NE.fromList ps)
 
 failsWith :: Pattern -> RewriteFailed -> IO ()
 failsWith p err =
@@ -240,10 +240,11 @@ canRewrite =
             let rule3Dv1 = dv someSort "otherThing"
                 rule3Dv2 = dv someSort "somethingElse"
                 con3Term = termInKCell "C" $ app con3 [rule3Dv1, d]
+                con1Term = termInKCell "C" $ app con1 [rule3Dv2]
                 branch1 = termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2]
                 branch2 = termInKCell "C" $ app f1 [rule3Dv2]
             runRewrite con3Term
-                >>= (@?= (1, RewriteBranch (NE.fromList [branch1, branch2])))
+                >>= (@?= (1, RewriteBranch con1Term (NE.fromList [branch1, branch2])))
         , testCase "Returns stuck when no rules could be applied" $ do
             let con3NoRules = termInKCell "C" $ app con3 [d, d]
             runRewrite con3NoRules >>= (@?= (0, RewriteStuck con3NoRules))
@@ -281,10 +282,11 @@ supportsDepthControl =
             let rule3Dv1 = dv someSort "otherThing"
                 rule3Dv2 = dv someSort "somethingElse"
                 con3Term = termInKCell "C" $ app con3 [rule3Dv1, d]
+                con1Dv2 = termInKCell "C" $ app con1 [rule3Dv2]
                 branch1 = termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2]
                 branch2 = termInKCell "C" $ app f1 [rule3Dv2]
             runRewriteDepth 2 con3Term
-                >>= (@?= (1, RewriteBranch (NE.fromList [branch1, branch2])))
+                >>= (@?= (1, RewriteBranch con1Dv2 (NE.fromList [branch1, branch2])))
         ]
   where
     con1Term = termInKCell "C" $ app con1 [d]
@@ -298,17 +300,20 @@ supportsCutPoints =
     testGroup
         "supports cut-point labels"
         [ testCase "stops at a cut-point label" $
-            runRewriteCutPoint "con1-f1" con1Term >>= (@?= (0, RewriteCutPoint con1Term f1Term))
+            runRewriteCutPoint "con1-f1" con1Term
+                >>= (@?= (0, RewriteCutPoint "con1-f1" con1Term f1Term))
         , testCase "ignores non-matching cut-point labels" $
-            runRewriteCutPoint "otherLabel" con1Term >>= (@?= (1, RewriteAborted f1Term))
+            runRewriteCutPoint "otherLabel" con1Term
+                >>= (@?= (1, RewriteAborted f1Term))
         , testCase "prefers reporting branches to stopping at label in one branch" $ do
             let rule3Dv1 = dv someSort "otherThing"
                 rule3Dv2 = dv someSort "somethingElse"
                 con3Term = termInKCell "C" $ app con3 [rule3Dv1, d]
+                con1Dv2 = termInKCell "C" $ app con1 [rule3Dv2]
                 branch1 = termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2]
                 branch2 = termInKCell "C" $ app f1 [rule3Dv2]
             runRewriteCutPoint "con1-f2" con3Term
-                >>= (@?= (1, RewriteBranch (NE.fromList [branch1, branch2])))
+                >>= (@?= (1, RewriteBranch con1Dv2 (NE.fromList [branch1, branch2])))
         ]
   where
     con1Term = termInKCell "C" $ app con1 [d]
@@ -322,9 +327,11 @@ supportsTerminalRules =
     testGroup
         "supports cut-point labels"
         [ testCase "stops at a terminal rule label" $
-            runRewriteTerminal "con1-f1" con1Term >>= (@?= (1, RewriteTerminal f1Term))
+            runRewriteTerminal "con1-f1" con1Term
+                >>= (@?= (1, RewriteTerminal "con1-f1" f1Term))
         , testCase "ignores non-matching labels" $
-            runRewriteTerminal "otherLabel" con1Term >>= (@?= (1, RewriteAborted f1Term))
+            runRewriteTerminal "otherLabel" con1Term
+                >>= (@?= (1, RewriteAborted f1Term))
         ]
   where
     con1Term = termInKCell "C" $ app con1 [d]

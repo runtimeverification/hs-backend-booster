@@ -80,20 +80,20 @@ rewriteStep def cutLabels terminalLabels pat = do
         -- simplify and filter out bottom states
         let finalResults = filter (not . isBottom . simplifyPattern . snd) results
 
-        let hasLabelIn :: RewriteRule -> [Text] -> Bool
-            hasLabelIn = elem . fromMaybe "" . (.ruleLabel) . (.attributes)
+        let labelOf = fromMaybe "" . (.ruleLabel) . (.attributes)
+
         case finalResults of
             [] ->
                 processGroups rest
             [(r, x)]
-                | r `hasLabelIn` cutLabels ->
-                    pure $ RewriteCutPoint pat x
-                | r `hasLabelIn` terminalLabels ->
-                    pure $ RewriteTerminal x
+                | labelOf r `elem` cutLabels ->
+                    pure $ RewriteCutPoint (labelOf r) pat x
+                | labelOf r `elem` terminalLabels ->
+                    pure $ RewriteTerminal (labelOf r) x
                 | otherwise ->
                     pure $ RewriteSingle x
             rxs ->
-                pure $ RewriteBranch $ NE.fromList $ map snd rxs
+                pure $ RewriteBranch pat $ NE.fromList $ map snd rxs
 
 {- | Tries to apply one rewrite rule:
 
@@ -190,13 +190,13 @@ data RewriteResult
     = -- | single result (internal use, not returned)
       RewriteSingle Pattern
     | -- | branch point
-      RewriteBranch (NonEmpty Pattern)
+      RewriteBranch Pattern (NonEmpty Pattern)
     | -- | no rules could be applied, config is stuck
       RewriteStuck Pattern
     | -- | cut point rule, return current (lhs) and single next state
-      RewriteCutPoint Pattern Pattern
+      RewriteCutPoint Text Pattern Pattern
     | -- | terminal rule, return rhs (final state reached)
-      RewriteTerminal Pattern
+      RewriteTerminal Text Pattern
     | -- | stopping because maximum depth has been reached
       RewriteStopped Pattern
     | -- | unable to handle the current case with this rewriter
