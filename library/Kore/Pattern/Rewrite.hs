@@ -242,7 +242,7 @@ performRewrite def mbMaxDepth cutLabels terminalLabels pat = do
     doSteps counter pat'
         | depthReached counter = do
             logRewrite $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
-            pure $ (counter, RewriteStopped pat')
+            pure (counter, RewriteStopped pat')
         | otherwise = do
             let res = runExcept $ rewriteStep def cutLabels terminalLabels pat'
             case res of
@@ -258,4 +258,4 @@ performRewrite def mbMaxDepth cutLabels terminalLabels pat = do
                 Left failure -> do
                     logRewrite $ "Aborted after " <> showCounter counter
                     logRewrite $ pack (show failure)
-                    pure $ (counter, RewriteAborted pat')
+                    pure (counter, RewriteAborted pat')
