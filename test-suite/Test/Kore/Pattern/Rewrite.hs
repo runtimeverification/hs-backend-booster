@@ -13,6 +13,7 @@ import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
+import Numeric.Natural
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -221,11 +222,11 @@ failsWith p err =
 ----------------------------------------
 -- tests for performRewrite (iterated rewrite in IO with logging)
 
-runRewrite :: Pattern -> IO RewriteResult
+runRewrite :: Pattern -> IO (Natural, RewriteResult)
 runRewrite = runNoLoggingT . performRewrite def Nothing [] []
 
 aborts :: Term -> IO ()
-aborts t = runRewrite (termInKCell "C" t) >>= (@?= RewriteAborted (termInKCell "C" t))
+aborts t = runRewrite (termInKCell "C" t) >>= (@?= (0, RewriteAborted (termInKCell "C" t)))
 
 canRewrite :: TestTree
 canRewrite =
@@ -234,7 +235,7 @@ canRewrite =
         [ testCase "Rewrites con1 once, then aborts" $ do
             let con1Term = termInKCell "C" $ app con1 [d]
                 f1Term = termInKCell "C" $ app f1 [d]
-            runRewrite con1Term >>= (@?= RewriteAborted f1Term)
+            runRewrite con1Term >>= (@?= (1, RewriteAborted f1Term))
         , testCase "Rewrites con3 twice, branching on con1" $ do
             let rule3Dv1 = dv someSort "otherThing"
                 rule3Dv2 = dv someSort "somethingElse"
@@ -242,10 +243,10 @@ canRewrite =
                 branch1 = termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2]
                 branch2 = termInKCell "C" $ app f1 [rule3Dv2]
             runRewrite con3Term
-                >>= (@?= RewriteBranch (NE.fromList [branch1, branch2]))
+                >>= (@?= (1, RewriteBranch (NE.fromList [branch1, branch2])))
         , testCase "Returns stuck when no rules could be applied" $ do
             let con3NoRules = termInKCell "C" $ app con3 [d, d]
-            runRewrite con3NoRules >>= (@?= RewriteStuck con3NoRules)
+            runRewrite con3NoRules >>= (@?= (0, RewriteStuck con3NoRules))
         ]
 
 abortsOnErrors :: TestTree
@@ -271,11 +272,11 @@ supportsDepthControl =
     testGroup
         "supports maximum depth control"
         [ testCase "executes normally when maxDepth > maximum expected" $
-            runRewriteDepth 42 con1Term >>= (@?= RewriteAborted f1Term)
+            runRewriteDepth 42 con1Term >>= (@?= (1, RewriteAborted f1Term))
         , testCase "stops execution after 1 step when maxDepth == 1" $
-            runRewriteDepth 1 con1Term >>= (@?= RewriteStopped f1Term)
+            runRewriteDepth 1 con1Term >>= (@?= (1, RewriteStopped f1Term))
         , testCase "performs no steps when maxDepth == 0" $
-            runRewriteDepth 0 con1Term >>= (@?= RewriteStopped con1Term)
+            runRewriteDepth 0 con1Term >>= (@?= (0, RewriteStopped con1Term))
         , testCase "prefers reporting branches to stopping at depth" $ do
             let rule3Dv1 = dv someSort "otherThing"
                 rule3Dv2 = dv someSort "somethingElse"
@@ -283,12 +284,12 @@ supportsDepthControl =
                 branch1 = termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2]
                 branch2 = termInKCell "C" $ app f1 [rule3Dv2]
             runRewriteDepth 2 con3Term
-                >>= (@?= RewriteBranch (NE.fromList [branch1, branch2]))
+                >>= (@?= (1, RewriteBranch (NE.fromList [branch1, branch2])))
         ]
   where
     con1Term = termInKCell "C" $ app con1 [d]
     f1Term = termInKCell "C" $ app f1 [d]
-    runRewriteDepth :: Int -> Pattern -> IO RewriteResult
+    runRewriteDepth :: Natural -> Pattern -> IO (Natural, RewriteResult)
     runRewriteDepth depth =
         runNoLoggingT . performRewrite def (Just depth) [] []
 
@@ -297,9 +298,9 @@ supportsCutPoints =
     testGroup
         "supports cut-point labels"
         [ testCase "stops at a cut-point label" $
-            runRewriteCutPoint "con1-f1" con1Term >>= (@?= RewriteCutPoint con1Term f1Term)
+            runRewriteCutPoint "con1-f1" con1Term >>= (@?= (0, RewriteCutPoint con1Term f1Term))
         , testCase "ignores non-matching cut-point labels" $
-            runRewriteCutPoint "otherLabel" con1Term >>= (@?= RewriteAborted f1Term)
+            runRewriteCutPoint "otherLabel" con1Term >>= (@?= (1, RewriteAborted f1Term))
         , testCase "prefers reporting branches to stopping at label in one branch" $ do
             let rule3Dv1 = dv someSort "otherThing"
                 rule3Dv2 = dv someSort "somethingElse"
@@ -307,12 +308,12 @@ supportsCutPoints =
                 branch1 = termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2]
                 branch2 = termInKCell "C" $ app f1 [rule3Dv2]
             runRewriteCutPoint "con1-f2" con3Term
-                >>= (@?= RewriteBranch (NE.fromList [branch1, branch2]))
+                >>= (@?= (1, RewriteBranch (NE.fromList [branch1, branch2])))
         ]
   where
     con1Term = termInKCell "C" $ app con1 [d]
     f1Term = termInKCell "C" $ app f1 [d]
-    runRewriteCutPoint :: Text -> Pattern -> IO RewriteResult
+    runRewriteCutPoint :: Text -> Pattern -> IO (Natural, RewriteResult)
     runRewriteCutPoint lbl =
         runNoLoggingT . performRewrite def Nothing [lbl] []
 
@@ -321,13 +322,13 @@ supportsTerminalRules =
     testGroup
         "supports cut-point labels"
         [ testCase "stops at a terminal rule label" $
-            runRewriteTerminal "con1-f1" con1Term >>= (@?= RewriteTerminal f1Term)
+            runRewriteTerminal "con1-f1" con1Term >>= (@?= (1, RewriteTerminal f1Term))
         , testCase "ignores non-matching labels" $
-            runRewriteTerminal "otherLabel" con1Term >>= (@?= RewriteAborted f1Term)
+            runRewriteTerminal "otherLabel" con1Term >>= (@?= (1, RewriteAborted f1Term))
         ]
   where
     con1Term = termInKCell "C" $ app con1 [d]
     f1Term = termInKCell "C" $ app f1 [d]
-    runRewriteTerminal :: Text -> Pattern -> IO RewriteResult
+    runRewriteTerminal :: Text -> Pattern -> IO (Natural, RewriteResult)
     runRewriteTerminal lbl =
         runNoLoggingT . performRewrite def Nothing [] [lbl]

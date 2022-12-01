@@ -19,6 +19,7 @@ import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
+import Numeric.Natural
 
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
@@ -220,38 +221,41 @@ performRewrite ::
     MonadLoggerIO io =>
     KoreDefinition ->
     -- | maximum depth
-    Maybe Int ->
+    Maybe Natural ->
     -- | cut point rule labels
     [Text] ->
     -- | terminal rule labels
     [Text] ->
     Pattern ->
-    io RewriteResult
+    io (Natural, RewriteResult)
 performRewrite def mbMaxDepth cutLabels terminalLabels pat = do
     logRewrite $ "Rewriting pattern " <> pack (show pat)
-    doSteps 1 pat
+    doSteps 0 pat
   where
     logRewrite = logOther (LevelOther "Rewrite")
 
-    depthReached n = maybe False (n >) mbMaxDepth
+    depthReached n = maybe False (n >=) mbMaxDepth
 
     showCounter = (<> " steps.") . pack . show
 
-    doSteps :: Int -> Pattern -> io RewriteResult
+    doSteps :: Natural -> Pattern -> io (Natural, RewriteResult)
     doSteps counter pat'
         | depthReached counter = do
             logRewrite $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
-            pure $ RewriteStopped pat'
+            pure $ (counter, RewriteStopped pat')
         | otherwise = do
             let res = runExcept $ rewriteStep def cutLabels terminalLabels pat'
             case res of
                 Right (RewriteSingle single) ->
                     doSteps (counter + 1) single
+                Right terminal@RewriteTerminal{} -> do
+                    logRewrite $ "Terminal rule reached after " <> showCounter (counter + 1)
+                    pure (counter + 1, terminal)
                 Right other -> do
                     logRewrite $ "Stopped after " <> showCounter counter
                     logRewrite $ pack (show other)
-                    pure other
+                    pure (counter, other)
                 Left failure -> do
                     logRewrite $ "Aborted after " <> showCounter counter
                     logRewrite $ pack (show failure)
-                    pure $ RewriteAborted pat'
+                    pure $ (counter, RewriteAborted pat')
