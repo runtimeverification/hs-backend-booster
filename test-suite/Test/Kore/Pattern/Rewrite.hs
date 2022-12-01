@@ -43,6 +43,8 @@ test_performRewrite =
         , abortsOnErrors
         , abortsOnFailures
         , supportsDepthControl
+        , supportsCutPoints
+        , supportsTerminalRules
         ]
 
 ----------------------------------------
@@ -71,7 +73,7 @@ rule1 =
         42
 rule1' =
     rule
-        (Just "con1-f1")
+        (Just "con1-f1'")
         (termInKCell "RuleVar" (app con1 [varX]))
         (termInKCell "RuleVar" (app f1 [varX]))
         50
@@ -289,3 +291,43 @@ supportsDepthControl =
     runRewriteDepth :: Int -> Pattern -> IO RewriteResult
     runRewriteDepth depth =
         runNoLoggingT . performRewrite def (Just depth) [] []
+
+supportsCutPoints :: TestTree
+supportsCutPoints =
+    testGroup
+        "supports cut-point labels"
+        [ testCase "stops at a cut-point label" $
+            runRewriteCutPoint "con1-f1" con1Term >>= (@?= RewriteCutPoint con1Term f1Term)
+        , testCase "ignores non-matching cut-point labels" $
+            runRewriteCutPoint "otherLabel" con1Term >>= (@?= RewriteAborted f1Term)
+        , testCase "prefers reporting branches to stopping at label in one branch" $ do
+            let rule3Dv1 = dv someSort "otherThing"
+                rule3Dv2 = dv someSort "somethingElse"
+                con3Term = termInKCell "C" $ app con3 [rule3Dv1, d]
+                branch1 = termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2]
+                branch2 = termInKCell "C" $ app f1 [rule3Dv2]
+            runRewriteCutPoint "con1-f2" con3Term
+                >>= (@?= RewriteBranch (NE.fromList [branch1, branch2]))
+        ]
+  where
+    con1Term = termInKCell "C" $ app con1 [d]
+    f1Term = termInKCell "C" $ app f1 [d]
+    runRewriteCutPoint :: Text -> Pattern -> IO RewriteResult
+    runRewriteCutPoint lbl =
+        runNoLoggingT . performRewrite def Nothing [lbl] []
+
+supportsTerminalRules :: TestTree
+supportsTerminalRules =
+    testGroup
+        "supports cut-point labels"
+        [ testCase "stops at a terminal rule label" $
+            runRewriteTerminal "con1-f1" con1Term >>= (@?= RewriteTerminal f1Term)
+        , testCase "ignores non-matching labels" $
+            runRewriteTerminal "otherLabel" con1Term >>= (@?= RewriteAborted f1Term)
+        ]
+  where
+    con1Term = termInKCell "C" $ app con1 [d]
+    f1Term = termInKCell "C" $ app f1 [d]
+    runRewriteTerminal :: Text -> Pattern -> IO RewriteResult
+    runRewriteTerminal lbl =
+        runNoLoggingT . performRewrite def Nothing [] [lbl]
