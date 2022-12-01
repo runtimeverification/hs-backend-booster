@@ -3,9 +3,11 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Test.Kore.Pattern.Rewrite (
-    test_rewrite,
+    test_rewriteStep,
+    test_performRewrite,
 ) where
 
+import Control.Monad.Logger.CallStack
 import Control.Monad.Trans.Except
 import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
@@ -20,8 +22,8 @@ import Kore.Pattern.Base
 import Kore.Pattern.Rewrite
 import Test.Kore.Fixture
 
-test_rewrite :: TestTree
-test_rewrite =
+test_rewriteStep :: TestTree
+test_rewriteStep =
     testGroup
         "Rewriting"
         [ errorCases
@@ -30,6 +32,16 @@ test_rewrite =
         , definednessUnclear
         , rewriteStuck
         , rulePriority
+        ]
+
+test_performRewrite :: TestTree
+test_performRewrite =
+    testGroup
+        "Iterated rewriting"
+        [ -- same tests as above, but calling the iterating function
+          canRewrite
+        , abortsOnErrors
+        , abortsOnFailures
         ]
 
 ----------------------------------------
@@ -202,3 +214,51 @@ p `branchesTo` ps =
 failsWith :: Pattern -> RewriteFailed -> IO ()
 failsWith p err =
     runExcept (rewriteStep def [] [] p) @?= Left err
+
+----------------------------------------
+-- tests for performRewrite (iterated rewrite in IO with logging)
+
+runRewrite :: Pattern -> IO RewriteResult
+runRewrite = runNoLoggingT . performRewrite def [] []
+
+aborts :: Term -> IO ()
+aborts t = runRewrite (termInKCell "C" t) >>= (@?= RewriteAborted (termInKCell "C" t))
+
+canRewrite :: TestTree
+canRewrite =
+    testGroup
+        "Can rewrite"
+        [ testCase "Rewrites con1 once, then aborts" $ do
+            let con1Term = termInKCell "C" $ app con1 [d]
+                f1Term = termInKCell "C" $ app f1 [d]
+            runRewrite con1Term >>= (@?= RewriteAborted f1Term)
+        , testCase "Rewrites con4 twice, then branches on con1" $ do
+            let rule3Dv1 = dv someSort "otherThing"
+                rule3Dv2 = dv someSort "somethingElse"
+                con3Term = termInKCell "C" $ app con3 [rule3Dv1, d]
+                branch1 = termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2]
+                branch2 = termInKCell "C" $ app f1 [rule3Dv2]
+            runRewrite con3Term
+                >>= (@?= RewriteBranch (NE.fromList [branch1, branch2]))
+        , testCase "Returns stuck when no rules could be applied" $ do
+            let con3NoRules = termInKCell "C" $ app con3 [d, d]
+            runRewrite con3NoRules >>= (@?= RewriteStuck con3NoRules)
+        ]
+
+abortsOnErrors :: TestTree
+abortsOnErrors =
+    testGroup
+        "Aborts rewrite when there is an error"
+        [ testCase "when there are no rules at all" $ aborts (app con2 [d])
+        , testCase "on internal errors (e.g., wrong argument count)" $ aborts (app con1 [d, d, d])
+        --        , testCase "when the term index is None" $
+        --              aborts (AndTerm (app con1 [d]) (app con2 [d]))
+        ]
+
+abortsOnFailures :: TestTree
+abortsOnFailures =
+    testGroup
+        "Aborts rewrite when the rewriter cannot handle it"
+        [ testCase "when unification is not a match" $ aborts (app con3 [var "X" someSort, d])
+        , testCase "when definedness is unclear" $ aborts (app con4 [d, d])
+        ]
