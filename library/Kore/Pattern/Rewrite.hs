@@ -117,8 +117,6 @@ applyRule def pat rule = do
             throwE $ RewriteSortError sortError
         UnificationRemainder remainder ->
             throwE $ RewriteUnificationUnclear rule remainder
-        InternalError msg ->
-            throwE $ RewriteRuleInternalError msg
         UnificationSuccess substitution ->
             pure substitution
 
@@ -173,8 +171,6 @@ data RuleFailed
       UnificationIsNotMatch RewriteRule Substitution
     | -- | A constraint of the rule simplifies to Bottom (when substituted)
       ConstraintIsBottom Predicate
-    | -- | Internal error (from unification or elsewhere)
-      RewriteRuleInternalError String
     deriving stock (Eq, Show)
 
 isUncertain :: RuleFailed -> Bool
@@ -183,7 +179,6 @@ isUncertain RewriteUnificationUnclear{} = True
 isUncertain RewriteSortError{} = True
 isUncertain UnificationIsNotMatch{} = True
 isUncertain ConstraintIsBottom{} = False
-isUncertain RewriteRuleInternalError{} = True
 
 -- | Different rewrite results (returned from RPC execute endpoint)
 data RewriteResult

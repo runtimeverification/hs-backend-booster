@@ -9,16 +9,16 @@ module Kore.JsonRpc (
 
 import Control.Concurrent (forkIO, throwTo)
 import Control.Concurrent.STM.TChan (newTChan, readTChan, writeTChan)
-import Control.Exception (mask)
+import Control.Exception (ErrorCall (..), mask)
 import Control.Monad (forever)
-import Control.Monad.Catch (catch)
+import Control.Monad.Catch (MonadCatch, catch, handle)
 import Control.Monad.IO.Class
 import Control.Monad.Logger.CallStack (LogLevel, MonadLoggerIO)
 import Control.Monad.Logger.CallStack qualified as Log
 import Control.Monad.STM (atomically)
 import Control.Monad.Trans.Except (runExcept)
 import Control.Monad.Trans.Reader (ask, runReaderT)
-import Data.Aeson (toJSON)
+import Data.Aeson (object, toJSON, (.=))
 import Data.Aeson.Encode.Pretty as Json
 import Data.Aeson.Types (Value (..))
 import Data.Conduit.Network (serverSettings)
@@ -52,11 +52,12 @@ import Kore.Syntax.Json.Internalise (PatternError, internalisePattern)
 
 respond ::
     forall m.
+    MonadCatch m =>
     MonadLoggerIO m =>
     KoreDefinition ->
     Respond (API 'Req) m (API 'Res)
 respond def@KoreDefinition{} =
-    \case
+    catchingServerErrors . \case
         Execute req -> do
             Log.logDebug "Testing JSON-RPC server."
             -- internalise given constrained term
@@ -80,7 +81,7 @@ respond def@KoreDefinition{} =
   where
     execResponse :: (Natural, RewriteResult) -> Either ErrorObj (API 'Res)
     execResponse (_, RewriteSingle{}) =
-        Left $ ErrorObj "Server error" (-32666) $ String "Single rewrite result"
+        error "Single rewrite result"
     execResponse (d, RewriteBranch p nexts) =
         Right $
             Execute
@@ -151,6 +152,21 @@ respond def@KoreDefinition{} =
     reportPatternError :: PatternError -> ErrorObj
     reportPatternError pErr =
         ErrorObj "Could not verify KORE pattern" (-32002) $ toJSON pErr
+
+{- | Catches all calls to `error` from the guts of the engine, and
+     returns json with the message and location as context.
+-}
+catchingServerErrors ::
+    MonadCatch m =>
+    MonadLoggerIO m =>
+    m (Either ErrorObj res) ->
+    m (Either ErrorObj res)
+catchingServerErrors =
+    let mkError (ErrorCallWithLocation msg loc) =
+            object ["error" .= msg, "context" .= loc]
+     in handle $ \err -> do
+            Log.logError $ "Server error: " <> Text.pack (show err)
+            pure $ Left (ErrorObj "Server error" (-32032) $ mkError err)
 
 runServer :: Int -> KoreDefinition -> LogLevel -> IO ()
 runServer port internalizedModule logLevel =
@@ -235,7 +251,7 @@ srv internalizedModule = do
 
             sendResponses :: BatchResponse -> Log.LoggingT IO ()
             sendResponses r = flip Log.runLoggingT logger $ flip runReaderT rpcSession $ sendBatchResponse r
-            respondTo :: MonadLoggerIO m => Request -> m (Maybe Response)
+            respondTo :: Request -> Log.LoggingT IO (Maybe Response)
             respondTo = buildResponse (respond internalizedModule)
 
             cancelReq :: BatchRequest -> Log.LoggingT IO ()

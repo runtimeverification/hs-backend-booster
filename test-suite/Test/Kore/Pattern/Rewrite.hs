@@ -7,6 +7,7 @@ module Test.Kore.Pattern.Rewrite (
     test_performRewrite,
 ) where
 
+import Control.Exception (ErrorCall, catch)
 import Control.Monad.Logger.CallStack
 import Control.Monad.Trans.Except
 import Data.List.NonEmpty qualified as NE
@@ -42,6 +43,7 @@ test_performRewrite =
         [ -- same tests as above, but calling the iterating function
           canRewrite
         , abortsOnErrors
+        , callsError
         , abortsOnFailures
         , supportsDepthControl
         , supportsCutPoints
@@ -255,9 +257,17 @@ abortsOnErrors =
     testGroup
         "Aborts rewrite when there is an error"
         [ testCase "when there are no rules at all" $ aborts (app con2 [d])
-        , testCase "on internal errors (e.g., wrong argument count)" $ aborts (app con1 [d, d, d])
         --        , testCase "when the term index is None" $
         --              aborts (AndTerm (app con1 [d]) (app con2 [d]))
+        ]
+
+callsError :: TestTree
+callsError =
+    testGroup
+        "Calls error when there are unexpected situations"
+        [ testCase "on wrong argument count in a symbol application" $ do
+            (runRewrite (termInKCell "C" $ app con1 [d, d, d]) >> assertFailure "success")
+                `catch` (\(_ :: ErrorCall) -> pure ())
         ]
 
 abortsOnFailures :: TestTree
