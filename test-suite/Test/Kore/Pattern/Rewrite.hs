@@ -42,6 +42,7 @@ test_performRewrite =
           canRewrite
         , abortsOnErrors
         , abortsOnFailures
+        , supportsDepthControl
         ]
 
 ----------------------------------------
@@ -219,7 +220,7 @@ failsWith p err =
 -- tests for performRewrite (iterated rewrite in IO with logging)
 
 runRewrite :: Pattern -> IO RewriteResult
-runRewrite = runNoLoggingT . performRewrite def [] []
+runRewrite = runNoLoggingT . performRewrite def Nothing [] []
 
 aborts :: Term -> IO ()
 aborts t = runRewrite (termInKCell "C" t) >>= (@?= RewriteAborted (termInKCell "C" t))
@@ -232,7 +233,7 @@ canRewrite =
             let con1Term = termInKCell "C" $ app con1 [d]
                 f1Term = termInKCell "C" $ app f1 [d]
             runRewrite con1Term >>= (@?= RewriteAborted f1Term)
-        , testCase "Rewrites con4 twice, then branches on con1" $ do
+        , testCase "Rewrites con3 twice, branching on con1" $ do
             let rule3Dv1 = dv someSort "otherThing"
                 rule3Dv2 = dv someSort "somethingElse"
                 con3Term = termInKCell "C" $ app con3 [rule3Dv1, d]
@@ -262,3 +263,29 @@ abortsOnFailures =
         [ testCase "when unification is not a match" $ aborts (app con3 [var "X" someSort, d])
         , testCase "when definedness is unclear" $ aborts (app con4 [d, d])
         ]
+
+supportsDepthControl :: TestTree
+supportsDepthControl =
+    testGroup
+        "supports maximum depth control"
+        [ testCase "executes normally when maxDepth > maximum expected" $
+            runRewriteDepth 42 con1Term >>= (@?= RewriteAborted f1Term)
+        , testCase "stops execution after 1 step when maxDepth == 1" $
+            runRewriteDepth 1 con1Term >>= (@?= RewriteStopped f1Term)
+        , testCase "performs no steps when maxDepth == 0" $
+            runRewriteDepth 0 con1Term >>= (@?= RewriteStopped con1Term)
+        , testCase "prefers reporting branches to stopping at depth" $ do
+            let rule3Dv1 = dv someSort "otherThing"
+                rule3Dv2 = dv someSort "somethingElse"
+                con3Term = termInKCell "C" $ app con3 [rule3Dv1, d]
+                branch1 = termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2]
+                branch2 = termInKCell "C" $ app f1 [rule3Dv2]
+            runRewriteDepth 2 con3Term
+                >>= (@?= RewriteBranch (NE.fromList [branch1, branch2]))
+        ]
+  where
+    con1Term = termInKCell "C" $ app con1 [d]
+    f1Term = termInKCell "C" $ app f1 [d]
+    runRewriteDepth :: Int -> Pattern -> IO RewriteResult
+    runRewriteDepth depth =
+        runNoLoggingT . performRewrite def (Just depth) [] []

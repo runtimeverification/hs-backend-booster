@@ -196,6 +196,8 @@ data RewriteResult
       RewriteCutPoint Pattern Pattern
     | -- | terminal rule, return rhs (final state reached)
       RewriteTerminal Pattern
+    | -- | stopping because maximum depth has been reached
+      RewriteStopped Pattern
     | -- | unable to handle the current case with this rewriter
       -- (signalled by exceptions)
       RewriteAborted Pattern
@@ -217,29 +219,39 @@ performRewrite ::
     forall io.
     MonadLoggerIO io =>
     KoreDefinition ->
+    -- | maximum depth
+    Maybe Int ->
     -- | cut point rule labels
     [Text] ->
     -- | terminal rule labels
     [Text] ->
     Pattern ->
     io RewriteResult
-performRewrite def cutLabels terminalLabels pat = do
+performRewrite def mbMaxDepth cutLabels terminalLabels pat = do
     logRewrite $ "Rewriting pattern " <> pack (show pat)
-    doSteps 0 pat
+    doSteps 1 pat
   where
     logRewrite = logOther (LevelOther "Rewrite")
 
+    depthReached n = maybe False (n >) mbMaxDepth
+
+    showCounter = (<> " steps.") . pack . show
+
     doSteps :: Int -> Pattern -> io RewriteResult
-    doSteps counter pat' = do
-        let res = runExcept $ rewriteStep def cutLabels terminalLabels pat'
-        case res of
-            Right (RewriteSingle single) ->
-                doSteps (counter + 1) single
-            Right other -> do
-                logRewrite $ "Stopped after " <> pack (show counter) <> " steps:"
-                logRewrite $ pack (show other)
-                pure other
-            Left failure -> do
-                logRewrite $ "Aborted after " <> pack (show counter) <> " steps:"
-                logRewrite $ pack (show failure)
-                pure $ RewriteAborted pat'
+    doSteps counter pat'
+        | depthReached counter = do
+            logRewrite $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
+            pure $ RewriteStopped pat'
+        | otherwise = do
+            let res = runExcept $ rewriteStep def cutLabels terminalLabels pat'
+            case res of
+                Right (RewriteSingle single) ->
+                    doSteps (counter + 1) single
+                Right other -> do
+                    logRewrite $ "Stopped after " <> showCounter counter
+                    logRewrite $ pack (show other)
+                    pure other
+                Left failure -> do
+                    logRewrite $ "Aborted after " <> showCounter counter
+                    logRewrite $ pack (show failure)
+                    pure $ RewriteAborted pat'
