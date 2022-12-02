@@ -17,6 +17,7 @@ module RpcClient (
 import Control.Exception
 import Control.Monad
 import Data.Aeson qualified as Json
+import Data.Aeson.Encode.Pretty qualified as Json
 import Data.Aeson.Key qualified as JsonKey
 import Data.Aeson.KeyMap qualified as JsonKeyMap
 import Data.Bifunctor
@@ -141,7 +142,7 @@ parseMode =
         strOption $
             long "execute"
                 <> metavar "TERMFILE"
-                <> help "execute (rewrite) the term in the file"
+                <> help "execute (rewrite) the state in the file"
     parseRaw =
         strOption $
             long "send"
@@ -158,9 +159,9 @@ prepareRequestData (SendRaw file) mbFile opts = do
     BS.readFile file
 prepareRequestData (Exec file) mbOptFile opts = do
     term :: Json.Value <-
-        Json.toJSON . Syntax.addHeader
+        Json.toJSON
             <$> ( BS.readFile file -- decode given term to test whether it is valid
-                    >>= either error pure . Json.eitherDecode @Syntax.KorePattern
+                    >>= either error pure . Json.eitherDecode @Syntax.KoreJson
                 )
     paramsFromFile <-
         maybe
@@ -227,11 +228,15 @@ mkRequest method =
 compareToExpectation :: FilePath -> BS.ByteString -> IO ()
 compareToExpectation expectFile output = do
     expected <- BS.readFile expectFile
+    let outputJson :: Json.Value
+        outputJson = either error id $ Json.eitherDecode output
+    let prettyOutput = Json.encodePretty outputJson
+
     -- TODO https://hackage.haskell.org/package/Diff (needs json reformatting)
     -- or  https://hackage.haskell.org/package/aeson-diff (needs diff pretty-printer)
-    when (output /= expected) $ do
+    when (prettyOutput /= expected) $ do
         BS.putStrLn $ "[Error] Expected:\n" <> expected
-        BS.putStrLn $ "[Error] but got:\n" <> output
+        BS.putStrLn $ "[Error] but got:\n" <> prettyOutput
         BS.putStrLn "[Error] Not the same, sorry."
         exitWith $ ExitFailure 1
     hPutStrLn stderr $ "[Info] Output matches " <> expectFile
