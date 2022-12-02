@@ -13,7 +13,7 @@ import Control.Exception (ErrorCall (..), mask)
 import Control.Monad (forever)
 import Control.Monad.Catch (MonadCatch, catch, handle)
 import Control.Monad.IO.Class
-import Control.Monad.Logger.CallStack (LogLevel, MonadLoggerIO)
+import Control.Monad.Logger.CallStack (LogLevel (LevelError), MonadLoggerIO)
 import Control.Monad.Logger.CallStack qualified as Log
 import Control.Monad.STM (atomically)
 import Control.Monad.Trans.Except (runExcept)
@@ -168,10 +168,10 @@ catchingServerErrors =
             Log.logError $ "Server error: " <> Text.pack (show err)
             pure $ Left (ErrorObj "Server error" (-32032) $ mkError err)
 
-runServer :: Int -> KoreDefinition -> LogLevel -> IO ()
-runServer port internalizedModule logLevel =
+runServer :: Int -> KoreDefinition -> (LogLevel, [LogLevel]) -> IO ()
+runServer port internalizedModule (logLevel, customLevels) =
     do
-        Log.runStderrLoggingT . logFilter
+        Log.runStderrLoggingT . (Log.filterLogger levelFilter)
         $ jsonrpcTCPServer
             Json.defConfig{confCompare}
             V2
@@ -179,7 +179,9 @@ runServer port internalizedModule logLevel =
             srvSettings
             (srv internalizedModule)
   where
-    logFilter = Log.filterLogger $ \_source lvl -> lvl >= logLevel
+    levelFilter _source lvl =
+        lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
+
     srvSettings = serverSettings port "*"
     confCompare =
         Json.keyOrder
