@@ -75,17 +75,14 @@ foreignImport name' ty' = do
           TH.SigD
             name
             (TH.AppT (TH.AppT (TH.AppT (TH.ConT ''ReaderT) (TH.ConT ''Linker.DL)) (TH.ConT ''IO)) ty)
-        , -- <camel_name> = ReaderT $ \libHandle -> <camel_name>Unwrap <$> Linker.dlsym libHandle "<name>"
+        , -- <camel_name> = <camel_name>Unwrap <$> <camel_name>FunPtr
           TH.ValD
             (TH.VarP name)
             ( TH.NormalB
                 ( TH.InfixE
-                    (Just (TH.ConE 'ReaderT))
-                    (TH.VarE '($))
-                    ( Just $
-                        TH.LamE [TH.VarP libHandle] $
-                            TH.InfixE (Just $ TH.VarE nameUnwrap) (TH.VarE '(<$>)) (Just $ TH.AppE (TH.AppE (TH.VarE 'Linker.dlsym) (TH.VarE libHandle)) (TH.LitE $ TH.StringL name'))
-                    )
+                    (Just (TH.VarE nameUnwrap))
+                    (TH.VarE '(<$>))
+                    (Just (TH.VarE nameFunPtr))
                 )
             )
             []
