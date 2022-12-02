@@ -48,14 +48,14 @@ parseCHeader input_file =
 foreignImport :: String -> C.Type -> TH.Q [TH.Dec]
 foreignImport name' ty' = do
     ty <- cTypeToHs ty'
-    let nameMk = TH.mkName $ toCamel $ (Identifier . (++ ["unwrap"]) . unIdentifier) $ fromAny name'
+    let nameUnwrap = TH.mkName $ toCamel $ (Identifier . (++ ["unwrap"]) . unIdentifier) $ fromAny name'
         nameFunPtr = TH.mkName $ toCamel $ (Identifier . (++ ["fun", "ptr"]) . unIdentifier) $ fromAny name'
         name = TH.mkName $ toCamel $ fromAny name'
     libHandle <- TH.newName "libHandle"
 
     pure
         [ -- foreign import ccall "dynamic" <camel_name>Unwrap :: FunPtr <ty> -> <ty>
-          TH.ForeignD $ TH.ImportF TH.CCall TH.Safe "dynamic" nameMk $ TH.AppT (TH.AppT TH.ArrowT $ TH.AppT (TH.ConT ''FunPtr) ty) ty
+          TH.ForeignD $ TH.ImportF TH.CCall TH.Safe "dynamic" nameUnwrap $ TH.AppT (TH.AppT TH.ArrowT $ TH.AppT (TH.ConT ''FunPtr) ty) ty
         , -- <camel_name>FunPtr :: ReaderT DL IO (FunPtr <ty>)
           TH.SigD
             nameFunPtr
@@ -84,7 +84,7 @@ foreignImport name' ty' = do
                     (TH.VarE '($))
                     ( Just $
                         TH.LamE [TH.VarP libHandle] $
-                            TH.InfixE (Just $ TH.VarE nameMk) (TH.VarE '(<$>)) (Just $ TH.AppE (TH.AppE (TH.VarE 'Linker.dlsym) (TH.VarE libHandle)) (TH.LitE $ TH.StringL name'))
+                            TH.InfixE (Just $ TH.VarE nameUnwrap) (TH.VarE '(<$>)) (Just $ TH.AppE (TH.AppE (TH.VarE 'Linker.dlsym) (TH.VarE libHandle)) (TH.LitE $ TH.StringL name'))
                     )
                 )
             )
