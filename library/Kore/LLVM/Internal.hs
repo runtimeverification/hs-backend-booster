@@ -3,7 +3,7 @@
 
 module Kore.LLVM.Internal (API (..), KorePatternAPI (..), runLLVM, ask, marshallTerm) where
 
-import Control.Monad ((>=>), foldM)
+import Control.Monad (foldM, (>=>))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT))
 import Control.Monad.Trans.Reader qualified as Reader
