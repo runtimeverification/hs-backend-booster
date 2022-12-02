@@ -14,6 +14,7 @@ module RpcClient (
     main,
 ) where
 
+import Control.Exception
 import Control.Monad
 import Data.Aeson qualified as Json
 import Data.Aeson.Key qualified as JsonKey
@@ -40,7 +41,7 @@ main :: IO ()
 main = do
     Options{host, port, mode, optionFile, options, expectFile} <-
         execParser parseOptions
-    runTCPClient host (show port) $ \s -> do
+    withTCPServer host port $ \s -> do
         request <-
             trace "[Info] Preparing request data" $
                 prepareRequestData mode optionFile options
@@ -49,7 +50,11 @@ main = do
         response <- recv s 8192
         trace "[Info] Response received." $
             maybe BS.putStrLn compareToExpectation expectFile response
-        shutdown s ShutdownBoth
+  where
+    withTCPServer :: String -> Int -> (Socket -> IO ()) -> IO ()
+    withTCPServer host port client =
+        runTCPClient host (show port) $ \s ->
+            bracket (pure s) (const $ shutdown s ShutdownBoth) client
 
 data Options = Options
     { host :: String
