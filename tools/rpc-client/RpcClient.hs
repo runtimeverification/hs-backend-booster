@@ -137,20 +137,25 @@ parseOptions =
 
 parsePostProcessing :: Parser PostProcessing
 parsePostProcessing =
-    (Expect <$>
-        strOption
-           (long "expect"
-               <> metavar "EXPECTATIONFILE"
-               <> help "compare JSON output against file contents"))
-        <|> (Output <$>
-                 (strOption $
-                     long "output"
-                         <> short 'o'
-                         <> metavar "OUTPUTFILE"
-                         <> help "write JSON output to a file"))
-        <|> (flag' Prettify $
-                      long "prettify"
-                          <> help "format JSON before printing")
+    ( Expect
+        <$> strOption
+            ( long "expect"
+                <> metavar "EXPECTATIONFILE"
+                <> help "compare JSON output against file contents"
+            )
+    )
+        <|> ( Output
+                <$> ( strOption $
+                        long "output"
+                            <> short 'o'
+                            <> metavar "OUTPUTFILE"
+                            <> help "write JSON output to a file"
+                    )
+            )
+        <|> ( flag' Prettify $
+                long "prettify"
+                    <> help "format JSON before printing"
+            )
 
 parseMode :: Parser Mode
 parseMode =
@@ -247,7 +252,6 @@ mkRequest method =
         , "method" ~> method
         ]
 
-
 postProcess :: PostProcessing -> BS.ByteString -> IO ()
 postProcess postProcessing output =
     case postProcessing of
@@ -270,4 +274,4 @@ postProcess postProcessing output =
     prettyOutput =
         Json.encodePretty' rpcJsonConfig $
             either error (id @Json.Value) $
-            Json.eitherDecode output
+                Json.eitherDecode output
