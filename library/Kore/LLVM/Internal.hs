@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
+{-# OPTIONS_GHC -ddump-splices #-}
 
 module Kore.LLVM.Internal (API (..), KorePatternAPI (..), runLLVM, ask, marshallTerm) where
 
@@ -43,34 +44,39 @@ newtype API = API
 newtype LLVM a = LLVM (ReaderT API IO a)
     deriving newtype (Functor, Applicative, Monad, MonadIO)
 
+{- | Uses dlopen to load a .so/.dylib C library at runtime. For doucmentation of flags such as `RTL_LAZY`, consult e.g.
+     https://man7.org/linux/man-pages/man3/dlopen.3.html
+-}
+withDLib :: FilePath -> ReaderT Linker.DL IO a -> IO a
+withDLib dlib = Linker.withDL dlib [Linker.RTLD_LAZY] . runReaderT
+
 runLLVM :: FilePath -> LLVM a -> IO a
-runLLVM dlib (LLVM m) = do
-    Linker.withDL dlib [Linker.RTLD_LAZY] $ \libHandle -> flip runReaderT libHandle $ do
-        free <- korePatternFreeFunPtr
-        composite <- do
-            new <- koreCompositePatternNew
-            pure $ KoreCompositePatternAPI $ \name -> liftIO $ C.withCString (Text.unpack name) $ new >=> newForeignPtr free
+runLLVM dlib (LLVM m) = withDLib dlib $ do
+    free <- korePatternFreeFunPtr
+    composite <- do
+        new <- koreCompositePatternNew
+        pure $ KoreCompositePatternAPI $ \name -> liftIO $ C.withCString (Text.unpack name) $ new >=> newForeignPtr free
 
-        string <- do
-            new <- koreStringPatternNew
-            pure $ KoreStringPatternAPI $ \name -> liftIO $ C.withCString (Text.unpack name) $ new >=> newForeignPtr free
+    string <- do
+        new <- koreStringPatternNew
+        pure $ KoreStringPatternAPI $ \name -> liftIO $ C.withCString (Text.unpack name) $ new >=> newForeignPtr free
 
-        dump <- do
-            dump' <- korePatternDump
-            pure $ \ptr -> liftIO $ withForeignPtr ptr $ \rawPtr -> do
-                strPtr <- dump' rawPtr
-                str <- C.peekCString strPtr
-                Foreign.free strPtr
-                pure str
+    dump <- do
+        dump' <- korePatternDump
+        pure $ \ptr -> liftIO $ withForeignPtr ptr $ \rawPtr -> do
+            strPtr <- dump' rawPtr
+            str <- C.peekCString strPtr
+            Foreign.free strPtr
+            pure str
 
-        addArgument <- do
-            addArgument' <- koreCompositePatternAddArgument
-            pure $ \parent child -> liftIO $ do
-                withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgument' rawParent
-                finalizeForeignPtr child
-                pure parent
+    addArgument <- do
+        addArgument' <- koreCompositePatternAddArgument
+        pure $ \parent child -> liftIO $ do
+            withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgument' rawParent
+            finalizeForeignPtr child
+            pure parent
 
-        liftIO $ runReaderT m $ API KorePatternAPI{composite, string, addArgument, dump}
+    liftIO $ runReaderT m $ API KorePatternAPI{composite, string, addArgument, dump}
 
 ask :: LLVM API
 ask = LLVM Reader.ask
