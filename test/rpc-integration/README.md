@@ -27,7 +27,7 @@ $ hs-backend-booster test/rpc-integration/resources/a-to-f.kore --module TEST`
 ```
 rpc-client \
     --execute state-zero-steps.json \
-    --params params-zero-steps.json \
+    --param-file params-zero-steps.json \
     --expect response-zero-steps.json
 ```
 

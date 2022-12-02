@@ -41,7 +41,7 @@ import Debug.Trace
 
 main :: IO ()
 main = do
-    Options{host, port, mode, optionFile, options, expectFile} <-
+    Options{host, port, mode, optionFile, options, postProcessing} <-
         execParser parseOptions
     withTCPServer host port $ \s -> do
         request <-
@@ -51,7 +51,7 @@ main = do
             sendAll s request
         response <- recv s 8192
         trace "[Info] Response received." $
-            maybe BS.putStrLn compareToExpectation expectFile response
+            maybe BS.putStrLn postProcess postProcessing response
   where
     withTCPServer :: String -> Int -> (Socket -> IO ()) -> IO ()
     withTCPServer host port client =
@@ -64,7 +64,7 @@ data Options = Options
     , mode :: Mode -- what to do
     , optionFile :: Maybe FilePath -- file with options (different for each endpoint
     , options :: [(String, String)] -- verbatim options (name, value) to add to json
-    , expectFile :: Maybe FilePath -- whether to diff to an expectation file or output
+    , postProcessing :: Maybe PostProcessing
     }
     deriving stock (Show)
 
@@ -76,6 +76,17 @@ data Mode
     | Simpl FilePath
     | Check FilePath FilePath
     | SendRaw FilePath
+    deriving stock (Show)
+
+{- | Optional output post-processing:
+  * 'Output' writes formatted output to a file
+  * 'Expect' checks formatted output against a given golden file
+  * 'Prettify' formats output before printing it to stdout
+-}
+data PostProcessing
+    = Output FilePath
+    | Expect FilePath
+    | Prettify
     deriving stock (Show)
 
 parseOptions :: ParserInfo Options
@@ -93,7 +104,7 @@ parseOptions =
             <*> parseMode
             <*> paramFileOpt
             <*> many paramOpt
-            <*> expectFileOpt
+            <*> optional parsePostProcessing
     hostOpt =
         strOption $
             long "host"
@@ -121,15 +132,25 @@ parseOptions =
             short 'o'
                 <> metavar "NAME=VALUE"
                 <> help "parameters to use (name=value)"
-    expectFileOpt =
-        optional $
-            strOption $
-                long "expect"
-                    <> metavar "EXPECTATIONFILE"
-                    <> help "file with expected output (json), optional"
-
     readPair =
         maybeReader $ \s -> case split (== '=') s of [k, v] -> Just (k, v); _ -> Nothing
+
+parsePostProcessing :: Parser PostProcessing
+parsePostProcessing =
+    (Expect <$>
+        strOption
+           (long "expect"
+               <> metavar "EXPECTATIONFILE"
+               <> help "compare JSON output against file contents"))
+        <|> (Output <$>
+                 (strOption $
+                     long "output"
+                         <> short 'o'
+                         <> metavar "OUTPUTFILE"
+                         <> help "write JSON output to a file"))
+        <|> (flag' Prettify $
+                      long "prettify"
+                          <> help "format JSON before printing")
 
 parseMode :: Parser Mode
 parseMode =
@@ -226,18 +247,27 @@ mkRequest method =
         , "method" ~> method
         ]
 
-compareToExpectation :: FilePath -> BS.ByteString -> IO ()
-compareToExpectation expectFile output = do
-    expected <- BS.readFile expectFile
-    let outputJson :: Json.Value
-        outputJson = either error id $ Json.eitherDecode output
-    let prettyOutput = Json.encodePretty' rpcJsonConfig outputJson
 
-    -- TODO https://hackage.haskell.org/package/Diff (needs json reformatting)
-    -- or  https://hackage.haskell.org/package/aeson-diff (needs diff pretty-printer)
-    when (prettyOutput /= expected) $ do
-        BS.putStrLn $ "[Error] Expected:\n" <> expected
-        BS.putStrLn $ "[Error] but got:\n" <> prettyOutput
-        BS.putStrLn "[Error] Not the same, sorry."
-        exitWith $ ExitFailure 1
-    hPutStrLn stderr $ "[Info] Output matches " <> expectFile
+postProcess :: PostProcessing -> BS.ByteString -> IO ()
+postProcess postProcessing output =
+    case postProcessing of
+        Prettify ->
+            BS.putStrLn prettyOutput
+        Output file ->
+            BS.writeFile file prettyOutput
+        Expect expectFile -> do
+            expected <- BS.readFile expectFile
+
+            -- TODO https://hackage.haskell.org/package/Diff (needs json reformatting)
+            -- or  https://hackage.haskell.org/package/aeson-diff (needs diff pretty-printer)
+            when (prettyOutput /= expected) $ do
+                BS.putStrLn $ "[Error] Expected:\n" <> expected
+                BS.putStrLn $ "[Error] but got:\n" <> prettyOutput
+                BS.putStrLn "[Error] Not the same, sorry."
+                exitWith $ ExitFailure 1
+            hPutStrLn stderr $ "[Info] Output matches " <> expectFile
+  where
+    prettyOutput =
+        Json.encodePretty' rpcJsonConfig $
+            either error (id @Json.Value) $
+            Json.eitherDecode output
