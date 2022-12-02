@@ -1,70 +1,88 @@
-module Kore.LLVM.Internal where
+{-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-import Control.Monad (foldM)
+module Kore.LLVM.Internal (API (..), KorePatternAPI (..), runLLVM, ask, marshallTerm) where
+
+import Control.Monad ((>=>), foldM)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT))
 import Control.Monad.Trans.Reader qualified as Reader
 import Data.Text (Text)
-import Data.Text.Foreign qualified as Text
-import Foreign (ForeignPtr, FunPtr, Ptr, finalizeForeignPtr, newForeignPtr, withForeignPtr)
+import Data.Text qualified as Text
+import Foreign (ForeignPtr, finalizeForeignPtr, newForeignPtr, withForeignPtr)
+import Foreign qualified
 import Foreign.C qualified as C
+import Kore.LLVM.TH (dynamicBindings)
 import Kore.Pattern.Base
-import System.Posix qualified as Linker
+import System.Posix.DynamicLinker qualified as Linker
 
-data KORECompositePattern
-type KORECompositePatternRawPtr = Ptr KORECompositePattern
+data KorePattern
+type KorePatternPtr = ForeignPtr KorePattern
 
-type KoreCompositePatternNew = C.CString -> IO KORECompositePatternRawPtr
-type KoreCompositePatternAddArgument = KORECompositePatternRawPtr -> KORECompositePatternRawPtr -> IO ()
-type KoreCompositePatternDump = KORECompositePatternRawPtr -> IO ()
+$(dynamicBindings "./cbits/kllvm-c.h")
 
-type KORECompositePatternPtr = ForeignPtr KORECompositePattern
-
-foreign import ccall "dynamic" mkKoreCompositePatternNew :: FunPtr KoreCompositePatternNew -> KoreCompositePatternNew
-foreign import ccall "dynamic" mkKoreCompositePatternAddArgument :: FunPtr KoreCompositePatternAddArgument -> KoreCompositePatternAddArgument
-foreign import ccall "dynamic" mkKoreCompositePatternDump :: FunPtr KoreCompositePatternDump -> KoreCompositePatternDump
-
-data KoreCompositePattern = KoreCompositePattern
-    { new :: Text -> LLVM KORECompositePatternPtr
-    , addArgument :: KORECompositePatternPtr -> KORECompositePatternPtr -> LLVM KORECompositePatternPtr
-    , dump :: KORECompositePatternPtr -> LLVM ()
+newtype KoreCompositePatternAPI = KoreCompositePatternAPI
+    { new :: Text -> LLVM KorePatternPtr
     }
 
-data API = API
-    { koreCompositePattern :: KoreCompositePattern
+newtype KoreStringPatternAPI = KoreStringPatternAPI
+    { new :: Text -> LLVM KorePatternPtr
     }
 
-newtype LLVM a = LLVM {unLLVM :: ReaderT API IO a}
+data KorePatternAPI = KorePatternAPI
+    { composite :: KoreCompositePatternAPI
+    , string :: KoreStringPatternAPI
+    , addArgument :: KorePatternPtr -> KorePatternPtr -> LLVM KorePatternPtr
+    , dump :: KorePatternPtr -> LLVM String
+    }
+
+newtype API = API
+    { korePattern :: KorePatternAPI
+    }
+
+newtype LLVM a = LLVM (ReaderT API IO a)
     deriving newtype (Functor, Applicative, Monad, MonadIO)
 
 runLLVM :: FilePath -> LLVM a -> IO a
 runLLVM dlib (LLVM m) = do
-    Linker.withDL dlib [Linker.RTLD_LAZY] $ \libHandle -> do
-        new' <- mkKoreCompositePatternNew <$> Linker.dlsym libHandle "kore_composite_pattern_new"
-        free <- Linker.dlsym libHandle "kore_composite_pattern_free"
-        let new name = liftIO $ Text.withCString name $ \cname -> newForeignPtr free =<< new' cname
+    Linker.withDL dlib [Linker.RTLD_LAZY] $ \libHandle -> flip runReaderT libHandle $ do
+        free <- korePatternFreeFunPtr
+        composite <- do
+            new <- koreCompositePatternNew
+            pure $ KoreCompositePatternAPI $ \name -> liftIO $ C.withCString (Text.unpack name) $ new >=> newForeignPtr free
 
-        dump' <- mkKoreCompositePatternDump <$> Linker.dlsym libHandle "kore_composite_pattern_dump"
-        let dump ptr = liftIO $ withForeignPtr ptr $ dump'
+        string <- do
+            new <- koreStringPatternNew
+            pure $ KoreStringPatternAPI $ \name -> liftIO $ C.withCString (Text.unpack name) $ new >=> newForeignPtr free
 
-        addArgument' <- mkKoreCompositePatternAddArgument <$> Linker.dlsym libHandle "kore_composite_pattern_add_argument"
+        dump <- do
+            dump' <- korePatternDump
+            pure $ \ptr -> liftIO $ withForeignPtr ptr $ \rawPtr -> do
+                strPtr <- dump' rawPtr
+                str <- C.peekCString strPtr
+                Foreign.free strPtr
+                pure str
 
-        let addArgument parent child = liftIO $ do
+        addArgument <- do
+            addArgument' <- koreCompositePatternAddArgument
+            pure $ \parent child -> liftIO $ do
                 withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgument' rawParent
                 finalizeForeignPtr child
                 pure parent
 
-        liftIO $ runReaderT m $ API KoreCompositePattern{new, dump, addArgument}
+        liftIO $ runReaderT m $ API KorePatternAPI{composite, string, addArgument, dump}
 
 ask :: LLVM API
 ask = LLVM Reader.ask
 
-marshallTerm :: Term -> LLVM KORECompositePatternPtr
+marshallTerm :: Term -> LLVM KorePatternPtr
 marshallTerm = \case
     SymbolApplication symbol trms -> do
         api <- ask
-        app <- api.koreCompositePattern.new symbol.name
-        foldM (\app' t -> api.koreCompositePattern.addArgument app' =<< marshallTerm t) app trms
+        app <- api.korePattern.composite.new symbol.name
+        foldM (\app' t -> api.korePattern.addArgument app' =<< marshallTerm t) app trms
     AndTerm _ _ -> error "marshalling And undefined"
-    DomainValue _ _ -> error "marshalling DomainValue undefined"
+    DomainValue _sort val -> do
+        api <- ask
+        api.korePattern.string.new val
     Var _ -> error "marshalling Var undefined"

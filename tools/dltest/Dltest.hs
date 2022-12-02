@@ -7,6 +7,7 @@ module Main (
     main,
 ) where
 
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.List (isPrefixOf, partition)
 import Kore.Definition.Attributes.Base
 import Kore.LLVM.Internal as LLVM
@@ -21,7 +22,8 @@ main = do
         [lib] -> LLVM.runLLVM lib $ do
             api <- LLVM.ask
             test <- LLVM.marshallTerm $ app f1 [app con1 [app f1 []], app con2 [], app f2 []]
-            api.koreCompositePattern.dump test
+            str <- api.korePattern.dump test
+            liftIO $ putStrLn str
         _ -> putStrLn "Too many arguments"
 
 app :: Symbol -> [Term] -> Term
