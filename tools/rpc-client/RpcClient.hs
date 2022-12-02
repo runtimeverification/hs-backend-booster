@@ -34,6 +34,7 @@ import Options.Applicative
 import System.Exit
 import System.IO
 
+import Kore.JsonRpc.Base (rpcJsonConfig)
 import Kore.Syntax.Json qualified as Syntax
 
 import Debug.Trace
@@ -230,7 +231,7 @@ compareToExpectation expectFile output = do
     expected <- BS.readFile expectFile
     let outputJson :: Json.Value
         outputJson = either error id $ Json.eitherDecode output
-    let prettyOutput = Json.encodePretty outputJson
+    let prettyOutput = Json.encodePretty' rpcJsonConfig outputJson
 
     -- TODO https://hackage.haskell.org/package/Diff (needs json reformatting)
     -- or  https://hackage.haskell.org/package/aeson-diff (needs diff pretty-printer)
