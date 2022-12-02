@@ -171,7 +171,7 @@ catchingServerErrors =
 runServer :: Int -> KoreDefinition -> (LogLevel, [LogLevel]) -> IO ()
 runServer port internalizedModule (logLevel, customLevels) =
     do
-        Log.runStderrLoggingT . (Log.filterLogger levelFilter)
+        Log.runStderrLoggingT . Log.filterLogger levelFilter
         $ jsonrpcTCPServer
             Json.defConfig{confCompare}
             V2
