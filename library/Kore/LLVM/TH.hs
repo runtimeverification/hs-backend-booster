@@ -75,7 +75,6 @@ parseCHeader input_file =
                             Left err -> error (show err)
                             Right (m, _) -> pure $ Map.toList m
 
-
 foreignImport :: String -> C.Type -> TH.Q [TH.Dec]
 foreignImport name' ty' = do
     ty <- cTypeToHs ty'
