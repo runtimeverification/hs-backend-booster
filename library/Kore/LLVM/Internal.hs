@@ -55,18 +55,18 @@ runLLVM dlib (LLVM m) = withDLib dlib $ do
     free <- korePatternFreeFunPtr
     composite <- do
         new' <- koreCompositePatternNew
-        let new name = liftIO $ 
-                C.withCString (Text.unpack name) $ 
-                    new' >=> newForeignPtr free
-        
+        let new name =
+                liftIO $
+                    C.withCString (Text.unpack name) $
+                        new' >=> newForeignPtr free
+
         addArgument' <- koreCompositePatternAddArgument
         let addArgument parent child = liftIO $ do
                 withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgument' rawParent
                 finalizeForeignPtr child
                 pure parent
-        
-        pure KoreCompositePatternAPI{new, addArgument}
 
+        pure KoreCompositePatternAPI{new, addArgument}
 
     string <- do
         new <- koreStringPatternNew
@@ -79,7 +79,7 @@ runLLVM dlib (LLVM m) = withDLib dlib $ do
             str <- C.peekCString strPtr
             Foreign.free strPtr
             pure str
-        
+
     liftIO $ runReaderT m $ API KorePatternAPI{composite, string, dump}
 
 ask :: LLVM API
