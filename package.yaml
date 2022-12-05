@@ -91,6 +91,8 @@ library:
   build-tools:
     - happy
     - alex
+  system-build-tools:
+    - gcc
 
 executables:
   hs-backend-booster:
