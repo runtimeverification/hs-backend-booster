@@ -22,8 +22,7 @@ main = do
         [lib] -> LLVM.runLLVM lib $ do
             api <- LLVM.ask
             test <- LLVM.marshallTerm $ app f1 [app con1 [app f1 []], app con2 [], app f2 []]
-            str <- api.korePattern.dump test
-            liftIO $ putStrLn str
+            api.korePattern.dump test >>= liftIO . putStrLn 
         _ -> putStrLn "Too many arguments"
 
 app :: Symbol -> [Term] -> Term

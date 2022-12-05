@@ -22,8 +22,9 @@ type KorePatternPtr = ForeignPtr KorePattern
 
 $(dynamicBindings "./cbits/kllvm-c.h")
 
-newtype KoreCompositePatternAPI = KoreCompositePatternAPI
+data KoreCompositePatternAPI = KoreCompositePatternAPI
     { new :: Text -> LLVM KorePatternPtr
+    , addArgument :: KorePatternPtr -> KorePatternPtr -> LLVM KorePatternPtr
     }
 
 newtype KoreStringPatternAPI = KoreStringPatternAPI
@@ -33,7 +34,6 @@ newtype KoreStringPatternAPI = KoreStringPatternAPI
 data KorePatternAPI = KorePatternAPI
     { composite :: KoreCompositePatternAPI
     , string :: KoreStringPatternAPI
-    , addArgument :: KorePatternPtr -> KorePatternPtr -> LLVM KorePatternPtr
     , dump :: KorePatternPtr -> LLVM String
     }
 
@@ -54,8 +54,19 @@ runLLVM :: FilePath -> LLVM a -> IO a
 runLLVM dlib (LLVM m) = withDLib dlib $ do
     free <- korePatternFreeFunPtr
     composite <- do
-        new <- koreCompositePatternNew
-        pure $ KoreCompositePatternAPI $ \name -> liftIO $ C.withCString (Text.unpack name) $ new >=> newForeignPtr free
+        new' <- koreCompositePatternNew
+        let new name = liftIO $ 
+                C.withCString (Text.unpack name) $ 
+                    new' >=> newForeignPtr free
+        
+        addArgument' <- koreCompositePatternAddArgument
+        let addArgument parent child = liftIO $ do
+                withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgument' rawParent
+                finalizeForeignPtr child
+                pure parent
+        
+        pure KoreCompositePatternAPI{new, addArgument}
+
 
     string <- do
         new <- koreStringPatternNew
@@ -68,15 +79,8 @@ runLLVM dlib (LLVM m) = withDLib dlib $ do
             str <- C.peekCString strPtr
             Foreign.free strPtr
             pure str
-
-    addArgument <- do
-        addArgument' <- koreCompositePatternAddArgument
-        pure $ \parent child -> liftIO $ do
-            withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgument' rawParent
-            finalizeForeignPtr child
-            pure parent
-
-    liftIO $ runReaderT m $ API KorePatternAPI{composite, string, addArgument, dump}
+        
+    liftIO $ runReaderT m $ API KorePatternAPI{composite, string, dump}
 
 ask :: LLVM API
 ask = LLVM Reader.ask
@@ -86,7 +90,7 @@ marshallTerm = \case
     SymbolApplication symbol trms -> do
         api <- ask
         app <- api.korePattern.composite.new symbol.name
-        foldM (\app' t -> api.korePattern.addArgument app' =<< marshallTerm t) app trms
+        foldM (\app' t -> api.korePattern.composite.addArgument app' =<< marshallTerm t) app trms
     AndTerm _ _ -> error "marshalling And undefined"
     DomainValue _sort val -> do
         api <- ask
