@@ -49,7 +49,7 @@ main = do
                 prepareRequestData mode optionFile options
         trace "[Info] Sending request..." $
             sendAll s request
-        response <- recv s 8192
+        response <- recv s (16 * 8192)
         trace "[Info] Response received." $
             maybe BS.putStrLn postProcess postProcessing response
   where
