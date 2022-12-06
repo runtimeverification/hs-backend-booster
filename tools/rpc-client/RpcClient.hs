@@ -42,7 +42,7 @@ import Debug.Trace
 main :: IO ()
 main = do
     Options{host, port, mode, optionFile, options, postProcessing} <-
-        execParser parseOptions
+        trace "\ndebug1\n" $ execParser parseOptions
     withTCPServer host port $ \s -> do
         request <-
             trace "[Info] Preparing request data" $
@@ -55,8 +55,7 @@ main = do
   where
     withTCPServer :: String -> Int -> (Socket -> IO ()) -> IO ()
     withTCPServer host port client =
-        runTCPClient host (show port) $ \s ->
-            bracket (pure s) (const $ shutdown s ShutdownBoth) client
+        runTCPClient host (show port) client
 
 data Options = Options
     { host :: String
