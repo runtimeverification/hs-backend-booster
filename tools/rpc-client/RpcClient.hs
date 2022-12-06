@@ -42,7 +42,7 @@ import Debug.Trace
 main :: IO ()
 main = do
     Options{host, port, mode, optionFile, options, postProcessing} <-
-        trace "\ndebug1\n" $ execParser parseOptions
+        execParser parseOptions
     withTCPServer host port $ \s -> do
         request <-
             trace "[Info] Preparing request data" $
