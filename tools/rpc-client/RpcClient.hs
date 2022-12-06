@@ -14,7 +14,6 @@ module RpcClient (
     main,
 ) where
 
-import Control.Exception
 import Control.Monad
 import Data.Aeson qualified as Json
 import Data.Aeson.Encode.Pretty qualified as Json
@@ -54,8 +53,8 @@ main = do
             maybe BS.putStrLn postProcess postProcessing response
   where
     withTCPServer :: String -> Int -> (Socket -> IO ()) -> IO ()
-    withTCPServer host port client =
-        runTCPClient host (show port) client
+    withTCPServer host port =
+        runTCPClient host (show port)
 
 data Options = Options
     { host :: String
