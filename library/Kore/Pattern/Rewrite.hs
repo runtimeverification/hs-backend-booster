@@ -8,6 +8,7 @@ module Kore.Pattern.Rewrite (
     RewriteFailed (..),
     RuleFailed (..),
     RewriteResult (..),
+    runRewriteM,
 ) where
 
 import Control.Monad
