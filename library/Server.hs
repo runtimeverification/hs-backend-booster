@@ -13,9 +13,10 @@ import Data.Text (Text, pack)
 import Options.Applicative
 
 import Kore.JsonRpc (runServer)
+import Kore.LLVM.Internal (withDLib)
 import Kore.Syntax.ParsedKore (loadDefinition)
 import Kore.VersionInfo (VersionInfo (..), versionInfo)
-import Kore.LLVM.Internal(withDLib)
+
 main :: IO ()
 main = do
     options <- execParser clParser
@@ -73,11 +74,13 @@ clOptionsParser =
                 <> long "module"
                 <> help "The name of the main module in the Kore definition."
             )
-        <*> optional (strOption
-            ( metavar "LLVM_BACKEND_LIBRARY"
-                <> long "llvm-backend-library"
-                <> help "Path to the .so/.dylib shared LLVM backend library"
-            ))
+        <*> optional
+            ( strOption
+                ( metavar "LLVM_BACKEND_LIBRARY"
+                    <> long "llvm-backend-library"
+                    <> help "Path to the .so/.dylib shared LLVM backend library"
+                )
+            )
         <*> option
             auto
             ( metavar "SERVER_PORT"

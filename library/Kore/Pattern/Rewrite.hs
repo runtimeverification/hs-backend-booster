@@ -30,12 +30,12 @@ import Kore.Pattern.Util
 
 import Kore.Syntax.ParsedKore.Internalise (computeTermIndex) -- FIXME move this function!
 
-import System.Posix.DynamicLinker qualified as Linker
-import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.Class
+import Control.Monad.Trans.Reader (ReaderT (..), ask)
+import System.Posix.DynamicLinker qualified as Linker
 
-newtype RewriteM err a = RewriteM { unRewriteM :: ReaderT (KoreDefinition, Maybe Linker.DL) (Except err) a}
-  deriving newtype (Functor, Applicative, Monad)
+newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe Linker.DL) (Except err) a}
+    deriving newtype (Functor, Applicative, Monad)
 
 runRewriteM :: KoreDefinition -> Maybe Linker.DL -> RewriteM err a -> Either err a
 runRewriteM def mLlvmLibrary = runExcept . flip runReaderT (def, mLlvmLibrary) . unRewriteM
@@ -45,7 +45,6 @@ throw = RewriteM . lift . throwE
 
 runExceptRewriteM :: RewriteM err a -> RewriteM err' (Either err a)
 runExceptRewriteM (RewriteM (ReaderT f)) = RewriteM $ ReaderT $ \env -> pure $ runExcept $ f env
-
 
 getDefinition :: RewriteM err KoreDefinition
 getDefinition = RewriteM $ fst <$> ask
@@ -85,7 +84,7 @@ rewriteStep cutLabels terminalLabels pat = do
     processGroups (rules : rest) = do
         -- try all rules of the priority group
         (failures, results) <-
-                partitionEithers <$> mapM (runExceptRewriteM . applyRule pat) rules
+            partitionEithers <$> mapM (runExceptRewriteM . applyRule pat) rules
 
         -- if any rule failure is an uncertainty, fail the rewrite
         -- immediately

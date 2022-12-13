@@ -7,21 +7,20 @@ module Kore.Pattern.Simplify (
     simplifyPredicate,
 ) where
 
+import Kore.LLVM (simplifyBool)
 import Kore.Pattern.Base
-import System.Posix.DynamicLinker qualified as Linker
-import Kore.LLVM ( simplifyBool )
 import Kore.Pattern.Util (sortOfTerm)
+import System.Posix.DynamicLinker qualified as Linker
 
 simplifyPattern :: Maybe Linker.DL -> Pattern -> Pattern
 simplifyPattern Nothing pat = pat
-simplifyPattern (Just dl) pat = 
+simplifyPattern (Just dl) pat =
     if sortOfTerm pat.term == SortApp "bool" []
-        then 
-            Pattern 
+        then
+            Pattern
                 (simplifyBool dl pat.term)
                 pat.constraints
-
         else pat
-    
+
 simplifyPredicate :: Predicate -> Predicate
 simplifyPredicate = id -- FIXME

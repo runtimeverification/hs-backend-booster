@@ -22,8 +22,8 @@ import Language.C.Analysis.TravMonad qualified as C
 import Language.C.Data.Ident qualified as C
 import Language.Haskell.TH qualified as TH
 import Language.Haskell.TH.Syntax qualified as TH
+import System.FilePath (takeDirectory)
 import System.Posix.DynamicLinker qualified as Linker
-import System.FilePath(takeDirectory)
 import Text.Casing (Identifier (..), fromAny, toCamel, toPascal)
 
 dynamicBindings :: FilePath -> TH.Q [TH.Dec]

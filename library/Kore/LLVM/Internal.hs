@@ -4,7 +4,7 @@
 
 module Kore.LLVM.Internal (API (..), KorePatternAPI (..), runLLVM, runLLVMwithDL, withDLib, ask, marshallTerm) where
 
-import Control.Monad (forM_, (>=>), join, void)
+import Control.Monad (forM_, join, void, (>=>))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT))
 import Control.Monad.Trans.Reader qualified as Reader
@@ -15,7 +15,7 @@ import Foreign qualified
 import Foreign.C qualified as C
 import Kore.LLVM.TH (dynamicBindings)
 import Kore.Pattern.Base
-import Kore.Pattern.Util(sortOfTerm)
+import Kore.Pattern.Util (sortOfTerm)
 import System.Posix.DynamicLinker qualified as Linker
 
 data KorePattern
@@ -28,7 +28,6 @@ type KoreSymbolPtr = ForeignPtr KoreSymbol
 type KoreSortPtr = ForeignPtr KoreSort
 
 $(dynamicBindings "./cbits/kllvm-c.h")
-
 
 newtype KoreStringPatternAPI = KoreStringPatternAPI
     { new :: Text -> LLVM KorePatternPtr
@@ -59,7 +58,7 @@ data KorePatternAPI = KorePatternAPI
     }
 
 data API = API
-    { pattern :: KorePatternAPI
+    { patt :: KorePatternAPI
     , symbol :: KoreSymbolAPI
     , sort :: KoreSortAPI
     , simplifyBool :: KorePatternPtr -> LLVM Bool
@@ -77,10 +76,9 @@ withDLib dlib = Linker.withDL dlib [Linker.RTLD_LAZY]
 runLLVM :: FilePath -> LLVM a -> IO a
 runLLVM fp m = withDLib fp $ flip runLLVMwithDL m
 
-
 runLLVMwithDL :: Linker.DL -> LLVM a -> IO a
 runLLVMwithDL dlib (LLVM m) = flip runReaderT dlib $ do
-    pttrn <- do
+    patt <- do
         freePattern <- korePatternFreeFunPtr
 
         newCompositePattern <- koreCompositePatternNew
@@ -95,7 +93,6 @@ runLLVMwithDL dlib (LLVM m) = flip runReaderT dlib $ do
                 finalizeForeignPtr child
                 pure parent
 
-
         string <- do
             newString <- koreStringPatternNew
             pure $ KoreStringPatternAPI $ \name -> liftIO $ C.withCString (Text.unpack name) $ newString >=> newForeignPtr freePattern
@@ -108,7 +105,6 @@ runLLVMwithDL dlib (LLVM m) = flip runReaderT dlib $ do
         fromSymbol <- do
             compositePatternFromSymbol <- koreCompositePatternFromSymbol
             pure $ \sym -> liftIO $ withForeignPtr sym $ compositePatternFromSymbol >=> newForeignPtr freePattern
-
 
         dump <- do
             dump' <- korePatternDump
@@ -133,7 +129,6 @@ runLLVMwithDL dlib (LLVM m) = flip runReaderT dlib $ do
                 withForeignPtr sym $ \rawSym -> withForeignPtr sort $ addArgumentSymbol rawSym
                 pure sym
 
-        
         pure KoreSymbolAPI{new, addArgument}
 
     sort <- do
@@ -150,7 +145,6 @@ runLLVMwithDL dlib (LLVM m) = flip runReaderT dlib $ do
                 withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgumentSort rawParent
                 pure parent
 
-
         dump <- do
             dump' <- koreSortDump
             pure $ \ptr -> liftIO $ withForeignPtr ptr $ \rawPtr -> do
@@ -158,18 +152,17 @@ runLLVMwithDL dlib (LLVM m) = flip runReaderT dlib $ do
                 str <- C.peekCString strPtr
                 Foreign.free strPtr
                 pure str
-        
+
         pure KoreSortAPI{new, addArgument, dump}
 
     simplifyBool <- do
         simplify <- koreSimplifyBool
-        pure $ \pattern -> liftIO $ withForeignPtr pattern $ (fmap (==1)) <$> simplify
+        pure $ \p -> liftIO $ withForeignPtr p $ (fmap (== 1)) <$> simplify
 
-    liftIO $ runReaderT m $ API {pattern = pttrn, symbol, sort, simplifyBool}
+    liftIO $ runReaderT m $ API{patt, symbol, sort, simplifyBool}
 
 ask :: LLVM API
 ask = LLVM Reader.ask
-
 
 marshallSymbol :: Symbol -> LLVM KoreSymbolPtr
 marshallSymbol s = do
@@ -192,16 +185,15 @@ marshallTerm t = do
     kore <- ask
     case t of
         SymbolApplication symbol trms -> do
-            trm <- kore.pattern.fromSymbol =<< marshallSymbol symbol
-            forM_ trms $ \t' -> kore.pattern.addArgument trm =<< marshallTerm t'
+            trm <- kore.patt.fromSymbol =<< marshallSymbol symbol
+            forM_ trms $ \t' -> kore.patt.addArgument trm =<< marshallTerm t'
             pure trm
         AndTerm l r -> do
             andSym <- kore.symbol.new "\\and"
             void $ kore.symbol.addArgument andSym =<< marshallSort (sortOfTerm l)
-            trm <- kore.pattern.fromSymbol andSym
-            void $ kore.pattern.addArgument trm =<< marshallTerm l 
-            kore.pattern.addArgument trm =<< marshallTerm r
-        DomainValue sort val -> 
-            join $ kore.pattern.token.new <$> pure val <*> marshallSort sort
+            trm <- kore.patt.fromSymbol andSym
+            void $ kore.patt.addArgument trm =<< marshallTerm l
+            kore.patt.addArgument trm =<< marshallTerm r
+        DomainValue sort val ->
+            join $ kore.patt.token.new <$> pure val <*> marshallSort sort
         Var _ -> error "marshalling Var unsupported"
-
