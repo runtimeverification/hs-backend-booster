@@ -4,7 +4,7 @@
 
 module Kore.LLVM.Internal (API (..), KorePatternAPI (..), runLLVM, runLLVMwithDL, withDLib, ask, marshallTerm) where
 
-import Control.Monad (forM_, join, void, (>=>))
+import Control.Monad (forM_, void, (>=>))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT))
 import Control.Monad.Trans.Reader qualified as Reader
@@ -99,8 +99,9 @@ runLLVMwithDL dlib (LLVM m) = flip runReaderT dlib $ do
 
         token <- do
             newToken <- korePatternNewToken
-            pure $ KoreTokenPatternAPI $ \name sort -> liftIO $ C.withCString (Text.unpack name) $ \rawName -> withForeignPtr sort $ \rawSort ->
-                newToken rawName rawSort >>= newForeignPtr freePattern
+            pure $ KoreTokenPatternAPI $ \name sort -> liftIO $ C.withCString (Text.unpack name) $ \rawName ->
+                withForeignPtr sort $
+                    newToken rawName >=> newForeignPtr freePattern
 
         fromSymbol <- do
             compositePatternFromSymbol <- koreCompositePatternFromSymbol
@@ -157,7 +158,7 @@ runLLVMwithDL dlib (LLVM m) = flip runReaderT dlib $ do
 
     simplifyBool <- do
         simplify <- koreSimplifyBool
-        pure $ \p -> liftIO $ withForeignPtr p $ (fmap (== 1)) <$> simplify
+        pure $ \p -> liftIO $ withForeignPtr p $ fmap (== 1) <$> simplify
 
     liftIO $ runReaderT m $ API{patt, symbol, sort, simplifyBool}
 
@@ -168,7 +169,7 @@ marshallSymbol :: Symbol -> LLVM KoreSymbolPtr
 marshallSymbol s = do
     kore <- ask
     sym <- kore.symbol.new s.name
-    forM_ s.argSorts $ \sort -> kore.symbol.addArgument sym =<< marshallSort sort
+    forM_ s.argSorts $ marshallSort >=> kore.symbol.addArgument sym
     kore.symbol.addArgument sym =<< marshallSort s.resultSort
 
 marshallSort :: Sort -> LLVM KoreSortPtr
@@ -176,7 +177,7 @@ marshallSort = \case
     SortApp name args -> do
         kore <- ask
         sort <- kore.sort.new name
-        forM_ args $ \s -> kore.sort.addArgument sort =<< marshallSort s
+        forM_ args $ marshallSort >=> kore.sort.addArgument sort
         pure sort
     SortVar _ -> error "marshalling SortVar unsupported"
 
@@ -186,7 +187,7 @@ marshallTerm t = do
     case t of
         SymbolApplication symbol trms -> do
             trm <- kore.patt.fromSymbol =<< marshallSymbol symbol
-            forM_ trms $ \t' -> kore.patt.addArgument trm =<< marshallTerm t'
+            forM_ trms $ marshallTerm >=> kore.patt.addArgument trm
             pure trm
         AndTerm l r -> do
             andSym <- kore.symbol.new "\\and"
@@ -195,5 +196,5 @@ marshallTerm t = do
             void $ kore.patt.addArgument trm =<< marshallTerm l
             kore.patt.addArgument trm =<< marshallTerm r
         DomainValue sort val ->
-            join $ kore.patt.token.new <$> pure val <*> marshallSort sort
+            marshallSort sort >>= kore.patt.token.new val
         Var _ -> error "marshalling Var unsupported"
