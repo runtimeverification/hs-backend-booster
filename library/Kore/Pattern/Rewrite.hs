@@ -30,6 +30,29 @@ import Kore.Pattern.Util
 
 import Kore.Syntax.ParsedKore.Internalise (computeTermIndex) -- FIXME move this function!
 
+import System.Posix.DynamicLinker qualified as Linker
+import Control.Monad.Trans.Reader (ReaderT (..), ask)
+import Control.Monad.Trans.Class
+
+newtype RewriteM err a = RewriteM { unRewriteM :: ReaderT (KoreDefinition, Maybe Linker.DL) (Except err) a}
+  deriving newtype (Functor, Applicative, Monad)
+
+runRewriteM :: KoreDefinition -> Maybe Linker.DL -> RewriteM err a -> Either err a
+runRewriteM def mLlvmLibrary = runExcept . flip runReaderT (def, mLlvmLibrary) . unRewriteM
+
+throw :: err -> RewriteM err a
+throw = RewriteM . lift . throwE
+
+runExceptRewriteM :: RewriteM err a -> RewriteM err' (Either err a)
+runExceptRewriteM (RewriteM (ReaderT f)) = RewriteM $ ReaderT $ \env -> pure $ runExcept $ f env
+
+
+getDefinition :: RewriteM err KoreDefinition
+getDefinition = RewriteM $ fst <$> ask
+
+getDL :: RewriteM err (Maybe Linker.DL)
+getDL = RewriteM $ snd <$> ask
+
 {- | Performs a rewrite step (using suitable rewrite rules from the
    definition).
 
@@ -37,11 +60,11 @@ import Kore.Syntax.ParsedKore.Internalise (computeTermIndex) -- FIXME move this 
   failed), or a rewritten pattern with a new term and possibly new
   additional constraints.
 -}
-rewriteStep :: KoreDefinition -> [Text] -> [Text] -> Pattern -> Except RewriteFailed RewriteResult
-rewriteStep def cutLabels terminalLabels pat = do
+rewriteStep :: [Text] -> [Text] -> Pattern -> RewriteM RewriteFailed RewriteResult
+rewriteStep cutLabels terminalLabels pat = do
     let termIdx = computeTermIndex pat.term
-    when (termIdx == None) $ throwE TermIndexIsNone
-
+    when (termIdx == None) $ throw TermIndexIsNone
+    def <- getDefinition
     let idxRules = fromMaybe Map.empty $ Map.lookup termIdx def.rewriteTheory
         anyRules = fromMaybe Map.empty $ Map.lookup Anything def.rewriteTheory
         rules =
@@ -50,25 +73,25 @@ rewriteStep def cutLabels terminalLabels pat = do
                     then idxRules
                     else Map.unionWith (<>) idxRules anyRules
 
-    when (null rules) $ throwE NoRulesForTerm
+    when (null rules) $ throw NoRulesForTerm
 
     -- process one priority group at a time (descending priority),
     -- until a result is obtained or the entire rewrite fails.
     processGroups rules
   where
-    processGroups :: [[RewriteRule]] -> Except RewriteFailed RewriteResult
+    processGroups :: [[RewriteRule]] -> RewriteM RewriteFailed RewriteResult
     processGroups [] =
         pure $ RewriteStuck pat
     processGroups (rules : rest) = do
         -- try all rules of the priority group
-        let (failures, results) =
-                partitionEithers $ map (runExcept . applyRule def pat) rules
+        (failures, results) <-
+                partitionEithers <$> mapM (runExceptRewriteM . applyRule pat) rules
 
         -- if any rule failure is an uncertainty, fail the rewrite
         -- immediately
         let uncertains = filter isUncertain failures
         unless (null uncertains) $
-            throwE $
+            throw $
                 RuleApplicationUncertain uncertains
 
         -- if any of the results does not preserve definedness, fail
@@ -78,11 +101,12 @@ rewriteStep def cutLabels terminalLabels pat = do
                     (not . (.computedAttributes.preservesDefinedness) . fst)
                     results
         unless (null maybeUndefined) $
-            throwE $
+            throw $
                 DefinednessUnclear maybeUndefined
 
+        dl <- getDL
         -- simplify and filter out bottom states
-        let finalResults = filter (not . isBottom . simplifyPattern . snd) results
+        let finalResults = filter (not . isBottom . simplifyPattern dl . snd) results
 
         let labelOf = fromMaybe "" . (.ruleLabel) . (.attributes)
 
@@ -107,26 +131,26 @@ rewriteStep def cutLabels terminalLabels pat = do
  * returns the rule and the resulting pattern
 -}
 applyRule ::
-    KoreDefinition ->
     Pattern ->
     RewriteRule ->
-    Except RuleFailed (RewriteRule, Pattern)
-applyRule def pat rule = do
+    RewriteM RuleFailed (RewriteRule, Pattern)
+applyRule pat rule = do
+    def <- getDefinition
     -- unify terms
     let unified = unifyTerms def rule.lhs.term pat.term
     subst <- case unified of
         UnificationFailed reason ->
-            throwE $ RewriteUnificationFailed reason
+            throw $ RewriteUnificationFailed reason
         UnificationSortError sortError ->
-            throwE $ RewriteSortError sortError
+            throw $ RewriteSortError sortError
         UnificationRemainder remainder ->
-            throwE $ RewriteUnificationUnclear rule remainder
+            throw $ RewriteUnificationUnclear rule remainder
         UnificationSuccess substitution ->
             pure substitution
 
     -- check it is a matching substitution (stop if not)
     unless (Map.keysSet subst == freeVariables rule.lhs.term) $
-        throwE $
+        throw $
             UnificationIsNotMatch rule subst
 
     -- apply substitution to rule constraints and simplify (stop if
@@ -142,10 +166,10 @@ applyRule def pat rule = do
                 (map (substituteInPredicate subst) $ pat.constraints <> newConstraints)
     return (rule, rewritten)
   where
-    checkConstraint :: Predicate -> Except RuleFailed ()
-    checkConstraint p =
+    checkConstraint :: Predicate -> RewriteM RuleFailed ()
+    checkConstraint p = do
         when (simplifyPredicate p == Bottom) $
-            throwE $
+            throw $
                 ConstraintIsBottom p
 
 {- | Reason why a rewrite did not produce a result. Contains additional
@@ -219,6 +243,7 @@ performRewrite ::
     forall io.
     MonadLoggerIO io =>
     KoreDefinition ->
+    Maybe Linker.DL ->
     -- | maximum depth
     Maybe Natural ->
     -- | cut point rule labels
@@ -227,7 +252,7 @@ performRewrite ::
     [Text] ->
     Pattern ->
     io (Natural, RewriteResult)
-performRewrite def mbMaxDepth cutLabels terminalLabels pat = do
+performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
     logRewrite $ "Rewriting pattern " <> pack (show pat)
     doSteps 0 pat
   where
@@ -243,7 +268,7 @@ performRewrite def mbMaxDepth cutLabels terminalLabels pat = do
             logRewrite $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
             pure (counter, RewriteStopped pat')
         | otherwise = do
-            let res = runExcept $ rewriteStep def cutLabels terminalLabels pat'
+            let res = runRewriteM def mLlvmLibrary $ rewriteStep cutLabels terminalLabels pat'
             case res of
                 Right (RewriteSingle single) ->
                     doSteps (counter + 1) single
