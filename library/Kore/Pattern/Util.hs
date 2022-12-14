@@ -17,6 +17,7 @@ module Kore.Pattern.Util (
     checkSymbolIsAc,
     checkTermSymbols,
     isBottom,
+    isConcrete,
 ) where
 
 import Data.Foldable (fold)
@@ -77,6 +78,9 @@ freeVariables :: Term -> Set Variable
 freeVariables = cata $ \case
     VarF var -> Set.singleton var
     other -> fold other
+
+isConcrete :: Term -> Bool
+isConcrete = Set.null . freeVariables
 
 isConstructorSymbol :: Symbol -> Bool
 isConstructorSymbol symbol =

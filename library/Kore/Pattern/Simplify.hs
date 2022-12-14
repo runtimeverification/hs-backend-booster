@@ -9,13 +9,13 @@ module Kore.Pattern.Simplify (
 
 import Kore.LLVM (simplifyBool)
 import Kore.Pattern.Base
-import Kore.Pattern.Util (sortOfTerm)
+import Kore.Pattern.Util (isConcrete, sortOfTerm)
 import System.Posix.DynamicLinker qualified as Linker
 
 simplifyPattern :: Maybe Linker.DL -> Pattern -> Pattern
 simplifyPattern Nothing pat = pat
 simplifyPattern (Just dl) pat =
-    if sortOfTerm pat.term == SortApp "bool" []
+    if isConcrete pat.term && sortOfTerm pat.term == SortApp "bool" []
         then
             Pattern
                 (simplifyBool dl pat.term)
