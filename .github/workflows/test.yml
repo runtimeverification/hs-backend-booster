@@ -145,7 +145,7 @@ jobs:
 
   nix-build-linux:
     name: 'Nix / Unit Tests'
-    runs-on: [self-hosted, linux, normal, github-runner-18]
+    runs-on: [self-hosted, linux, normal]
     steps:
       - name: 'Check out code'
         uses: actions/checkout@v3
