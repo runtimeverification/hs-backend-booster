@@ -149,8 +149,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: linux
-            os: [self-hosted, linux, normal]
+          - runner: [self-hosted, linux, normal]
+            os: Ubuntu-22.04
           - runner: MacM1
             os: self-macos-12
     runs-on: ${{ matrix.runner }}
