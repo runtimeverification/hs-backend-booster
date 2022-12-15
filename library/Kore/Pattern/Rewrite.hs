@@ -168,7 +168,8 @@ applyRule pat rule = do
   where
     checkConstraint :: Predicate -> RewriteM RuleFailed ()
     checkConstraint p = do
-        when (simplifyPredicate p == Bottom) $
+        dl <- getDL
+        when (simplifyPredicate dl p == Bottom) $
             throw $
                 ConstraintIsBottom p
 
