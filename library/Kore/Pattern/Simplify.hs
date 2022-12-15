@@ -18,14 +18,15 @@ simplifyPattern (Just dl) pat =
     if isConcrete pat.term && sortOfTerm pat.term == bool
         then
             Pattern
-                (DomainValue bool $
+                ( DomainValue bool $
                     if simplifyBool dl pat.term
-                    then "true"
-                    else "false")
+                        then "true"
+                        else "false"
+                )
                 pat.constraints
         else pat
-    where
-        bool = SortApp "bool" []
+  where
+    bool = SortApp "bool" []
 
 simplifyPredicate :: Maybe Linker.DL -> Predicate -> Predicate
 simplifyPredicate dl = \case
@@ -33,14 +34,12 @@ simplifyPredicate dl = \case
     Bottom -> Bottom
     p@(Ceil _) -> p
     p@(EqualsTerm l r) ->
-        if sortOfTerm l == SortApp "bool" [] 
-            then case dl of
-                Nothing -> p
-                Just dlib -> 
-                    if simplifyBool dlib l == simplifyBool dlib r
-                        then Top
-                        else Bottom
-            else p
+        case (dl, sortOfTerm l == SortApp "bool" [] && isConcrete l && isConcrete r) of
+            (Just dlib, True) ->
+                if simplifyBool dlib l == simplifyBool dlib r
+                    then Top
+                    else Bottom
+            _ -> p
     EqualsPredicate l r -> EqualsPredicate (simplifyPredicate dl l) (simplifyPredicate dl r)
     p@(Exists _ _) -> p
     p@(Forall _ _) -> p
