@@ -109,7 +109,7 @@ internaliseTerm sortVars definition@KoreDefinition{sorts, symbols} pat =
             unless (length appSorts == length symbol.sortVars) $
                 throwE $
                     PatternSortError pat $
-                        GeneralError $
+                        GeneralError
                             "wrong sort argument count for symbol"
             Internal.SymbolApplication symbol
                 <$> mapM lookupInternalSort' appSorts
