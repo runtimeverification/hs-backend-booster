@@ -31,6 +31,10 @@ data Sort
       SortVar VarName
     deriving stock (Eq, Ord, Show)
 
+
+pattern SortBool :: Sort
+pattern SortBool = SortApp "SortBool" []
+
 -- | A variable for symbolic execution or for terms in a rule.
 data Variable = Variable
     { variableSort :: Sort
