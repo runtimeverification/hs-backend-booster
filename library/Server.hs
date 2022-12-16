@@ -6,29 +6,35 @@ License     : BSD-3-Clause
 -}
 module Server (main) where
 
+import Control.DeepSeq (force)
+import Control.Exception (evaluate)
 import Control.Monad.Logger (LogLevel (..))
+import Data.List (partition)
 import Data.Maybe (fromMaybe)
-import Data.Text (Text)
+import Data.Text (Text, pack)
 import Options.Applicative
 
 import Kore.JsonRpc (runServer)
+import Kore.LLVM.Internal (withDLib)
 import Kore.Syntax.ParsedKore (loadDefinition)
 import Kore.VersionInfo (VersionInfo (..), versionInfo)
 
 main :: IO ()
 main = do
     options <- execParser clParser
-    let CLOptions{definitionFile, mainModuleName, port, logLevel} = options
+    let CLOptions{definitionFile, mainModuleName, port, logLevels, llvmLibraryFile} = options
     putStrLn $
         "Loading definition from "
             <> definitionFile
             <> ", main module "
             <> show mainModuleName
     internalModule <-
-        either (error . show) id
-            <$> loadDefinition mainModuleName definitionFile
+        loadDefinition mainModuleName definitionFile
+            >>= evaluate . force . either (error . show) id
     putStrLn "Starting RPC server"
-    runServer port internalModule logLevel
+    case llvmLibraryFile of
+        Nothing -> runServer port internalModule Nothing (adjustLogLevels logLevels)
+        Just fp -> withDLib fp $ \dl -> runServer port internalModule (Just dl) (adjustLogLevels logLevels)
   where
     clParser =
         info
@@ -38,9 +44,11 @@ main = do
 data CLOptions = CLOptions
     { definitionFile :: FilePath
     , mainModuleName :: Text
+    , llvmLibraryFile :: Maybe FilePath
     , port :: Int
-    , logLevel :: LogLevel
+    , logLevels :: [LogLevel]
     }
+    deriving (Show)
 
 parserInfoModifiers :: InfoMod options
 parserInfoModifiers =
@@ -59,16 +67,21 @@ versionInfoParser =
 clOptionsParser :: Parser CLOptions
 clOptionsParser =
     CLOptions
-        <$> argument
-            str
+        <$> strArgument
             ( metavar "DEFINITION_FILE"
                 <> help "Kore definition file to verify and use for execution"
             )
-        <*> option
-            str
+        <*> strOption
             ( metavar "MODULE"
                 <> long "module"
                 <> help "The name of the main module in the Kore definition."
+            )
+        <*> optional
+            ( strOption
+                ( metavar "LLVM_BACKEND_LIBRARY"
+                    <> long "llvm-backend-library"
+                    <> help "Path to the .so/.dylib shared LLVM backend library"
+                )
             )
         <*> option
             auto
@@ -78,13 +91,18 @@ clOptionsParser =
                 <> help "Port for the RPC server to bind to"
                 <> showDefault
             )
-        <*> option
-            (eitherReader readLogLevel)
-            ( metavar "LEVEL"
-                <> long "log-level"
-                <> short 'l'
-                <> value LevelInfo
-                <> help "Log level: debug, info (default), warn, error"
+        <*> many
+            ( option
+                (eitherReader readLogLevel)
+                ( metavar "LEVEL"
+                    <> long "log-level"
+                    <> short 'l'
+                    <> help
+                        ( "Log level: debug, info (default), warn, error, \
+                          \or a custom level from "
+                            <> show allowedLogLevels
+                        )
+                )
             )
   where
     readLogLevel :: String -> Either String LogLevel
@@ -93,7 +111,22 @@ clOptionsParser =
         "info" -> Right LevelInfo
         "warn" -> Right LevelWarn
         "error" -> Right LevelError
-        other -> Left $ other <> ": Unsupported log level"
+        other
+            | other `elem` allowedLogLevels -> Right (LevelOther $ pack other)
+            | otherwise -> Left $ other <> ": Unsupported log level"
+
+-- custom log levels that can be selected
+allowedLogLevels :: [String]
+allowedLogLevels = ["Rewrite"]
+
+-- Partition provided log levels into standard and custom ones, and
+-- select the lowest standard level. Default to 'LevelInfo' if no
+-- standard log level was given.
+adjustLogLevels :: [LogLevel] -> (LogLevel, [LogLevel])
+adjustLogLevels ls = (standardLevel, customLevels)
+  where
+    (stds, customLevels) = partition (<= LevelError) ls
+    standardLevel = minimum (LevelInfo : stds)
 
 versionInfoStr :: String
 versionInfoStr =

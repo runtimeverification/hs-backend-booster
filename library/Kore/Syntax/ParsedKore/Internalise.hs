@@ -10,6 +10,7 @@ data needed internally from the parsed entities.
 module Kore.Syntax.ParsedKore.Internalise (
     buildDefinition,
     DefinitionError (..),
+    computeTermIndex,
 ) where
 
 import Control.Applicative (Alternative (..), asum)
@@ -381,12 +382,17 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
                 `orFailWith` UnknownAlias aliasName
     args <- traverse (withExcept DefinitionPatternError . internaliseTerm (Just sortVars) partialDefinition) aliasArgs
     result <- expandAlias alias args
+
+    -- prefix all variables in lhs and rhs with "Rule#" to avoid
+    -- name clashes with patterns from the user
     lhs <-
-        Util.retractPattern result
-            `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
+        fmap (Util.modifyVariables ("Rule#" <>)) $
+            Util.retractPattern result
+                `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
     rhs <-
-        withExcept DefinitionPatternError $
-            internalisePattern (Just sortVars) partialDefinition right
+        fmap (Util.modifyVariables ("Rule#" <>)) $
+            withExcept DefinitionPatternError $
+                internalisePattern (Just sortVars) partialDefinition right
     let preservesDefinedness =
             Util.checkTermSymbols Util.isDefinedSymbol rhs.term
         containsAcSymbols =
@@ -447,11 +453,12 @@ internaliseSymbol sorts parsedSymbol = do
     argSorts <- mapM check parsedSymbol.argSorts
     let name = parsedSymbol.name.getId
         attributes = extract parsedSymbol
-        internalSymbol = Def.Symbol{name, resultSort, argSorts, attributes}
+        internalSymbol = Def.Symbol{name, sortVars, resultSort, argSorts, attributes}
     -- TODO(Ana): rename extract
     pure (name, internalSymbol)
   where
-    knownVars = Set.fromList $ map (.getId) parsedSymbol.sortVars
+    knownVars = Set.fromList sortVars
+    sortVars = map (.getId) parsedSymbol.sortVars
 
     check :: Json.Sort -> Except DefinitionError Def.Sort
     check =
@@ -519,14 +526,14 @@ data TermOrPredicateError
 computeTermIndex :: Def.Term -> Def.TermIndex
 computeTermIndex config =
     case lookForKCell config of
-        Just (Def.SymbolApplication _ children) ->
+        Just (Def.SymbolApplication _ _ children) ->
             getTermIndex (lookForTopTerm (getFirstKCellElem children))
         _ -> Def.Anything
   where
     getTermIndex :: Def.Term -> Def.TermIndex
     getTermIndex term =
         case term of
-            Def.SymbolApplication symbol _ ->
+            Def.SymbolApplication symbol _ _ ->
                 case symbol.attributes.symbolType of
                     Constructor -> Def.TopSymbol symbol.name
                     _ -> Def.Anything
@@ -537,7 +544,7 @@ computeTermIndex config =
     -- in addition to the result of folding that sub-tree.
     lookForKCell :: Def.Term -> Maybe Def.Term
     lookForKCell = para $ \case
-        kCell@(Def.SymbolApplicationF symbol (children :: [(Def.Term, Maybe Def.Term)]))
+        kCell@(Def.SymbolApplicationF symbol _ (children :: [(Def.Term, Maybe Def.Term)]))
             | symbol.name == "Lbl'-LT-'k'-GT-'" -> Just $ embed $ fmap fst kCell
             | otherwise -> asum $ map snd children
         other -> foldr ((<|>) . snd) Nothing other
@@ -546,7 +553,7 @@ computeTermIndex config =
     lookForTopTerm :: Def.Term -> Def.Term
     lookForTopTerm =
         \case
-            Def.SymbolApplication symbol children
+            Def.SymbolApplication symbol _ children
                 | symbol.name == "kseq" ->
                     let firstChild = getKSeqFirst children
                      in stripAwaySortInjections firstChild
@@ -558,7 +565,7 @@ computeTermIndex config =
     stripAwaySortInjections :: Def.Term -> Def.Term
     stripAwaySortInjections =
         \case
-            term@(Def.SymbolApplication symbol children) ->
+            term@(Def.SymbolApplication symbol _ children) ->
                 if Util.isSortInjectionSymbol symbol
                     then stripAwaySortInjections (getInjChild children)
                     else term

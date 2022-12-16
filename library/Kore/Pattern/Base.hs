@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 {- |
@@ -28,22 +29,29 @@ data Sort
       SortApp SortName [Sort]
     | -- | sort variable (symbolic)
       SortVar VarName
-    deriving stock (Eq, Ord, Show)
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
+
+pattern SortBool :: Sort
+pattern SortBool = SortApp "SortBool" []
 
 -- | A variable for symbolic execution or for terms in a rule.
 data Variable = Variable
     { variableSort :: Sort
     , variableName :: VarName
     }
-    deriving (Eq, Ord, Show)
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
 
 data Symbol = Symbol
     { name :: SymbolName
+    , sortVars :: [VarName]
     , argSorts :: [Sort]
     , resultSort :: Sort
     , attributes :: SymbolAttributes
     }
-    deriving stock (Eq, Ord, Show)
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
 
 {- | A term consists of an AST of constructors and function calls, as
    well as domain values (tokens and built-in types) and (element)
@@ -55,12 +63,16 @@ data Symbol = Symbol
 -}
 data Term
     = AndTerm Term Term -- used in #as patterns
-    | SymbolApplication Symbol [Term]
+    | SymbolApplication Symbol [Sort] [Term]
     | DomainValue Sort Text
     | Var Variable
-    deriving stock (Eq, Ord, Show)
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
 
 makeBaseFunctor ''Term
+
+pattern AndBool :: [Term] -> Term
+pattern AndBool ts <- SymbolApplication (Symbol "Lbl'Unds'andBool'Unds'" _ _ _ _) _ ts
 
 {- | A predicate describes constraints on terms. It will always evaluate
    to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.
@@ -79,7 +91,8 @@ data Predicate
     | Not Predicate
     | Or Predicate Predicate
     | Top
-    deriving stock (Eq, Ord, Show)
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
 
 makeBaseFunctor ''Predicate
 
@@ -88,12 +101,14 @@ data Pattern = Pattern
     { term :: Term
     , constraints :: [Predicate]
     }
-    deriving stock (Eq, Ord, Show)
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
 
 data TermOrPredicate -- = Either Predicate Pattern
     = APredicate Predicate
     | TermAndPredicate Pattern
-    deriving stock (Eq, Ord, Show)
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
 
 {- | Index data allowing for a quick lookup of potential axioms.
 

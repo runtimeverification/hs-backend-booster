@@ -3,17 +3,22 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Kore.Pattern.Util (
+    applySubst,
     sortOfTerm,
     sortOfTermOrPredicate,
     retractPattern,
     substituteInTerm,
     substituteInPredicate,
+    modifyVariables,
     freeVariables,
     isConstructorSymbol,
     isSortInjectionSymbol,
+    isFunctionSymbol,
     isDefinedSymbol,
     checkSymbolIsAc,
     checkTermSymbols,
+    isBottom,
+    isConcrete,
 ) where
 
 import Data.Foldable (fold)
@@ -29,9 +34,16 @@ import Kore.Pattern.Base
 -- | Returns the sort of a term
 sortOfTerm :: Term -> Sort
 sortOfTerm (AndTerm _ child) = sortOfTerm child
-sortOfTerm (SymbolApplication symbol _) = symbol.resultSort
+sortOfTerm (SymbolApplication symbol sorts _) =
+    applySubst (Map.fromList $ zip symbol.sortVars sorts) symbol.resultSort
 sortOfTerm (DomainValue sort _) = sort
 sortOfTerm (Var Variable{variableSort}) = variableSort
+
+applySubst :: Map VarName Sort -> Sort -> Sort
+applySubst subst var@(SortVar n) =
+    fromMaybe var $ Map.lookup n subst
+applySubst subst (SortApp n args) =
+    SortApp n $ map (applySubst subst) args
 
 sortOfTermOrPredicate :: TermOrPredicate -> Maybe Sort
 sortOfTermOrPredicate (TermAndPredicate Pattern{term}) = Just (sortOfTerm term)
@@ -52,10 +64,32 @@ substituteInPredicate substitution = cata $ \case
         EqualsTerm (substituteInTerm substitution t1) (substituteInTerm substitution t2)
     other -> embed other
 
+modifyVariables :: (VarName -> VarName) -> Pattern -> Pattern
+modifyVariables f p =
+    Pattern
+        { term = modifyT p.term
+        , constraints = map modifyP p.constraints
+        }
+  where
+    modifyT :: Term -> Term
+    modifyT = cata $ \case
+        VarF v@Variable{variableName} ->
+            Var v{variableName = f variableName}
+        other -> embed other
+    modifyP :: Predicate -> Predicate
+    modifyP = cata $ \case
+        EqualsTermF t1 t2 ->
+            EqualsTerm (modifyT t1) (modifyT t2)
+        other -> embed other
+
 freeVariables :: Term -> Set Variable
 freeVariables = cata $ \case
     VarF var -> Set.singleton var
     other -> fold other
+
+-- | Don't use unless therm size is small
+isConcrete :: Term -> Bool
+isConcrete = Set.null . freeVariables
 
 isConstructorSymbol :: Symbol -> Bool
 isConstructorSymbol symbol =
@@ -67,6 +101,13 @@ isSortInjectionSymbol :: Symbol -> Bool
 isSortInjectionSymbol symbol =
     case symbol.attributes.symbolType of
         SortInjection -> True
+        _ -> False
+
+isFunctionSymbol :: Symbol -> Bool
+isFunctionSymbol symbol =
+    case symbol.attributes.symbolType of
+        TotalFunction -> True
+        PartialFunction -> True
         _ -> False
 
 isDefinedSymbol :: Symbol -> Bool
@@ -83,5 +124,8 @@ checkSymbolIsAc symbol =
 
 checkTermSymbols :: (Symbol -> Bool) -> Term -> Bool
 checkTermSymbols check = cata $ \case
-    SymbolApplicationF symbol ts -> check symbol && and ts
+    SymbolApplicationF symbol _ ts -> check symbol && and ts
     other -> and other
+
+isBottom :: Pattern -> Bool
+isBottom = (Bottom `elem`) . constraints
