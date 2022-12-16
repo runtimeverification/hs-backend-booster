@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -63,7 +63,6 @@ data Term
     deriving stock (Eq, Ord, Show)
 
 makeBaseFunctor ''Term
-
 
 pattern AndBool :: [Term] -> Term
 pattern AndBool ts <- SymbolApplication (Symbol "Lbl'Unds'andBool'Unds'" _ _ _ _) _ ts

@@ -29,9 +29,13 @@ simplifyPattern (Just dl) pat =
   where
     bool = SortApp "bool" []
 
-
+{- | We want to break apart predicates of type `X #Equals Y1 andBool ... Yn` into
+`X #Equals Y1, ..., X #Equals  Yn` in the case when some of the `Y`s are abstract
+and thus the whole original expression could not be fed to the LLVM simplifyBool function
+-}
 splitBoolPredicates :: Predicate -> [Predicate]
 splitBoolPredicates = \case
+    p@(EqualsTerm l r) | isConcrete l && isConcrete r -> [p]
     EqualsTerm (AndBool ls) r -> concatMap splitBoolPredicates $ map (flip EqualsTerm r) ls
     EqualsTerm l (AndBool rs) -> concatMap splitBoolPredicates $ map (EqualsTerm l) rs
     other -> [other]
@@ -43,7 +47,7 @@ simplifyPredicate dl = \case
         (_, Bottom) -> Bottom
         (Top, r') -> r'
         (l', Top) -> l'
-        (l',r') -> AndPredicate l' r'
+        (l', r') -> AndPredicate l' r'
     Bottom -> Bottom
     p@(Ceil _) -> p
     p@(EqualsTerm l r) ->

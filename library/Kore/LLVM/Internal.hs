@@ -172,9 +172,8 @@ marshallSymbol sym sorts = do
     sym' <- kore.symbol.new sym.name
     forM_ sym.argSorts $ marshallSort . applySorts >=> kore.symbol.addArgument sym'
     kore.symbol.addArgument sym' =<< marshallSort sym.resultSort
-
-    where
-        applySorts = applySubst (Map.fromList $ zip sym.sortVars sorts)
+  where
+    applySorts = applySubst (Map.fromList $ zip sym.sortVars sorts)
 
 marshallSort :: Sort -> LLVM KoreSortPtr
 marshallSort = \case
