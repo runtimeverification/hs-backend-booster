@@ -15,10 +15,10 @@ module Kore.Definition.Base (
     module Kore.Definition.Base,
 ) where
 
+import Control.DeepSeq (NFData)
 import Data.Map.Strict as Map (Map, empty)
 import Data.Set (Set)
 import Data.Text (Text)
-import Control.DeepSeq (NFData)
 import GHC.Generics qualified as GHC
 
 import Kore.Definition.Attributes.Base
