@@ -104,13 +104,20 @@ rewriteStep cutLabels terminalLabels pat = do
             throw $
                 DefinednessUnclear maybeUndefined
 
-        dl <- getDL
         -- simplify and filter out bottom states
-        let finalResults = filter (not . isBottom . simplifyPattern dl . snd) results
+
+        -- At the moment, there is no point in calling simplify on the conditions of the
+        -- resulting patterns again, since we already pruned any rule applications
+        -- which resulted in one of the conditions being bottom.
+        -- Also, our current simplifier cannot deduce bottom from a combination of conditions,
+        -- so unless the original pattern contained bottom, we won't gain anything from
+        -- calling the simplifier on the original conditions which came with the term.
+
+        -- let finalResults = filter (not . isBottom . simplifyPattern dl . snd) results
 
         let labelOf = fromMaybe "" . (.ruleLabel) . (.attributes)
 
-        case finalResults of
+        case results of
             [] ->
                 processGroups rest
             [(r, x)]

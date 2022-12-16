@@ -87,6 +87,7 @@ freeVariables = cata $ \case
     VarF var -> Set.singleton var
     other -> fold other
 
+-- | Don't use unless therm size is small
 isConcrete :: Term -> Bool
 isConcrete = Set.null . freeVariables
 

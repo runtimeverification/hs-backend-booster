@@ -3,7 +3,6 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Kore.Pattern.Simplify (
-    simplifyPattern,
     simplifyPredicate,
     splitBoolPredicates,
 ) where
@@ -12,20 +11,6 @@ import Kore.LLVM (simplifyBool)
 import Kore.Pattern.Base
 import Kore.Pattern.Util (isConcrete, sortOfTerm)
 import System.Posix.DynamicLinker qualified as Linker
-
-simplifyPattern :: Maybe Linker.DL -> Pattern -> Pattern
-simplifyPattern Nothing pat = pat
-simplifyPattern (Just dl) pat =
-    if isConcrete pat.term && sortOfTerm pat.term == SortBool
-        then
-            Pattern
-                ( DomainValue SortBool $
-                    if simplifyBool dl pat.term
-                        then "true"
-                        else "false"
-                )
-                pat.constraints
-        else pat
 
 {- | We want to break apart predicates of type `X #Equals Y1 andBool ... Yn` into
 `X #Equals Y1, ..., X #Equals  Yn` in the case when some of the `Y`s are abstract
