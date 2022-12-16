@@ -36,8 +36,8 @@ and thus the whole original expression could not be fed to the LLVM simplifyBool
 splitBoolPredicates :: Predicate -> [Predicate]
 splitBoolPredicates = \case
     p@(EqualsTerm l r) | isConcrete l && isConcrete r -> [p]
-    EqualsTerm (AndBool ls) r -> concatMap splitBoolPredicates $ map (flip EqualsTerm r) ls
-    EqualsTerm l (AndBool rs) -> concatMap splitBoolPredicates $ map (EqualsTerm l) rs
+    EqualsTerm (AndBool ls) r -> concatMap (splitBoolPredicates . flip EqualsTerm r) ls
+    EqualsTerm l (AndBool rs) -> concatMap (splitBoolPredicates . EqualsTerm l) rs
     other -> [other]
 
 simplifyPredicate :: Maybe Linker.DL -> Predicate -> Predicate
