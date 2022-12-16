@@ -31,7 +31,6 @@ data Sort
       SortVar VarName
     deriving stock (Eq, Ord, Show)
 
-
 pattern SortBool :: Sort
 pattern SortBool = SortApp "SortBool" []
 
