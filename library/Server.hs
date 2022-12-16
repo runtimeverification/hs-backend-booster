@@ -11,6 +11,8 @@ import Data.List (partition)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
 import Options.Applicative
+import Control.DeepSeq (force)
+import Control.Exception (evaluate)
 
 import Kore.JsonRpc (runServer)
 import Kore.Syntax.ParsedKore (loadDefinition)
@@ -26,8 +28,10 @@ main = do
             <> ", main module "
             <> show mainModuleName
     internalModule <-
-        either (error . show) id
+            force
+            <$> either (error . show) id
             <$> loadDefinition mainModuleName definitionFile
+            >>= evaluate
     putStrLn "Starting RPC server"
     runServer port internalModule (adjustLogLevels logLevels)
   where
