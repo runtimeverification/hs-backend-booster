@@ -156,8 +156,9 @@ applyRule pat rule = do
     -- apply substitution to rule constraints and simplify (stop if
     -- false, one by one in isolation)
     let newConstraints =
-            map (substituteInPredicate subst) $
-                rule.lhs.constraints <> rule.rhs.constraints
+            concatMap splitBoolPredicates $
+              map (substituteInPredicate subst) $
+                  rule.lhs.constraints <> rule.rhs.constraints
     mapM_ checkConstraint newConstraints
 
     let rewritten =

@@ -8,6 +8,7 @@ import Control.Monad (forM_, void, (>=>))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT))
 import Control.Monad.Trans.Reader qualified as Reader
+import Data.Map qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Foreign (ForeignPtr, finalizeForeignPtr, newForeignPtr, withForeignPtr)
@@ -15,7 +16,7 @@ import Foreign qualified
 import Foreign.C qualified as C
 import Kore.LLVM.TH (dynamicBindings)
 import Kore.Pattern.Base
-import Kore.Pattern.Util (sortOfTerm)
+import Kore.Pattern.Util (applySubst, sortOfTerm)
 import System.Posix.DynamicLinker qualified as Linker
 
 data KorePattern
@@ -165,12 +166,15 @@ runLLVMwithDL dlib (LLVM m) = flip runReaderT dlib $ do
 ask :: LLVM API
 ask = LLVM Reader.ask
 
-marshallSymbol :: Symbol -> LLVM KoreSymbolPtr
-marshallSymbol s = do
+marshallSymbol :: Symbol -> [Sort] -> LLVM KoreSymbolPtr
+marshallSymbol sym sorts = do
     kore <- ask
-    sym <- kore.symbol.new s.name
-    forM_ s.argSorts $ marshallSort >=> kore.symbol.addArgument sym
-    kore.symbol.addArgument sym =<< marshallSort s.resultSort
+    sym' <- kore.symbol.new sym.name
+    forM_ sym.argSorts $ marshallSort . applySorts >=> kore.symbol.addArgument sym'
+    kore.symbol.addArgument sym' =<< marshallSort sym.resultSort
+
+    where
+        applySorts = applySubst (Map.fromList $ zip sym.sortVars sorts)
 
 marshallSort :: Sort -> LLVM KoreSortPtr
 marshallSort = \case
@@ -185,8 +189,8 @@ marshallTerm :: Term -> LLVM KorePatternPtr
 marshallTerm t = do
     kore <- ask
     case t of
-        SymbolApplication symbol trms -> do
-            trm <- kore.patt.fromSymbol =<< marshallSymbol symbol
+        SymbolApplication symbol sorts trms -> do
+            trm <- kore.patt.fromSymbol =<< marshallSymbol symbol sorts
             forM_ trms $ marshallTerm >=> kore.patt.addArgument trm
             pure trm
         AndTerm l r -> do

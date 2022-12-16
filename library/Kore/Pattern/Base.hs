@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -39,6 +40,7 @@ data Variable = Variable
 
 data Symbol = Symbol
     { name :: SymbolName
+    , sortVars :: [VarName]
     , argSorts :: [Sort]
     , resultSort :: Sort
     , attributes :: SymbolAttributes
@@ -55,12 +57,16 @@ data Symbol = Symbol
 -}
 data Term
     = AndTerm Term Term -- used in #as patterns
-    | SymbolApplication Symbol [Term]
+    | SymbolApplication Symbol [Sort] [Term]
     | DomainValue Sort Text
     | Var Variable
     deriving stock (Eq, Ord, Show)
 
 makeBaseFunctor ''Term
+
+
+pattern AndBool :: [Term] -> Term
+pattern AndBool ts <- SymbolApplication (Symbol "Lbl'Unds'andBool'Unds'" _ _ _ _) _ ts
 
 {- | A predicate describes constraints on terms. It will always evaluate
    to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.

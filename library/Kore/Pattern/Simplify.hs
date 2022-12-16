@@ -5,6 +5,7 @@ License     : BSD-3-Clause
 module Kore.Pattern.Simplify (
     simplifyPattern,
     simplifyPredicate,
+    splitBoolPredicates,
 ) where
 
 import Kore.LLVM (simplifyBool)
@@ -28,9 +29,21 @@ simplifyPattern (Just dl) pat =
   where
     bool = SortApp "bool" []
 
+
+splitBoolPredicates :: Predicate -> [Predicate]
+splitBoolPredicates = \case
+    EqualsTerm (AndBool ls) r -> concatMap splitBoolPredicates $ map (flip EqualsTerm r) ls
+    EqualsTerm l (AndBool rs) -> concatMap splitBoolPredicates $ map (EqualsTerm l) rs
+    other -> [other]
+
 simplifyPredicate :: Maybe Linker.DL -> Predicate -> Predicate
 simplifyPredicate dl = \case
-    AndPredicate l r -> AndPredicate (simplifyPredicate dl l) (simplifyPredicate dl r)
+    AndPredicate l r -> case (simplifyPredicate dl l, simplifyPredicate dl r) of
+        (Bottom, _) -> Bottom
+        (_, Bottom) -> Bottom
+        (Top, r') -> r'
+        (l', Top) -> l'
+        (l',r') -> AndPredicate l' r'
     Bottom -> Bottom
     p@(Ceil _) -> p
     p@(EqualsTerm l r) ->
