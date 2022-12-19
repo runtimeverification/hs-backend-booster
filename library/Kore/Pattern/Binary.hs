@@ -1,6 +1,6 @@
 {-# LANGUAGE PatternSynonyms #-}
 
-module Kore.Pattern.Binary where
+module Kore.Pattern.Binary (decodeKorePattern, test) where
 
 import Control.Monad (unless)
 import Control.Monad.Extra (forM)
