@@ -149,7 +149,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: [self-hosted, linux, normal, github-runner-2]
+          - runner: [self-hosted, linux, normal]
             os: Ubuntu-22.04
           - runner: MacM1
             os: self-macos-12
