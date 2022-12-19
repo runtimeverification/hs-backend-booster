@@ -40,12 +40,12 @@ externaliseTerm = \case
             (externaliseSort $ sortOfTerm second')
             (externaliseTerm first')
             (externaliseTerm second')
-    Internal.SymbolApplication symbol sorts args ->
+    Internal.SymbolApplication (Internal.Application symbol sorts args) ->
         Syntax.KJApp
             (symbolNameToId symbol.name)
             (map externaliseSort sorts)
             (map externaliseTerm args)
-    Internal.DomainValue sort txt ->
+    Internal.DomainValue (Internal.DV sort txt) ->
         Syntax.KJDV (externaliseSort sort) txt
     Internal.Var Internal.Variable{variableSort = iSort, variableName = iName} ->
         Syntax.KJEVar (varNameToId iName) (externaliseSort iSort)

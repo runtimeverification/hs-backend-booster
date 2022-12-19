@@ -34,9 +34,9 @@ import Kore.Pattern.Base
 -- | Returns the sort of a term
 sortOfTerm :: Term -> Sort
 sortOfTerm (AndTerm _ child) = sortOfTerm child
-sortOfTerm (SymbolApplication symbol sorts _) =
+sortOfTerm (SymbolApplication (Application symbol sorts _)) =
     applySubst (Map.fromList $ zip symbol.sortVars sorts) symbol.resultSort
-sortOfTerm (DomainValue sort _) = sort
+sortOfTerm (DomainValue (DV sort _)) = sort
 sortOfTerm (Var Variable{variableSort}) = variableSort
 
 applySubst :: Map VarName Sort -> Sort -> Sort
@@ -124,7 +124,7 @@ checkSymbolIsAc symbol =
 
 checkTermSymbols :: (Symbol -> Bool) -> Term -> Bool
 checkTermSymbols check = cata $ \case
-    SymbolApplicationF symbol _ ts -> check symbol && and ts
+    SymbolApplicationF (Application symbol _ ts) -> check symbol && and ts
     other -> and other
 
 isBottom :: Pattern -> Bool

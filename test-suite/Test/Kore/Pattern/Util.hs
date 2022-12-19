@@ -44,7 +44,7 @@ var :: VarName -> Sort -> Term
 var variableName variableSort = Var $ Variable{variableSort, variableName}
 
 app :: Symbol -> [Term] -> Term
-app s = SymbolApplication s []
+app s = SymbolApplication . \ts -> Application s [] ts
 
 asConstructor :: SymbolAttributes
 asConstructor = SymbolAttributes Constructor False False

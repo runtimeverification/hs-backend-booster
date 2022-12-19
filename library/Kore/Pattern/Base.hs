@@ -16,6 +16,10 @@ import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Kore.Definition.Attributes.Base (SymbolAttributes)
+import Kore.Unparse (Unparse (..), unparseGeneric)
+import Kore.Unparse qualified as Unparse
+import Generics.SOP qualified as SOP
+import Prettyprinter qualified as Pretty
 
 type VarName = Text
 type SymbolName = Text
@@ -53,6 +57,22 @@ data Symbol = Symbol
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
+data Application child = Application
+    { symbol :: Symbol
+    , sortParams :: [Sort]
+    , arguments :: [child]
+    }
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving stock (Functor, Foldable, Traversable)
+    deriving anyclass (NFData)
+
+data DV = DV
+    { sort :: Sort
+    , domainValue :: Text
+    }
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
+
 {- | A term consists of an AST of constructors and function calls, as
    well as domain values (tokens and built-in types) and (element)
    variables.
@@ -63,16 +83,48 @@ data Symbol = Symbol
 -}
 data Term
     = AndTerm Term Term -- used in #as patterns
-    | SymbolApplication Symbol [Sort] [Term]
-    | DomainValue Sort Text
+    | SymbolApplication (Application Term)
+    | DomainValue DV
     | Var Variable
     deriving stock (Eq, Ord, Show, Generic)
-    deriving anyclass (NFData)
+    deriving anyclass (SOP.Generic, NFData)
 
 makeBaseFunctor ''Term
 
 pattern AndBool :: [Term] -> Term
-pattern AndBool ts <- SymbolApplication (Symbol "Lbl'Unds'andBool'Unds'" _ _ _ _) _ ts
+pattern AndBool ts <-
+    SymbolApplication
+        ( Application
+            (Symbol "Lbl'Unds'andBool'Unds'" _ _ _ _)
+            _
+            ts
+        )
+
+instance Unparse Term where
+    unparse = unparseGeneric
+
+instance (Unparse child) => Unparse (Application child) where
+    unparse Application { symbol, sortParams, arguments } =
+        Pretty.pretty symbol.name
+        <> Unparse.parameters sortParams
+        <> Unparse.arguments arguments
+
+instance Unparse DV where
+    -- TODO: probably not right
+    unparse dv =
+        Pretty.pretty dv.domainValue
+
+instance Unparse Sort where
+    unparse (SortApp name params) = 
+        Pretty.pretty name <> Unparse.parameters params
+    unparse (SortVar name) = 
+        Pretty.pretty name
+
+instance Unparse Variable where
+    unparse var =
+        Pretty.pretty var.variableName
+        <> Pretty.colon
+        <> unparse var.variableSort
 
 {- | A predicate describes constraints on terms. It will always evaluate
    to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.

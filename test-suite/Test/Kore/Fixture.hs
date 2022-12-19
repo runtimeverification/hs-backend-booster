@@ -57,10 +57,10 @@ var :: VarName -> Sort -> Term
 var variableName variableSort = Var $ Variable{variableSort, variableName}
 
 dv :: Sort -> Text -> Term
-dv = DomainValue
+dv s t = DomainValue $ DV s t
 
 app :: Symbol -> [Term] -> Term
-app s = SymbolApplication s []
+app s ts = SymbolApplication (Application s [] ts)
 
 asTotalFunction, asPartialFunction, asConstructor :: SymbolAttributes
 asTotalFunction = SymbolAttributes TotalFunction False False
