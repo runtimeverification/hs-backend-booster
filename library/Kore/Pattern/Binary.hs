@@ -159,8 +159,8 @@ setCurrentSymbolWithSorts :: (Symbol, [Sort]) -> DecodeM ()
 setCurrentSymbolWithSorts symbolWithSorts = DecodeM $ lift $ do
     modify (\s -> s{currentSymbolWithSorts = Just symbolWithSorts})
 
-askKoreDefinitionSymbols :: DecodeM (Map.Map SymbolName Symbol)
-askKoreDefinitionSymbols = DecodeM $ asks (symbols . snd)
+lookupKoreDefinitionSymbol :: SymbolName -> DecodeM (Maybe Symbol)
+lookupKoreDefinitionSymbol name = DecodeM $ asks (Map.lookup name . symbols . snd)
 
 decodeBlock :: DecodeM Term
 decodeBlock = do
@@ -209,7 +209,7 @@ decodeBlock = do
 
     mkSymbolWithSorts "\\dv" [sort] = pure (Symbol "\\dv" [] [] sort undefined, [])
     mkSymbolWithSorts name sorts =
-        Map.lookup name <$> askKoreDefinitionSymbols >>= \case
+        lookupKoreDefinitionSymbol name >>= \case
             Just symbol@Symbol{sortVars} -> pure (symbol, zipWith (const id) sortVars sorts)
             Nothing -> fail $ "Unknown symbol " <> show name
 
