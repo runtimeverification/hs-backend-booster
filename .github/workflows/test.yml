@@ -175,35 +175,6 @@ jobs:
           nix build .#hs-backend-booster:exe:rpc-client
 
       - name: Run unit tests
+        env:
+          GC_DONT_GC: '1'
         run: nix build .#hs-backend-booster:test:test-suite
-
-  # nix-build-m1:
-  #   name: 'Nix / Unit Tests'
-  #   strategy:
-  #     fail-fast: false
-  #   runs-on: MacM1
-  #   steps:
-  #     - name: Check out code
-  #       uses: actions/checkout@v2.3.4
-  #       with:
-  #         # Check out pull request HEAD instead of merge commit.
-  #         ref: ${{ github.event.pull_request.head.sha }}
-
-  #     - name: 'Upgrade bash'
-  #       run: brew install bash
-
-  #     - name: Build executables
-  #       env:
-  #         CACHIX_AUTH_TOKEN: '${{ secrets.CACHIX_PRIVATE_TOKEN }}'
-  #         GC_DONT_GC: '1'
-  #       run: |
-  #         export JQ=$(nix-build '<nixpkgs>' -A jq --no-link)/bin/jq
-  #         booster=$(nix build .#hs-backend-booster:exe:hs-backend-booster --json | $JQ -r '.[].outputs | to_entries[].value')
-  #         drv=$(nix-store --query --deriver ${booster})
-  #         nix-store --query --requisites --include-outputs ${drv} | cachix push runtimeverification
-  #         # cachix watch-exec runtimeverification -- nix build .#hs-backend-booster:exe:hs-backend-booster
-  #         nix build .#hs-backend-booster:exe:parsetest
-  #         nix build .#hs-backend-booster:exe:rpc-client
-
-  #     - name: Run unit tests
-  #       run: GC_DONT_GC=1 nix build .#hs-backend-booster:test:test-suite
