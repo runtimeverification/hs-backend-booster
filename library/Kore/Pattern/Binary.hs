@@ -209,7 +209,7 @@ decodeBlock = do
 
     mkSymbolWithSorts "\\dv" [sort] = pure (Symbol "\\dv" [] [] sort undefined, [])
     mkSymbolWithSorts name sorts =
-        askKoreDefinitionSymbols >>= \symbols -> case Map.lookup name symbols of
+        Map.lookup name <$> askKoreDefinitionSymbols >>= \case
             Just symbol@Symbol{sortVars} -> pure (symbol, zipWith (const id) sortVars sorts)
             Nothing -> fail $ "Unknown symbol " <> show name
 
