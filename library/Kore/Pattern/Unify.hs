@@ -142,7 +142,8 @@ unify1
         , targetP == targetS -- same target sort!
         , variableSort == srcP -- correct variable sort
         , srcP /= srcS -- different source sort (same sort handled by next case)
-          = do
+            =
+            do
                 -- check if subject source sorts subsort of pattern source sort
                 mbSubsorts <- gets (Map.lookup srcPName . uSubsorts)
                 isSubsort <-
