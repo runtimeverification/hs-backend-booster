@@ -4,6 +4,9 @@ module Kore.Pattern.Binary (decodeKorePattern, test) where
 
 import Control.Monad (unless)
 import Control.Monad.Extra (forM)
+import Control.Monad.Trans.Class (MonadTrans (..))
+import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask, asks, local)
+import Control.Monad.Trans.State (StateT, evalStateT, gets, modify, runStateT)
 import Data.Binary.Get
 import Data.Bits
 import Data.ByteString qualified as BS
@@ -35,6 +38,35 @@ data Version = Version
     }
     deriving (Show)
 
+data DecoderState = DecoderState
+    { internedStrings :: Map.Map Int BS.ByteString
+    , currentSymbolWithSorts :: Maybe (Symbol, [Sort])
+    , sortStack :: [Sort]
+    , termOrTextStack :: [Either Text.Text Term]
+    }
+    deriving (Show)
+
+newtype DecodeM a = DecodeM {unDecodeM :: ReaderT (Version, KoreDefinition) (StateT DecoderState Get) a}
+    deriving newtype (Functor, Applicative, Monad, MonadFail)
+
+runDecodeM :: Version -> KoreDefinition -> DecodeM a -> Get a
+runDecodeM v def = flip evalStateT (DecoderState mempty Nothing mempty mempty) . flip runReaderT (v, def) . unDecodeM
+
+liftDecode :: Get a -> DecodeM a
+liftDecode m = DecodeM $ lift $ lift m
+
+askVersion :: DecodeM Version
+askVersion = DecodeM $ asks fst
+
+getInternedStrings :: DecodeM (Map.Map Int BS.ByteString)
+getInternedStrings = DecodeM $ lift $ gets internedStrings
+
+insertInternedString :: Int -> BS.ByteString -> DecodeM ()
+insertInternedString pos str =
+    DecodeM $
+        lift $
+            modify (\s@DecoderState{internedStrings} -> s{internedStrings = Map.insert pos str internedStrings})
+
 areCompatible :: Version -> Version -> Bool
 areCompatible a b = a.major == b.major && a.minor == b.minor
 
@@ -45,11 +77,13 @@ decodeMagicHeaderAndVersion = do
     unless (header == "KORE") $ fail "Invalid magic header for binary KORE"
     Version <$> getInt16le <*> getInt16le <*> getInt16le
 
-decodeLength :: Version -> Int -> Get Int
-decodeLength v l =
-    if areCompatible v $ Version 1 0 0
-        then readAndShift l 0x0
-        else readAndShiftV2 True 0 0
+decodeLength :: Int -> DecodeM Int
+decodeLength l = do
+    version <- askVersion
+    liftDecode $
+        if areCompatible version $ Version 1 0 0
+            then readAndShift l 0x0
+            else readAndShiftV2 True 0 0
   where
     readAndShift :: Int -> Int -> Get Int
     readAndShift counter ret
@@ -69,56 +103,96 @@ decodeLength v l =
             ret' = ret .|. (fromIntegral $ (fromIntegral chunk' :: Word64) `shiftL` (7 * steps))
         readAndShiftV2 continue (steps + 1) ret'
 
-decodeString :: Version -> Map.Map Int BS.ByteString -> Get (Int, BS.ByteString)
-decodeString v m =
-    getWord8 >>= \case
+decodeString :: DecodeM BS.ByteString
+decodeString =
+    liftDecode getWord8 >>= \case
         0x1 -> do
-            position <- fromIntegral <$> bytesRead
-            len <- decodeLength v 4
-            (position,) <$> getByteString len
+            position <- fromIntegral <$> liftDecode bytesRead
+            len <- decodeLength 4
+            str <- liftDecode $ getByteString len
+            insertInternedString position str
+            pure str
         0x2 -> do
-            position <- fromIntegral <$> bytesRead
-            backref <- decodeLength v 4
+            position <- fromIntegral <$> liftDecode bytesRead
+            backref <- decodeLength 4
+            m <- getInternedStrings
             case Map.lookup (position - backref + 1) m of
-                Just str -> pure (position, str)
-                Nothing -> trace ("position: " <> show (position - backref) <> " map: " <> show m) $ fail "Incorrect offset for interned string"
+                Just str -> do
+                    insertInternedString position str
+                    pure str
+                Nothing -> fail "Incorrect offset for interned string"
         _ -> fail "Incorrect String encoding"
 
-decodeBlock :: Version -> KoreDefinition -> Map.Map Int BS.ByteString -> Maybe (Symbol, [Sort]) -> [Sort] -> [Either Text.Text Term] -> Get [Either Text.Text Term]
-decodeBlock v def@KoreDefinition{symbols} stringMap mSymbol sortStack termStack = do
-    isEmpty >>= \empty ->
-        if empty
-            then pure termStack
-            else do
-                (newStringMap, nextSymbol, nextSortStack, nextTermStack) <-
-                    getWord8 >>= \case
-                        KORECompositePattern -> case mSymbol of
-                            Just symbolAndSorts -> do
-                                arity <- decodeLength v 2
-                                unless (length termStack >= arity) $ fail "Incorrect arity Term"
-                                term <- mkSymbolApplication symbolAndSorts $ reverse $ take arity termStack
-                                pure (stringMap, Nothing, sortStack, term : drop arity termStack)
-                            Nothing -> fail "no symbol found"
-                        KOREStringPattern -> do
-                            (pos, str) <- decodeString v stringMap
-                            pure (Map.insert pos str stringMap, mSymbol, sortStack, Left (Text.decodeUtf8 str) : termStack)
-                        KORECompositeSort -> do
-                            arity <- decodeLength v 2
-                            (pos, sortName) <- decodeString v stringMap
-                            unless (length sortStack >= arity) $ fail "Incorrect arity Sort"
-                            pure (Map.insert pos sortName stringMap, mSymbol, (SortApp (Text.decodeUtf8 sortName) $ reverse $ take arity sortStack) : drop arity sortStack, termStack)
-                        KORESortVariable -> fail "KORESortVariable header decoding undefined"
-                        KORESymbol -> do
-                            arity <- decodeLength v 2
-                            (pos, symbolName) <- decodeString v stringMap
-                            unless (length sortStack >= arity) $ fail "Incorrect arity KORESymbol"
-                            symbol <- mkSymbol (Text.decodeUtf8 symbolName) $ reverse $ take arity sortStack
-                            pure (Map.insert pos symbolName stringMap, Just symbol, drop arity sortStack, termStack)
-                        KOREVariablePattern -> fail "KOREVariablePattern header decoding undefined"
-                        KOREVariable -> fail "KOREVariable header decoding undefined"
-                        _ -> fail "Invalid header"
-                decodeBlock v def newStringMap nextSymbol nextSortStack nextTermStack
+popTermOrTextStack :: Int -> DecodeM [Either Text.Text Term]
+popTermOrTextStack n = DecodeM $ lift $ do
+    stack <- gets termOrTextStack
+    unless (length stack >= n) $ fail "Trying to pop more items off the stack than available"
+    modify (\s -> s{termOrTextStack = drop n stack})
+    pure $ reverse $ take n stack
+
+pushTermOrTextStack :: Either Text.Text Term -> DecodeM ()
+pushTermOrTextStack t = DecodeM $ lift $ do
+    modify (\s@DecoderState{termOrTextStack} -> s{termOrTextStack = t : termOrTextStack})
+
+popSortStack :: Int -> DecodeM [Sort]
+popSortStack n = DecodeM $ lift $ do
+    stack <- gets sortStack
+    unless (length stack >= n) $ fail "Trying to pop more items off the stack than available"
+    modify (\s -> s{sortStack = drop n stack})
+    pure $ reverse $ take n stack
+
+pushSortStack :: Sort -> DecodeM ()
+pushSortStack sort = DecodeM $ lift $ do
+    modify (\s@DecoderState{sortStack} -> s{sortStack = sort : sortStack})
+
+getCurrentSymbolWithSorts :: DecodeM (Maybe (Symbol, [Sort]))
+getCurrentSymbolWithSorts = DecodeM $ lift $ gets currentSymbolWithSorts
+
+setCurrentSymbolWithSorts :: (Symbol, [Sort]) -> DecodeM ()
+setCurrentSymbolWithSorts symbolWithSorts = DecodeM $ lift $ do
+    modify (\s -> s{currentSymbolWithSorts = Just symbolWithSorts})
+
+askKoreDefinitionSymbols :: DecodeM (Map.Map SymbolName Symbol)
+askKoreDefinitionSymbols = DecodeM $ asks (symbols . snd)
+
+decodeBlock :: DecodeM Term
+decodeBlock = do
+    whileNotEmpty $ do
+        liftDecode getWord8 >>= \case
+            KORECompositePattern ->
+                getCurrentSymbolWithSorts >>= \case
+                    Just symbolAndSorts -> do
+                        arity <- decodeLength 2
+                        args <- popTermOrTextStack arity
+                        mkSymbolApplication symbolAndSorts args >>= pushTermOrTextStack
+                    Nothing -> fail "No current symbol set"
+            KOREStringPattern -> do
+                str <- decodeString
+                pushTermOrTextStack $ Left $ Text.decodeUtf8 str
+            KORECompositeSort -> do
+                arity <- decodeLength 2
+                sortName <- decodeString
+                args <- popSortStack arity
+                pushSortStack $ SortApp (Text.decodeUtf8 sortName) args
+            KORESortVariable -> fail "KORESortVariable decoding undefined"
+            KORESymbol -> do
+                arity <- decodeLength 2
+                symbolName <- decodeString
+                args <- popSortStack arity
+                mkSymbolWithSorts (Text.decodeUtf8 symbolName) args >>= setCurrentSymbolWithSorts
+            KOREVariablePattern -> fail "KOREVariablePattern decoding undefined"
+            KOREVariable -> fail "KOREVariable decoding undefined"
+            _ -> fail "Invalid header"
+
+    popTermOrTextStack 1 >>= \case
+        [Right trm] -> pure trm
+        _ -> fail "Expecting a term on the top of the stack"
   where
+    whileNotEmpty m =
+        liftDecode isEmpty >>= \case
+            True -> pure ()
+            False -> m >> whileNotEmpty m
+
     mkSymbolApplication (DV sort, _) [Left txt] = pure $ Right $ DomainValue sort txt
     mkSymbolApplication (symbol, sorts) xs = do
         args <- forM xs $ \case
@@ -126,17 +200,16 @@ decodeBlock v def@KoreDefinition{symbols} stringMap mSymbol sortStack termStack 
             Right trm -> pure trm
         pure $ Right $ SymbolApplication symbol sorts args
 
-    mkSymbol "\\dv" [sort] = pure (Symbol "\\dv" [] [] sort undefined, [])
-    mkSymbol name sorts = case Map.lookup name symbols of
-        Just symbol@Symbol{sortVars} -> pure (symbol, zipWith (const id) sortVars sorts)
-        Nothing -> fail $ "Unknown symbol " <> show name
+    mkSymbolWithSorts "\\dv" [sort] = pure (Symbol "\\dv" [] [] sort undefined, [])
+    mkSymbolWithSorts name sorts =
+        askKoreDefinitionSymbols >>= \symbols -> case Map.lookup name symbols of
+            Just symbol@Symbol{sortVars} -> pure (symbol, zipWith (const id) sortVars sorts)
+            Nothing -> fail $ "Unknown symbol " <> show name
 
 decodeKorePattern :: KoreDefinition -> Get Term
 decodeKorePattern def = do
     version <- decodeMagicHeaderAndVersion
-    decodeBlock version def mempty Nothing [] [] >>= \case
-        [Right trm] -> pure trm
-        _ -> fail "Was expecting a single term"
+    runDecodeM version def decodeBlock
 
 test :: FilePath -> Text.Text -> FilePath -> IO Term
 test definitionFile mainModuleName f = do
