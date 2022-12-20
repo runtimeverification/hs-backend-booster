@@ -26,7 +26,7 @@ main = do
         _ -> putStrLn "Too many arguments"
 
 app :: Symbol -> [Term] -> Term
-app s = SymbolApplication s [] 
+app s = SymbolApplication s []
 
 asTotalFunction, asConstructor :: SymbolAttributes
 asTotalFunction = SymbolAttributes TotalFunction False False

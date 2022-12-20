@@ -1,11 +1,11 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
+
 {- |
 Module      : Kore.Unparse
 Copyright   : (c) Runtime Verification, 2018-2022
 License     : BSD-3-Clause
 -}
-
-{-# LANGUAGE FlexibleContexts, RankNTypes #-}
-
 module Kore.Unparse (
     Unparse (..),
     unparseToText,
@@ -31,8 +31,8 @@ module Kore.Unparse (
     unparseConcat',
 ) where
 
-import Data.Char qualified as Char
 import Control.Arrow ((>>>)) -- TODO: remove
+import Data.Char qualified as Char
 import Data.Function ((&))
 import Data.Map.Strict (
     Map,
@@ -43,11 +43,10 @@ import Data.Text (
  )
 import Data.Text qualified as Text
 import Numeric qualified
-import Prettyprinter qualified as Pretty 
-import Prettyprinter (Pretty (..)) 
-import Prettyprinter.Render.Text qualified as RenderText
+import Prettyprinter (Doc, LayoutOptions (..), Pretty (..), SimpleDocStream)
+import Prettyprinter qualified as Pretty
 import Prettyprinter.Render.String qualified as RenderString
-import Prettyprinter (Doc, SimpleDocStream, LayoutOptions (..))
+import Prettyprinter.Render.Text qualified as RenderText
 
 {- | Class of types that can be rendered in concrete Kore syntax.
 
@@ -63,8 +62,8 @@ class Unparse p where
 unparseToText :: Unparse p => p -> Text
 unparseToText =
     RenderText.renderStrict
-    . Pretty.layoutPretty Pretty.defaultLayoutOptions
-    . unparse
+        . Pretty.layoutPretty Pretty.defaultLayoutOptions
+        . unparse
 
 -- | Serialize an object to 'String'.
 unparseToString :: Unparse p => p -> String
@@ -73,7 +72,7 @@ unparseToString = renderDefault . unparse
 renderDefault :: Doc ann -> String
 renderDefault =
     RenderString.renderString
-    . Pretty.layoutPretty Pretty.defaultLayoutOptions
+        . Pretty.layoutPretty Pretty.defaultLayoutOptions
 
 parametersU :: Unparse p => [p] -> Doc ann
 parametersU = parameters' . map unparse
@@ -237,9 +236,9 @@ unparseAssoc' oper ident =
     worker [x] = x
     worker (x : xs) =
         mconcat
-            ( worker' x xs :
-              Pretty.line' :
-              replicate (length xs) Pretty.rparen
+            ( worker' x xs
+                : Pretty.line'
+                : replicate (length xs) Pretty.rparen
             )
 
     worker' x [] = Pretty.indent 4 x

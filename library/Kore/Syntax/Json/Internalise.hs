@@ -111,7 +111,7 @@ internaliseTerm sortVars definition@KoreDefinition{sorts, symbols} pat =
                     PatternSortError pat $
                         GeneralError
                             "wrong sort argument count for symbol"
-            Internal.SymbolApplication symbol 
+            Internal.SymbolApplication symbol
                 <$> mapM lookupInternalSort' appSorts
                 <*> mapM recursion args
         Syntax.KJString{value} ->

@@ -57,7 +57,7 @@ var :: VarName -> Sort -> Term
 var variableName variableSort = Var $ Variable{variableSort, variableName}
 
 dv :: Sort -> Text -> Term
-dv = DomainValue 
+dv = DomainValue
 
 app :: Symbol -> [Term] -> Term
 app s ts = SymbolApplication s [] ts
