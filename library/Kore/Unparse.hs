@@ -12,8 +12,11 @@ module Kore.Unparse (
     unparseToString,
     renderDefault,
     layoutPrettyUnbounded,
-    parameters,
-    arguments,
+    parametersU,
+    parametersP,
+    noParameters,
+    argumentsU,
+    argumentsP,
     noArguments,
     attributes,
     parameters',
@@ -31,7 +34,6 @@ module Kore.Unparse (
 import Data.Char qualified as Char
 import Control.Arrow ((>>>)) -- TODO: remove
 import Data.Function ((&))
-import Data.Functor.Const
 import Data.Map.Strict (
     Map,
  )
@@ -40,9 +42,9 @@ import Data.Text (
     Text,
  )
 import Data.Text qualified as Text
-import Data.Void
 import Numeric qualified
 import Prettyprinter qualified as Pretty 
+import Prettyprinter (Pretty (..)) 
 import Prettyprinter.Render.Text qualified as RenderText
 import Prettyprinter.Render.String qualified as RenderString
 import Prettyprinter (Doc, SimpleDocStream, LayoutOptions (..))
@@ -73,16 +75,25 @@ renderDefault =
     RenderString.renderString
     . Pretty.layoutPretty Pretty.defaultLayoutOptions
 
-parameters :: Unparse p => [p] -> Doc ann
-parameters = parameters' . map unparse
+parametersU :: Unparse p => [p] -> Doc ann
+parametersU = parameters' . map unparse
+
+parametersP :: Pretty p => [p] -> Doc ann
+parametersP = parameters' . map pretty
+
+noParameters :: Doc ann
+noParameters = parameters' []
 
 -- | Print a list of sort parameters.
 parameters' :: [Doc ann] -> Doc ann
 parameters' =
     Pretty.braces . Pretty.hsep . Pretty.punctuate Pretty.comma
 
-arguments :: Unparse p => [p] -> Doc ann
-arguments = arguments' . map unparse
+argumentsU :: Unparse p => [p] -> Doc ann
+argumentsU = arguments' . map unparse
+
+argumentsP :: Pretty p => [p] -> Doc ann
+argumentsP = arguments' . map pretty
 
 -- | Print a list of documents as arguments.
 arguments' :: [Doc ann] -> Doc ann

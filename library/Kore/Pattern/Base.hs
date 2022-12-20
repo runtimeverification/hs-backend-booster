@@ -14,11 +14,13 @@ module Kore.Pattern.Base (
 import Control.DeepSeq (NFData (..))
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Text (Text)
+import Data.Text qualified as Text
+import Data.Map qualified as Map
 import GHC.Generics (Generic)
 import Kore.Definition.Attributes.Base (SymbolAttributes)
-import Kore.Unparse (Unparse (..))
 import Kore.Unparse qualified as Unparse
 import Prettyprinter qualified as Pretty
+import Prettyprinter (Pretty (..))
 
 type VarName = Text
 type SymbolName = Text
@@ -77,29 +79,6 @@ makeBaseFunctor ''Term
 pattern AndBool :: [Term] -> Term
 pattern AndBool ts <-
     SymbolApplication (Symbol "Lbl'Unds'andBool'Unds'" _ _ _ _) _ ts
-
-instance Unparse Term where
-    unparse = undefined 
---       where
---         unparseApplication symbol sortParams arguments =
---             Pretty.pretty symbol.name
---             <> Unparse.parameters sortParams
---             <> Unparse.arguments arguments
---         -- TODO: probably not right
---         unparseDomainValue sort text =
---             Pretty.pretty text
-
-instance Unparse Sort where
-    unparse (SortApp name params) = 
-        Pretty.pretty name <> Unparse.parameters params
-    unparse (SortVar name) = 
-        Pretty.pretty name
-
-instance Unparse Variable where
-    unparse var =
-        Pretty.pretty var.variableName
-        <> Pretty.colon
-        <> unparse var.variableSort
 
 {- | A predicate describes constraints on terms. It will always evaluate
    to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.
@@ -176,3 +155,97 @@ combine s@(TopSymbol s1) (TopSymbol s2)
     | s1 == s2 = s
 --     | otherwise = None -- redundant
 combine _ _ = None -- incompatible indexes
+
+decodeLabel :: Text -> Either String Text
+decodeLabel str
+    | Text.null str = Right str
+    | "'" `Text.isPrefixOf` str =
+        let (encoded, rest) = Text.span (/= '\'') (Text.tail str)
+         in (<>) <$> decode encoded <*> decodeLabel (Text.drop 1 rest)
+    | otherwise =
+        let (notEncoded, rest) = Text.span (/= '\'') str
+         in (notEncoded <>) <$> decodeLabel rest
+  where
+    decode :: Text -> Either String Text
+    decode s
+        | Text.null s = Right s
+        | Text.length code < 4 = Left $ "Bad character code  " <> show code
+        | otherwise =
+            maybe
+                (Left $ "Unknown character code  " <> show code)
+                (\c -> (c <>) <$> decode rest)
+                (Map.lookup code decodeMap)
+      where
+        (code, rest) = Text.splitAt 4 s
+
+decodeMap :: Map.Map Text Text
+decodeMap =
+    Map.fromList
+        [ ("Spce", " ")
+        , ("Bang", "!")
+        , ("Quot", "\"")
+        , ("Hash", "#")
+        , ("Dolr", "$")
+        , ("Perc", "%")
+        , ("And-", "&")
+        , ("Apos", "'")
+        , ("LPar", "(")
+        , ("RPar", ")")
+        , ("Star", "*")
+        , ("Plus", "+")
+        , ("Comm", ",")
+        , ("Hyph", "-")
+        , ("Stop", ".")
+        , ("Slsh", "/")
+        , ("Coln", ":")
+        , ("SCln", ";")
+        , ("-LT-", "<")
+        , ("Eqls", "=")
+        , ("-GT-", ">")
+        , ("Ques", "?")
+        , ("-AT-", "@")
+        , ("LSqB", "[")
+        , ("RSqB", "]")
+        , ("Bash", "\\")
+        , ("Xor-", "^")
+        , ("Unds", "_")
+        , ("BQuo", "`")
+        , ("LBra", "{")
+        , ("Pipe", "|")
+        , ("RBra", "}")
+        , ("Tild", "~")
+        ]
+
+decodeLabel' :: Text -> Text
+decodeLabel' orig =
+    either (const orig) id (decodeLabel orig)
+
+instance Pretty Term where
+    pretty =
+        \case
+            AndTerm t1 t2 ->
+                "\\and"
+                <> Unparse.noParameters
+                <> Unparse.argumentsP [t1, t2]
+            SymbolApplication symbol sortParams args ->
+                pretty (decodeLabel' symbol.name)
+                -- TODO: why does sortParams exist? why not use symbol.sortVars?
+                <> Unparse.parametersP sortParams
+                <> Unparse.argumentsP args
+            DomainValue sort text ->
+                "\\dv"
+                <> Unparse.parametersP [sort]
+                <> Unparse.argumentsP [text]
+            Var var -> pretty var
+
+instance Pretty Sort where
+    pretty (SortApp name params) = 
+        Pretty.pretty name <> Unparse.parametersP params
+    pretty (SortVar name) = 
+        Pretty.pretty name
+
+instance Pretty Variable where
+    pretty var =
+        Pretty.pretty (decodeLabel' var.variableName)
+        <> Pretty.colon
+        <> pretty var.variableSort
