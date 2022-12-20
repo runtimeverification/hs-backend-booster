@@ -71,7 +71,6 @@ library:
   - exceptions
   - extra
   - filepath
-  - generics-sop
   - gitrev
   - hpp
   - json-rpc

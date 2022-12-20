@@ -111,11 +111,11 @@ internaliseTerm sortVars definition@KoreDefinition{sorts, symbols} pat =
                     PatternSortError pat $
                         GeneralError
                             "wrong sort argument count for symbol"
-            (\ss ts -> Internal.SymbolApplication (Internal.Application symbol ss ts))
+            Internal.SymbolApplication symbol 
                 <$> mapM lookupInternalSort' appSorts
                 <*> mapM recursion args
         Syntax.KJString{value} ->
-            pure $ Internal.DomainValue (Internal.DV (Internal.SortApp "SortString" []) value)
+            pure $ Internal.DomainValue (Internal.SortApp "SortString" []) value
         Syntax.KJTop{} -> predicate
         Syntax.KJBottom{} -> predicate
         Syntax.KJNot{} -> predicate
@@ -140,7 +140,7 @@ internaliseTerm sortVars definition@KoreDefinition{sorts, symbols} pat =
         Syntax.KJNext{} -> predicate
         Syntax.KJRewrites{} -> predicate
         Syntax.KJDV{sort, value} ->
-            (\s v -> Internal.DomainValue $ Internal.DV s v)
+            Internal.DomainValue
                 <$> lookupInternalSort' sort
                 <*> pure value
         Syntax.KJMultiOr{} -> predicate

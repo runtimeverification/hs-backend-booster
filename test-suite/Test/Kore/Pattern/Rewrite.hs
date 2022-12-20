@@ -130,7 +130,7 @@ kseq =
         }
 
 injKItem :: Term -> Term
-injKItem t = SymbolApplication (Application inj [sortOfTerm t, kItemSort] [t])
+injKItem t = SymbolApplication inj [sortOfTerm t, kItemSort] [t]
 
 inj :: Symbol
 inj =

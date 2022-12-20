@@ -115,8 +115,8 @@ unify1 ::
     StateT UnificationState (Except UnificationResult) ()
 -- two domain values: have to fully agree
 unify1
-    d1@(DomainValue (DV s1 t1))
-    d2@(DomainValue (DV s2 t2)) =
+    d1@(DomainValue s1 t1)
+    d2@(DomainValue s2 t2) =
         do
             unless (t1 == t2) $
                 failWith (DifferentValues d1 d2)
@@ -125,8 +125,8 @@ unify1
 
 -- two symbol applications: fail if names differ, recurse
 unify1
-    t1@(SymbolApplication (Application symbol1 sorts1 args1))
-    t2@(SymbolApplication (Application symbol2 sorts2 args2)) =
+    t1@(SymbolApplication symbol1 sorts1 args1)
+    t2@(SymbolApplication symbol2 sorts2 args2) =
         do
             -- If we have functions, pass - only constructors and sort
             -- injections are matched.

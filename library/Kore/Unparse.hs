@@ -8,7 +8,6 @@ License     : BSD-3-Clause
 
 module Kore.Unparse (
     Unparse (..),
-    unparseGeneric,
     unparseToText,
     unparseToString,
     renderDefault,
@@ -42,13 +41,6 @@ import Data.Text (
  )
 import Data.Text qualified as Text
 import Data.Void
-import Generics.SOP (
-    All2,
-    Code,
-    Generic,
-    Proxy (..),
- )
-import Generics.SOP qualified as SOP
 import Numeric qualified
 import Prettyprinter qualified as Pretty 
 import Prettyprinter.Render.Text qualified as RenderText
@@ -64,49 +56,6 @@ parser in "Kore.Parser.Parser".
 class Unparse p where
     -- | Render a type from abstract to concrete Kore syntax.
     unparse :: p -> Doc ann
-
-instance Unparse a => Unparse (Const a child) where
-    unparse (Const a) = unparse a
-
-instance Unparse Void where
-    unparse = \case {}
-
-{- | Unparse a 'Generic' type with 'unparse'.
-
-/All/ arguments of /all/ constructors must be instances of 'Unparse'; this is
-the @'All2' 'Unparse'@ constraint.
-
-Each constructor is unparsed in the following generic way:
-
-- For zero-argument constructors, produce no output ('empty').
-- For one-argument constructors, 'unparse' the argument.
-- For construtors with more arguments, 'unparse' each argument and combine them
-  with 'sep'.
-
-@unparseGeneric@ can be used to quickly implement 'unparse' for types that are
-instances of 'Generic'. @unparseGeneric@ is not the default implementation for
-all types because it is /excessively/ general. Instances that rely on
-@unparseGeneric@ and @unparse2Generic@ should test that these functions
-implement the desired behavior, i.e. that they actually produce output that can
-be parsed.
-
-See also: 'unparse2Generic'
--}
-unparseGeneric :: (Generic a, All2 Unparse (Code a)) => a -> Doc ann
-unparseGeneric = unparseGenericWith unparse
-{-# INLINE unparseGeneric #-}
-
-unparseGenericWith ::
-    (Generic a, All2 Unparse (Code a)) =>
-    -- | function to unparse anything
-    (forall x. Unparse x => x -> Doc ann) ->
-    a ->
-    Doc ann
-unparseGenericWith helper =
-    Pretty.sep . SOP.hcollapse . SOP.hcmap constraint (SOP.mapIK helper) . SOP.from
-  where
-    constraint = Proxy :: Proxy Unparse
-{-# INLINE unparseGenericWith #-}
 
 -- | Serialize an object to 'Text'.
 unparseToText :: Unparse p => p -> Text

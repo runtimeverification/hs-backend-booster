@@ -188,7 +188,7 @@ marshallTerm :: Term -> LLVM KorePatternPtr
 marshallTerm t = do
     kore <- ask
     case t of
-        SymbolApplication (Application symbol sorts trms) -> do
+        SymbolApplication symbol sorts trms -> do
             trm <- kore.patt.fromSymbol =<< marshallSymbol symbol sorts
             forM_ trms $ marshallTerm >=> kore.patt.addArgument trm
             pure trm
@@ -198,6 +198,6 @@ marshallTerm t = do
             trm <- kore.patt.fromSymbol andSym
             void $ kore.patt.addArgument trm =<< marshallTerm l
             kore.patt.addArgument trm =<< marshallTerm r
-        DomainValue (DV sort val) ->
+        DomainValue sort val ->
             marshallSort sort >>= kore.patt.token.new val
         Var _ -> error "marshalling Var unsupported"
