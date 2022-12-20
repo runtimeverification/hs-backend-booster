@@ -224,12 +224,11 @@ instance Pretty Term where
     pretty =
         \case
             AndTerm t1 t2 ->
-                "\\and"
+                "\\andTerm"
                 <> Unparse.noParameters
                 <> Unparse.argumentsP [t1, t2]
             SymbolApplication symbol sortParams args ->
                 pretty (decodeLabel' symbol.name)
-                -- TODO: why does sortParams exist? why not use symbol.sortVars?
                 <> Unparse.parametersP sortParams
                 <> Unparse.argumentsP args
             DomainValue sort text ->
@@ -249,3 +248,68 @@ instance Pretty Variable where
         Pretty.pretty (decodeLabel' var.variableName)
         <> Pretty.colon
         <> pretty var.variableSort
+
+instance Pretty Predicate where
+    pretty =
+        \case
+            AndPredicate p1 p2 ->
+                "\\andPredicate"
+                <> Unparse.noParameters
+                <> Unparse.argumentsP [p1, p2]
+            Bottom ->
+                "\\bottom"
+                <> Unparse.noParameters
+                <> Unparse.noArguments
+            Ceil t ->
+                "\\ceil"
+                <> Unparse.noParameters
+                <> Unparse.argumentsP [t]
+            EqualsTerm t1 t2 ->
+                "\\equalsTerm"
+                <> Unparse.noParameters
+                <> Unparse.argumentsP [t1, t2]
+            EqualsPredicate p1 p2 ->
+                "\\equalsPredicate"
+                <> Unparse.noParameters
+                <> Unparse.argumentsP [p1, p2]
+            Exists vn p ->
+                "\\exists"
+                <> Unparse.noParameters
+                <> Unparse.arguments' [pretty vn, pretty p]
+            Forall vn p ->
+                "\\forall"
+                <> Unparse.noParameters
+                <> Unparse.arguments' [pretty vn, pretty p]
+            Iff p1 p2 ->
+                "\\iff"
+                <> Unparse.noParameters
+                <> Unparse.argumentsP [p1, p2]
+            Implies p1 p2 ->
+                "\\implies"
+                <> Unparse.noParameters
+                <> Unparse.argumentsP [p1, p2]
+            In t1 t2 ->
+                "\\in"
+                <> Unparse.noParameters
+                <> Unparse.argumentsP [t1, t2]
+            Not p ->
+                "\\not"
+                <> Unparse.noParameters
+                <> Unparse.argumentsP [p]
+            Or p1 p2 ->
+                "\\or"
+                <> Unparse.noParameters
+                <> Unparse.argumentsP [p1, p2]
+            Top ->
+                "\\top"
+                <> Unparse.noParameters
+                <> Unparse.noArguments
+
+instance Pretty Pattern where
+    pretty patt =
+        Pretty.vsep $
+            [ "Term:"
+            , Pretty.indent 4 $ pretty patt.term
+            , "Conditions:"
+            ]
+            <> fmap (Pretty.indent 4 . pretty) patt.constraints
