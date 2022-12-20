@@ -5,10 +5,18 @@ module Kore.Pattern.Binary (decodeKorePattern, test) where
 import Control.Monad (unless)
 import Control.Monad.Extra (forM)
 import Control.Monad.Trans.Class (MonadTrans (..))
-import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask, asks, local)
-import Control.Monad.Trans.State (StateT, evalStateT, gets, modify, runStateT)
-import Data.Binary.Get
-import Data.Bits
+import Control.Monad.Trans.Reader (ReaderT (runReaderT), asks)
+import Control.Monad.Trans.State (StateT, evalStateT, gets, modify)
+import Data.Binary.Get (
+    Get,
+    bytesRead,
+    getByteString,
+    getInt16le,
+    getWord8,
+    isEmpty,
+    runGet,
+ )
+import Data.Bits (Bits (complement, shiftL, (.&.), (.|.)))
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BL
 import Data.Int (Int16)
@@ -16,7 +24,6 @@ import Data.Map qualified as Map
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Word (Word64)
-import Debug.Trace
 import GHC.Word (Word8)
 import Kore.Definition.Base
 import Kore.Pattern.Base
