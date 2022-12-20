@@ -1,12 +1,9 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RankNTypes #-}
-
 {- |
-Module      : Kore.Unparse
+Module      : Kore.Prettyprinter
 Copyright   : (c) Runtime Verification, 2018-2022
 License     : BSD-3-Clause
 -}
-module Kore.Unparse (
+module Kore.Prettyprinter (
     Unparse (..),
     unparseToText,
     unparseToString,
@@ -52,7 +49,7 @@ import Prettyprinter.Render.Text qualified as RenderText
 
 @Unparse@ should only be instantiated for types with a corresponding
 concrete syntax, i.e. each instance of @Unparse@ should correspond to a
-parser in "Kore.Parser.Parser".
+parser in "Kore.ParsedKore.Parser".
 -}
 class Unparse p where
     -- | Render a type from abstract to concrete Kore syntax.
@@ -156,7 +153,7 @@ layoutPrettyUnbounded =
 @escapeString@ does not include the surrounding delimiters.
 -}
 escapeString :: String -> String
-escapeString s = foldr escapeCharS "" s
+escapeString = foldr escapeCharS ""
 
 escapeStringT :: Text -> Text
 escapeStringT = Text.concatMap escapeCharT

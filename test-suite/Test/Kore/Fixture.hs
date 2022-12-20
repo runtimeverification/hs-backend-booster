@@ -60,7 +60,7 @@ dv :: Sort -> Text -> Term
 dv = DomainValue
 
 app :: Symbol -> [Term] -> Term
-app s ts = SymbolApplication s [] ts
+app s = SymbolApplication s []
 
 asTotalFunction, asPartialFunction, asConstructor :: SymbolAttributes
 asTotalFunction = SymbolAttributes TotalFunction False False

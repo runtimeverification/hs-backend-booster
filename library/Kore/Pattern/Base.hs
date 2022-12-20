@@ -12,13 +12,14 @@ module Kore.Pattern.Base (
 ) where
 
 import Control.DeepSeq (NFData (..))
+import Data.Either (fromRight)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Map qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC.Generics (Generic)
 import Kore.Definition.Attributes.Base (SymbolAttributes)
-import Kore.Unparse qualified as Unparse
+import Kore.Prettyprinter qualified as KPretty
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
 
@@ -218,28 +219,28 @@ decodeMap =
 
 decodeLabel' :: Text -> Text
 decodeLabel' orig =
-    either (const orig) id (decodeLabel orig)
+    fromRight orig (decodeLabel orig)
 
 instance Pretty Term where
     pretty =
         \case
             AndTerm t1 t2 ->
                 "\\andTerm"
-                    <> Unparse.noParameters
-                    <> Unparse.argumentsP [t1, t2]
+                    <> KPretty.noParameters
+                    <> KPretty.argumentsP [t1, t2]
             SymbolApplication symbol sortParams args ->
                 pretty (decodeLabel' symbol.name)
-                    <> Unparse.parametersP sortParams
-                    <> Unparse.argumentsP args
+                    <> KPretty.parametersP sortParams
+                    <> KPretty.argumentsP args
             DomainValue sort text ->
                 "\\dv"
-                    <> Unparse.parametersP [sort]
-                    <> Unparse.argumentsP [text]
+                    <> KPretty.parametersP [sort]
+                    <> KPretty.argumentsP [text]
             Var var -> pretty var
 
 instance Pretty Sort where
     pretty (SortApp name params) =
-        Pretty.pretty name <> Unparse.parametersP params
+        Pretty.pretty name <> KPretty.parametersP params
     pretty (SortVar name) =
         Pretty.pretty name
 
@@ -254,56 +255,56 @@ instance Pretty Predicate where
         \case
             AndPredicate p1 p2 ->
                 "\\andPredicate"
-                    <> Unparse.noParameters
-                    <> Unparse.argumentsP [p1, p2]
+                    <> KPretty.noParameters
+                    <> KPretty.argumentsP [p1, p2]
             Bottom ->
                 "\\bottom"
-                    <> Unparse.noParameters
-                    <> Unparse.noArguments
+                    <> KPretty.noParameters
+                    <> KPretty.noArguments
             Ceil t ->
                 "\\ceil"
-                    <> Unparse.noParameters
-                    <> Unparse.argumentsP [t]
+                    <> KPretty.noParameters
+                    <> KPretty.argumentsP [t]
             EqualsTerm t1 t2 ->
                 "\\equalsTerm"
-                    <> Unparse.noParameters
-                    <> Unparse.argumentsP [t1, t2]
+                    <> KPretty.noParameters
+                    <> KPretty.argumentsP [t1, t2]
             EqualsPredicate p1 p2 ->
                 "\\equalsPredicate"
-                    <> Unparse.noParameters
-                    <> Unparse.argumentsP [p1, p2]
+                    <> KPretty.noParameters
+                    <> KPretty.argumentsP [p1, p2]
             Exists vn p ->
                 "\\exists"
-                    <> Unparse.noParameters
-                    <> Unparse.arguments' [pretty vn, pretty p]
+                    <> KPretty.noParameters
+                    <> KPretty.arguments' [pretty vn, pretty p]
             Forall vn p ->
                 "\\forall"
-                    <> Unparse.noParameters
-                    <> Unparse.arguments' [pretty vn, pretty p]
+                    <> KPretty.noParameters
+                    <> KPretty.arguments' [pretty vn, pretty p]
             Iff p1 p2 ->
                 "\\iff"
-                    <> Unparse.noParameters
-                    <> Unparse.argumentsP [p1, p2]
+                    <> KPretty.noParameters
+                    <> KPretty.argumentsP [p1, p2]
             Implies p1 p2 ->
                 "\\implies"
-                    <> Unparse.noParameters
-                    <> Unparse.argumentsP [p1, p2]
+                    <> KPretty.noParameters
+                    <> KPretty.argumentsP [p1, p2]
             In t1 t2 ->
                 "\\in"
-                    <> Unparse.noParameters
-                    <> Unparse.argumentsP [t1, t2]
+                    <> KPretty.noParameters
+                    <> KPretty.argumentsP [t1, t2]
             Not p ->
                 "\\not"
-                    <> Unparse.noParameters
-                    <> Unparse.argumentsP [p]
+                    <> KPretty.noParameters
+                    <> KPretty.argumentsP [p]
             Or p1 p2 ->
                 "\\or"
-                    <> Unparse.noParameters
-                    <> Unparse.argumentsP [p1, p2]
+                    <> KPretty.noParameters
+                    <> KPretty.argumentsP [p1, p2]
             Top ->
                 "\\top"
-                    <> Unparse.noParameters
-                    <> Unparse.noArguments
+                    <> KPretty.noParameters
+                    <> KPretty.noArguments
 
 instance Pretty Pattern where
     pretty patt =
