@@ -280,7 +280,11 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
             logRewrite $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
             pure (counter, RewriteStopped pat')
         | otherwise = do
-            let res = runRewriteM def mLlvmLibrary $ rewriteStep cutLabels terminalLabels pat'
+            let simplifiedPat =
+                    pat'{term = simplifyConcrete mLlvmLibrary def pat'.term}
+                res =
+                    runRewriteM def mLlvmLibrary $
+                        rewriteStep cutLabels terminalLabels simplifiedPat
             case res of
                 Right (RewriteSingle single) ->
                     doSteps (counter + 1) single
