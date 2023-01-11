@@ -25,7 +25,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Word (Word64)
 import GHC.Word (Word8)
-import Kore.Definition.Attributes.Base 
+import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
 import Kore.Pattern.Base
 import Kore.Syntax.ParsedKore
@@ -86,7 +86,7 @@ decodeMagicHeaderAndVersion = do
     unless (header == "KORE") $ fail "Invalid magic header for binary KORE"
     Version <$> getInt16le <*> getInt16le <*> getInt16le
 
-{-| Length (non-negative integer) is encoded in one of two special
+{- | Length (non-negative integer) is encoded in one of two special
   formats (depending on the version).
   Version 1.0.x: stored big-endian in a fixed amount of bytes.
   Other versions:
@@ -121,7 +121,7 @@ decodeLength l = do
             ret' = ret .|. (fromIntegral $ (fromIntegral chunk' :: Word64) `shiftL` (7 * steps))
         readAndShiftV2 continue (steps + 1) ret'
 
-{-| A string can either be a literal encoded as length/contents (tag
+{- | A string can either be a literal encoded as length/contents (tag
   0x01), or a back-reference to a previously-unpacked string (tag
   0x02), given as a _relative_ offset backwards from the current
   position. The previously-unpacked strings are remembered in the
@@ -139,7 +139,7 @@ decodeString = do
             pure str
         0x2 -> do
             backref <- decodeLength 4
-            -- we look up the position after reading `backref` and subtract `backref` from it, 
+            -- we look up the position after reading `backref` and subtract `backref` from it,
             -- to obtain the position of the string, which we then look up in the backref map
             position <- fromIntegral <$> liftDecode bytesRead
             m <- getInternedStrings
@@ -188,10 +188,10 @@ lookupKoreDefinitionSymbol name = DecodeM $ do
     pure $ case mDef of
         -- return a symbol with dummy attributes if no definition is supplied.
         -- this should be used for testing ONLY!
-        Nothing -> Just $ Symbol name [] [] (SortApp "dummy" []) ( SymbolAttributes PartialFunction False False)
+        Nothing -> Just $ Symbol name [] [] (SortApp "dummy" []) (SymbolAttributes PartialFunction False False)
         Just def -> Map.lookup name $ symbols def
 
-{-| Successively decodes items from the given "block" of bytes,
+{- | Successively decodes items from the given "block" of bytes,
   branching on the initial tag of the item.
   A block is a sequence of items which are encoded as described in the
   comments on each tag case below.
@@ -255,7 +255,7 @@ decodeBlock = do
             Just symbol@Symbol{sortVars} -> pure (symbol, zipWith (const id) sortVars sorts)
             Nothing -> fail $ "Unknown symbol " <> show name
 
-{-| The term in binary format is stored as follows:
+{- | The term in binary format is stored as follows:
 Bytes   1    4      2         2         2                ?
       +----+------+---------+---------+---------------+---------+
       | 7f | KORE | <major> | <minor> | <patch-level> | <BLOCK> |
