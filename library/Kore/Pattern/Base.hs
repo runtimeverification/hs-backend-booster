@@ -84,6 +84,12 @@ pattern AndBool ts <-
 pattern DV :: Sort -> Symbol
 pattern DV sort <- Symbol "\\dv" _ _ sort _
 
+-- NB assumes a particular shape and order of sort variables of the
+-- particular symbol "inj". A custom representation would be safer.
+pattern Injection :: Sort -> Sort -> Term -> Term
+pattern Injection fromSort toSort term <-
+    SymbolApplication (Symbol "inj" _ _ _ _) [fromSort, toSort] [term]
+
 {- | A predicate describes constraints on terms. It will always evaluate
    to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.
 -}
