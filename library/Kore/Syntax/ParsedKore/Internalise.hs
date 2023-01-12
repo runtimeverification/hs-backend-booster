@@ -527,7 +527,7 @@ computeTermIndex :: Def.Term -> Def.TermIndex
 computeTermIndex config =
     case lookForKCell config of
         Just (Def.SymbolApplication _ _ children) ->
-            getTermIndex (lookForTopTerm (getFirstKCellElem children))
+            maybe Def.None getTermIndex (lookForTopTerm (getFirstKCellElem children))
         _ -> Def.Anything
   where
     getTermIndex :: Def.Term -> Def.TermIndex
@@ -550,16 +550,16 @@ computeTermIndex config =
         other -> foldr ((<|>) . snd) Nothing other
 
     -- this assumes that the top kseq is already normalized into right-assoc form
-    lookForTopTerm :: Def.Term -> Def.Term
+    lookForTopTerm :: Def.Term -> Maybe Def.Term
     lookForTopTerm =
         \case
             Def.SymbolApplication symbol _ children
                 | symbol.name == "kseq" ->
                     let firstChild = getKSeqFirst children
-                     in stripAwaySortInjections firstChild
+                     in Just $ stripAwaySortInjections firstChild
                 | otherwise ->
-                    error ("lookForTopTerm: the first child of the K cell isn't a kseq" <> show symbol.name)
-            term -> term
+                      Nothing -- error ("lookForTopTerm: the first child of the K cell isn't a kseq" <> show symbol.name)
+            _other -> Nothing
 
     -- this assumes that sort injections are well-formed (have a single argument)
     stripAwaySortInjections :: Def.Term -> Def.Term
