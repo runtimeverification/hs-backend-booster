@@ -385,12 +385,13 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
 
     -- prefix all variables in lhs and rhs with "Rule#" to avoid
     -- name clashes with patterns from the user
+    -- filter out literal `Top` constraints
     lhs <-
-        fmap (Util.modifyVariables ("Rule#" <>)) $
+        fmap (removeTops . Util.modifyVariables ("Rule#" <>)) $
             Util.retractPattern result
                 `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
     rhs <-
-        fmap (Util.modifyVariables ("Rule#" <>)) $
+        fmap (removeTops . Util.modifyVariables ("Rule#" <>)) $
             withExcept DefinitionPatternError $
                 internalisePattern (Just sortVars) partialDefinition right
     let preservesDefinedness =
@@ -400,6 +401,9 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
         computedAttributes =
             ComputedAxiomAttributes{preservesDefinedness, containsAcSymbols}
     return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes}
+  where
+    removeTops :: Def.Pattern -> Def.Pattern
+    removeTops p = p{Def.constraints = filter (not . (== Def.Top)) p.constraints}
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
