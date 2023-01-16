@@ -77,6 +77,8 @@ computeTermIndex config =
                 case symbol.attributes.symbolType of
                     Constructor -> TopSymbol symbol.name
                     _ -> Anything
+            AndTerm term1 term2 ->
+                combine (getTermIndex term1) (getTermIndex term2)
             _ -> Anything
 
     -- it is assumed there is only one K cell
