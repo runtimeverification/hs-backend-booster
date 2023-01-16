@@ -13,7 +13,6 @@ module Kore.Syntax.ParsedKore.Internalise (
     computeTermIndex,
 ) where
 
-import Control.Applicative (Alternative (..), asum)
 import Control.Monad
 import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.Class
@@ -21,7 +20,6 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Bifunctor (first)
 import Data.Function (on)
-import Data.Functor.Foldable (embed, para)
 import Data.List (foldl', groupBy, partition, sortOn)
 import Data.List.Extra (groupSort)
 import Data.Map.Strict (Map)
@@ -36,6 +34,7 @@ import Kore.Definition.Attributes.Base
 import Kore.Definition.Attributes.Reader
 import Kore.Definition.Base as Def
 import Kore.Pattern.Base qualified as Def
+import Kore.Pattern.Index (TermIndex, computeTermIndex)
 import Kore.Pattern.Util qualified as Util
 import Kore.Syntax.Json.Base qualified as Json
 import Kore.Syntax.Json.Internalise
@@ -433,7 +432,7 @@ addToTheory axioms theory =
                 $ axioms
      in Map.unionWith (Map.unionWith (<>)) theory newTheory
 
-groupByTermIndex :: [RewriteRule] -> Map Def.TermIndex [RewriteRule]
+groupByTermIndex :: [RewriteRule] -> Map TermIndex [RewriteRule]
 groupByTermIndex axioms =
     let withTermIndexes = do
             axiom <- axioms
@@ -526,61 +525,3 @@ data TermOrPredicateError
     = PatternExpected Def.TermOrPredicate
     | TOPNotSupported Def.TermOrPredicate
     deriving stock (Eq, Show)
-
-computeTermIndex :: Def.Term -> Def.TermIndex
-computeTermIndex config =
-    case lookForKCell config of
-        Just (Def.SymbolApplication _ _ children) ->
-            maybe Def.None getTermIndex (lookForTopTerm (getFirstKCellElem children))
-        _ -> Def.Anything
-  where
-    getTermIndex :: Def.Term -> Def.TermIndex
-    getTermIndex term =
-        case term of
-            Def.SymbolApplication symbol _ _ ->
-                case symbol.attributes.symbolType of
-                    Constructor -> Def.TopSymbol symbol.name
-                    _ -> Def.Anything
-            _ -> Def.Anything
-
-    -- it is assumed there is only one K cell
-    -- Note: para is variant of cata in which recursive positions also include the original sub-tree,
-    -- in addition to the result of folding that sub-tree.
-    lookForKCell :: Def.Term -> Maybe Def.Term
-    lookForKCell = para $ \case
-        kCell@(Def.SymbolApplicationF symbol _ (children :: [(Def.Term, Maybe Def.Term)]))
-            | symbol.name == "Lbl'-LT-'k'-GT-'" -> Just $ embed $ fmap fst kCell
-            | otherwise -> asum $ map snd children
-        other -> foldr ((<|>) . snd) Nothing other
-
-    -- this assumes that the top kseq is already normalized into right-assoc form
-    lookForTopTerm :: Def.Term -> Maybe Def.Term
-    lookForTopTerm =
-        \case
-            Def.SymbolApplication symbol _ children
-                | symbol.name == "kseq" ->
-                    let firstChild = getKSeqFirst children
-                     in Just $ stripAwaySortInjections firstChild
-                | otherwise ->
-                      Nothing -- error ("lookForTopTerm: the first child of the K cell isn't a kseq" <> show symbol.name)
-            _other -> Nothing
-
-    -- this assumes that sort injections are well-formed (have a single argument)
-    stripAwaySortInjections :: Def.Term -> Def.Term
-    stripAwaySortInjections =
-        \case
-            term@(Def.SymbolApplication symbol _ children) ->
-                if Util.isSortInjectionSymbol symbol
-                    then stripAwaySortInjections (getInjChild children)
-                    else term
-            term -> term
-
-    getKSeqFirst [] = error "lookForTopTerm: empty KSeq"
-    getKSeqFirst (x : _) = x
-
-    getInjChild [] = error "stripAwaySortInjections: injection with 0 children"
-    getInjChild [x] = x
-    getInjChild _ = error "stripAwaySortInjections: injection with multiple children"
-
-    getFirstKCellElem [] = error "computeTermIndex: empty K cell"
-    getFirstKCellElem (x : _) = x

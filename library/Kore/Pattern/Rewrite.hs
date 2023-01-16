@@ -13,7 +13,9 @@ module Kore.Pattern.Rewrite (
 
 import Control.Monad
 import Control.Monad.Logger.CallStack
+import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
+import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Data.Either
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.List.NonEmpty qualified as NE
@@ -21,19 +23,15 @@ import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
 import Numeric.Natural
+import System.Posix.DynamicLinker qualified as Linker
 
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
 import Kore.Pattern.Base
+import Kore.Pattern.Index (TermIndex (..), computeTermIndex)
 import Kore.Pattern.Simplify
 import Kore.Pattern.Unify
 import Kore.Pattern.Util
-
-import Kore.Syntax.ParsedKore.Internalise (computeTermIndex) -- FIXME move this function!
-
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Reader (ReaderT (..), ask)
-import System.Posix.DynamicLinker qualified as Linker
 
 newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe Linker.DL) (Except err) a}
     deriving newtype (Functor, Applicative, Monad)
