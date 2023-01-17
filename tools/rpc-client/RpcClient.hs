@@ -56,7 +56,7 @@ main = do
     withTCPServer :: String -> Int -> (Socket -> IO ()) -> IO ()
     withTCPServer host port client =
         runTCPClient host (show port) $ \s ->
-            bracket (pure s) (flip shutdown ShutdownBoth) client
+            bracket (pure s) (`shutdown` ShutdownBoth) client
 
     -- readResponse :: Socket -> Int64 -> IO BS.ByteString
     readResponse s bufSize = do

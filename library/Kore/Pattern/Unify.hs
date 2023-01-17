@@ -135,9 +135,8 @@ unification = do
 checkIndeterminate :: StateT UnificationState (Except UnificationResult) ()
 checkIndeterminate = do
     indeterminate <- gets uIndeterminate
-    when (not $ null indeterminate) $
-        lift $
-            throwE (UnificationRemainder $ NE.fromList indeterminate)
+    unless (null indeterminate) . lift $
+        throwE (UnificationRemainder $ NE.fromList indeterminate)
 
 unify1 ::
     Term ->

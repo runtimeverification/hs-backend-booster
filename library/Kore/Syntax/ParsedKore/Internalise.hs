@@ -402,7 +402,7 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
     return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes}
   where
     removeTops :: Def.Pattern -> Def.Pattern
-    removeTops p = p{Def.constraints = filter (not . (== Def.Top)) p.constraints}
+    removeTops p = p{Def.constraints = filter (/= Def.Top) p.constraints}
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
