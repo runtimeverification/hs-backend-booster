@@ -21,6 +21,7 @@ import Data.Sequence (Seq (..))
 import Data.Sequence qualified as Seq
 import Data.Set (Set)
 import Data.Set qualified as Set
+import Prettyprinter
 
 import Kore.Definition.Base
 import Kore.Pattern.Base
@@ -56,6 +57,20 @@ data FailReason
     | -- | Variable reassigned
       VariableConflict Variable Term Term
     deriving stock (Eq, Show)
+
+instance Pretty FailReason where
+    pretty (DifferentValues t1 t2) =
+        "Values differ:" <> align (sep [pretty t1, pretty t2])
+    pretty (DifferentSymbols t1 t2) =
+        vsep ["Symbols differ:", pretty t1, pretty t2] -- shorten?
+    pretty (VariableRecursion v t) =
+        "Variable recursion found: " <> pretty v <> " in " <> pretty t
+    pretty (VariableConflict v t1 t2) =
+        vsep
+            [ "Variable conflict for " <> pretty v
+            , pretty t1
+            , pretty t2
+            ]
 
 type Substitution = Map Variable Term
 
