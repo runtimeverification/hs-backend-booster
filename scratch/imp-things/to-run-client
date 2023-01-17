@@ -1,0 +1,1 @@
+time ../../.build/kore/bin/rpc-client --execute  sum-state.json -O 'terminal-rules=[IMP.stop]' -o response-10k.json

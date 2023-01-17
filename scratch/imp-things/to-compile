@@ -1,0 +1,1 @@
+kompile --llvm-kompile-type c -o imp-llvm-library imp.k && kompile --backend haskell -o imp-haskell imp.k && kompile imp.k

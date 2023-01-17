@@ -1,0 +1,1 @@
+../../.build/kore/bin/hs-backend-booster imp-haskell/definition.kore --module IMP -l Rewrite --llvm-backend-library imp-llvm-library/interpreter > output.log 2>&1
