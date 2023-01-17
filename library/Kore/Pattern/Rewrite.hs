@@ -168,7 +168,7 @@ applyRule pat rule = do
     let rewritten =
             Pattern
                 (substituteInTerm subst rule.rhs.term)
-                (map (substituteInPredicate subst) $ pat.constraints <> newConstraints)
+                (map (substituteInPredicate subst) $ pat.constraints)
     return (rule, rewritten)
   where
     checkConstraint :: Predicate -> RewriteM RuleFailed ()
