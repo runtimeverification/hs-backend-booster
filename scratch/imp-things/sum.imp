@@ -1,6 +1,7 @@
-k = 10000;
+int k, sum;
+k = 1;
 sum = 0;
-while (k > 0) {
+while (k <= 10000) {
   sum = sum + k;
-  k = k - 1
+  k = k + 1;
 }
