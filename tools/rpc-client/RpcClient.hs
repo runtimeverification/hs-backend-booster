@@ -32,6 +32,8 @@ import Network.Socket.ByteString.Lazy
 import Options.Applicative
 import System.Exit
 import System.IO
+import System.Process
+import System.Directory
 
 import Kore.JsonRpc.Base (rpcJsonConfig)
 import Kore.Syntax.Json qualified as Syntax
@@ -82,8 +84,7 @@ data Mode
   * 'Prettify' formats output before printing it to stdout
 -}
 data PostProcessing
-    = Output FilePath
-    | Expect FilePath
+    = Expect FilePath Bool
     | Prettify
     deriving stock (Show)
 
@@ -127,7 +128,7 @@ parseOptions =
                     <> help "file with parameters (json object), optional"
     paramOpt =
         option readPair $
-            short 'o'
+            short 'p'
                 <> metavar "NAME=VALUE"
                 <> help "parameters to use (name=value)"
     readPair =
@@ -141,15 +142,11 @@ parsePostProcessing =
                 <> metavar "EXPECTATIONFILE"
                 <> help "compare JSON output against file contents"
             )
-    )
-        <|> ( Output
-                <$> ( strOption $
-                        long "output"
-                            <> short 'o'
-                            <> metavar "OUTPUTFILE"
-                            <> help "write JSON output to a file"
-                    )
+        <*>  ( flag False True $
+                long "regenerate"
+                    <> help "regenrate the expected file"
             )
+    )
         <|> ( flag' Prettify $
                 long "prettify"
                     <> help "format JSON before printing"
@@ -255,19 +252,31 @@ postProcess postProcessing output =
     case postProcessing of
         Prettify ->
             BS.putStrLn prettyOutput
-        Output file ->
-            BS.writeFile file prettyOutput
-        Expect expectFile -> do
-            expected <- BS.readFile expectFile
+        Expect expectFile regenerate -> do
+            doesFileExist expectFile >>= \case
+                False -> 
+                    if regenerate 
+                        then do
+                            BS.putStrLn "[Info] Generating expected file for the first time."
+                            BS.writeFile expectFile prettyOutput
+                        else
+                            BS.putStrLn "[Error] The expected file does not exist. Use `--regenerate` if you wish to create it."
+                True -> do
+                    expected <- BS.readFile expectFile
+                    when (prettyOutput /= expected) $ do
+                        BS.writeFile "response" prettyOutput
+                        (_, result, _) <- readProcessWithExitCode "git" ["diff", "--no-index", "--color-words=.", expectFile, "response"] ""
+                        putStrLn result
 
-            -- TODO https://hackage.haskell.org/package/Diff (needs json reformatting)
-            -- or  https://hackage.haskell.org/package/aeson-diff (needs diff pretty-printer)
-            when (prettyOutput /= expected) $ do
-                BS.putStrLn $ "[Error] Expected:\n" <> expected
-                BS.putStrLn $ "[Error] but got:\n" <> prettyOutput
-                BS.putStrLn "[Error] Not the same, sorry."
-                exitWith $ ExitFailure 1
-            hPutStrLn stderr $ "[Info] Output matches " <> expectFile
+                        if regenerate 
+                            then do
+                                BS.putStrLn "[Info] Re-generating expected file."
+                                renameFile "response" expectFile
+                            else do
+                                removeFile "response"
+                                BS.putStrLn "[Error] Not the same, sorry."
+                                exitWith $ ExitFailure 1
+                    hPutStrLn stderr $ "[Info] Output matches " <> expectFile
   where
     prettyOutput =
         Json.encodePretty' rpcJsonConfig $
