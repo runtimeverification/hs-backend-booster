@@ -22,7 +22,6 @@ module Kore.Pattern.Util (
     decodeLabel,
 ) where
 
-import Data.Foldable (fold)
 import Data.Functor.Foldable (Corecursive (embed), cata)
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -84,11 +83,8 @@ modifyVariables f p =
         other -> embed other
 
 freeVariables :: Term -> Set Variable
-freeVariables = cata $ \case
-    VarF var -> Set.singleton var
-    other -> fold other
+freeVariables (Term attributes _) = attributes.variables
 
--- | Don't use unless therm size is small
 isConcrete :: Term -> Bool
 isConcrete = Set.null . freeVariables
 

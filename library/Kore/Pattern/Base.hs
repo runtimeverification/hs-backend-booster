@@ -13,7 +13,9 @@ module Kore.Pattern.Base (
 
 import Control.DeepSeq (NFData (..))
 import Data.Either (fromRight)
-import Data.Functor.Foldable.TH (makeBaseFunctor)
+import Data.Functor.Foldable
+
+-- import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Map qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -22,6 +24,12 @@ import Kore.Definition.Attributes.Base (SymbolAttributes)
 import Kore.Prettyprinter qualified as KPretty
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
+
+----------------------------------------
+--import Control.Comonad.Trans.Cofree
+import Data.Set (Set)
+import Data.Set qualified as Set
+----------------------------------------
 
 type VarName = Text
 type SymbolName = Text
@@ -67,15 +75,88 @@ data Symbol = Symbol
    Deliberately kept simple in this codebase (leaving out built-in
    types and containers).
 -}
-data Term
-    = AndTerm Term Term -- used in #as patterns
-    | SymbolApplication Symbol [Sort] [Term]
-    | DomainValue Sort Text
-    | Var Variable
-    deriving stock (Eq, Ord, Show, Generic)
-    deriving anyclass (NFData)
+-- data Term
+--     = AndTerm Term Term -- used in #as patterns
+--     | SymbolApplication Symbol [Sort] [Term]
+--     | DomainValue Sort Text
+--     | Var Variable
+--     deriving stock (Eq, Ord, Show, Generic)
+--     deriving anyclass (NFData)
 
-makeBaseFunctor ''Term
+-- makeBaseFunctor ''Term
+data TermF t
+    = AndTermF t t
+    | SymbolApplicationF Symbol [Sort] [t]
+    | DomainValueF Sort Text
+    | VarF Variable
+    deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
+    deriving anyclass NFData
+
+type instance Base Term = TermF
+
+instance Recursive Term where
+    project (Term _ t) = t
+
+instance Corecursive Term where
+    embed (AndTermF t1 t2) = AndTerm t1 t2
+    embed (SymbolApplicationF s ss ts) = SymbolApplication s ss ts
+    embed (DomainValueF s t) = DomainValue s t
+    embed (VarF v) = Var v
+
+----------------------------------------
+
+data TermAttributes =
+    TermAttributes
+    { variables :: Set Variable
+    , isEvaluated :: Bool
+    }
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass NFData
+
+instance Semigroup TermAttributes where
+    a1 <> a2 =
+        TermAttributes
+        { variables = a1.variables <> a2.variables
+        , isEvaluated = a1.isEvaluated && a2.isEvaluated
+        }
+
+instance Monoid TermAttributes where
+    mempty = TermAttributes Set.empty True
+
+data Term = Term TermAttributes (TermF Term)
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass NFData
+
+extract :: Term -> TermAttributes
+extract (Term a _) = a
+
+--------------------
+-- smart term constructors, as bidirectional patterns
+pattern AndTerm :: Term -> Term -> Term
+pattern AndTerm t1 t2 <- Term _ (AndTermF t1 t2)
+  where
+    AndTerm t1@(Term a1 _) t2@(Term a2 _) = Term (a1 <> a2) $ AndTermF t1 t2
+
+pattern SymbolApplication :: Symbol -> [Sort] -> [Term] -> Term
+pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts args)
+  where
+    SymbolApplication sym sorts args =
+        Term (mconcat (map extract args)) { isEvaluated = False } $ -- FIXME constructors and injections are evaluated if their arguments are
+            SymbolApplicationF sym sorts args
+
+pattern DomainValue :: Sort -> Text -> Term
+pattern DomainValue sort value <- Term _ (DomainValueF sort value)
+  where
+    DomainValue sort value = Term mempty $ DomainValueF sort value
+
+pattern Var :: Variable -> Term
+pattern Var v <- Term _ (VarF v)
+  where
+    Var v = Term mempty{variables = Set.singleton v} (VarF v)
+
+{-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var #-}
+----------------------------------------
+--------------------
 
 pattern AndBool :: [Term] -> Term
 pattern AndBool ts <-
@@ -110,7 +191,53 @@ data Predicate
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
-makeBaseFunctor ''Predicate
+-- makeBaseFunctor ''Predicate
+data PredicateF p
+    = AndPredicateF p p
+    | BottomF
+    | CeilF Term
+    | EqualsTermF Term Term
+    | EqualsPredicateF p p
+    | ExistsF VarName p
+    | ForallF VarName p
+    | IffF p p
+    | ImpliesF p p
+    | InF Term Term
+    | NotF p
+    | OrF p p
+    | TopF
+    deriving (Functor, Foldable, Traversable)
+type instance Base Predicate = PredicateF
+instance Recursive Predicate where
+    project (AndPredicate p1 p2) = AndPredicateF p1 p2
+    project Bottom = BottomF
+    project (Ceil t) = CeilF t
+    project (EqualsTerm t1 t2) = EqualsTermF t1 t2
+    project (EqualsPredicate p1 p2) = EqualsPredicateF p1 p2
+    project (Exists v p) = ExistsF v p
+    project (Forall v p) = ForallF v p
+    project (Iff p1 p2) = IffF p1 p2
+    project (Implies p1 p2) = ImpliesF p1 p2
+    project (In t1 t2) = InF t1 t2
+    project (Not p) = NotF p
+    project (Or p1 p2) = OrF p1 p2
+    project Top = TopF
+instance Corecursive Predicate where
+    embed (AndPredicateF p1 p2) = AndPredicate p1 p2
+    embed BottomF = Bottom
+    embed (CeilF t) = Ceil t
+    embed (EqualsTermF t1 t2) = EqualsTerm t1 t2
+    embed (EqualsPredicateF p1 p2) = EqualsPredicate p1 p2
+    embed (ExistsF v p) = Exists v p
+    embed (ForallF v p) = Forall v p
+    embed (IffF p1 p2) = Iff p1 p2
+    embed (ImpliesF p1 p2) = Implies p1 p2
+    embed (InF t1 t2) = In t1 t2
+    embed (NotF p) = Not p
+    embed (OrF p1 p2) = Or p1 p2
+    embed TopF = Top
+
+--------------------
 
 -- | A term (configuration) constrained by a number of predicates.
 data Pattern = Pattern
