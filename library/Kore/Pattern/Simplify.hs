@@ -73,15 +73,15 @@ simplifyConcrete (Just dl) def trm = recurse trm
         | isConcrete t =
             simplifyTerm dl def t (sortOfTerm t)
         | otherwise =
-              case t of
-                  var@Var{} ->
-                      var -- nothing to do. Should have isEvaluated set
-                  dv@DomainValue{} ->
-                      dv -- nothing to do. Should have isEvaluated set
-                  AndTerm t1 t2 ->
-                      AndTerm (recurse t1) (recurse t2)
-                  SymbolApplication sym sorts args ->
-                      SymbolApplication sym sorts (map recurse args)
+            case t of
+                var@Var{} ->
+                    var -- nothing to do. Should have isEvaluated set
+                dv@DomainValue{} ->
+                    dv -- nothing to do. Should have isEvaluated set
+                AndTerm t1 t2 ->
+                    AndTerm (recurse t1) (recurse t2)
+                SymbolApplication sym sorts args ->
+                    SymbolApplication sym sorts (map recurse args)
 
 -- FIXME recursions repeat runLLVMwithDL (no sharing). This is
 --  a more general problem with runLLVMwithDL, the library
