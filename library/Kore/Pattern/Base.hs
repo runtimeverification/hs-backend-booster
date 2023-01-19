@@ -20,7 +20,11 @@ import Data.Map qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC.Generics (Generic)
-import Kore.Definition.Attributes.Base (SymbolAttributes)
+import Kore.Definition.Attributes.Base (
+    SymbolAttributes,
+    SymbolType (..),
+    SymbolAttributes (..),
+  )
 import Kore.Prettyprinter qualified as KPretty
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
@@ -141,8 +145,19 @@ pattern SymbolApplication :: Symbol -> [Sort] -> [Term] -> Term
 pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts args)
   where
     SymbolApplication sym sorts args =
-        Term (mconcat (map extract args)) { isEvaluated = False } $ -- FIXME constructors and injections are evaluated if their arguments are
+        let
+            argAttributes = mconcat $ map extract args
+            newEvaluatedFlag =
+                case sym.attributes.symbolType of
+                    -- constructors and injections are evaluated if their arguments are
+                    Constructor -> argAttributes.isEvaluated
+                    SortInjection -> argAttributes.isEvaluated
+                    -- function calls are not evaluated
+                    PartialFunction -> False
+                    TotalFunction -> False
+        in Term argAttributes { isEvaluated = newEvaluatedFlag } $
             SymbolApplicationF sym sorts args
+
 
 pattern DomainValue :: Sort -> Text -> Term
 pattern DomainValue sort value <- Term _ (DomainValueF sort value)
