@@ -151,7 +151,7 @@ jobs:
         include:
           - runner: [self-hosted, linux, normal]
             os: Ubuntu-22.04
-            nix: aarch64-darwin
+            nix: x86_64-linux
           - runner: MacM1
             os: self-macos-12
             nix: aarch64-darwin
