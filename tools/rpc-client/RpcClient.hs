@@ -28,6 +28,7 @@ import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Data.Vector as Array (fromList)
 import Formatting
+
 -- import Formatting.Clock
 import Formatting.Internal
 import Network.Run.TCP
@@ -318,7 +319,6 @@ postProcess prettify postProcessing output =
             either error (id @Json.Value) $
                 Json.eitherDecode output
 
-
 timeSpecs :: Format r (TimeSpec -> TimeSpec -> r)
 timeSpecs = Format (\g x y -> g (fmt0 x y))
   where
@@ -327,13 +327,12 @@ timeSpecs = Format (\g x y -> g (fmt0 x y))
         | Just i <- scale (10 ^ (6 :: Int)) = bprint (fixed 2 % " ms") i
         | Just i <- scale (10 ^ (3 :: Int)) = bprint (fixed 2 % " us") i
         | otherwise = bprint (int % " ns") diff
-        where
-            scale :: Integer -> Maybe Double
-            scale i =
-                if diff >= i
-                    then Just (fromIntegral diff / fromIntegral i)
-                    else Nothing
-
+      where
+        scale :: Integer -> Maybe Double
+        scale i =
+            if diff >= i
+                then Just (fromIntegral diff / fromIntegral i)
+                else Nothing
 
     fmt0 (TimeSpec s1 n1) (TimeSpec s2 n2) = fmt diff
       where
