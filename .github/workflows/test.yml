@@ -184,7 +184,7 @@ jobs:
       - name: Run integration tests
         env:
           GC_DONT_GC: '1'
-          ARCH: ${{ runner.nix }
+          ARCH: ${{ runner.nix }}
         run: |
           nix build .#checks.$ARCH.integration.a-to-f --extra-experimental-features 'nix-command flakes' --print-build-logs
           imp=$(nix build .#checks.$ARCH.integration.imp --extra-experimental-features 'nix-command flakes' --print-build-logs --json | $JQ -r '.[].outputs | to_entries[].value')
