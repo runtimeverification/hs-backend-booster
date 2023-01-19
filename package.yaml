@@ -116,8 +116,10 @@ executables:
       - aeson-pretty
       - base
       - bytestring
+      - clock
       - directory
       - extra
+      - formatting
       - hs-backend-booster
       - network
       - network-run

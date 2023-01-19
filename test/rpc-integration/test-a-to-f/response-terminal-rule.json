@@ -79,66 +79,6 @@
                         }
                     ]
                 }
-            },
-            "predicate": {
-                "format": "KORE",
-                "version": 1,
-                "term": {
-                    "tag": "And",
-                    "sort": {
-                        "tag": "SortApp",
-                        "name": "SortGeneratedTopCell",
-                        "args": []
-                    },
-                    "first": {
-                        "tag": "And",
-                        "sort": {
-                            "tag": "SortApp",
-                            "name": "SortGeneratedTopCell",
-                            "args": []
-                        },
-                        "first": {
-                            "tag": "And",
-                            "sort": {
-                                "tag": "SortApp",
-                                "name": "SortGeneratedTopCell",
-                                "args": []
-                            },
-                            "first": {
-                                "tag": "Top",
-                                "sort": {
-                                    "tag": "SortApp",
-                                    "name": "SortGeneratedTopCell",
-                                    "args": []
-                                }
-                            },
-                            "second": {
-                                "tag": "Top",
-                                "sort": {
-                                    "tag": "SortApp",
-                                    "name": "SortGeneratedTopCell",
-                                    "args": []
-                                }
-                            }
-                        },
-                        "second": {
-                            "tag": "Top",
-                            "sort": {
-                                "tag": "SortApp",
-                                "name": "SortGeneratedTopCell",
-                                "args": []
-                            }
-                        }
-                    },
-                    "second": {
-                        "tag": "Top",
-                        "sort": {
-                            "tag": "SortApp",
-                            "name": "SortGeneratedTopCell",
-                            "args": []
-                        }
-                    }
-                }
             }
         }
     }
