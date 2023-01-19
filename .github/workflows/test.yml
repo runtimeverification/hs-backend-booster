@@ -184,6 +184,7 @@ jobs:
       - name: Run integration tests
         env:
           GC_DONT_GC: '1'
+          GH_TOKEN: ${{ github.token }}
         run: |
           export JQ=$(nix-build '<nixpkgs>' -A jq --no-link)/bin/jq
           nix build .#checks.${{ matrix.nix }}.integration.a-to-f --extra-experimental-features 'nix-command flakes' --print-build-logs
