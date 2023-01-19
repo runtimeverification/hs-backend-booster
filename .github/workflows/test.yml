@@ -187,4 +187,3 @@ jobs:
         run: |
           nix build .#checks.${{ matrix.nix }}.integration.a-to-f --extra-experimental-features 'nix-command flakes' --print-build-logs
           imp=$(nix build .#checks.${{ matrix.nix }}.integration.imp --extra-experimental-features 'nix-command flakes' --print-build-logs --json | $JQ -r '.[].outputs | to_entries[].value')
-          gh pr comment ${{ github.event.pull_request.number }} -F $imp
