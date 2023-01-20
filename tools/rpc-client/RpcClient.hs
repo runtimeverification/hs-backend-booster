@@ -289,7 +289,7 @@ postProcess prettify postProcessing output =
                 False ->
                     if regenerate
                         then do
-                            hPutStrLn stderr $ "[Info] Generating expected file for the first time."
+                            hPutStrLn stderr "[Info] Generating expected file for the first time."
                             BS.writeFile expectFile prettyOutput
                         else do
                             BS.putStrLn "[Error] The expected file does not exist. Use `--regenerate` if you wish to create it."
@@ -303,7 +303,7 @@ postProcess prettify postProcessing output =
 
                         if regenerate
                             then do
-                                hPutStrLn stderr $ "[Info] Re-generating expected file."
+                                hPutStrLn stderr "[Info] Re-generating expected file."
                                 renameFile "response" expectFile
                             else do
                                 removeFile "response"
