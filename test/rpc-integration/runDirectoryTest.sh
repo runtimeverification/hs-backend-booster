@@ -38,7 +38,7 @@ echo "Starting server"
 $server $kore --module ${MODULE:-TEST} $server_params &
 server_pid=$!
 
-trap 'kill -9 ${server_pid}' ERR EXIT
+trap 'kill -9 ${server_pid}; popd' ERR EXIT
 echo "Server PID ${server_pid}"
 
 sleep 2
