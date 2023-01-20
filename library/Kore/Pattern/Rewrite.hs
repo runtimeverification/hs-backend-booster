@@ -24,7 +24,6 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack, split, unpack)
 import Numeric.Natural
 import Prettyprinter
-import System.Posix.DynamicLinker qualified as Linker
 
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
@@ -34,11 +33,13 @@ import Kore.Pattern.Simplify
 import Kore.Pattern.Unify
 import Kore.Pattern.Util
 import Kore.Prettyprinter
+import Kore.LLVM.Internal qualified as LLVM
 
-newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe Linker.DL) (Except err) a}
+
+newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe LLVM.API) (Except err) a}
     deriving newtype (Functor, Applicative, Monad)
 
-runRewriteM :: KoreDefinition -> Maybe Linker.DL -> RewriteM err a -> Either err a
+runRewriteM :: KoreDefinition -> Maybe LLVM.API -> RewriteM err a -> Either err a
 runRewriteM def mLlvmLibrary = runExcept . flip runReaderT (def, mLlvmLibrary) . unRewriteM
 
 throw :: err -> RewriteM err a
@@ -50,8 +51,8 @@ runExceptRewriteM (RewriteM (ReaderT f)) = RewriteM $ ReaderT $ \env -> pure $ r
 getDefinition :: RewriteM err KoreDefinition
 getDefinition = RewriteM $ fst <$> ask
 
-getDL :: RewriteM err (Maybe Linker.DL)
-getDL = RewriteM $ snd <$> ask
+getLLVM :: RewriteM err (Maybe LLVM.API)
+getLLVM = RewriteM $ snd <$> ask
 
 {- | Performs a rewrite step (using suitable rewrite rules from the
    definition).
@@ -175,8 +176,8 @@ applyRule pat rule = do
   where
     checkConstraint :: Predicate -> RewriteM RuleFailed ()
     checkConstraint p = do
-        dl <- getDL
-        case simplifyPredicate dl p of
+        mApi <- getLLVM
+        case simplifyPredicate mApi p of
             Bottom -> throw $ ConstraintIsBottom p
             Top -> pure ()
             other -> throw $ ConstraintIsIndeterminate other
@@ -355,7 +356,7 @@ performRewrite ::
     forall io.
     MonadLoggerIO io =>
     KoreDefinition ->
-    Maybe Linker.DL ->
+    Maybe LLVM.API ->
     -- | maximum depth
     Maybe Natural ->
     -- | cut point rule labels
