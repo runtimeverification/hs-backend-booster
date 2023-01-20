@@ -119,7 +119,6 @@ executables:
       - clock
       - directory
       - extra
-      - formatting
       - hs-backend-booster
       - network
       - network-run

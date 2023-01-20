@@ -25,12 +25,7 @@ import Data.Char (isDigit)
 import Data.List.Extra
 import Data.Maybe (isNothing)
 import Data.Text qualified as Text
-import Data.Text.IO qualified as Text
 import Data.Vector as Array (fromList)
-import Formatting
-
--- import Formatting.Clock
-import Formatting.Internal
 import Network.Run.TCP
 import Network.Socket.ByteString.Lazy
 import Options.Applicative
@@ -59,11 +54,11 @@ main = do
         response <- readResponse s 8192
         end <- getTime Monotonic
         let modeFile = getModeFile mode
-        fprint ("[info] Round trip time for request '" % string % "' was " % timeSpecs % "\n") modeFile start end
-        -- putStrLn $ "[info] Round trip time for request '" <> modeFile <> "' was " <> timeSpent
+            timeStr = timeSpecs start end
+        hPutStrLn stderr $ "[info] Round trip time for request '" <> modeFile <> "' was " <> timeStr
         when time $ do
-            putStrLn $ "[info] Saving timing for " <> modeFile
-            Text.writeFile (modeFile <> ".time") $ sformat timeSpecs start end
+            hPutStrLn stderr $ "[info] Saving timing for " <> modeFile
+            writeFile (modeFile <> ".time") timeStr
 
         trace "[Info] Response received." $
             postProcess prettify postProcessing response
@@ -294,9 +289,11 @@ postProcess prettify postProcessing output =
                 False ->
                     if regenerate
                         then do
-                            BS.putStrLn "[Info] Generating expected file for the first time."
+                            hPutStrLn stderr $ "[Info] Generating expected file for the first time."
                             BS.writeFile expectFile prettyOutput
-                        else BS.putStrLn "[Error] The expected file does not exist. Use `--regenerate` if you wish to create it."
+                        else do
+                            BS.putStrLn "[Error] The expected file does not exist. Use `--regenerate` if you wish to create it."
+                            exitWith $ ExitFailure 1
                 True -> do
                     expected <- BS.readFile expectFile
                     when (prettyOutput /= expected) $ do
@@ -306,7 +303,7 @@ postProcess prettify postProcessing output =
 
                         if regenerate
                             then do
-                                BS.putStrLn "[Info] Re-generating expected file."
+                                hPutStrLn stderr $ "[Info] Re-generating expected file."
                                 renameFile "response" expectFile
                             else do
                                 removeFile "response"
@@ -319,14 +316,14 @@ postProcess prettify postProcessing output =
             either error (id @Json.Value) $
                 Json.eitherDecode output
 
-timeSpecs :: Format r (TimeSpec -> TimeSpec -> r)
-timeSpecs = Format (\g x y -> g (fmt0 x y))
+timeSpecs :: TimeSpec -> TimeSpec -> String
+timeSpecs = fmt0
   where
     fmt diff
-        | Just i <- scale (10 ^ (9 :: Int)) = bprint (fixed 2 % " s") i
-        | Just i <- scale (10 ^ (6 :: Int)) = bprint (fixed 2 % " ms") i
-        | Just i <- scale (10 ^ (3 :: Int)) = bprint (fixed 2 % " us") i
-        | otherwise = bprint (int % " ns") diff
+        | Just i <- scale (10 ^ (9 :: Int)) = show i <> " s"
+        | Just i <- scale (10 ^ (6 :: Int)) = show i <> " ms"
+        | Just i <- scale (10 ^ (3 :: Int)) = show i <> " us"
+        | otherwise = show diff <> " ns"
       where
         scale :: Integer -> Maybe Double
         scale i =
