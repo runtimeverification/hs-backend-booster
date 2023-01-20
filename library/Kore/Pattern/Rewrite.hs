@@ -81,7 +81,7 @@ rewriteStep cutLabels terminalLabels pat = do
   where
     processGroups :: [[RewriteRule]] -> RewriteM RewriteFailed (RewriteResult Pattern)
     processGroups [] =
-        pure $ RewriteStuck pat
+        throw $ NoApplicableRules
     processGroups (rules : rest) = do
         -- try all rules of the priority group
         (failures, results) <-
@@ -187,7 +187,7 @@ applyRule pat rule = do
 data RewriteFailed
     = -- | No rules have been found
       NoRulesForTerm
-    | -- | All rules have been tried unsuccessfully
+    | -- | All rules have been tried unsuccessfully (rewrite is stuck)
       NoApplicableRules
     | -- | It is uncertain whether or not rules can be applied
       RuleApplicationUncertain [RuleFailed]
@@ -398,8 +398,9 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                     pure (counter + 1, fmap simplify terminal)
                 Right other -> do
                     logRewrite $ "Stopped after " <> showCounter counter
+                    logRewrite $ prettyText other
                     let simplifiedOther = fmap simplify other
-                    logRewrite $ prettyText simplifiedOther
+                    logRewrite $ "Simplified: " <> prettyText simplifiedOther
                     pure (counter, simplifiedOther)
                 -- if unification was unclear and the pattern was
                 -- unsimplified, simplify and retry rewriting once
@@ -410,6 +411,16 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                         logRewrite $ "Unification unclear for " <> prettyText pat'
                         logRewrite $ "Retrying with simplified pattern " <> prettyText simplifiedPat
                         doSteps True counter simplifiedPat
+                -- if there were no applicable rules, unification may
+                -- have stumbled over an injection. Simplify and re-try
+                -- FIXME injections should be represented differently!
+                Left NoApplicableRules
+                    | not wasSimplified -> do
+                        let simplifiedPat = simplify pat'
+                        logRewrite $ "No rules found for " <> prettyText pat'
+                        logRewrite $ "Retrying with simplified pattern " <> prettyText simplifiedPat
+                        doSteps True counter simplifiedPat
+                    | otherwise -> pure (counter, RewriteStuck pat')
                 Left failure -> do
                     logRewrite $ "Aborted after " <> showCounter counter
                     logRewrite $ prettyText failure
