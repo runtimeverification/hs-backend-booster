@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -14,9 +13,9 @@ module Kore.Pattern.Base (
 import Control.DeepSeq (NFData (..))
 import Data.Either (fromRight)
 import Data.Functor.Foldable
-
--- import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Map qualified as Map
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC.Generics (Generic)
@@ -29,9 +28,6 @@ import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
 
 ----------------------------------------
--- import Control.Comonad.Trans.Cofree
-import Data.Set (Set)
-import Data.Set qualified as Set
 
 ----------------------------------------
 
@@ -79,16 +75,6 @@ data Symbol = Symbol
    Deliberately kept simple in this codebase (leaving out built-in
    types and containers).
 -}
-
--- data Term
---     = AndTerm Term Term -- used in #as patterns
---     | SymbolApplication Symbol [Sort] [Term]
---     | DomainValue Sort Text
---     | Var Variable
---     deriving stock (Eq, Ord, Show, Generic)
---     deriving anyclass (NFData)
-
--- makeBaseFunctor ''Term
 data TermF t
     = AndTermF t t
     | SymbolApplicationF Symbol [Sort] [t]
@@ -97,19 +83,11 @@ data TermF t
     deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
     deriving anyclass (NFData)
 
-type instance Base Term = TermF
-
-instance Recursive Term where
-    project (Term _ t) = t
-
-instance Corecursive Term where
-    embed (AndTermF t1 t2) = AndTerm t1 t2
-    embed (SymbolApplicationF s ss ts) = SymbolApplication s ss ts
-    embed (DomainValueF s t) = DomainValue s t
-    embed (VarF v) = Var v
-
-----------------------------------------
-
+{- | Term attributes are synthetic (bottom-up) attributes that cache
+   information about a term to avoid unnecessary AST
+   traversals. Attributes are computed when terms are constructed (see
+   patterns below).
+-}
 data TermAttributes = TermAttributes
     { variables :: Set Variable
     , isEvaluated :: Bool
@@ -127,14 +105,25 @@ instance Semigroup TermAttributes where
 instance Monoid TermAttributes where
     mempty = TermAttributes Set.empty True
 
+-- | A term together with its attributes.
 data Term = Term TermAttributes (TermF Term)
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
+type instance Base Term = TermF
+
+instance Recursive Term where
+    project (Term _ t) = t
+
 extract :: Term -> TermAttributes
 extract (Term a _) = a
 
---------------------
+instance Corecursive Term where
+    embed (AndTermF t1 t2) = AndTerm t1 t2
+    embed (SymbolApplicationF s ss ts) = SymbolApplication s ss ts
+    embed (DomainValueF s t) = DomainValue s t
+    embed (VarF v) = Var v
+
 -- smart term constructors, as bidirectional patterns
 pattern AndTerm :: Term -> Term -> Term
 pattern AndTerm t1 t2 <- Term _ (AndTermF t1 t2)
@@ -169,9 +158,7 @@ pattern Var v <- Term _ (VarF v)
 
 {-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var #-}
 
-----------------------------------------
---------------------
-
+-- convenience patterns
 pattern AndBool :: [Term] -> Term
 pattern AndBool ts <-
     SymbolApplication (Symbol "Lbl'Unds'andBool'Unds'" _ _ _ _) _ ts
@@ -193,9 +180,9 @@ data Predicate
     | Bottom
     | Ceil Term
     | EqualsTerm Term Term
-    | EqualsPredicate Predicate Predicate -- I remember running into this one a few times, but I'm not sure if it was an integration test or a unit test
+    | EqualsPredicate Predicate Predicate
     | Exists VarName Predicate
-    | Forall VarName Predicate -- do we need forall?
+    | Forall VarName Predicate
     | Iff Predicate Predicate
     | Implies Predicate Predicate
     | In Term Term
@@ -205,7 +192,6 @@ data Predicate
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
--- makeBaseFunctor ''Predicate
 data PredicateF p
     = AndPredicateF p p
     | BottomF

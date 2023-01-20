@@ -44,9 +44,6 @@ default-extensions:
   TypeFamilies
   ViewPatterns
 
-other-extensions:
-  TemplateHaskell
-
 ghc-options:
 - -Wall
 - -Wcompat
@@ -75,7 +72,6 @@ library:
   - exceptions
   - extra
   - filepath
-  - free
   - gitrev
   - hpp
   - json-rpc
