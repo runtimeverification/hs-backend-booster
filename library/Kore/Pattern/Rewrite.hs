@@ -60,7 +60,7 @@ getDL = RewriteM $ snd <$> ask
   failed), or a rewritten pattern with a new term and possibly new
   additional constraints.
 -}
-rewriteStep :: [Text] -> [Text] -> Pattern -> RewriteM RewriteFailed RewriteResult
+rewriteStep :: [Text] -> [Text] -> Pattern -> RewriteM RewriteFailed (RewriteResult Pattern)
 rewriteStep cutLabels terminalLabels pat = do
     let termIdx = computeTermIndex pat.term
     when (termIdx == None) $ throw TermIndexIsNone
@@ -79,7 +79,7 @@ rewriteStep cutLabels terminalLabels pat = do
     -- until a result is obtained or the entire rewrite fails.
     processGroups rules
   where
-    processGroups :: [[RewriteRule]] -> RewriteM RewriteFailed RewriteResult
+    processGroups :: [[RewriteRule]] -> RewriteM RewriteFailed (RewriteResult Pattern)
     processGroups [] =
         pure $ RewriteStuck pat
     processGroups (rules : rest) = do
@@ -276,26 +276,40 @@ isUncertain UnificationIsNotMatch{} = True
 isUncertain ConstraintIsBottom{} = False
 isUncertain ConstraintIsIndeterminate{} = True
 
+isUnificationUnclear :: RuleFailed -> Bool
+isUnificationUnclear RewriteUnificationUnclear{} = True
+isUnificationUnclear _other = False
+
 -- | Different rewrite results (returned from RPC execute endpoint)
-data RewriteResult
+data RewriteResult pat
     = -- | single result (internal use, not returned)
-      RewriteSingle Pattern
+      RewriteSingle pat
     | -- | branch point
-      RewriteBranch Pattern (NonEmpty Pattern)
+      RewriteBranch pat (NonEmpty pat)
     | -- | no rules could be applied, config is stuck
-      RewriteStuck Pattern
+      RewriteStuck pat
     | -- | cut point rule, return current (lhs) and single next state
-      RewriteCutPoint Text Pattern Pattern
+      RewriteCutPoint Text pat pat
     | -- | terminal rule, return rhs (final state reached)
-      RewriteTerminal Text Pattern
+      RewriteTerminal Text pat
     | -- | stopping because maximum depth has been reached
-      RewriteStopped Pattern
+      RewriteStopped pat
     | -- | unable to handle the current case with this rewriter
       -- (signalled by exceptions)
-      RewriteAborted Pattern
+      RewriteAborted pat
     deriving stock (Eq, Show)
 
-instance Pretty RewriteResult where
+instance Functor RewriteResult where
+    fmap f = \case
+        RewriteSingle pat -> RewriteSingle $ f pat
+        RewriteBranch pat pats -> RewriteBranch (f pat) (NE.map f pats)
+        RewriteStuck pat -> RewriteStuck $ f pat
+        RewriteCutPoint lbl pat next -> RewriteCutPoint lbl (f pat) (f next)
+        RewriteTerminal lbl pat -> RewriteTerminal lbl $ f pat
+        RewriteStopped pat -> RewriteStopped $ f pat
+        RewriteAborted pat -> RewriteAborted $ f pat
+
+instance Pretty (RewriteResult Pattern) where
     pretty (RewriteSingle pat) =
         showPattern "Rewritten to" pat
     pretty (RewriteBranch pat nexts) =
@@ -349,39 +363,54 @@ performRewrite ::
     -- | terminal rule labels
     [Text] ->
     Pattern ->
-    io (Natural, RewriteResult)
+    io (Natural, RewriteResult Pattern)
 performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
-    logRewrite $ "Rewriting pattern " <> pack (renderDefault $ pretty pat)
-    doSteps 0 pat
+    logRewrite $ "Rewriting pattern " <> prettyText pat
+    -- FIXME could simplify here and log simplified pattern
+    doSteps False 0 pat
   where
     logRewrite = logOther (LevelOther "Rewrite")
+
+    prettyText :: Pretty a => a -> Text
+    prettyText = pack . renderDefault . pretty
 
     depthReached n = maybe False (n >=) mbMaxDepth
 
     showCounter = (<> " steps.") . pack . show
 
-    doSteps :: Natural -> Pattern -> io (Natural, RewriteResult)
-    doSteps counter pat'
+    simplify :: Pattern -> Pattern
+    simplify p = p{term = simplifyConcrete mLlvmLibrary def p.term}
+
+    doSteps :: Bool -> Natural -> Pattern -> io (Natural, RewriteResult Pattern)
+    doSteps wasSimplified counter pat'
         | depthReached counter = do
             logRewrite $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
-            pure (counter, RewriteStopped pat')
+            pure (counter, (if wasSimplified then id else fmap simplify) $ RewriteStopped pat')
         | otherwise = do
-            let simplifiedPat =
-                    pat'{term = simplifyConcrete mLlvmLibrary def pat'.term}
-                res =
+            let res =
                     runRewriteM def mLlvmLibrary $
-                        rewriteStep cutLabels terminalLabels simplifiedPat
+                        rewriteStep cutLabels terminalLabels pat'
             case res of
                 Right (RewriteSingle single) ->
-                    doSteps (counter + 1) single
+                    doSteps False (counter + 1) single
                 Right terminal@RewriteTerminal{} -> do
                     logRewrite $ "Terminal rule reached after " <> showCounter (counter + 1)
-                    pure (counter + 1, terminal)
+                    pure (counter + 1, fmap simplify terminal)
                 Right other -> do
                     logRewrite $ "Stopped after " <> showCounter counter
-                    logRewrite $ pack (renderDefault $ pretty other)
-                    pure (counter, other)
+                    let simplifiedOther = fmap simplify other
+                    logRewrite $ prettyText simplifiedOther
+                    pure (counter, simplifiedOther)
+                -- if unification was unclear and the pattern was
+                -- unsimplified, simplify and retry rewriting once
+                Left (RuleApplicationUncertain ruleFails)
+                    | any isUnificationUnclear ruleFails
+                    , not wasSimplified -> do
+                        let simplifiedPat = simplify pat'
+                        logRewrite $ "Unification unclear for " <> prettyText pat'
+                        logRewrite $ "Retrying with simplified pattern " <> prettyText simplifiedPat
+                        doSteps True counter simplifiedPat
                 Left failure -> do
                     logRewrite $ "Aborted after " <> showCounter counter
-                    logRewrite $ pack (renderDefault $ pretty failure)
-                    pure (counter, RewriteAborted pat')
+                    logRewrite $ prettyText failure
+                    pure (counter, (if wasSimplified then id else fmap simplify) $ RewriteAborted pat')
