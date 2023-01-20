@@ -54,7 +54,7 @@ retractPattern (TermAndPredicate patt) = Just patt
 retractPattern _ = Nothing
 
 substituteInTerm :: Map Variable Term -> Term -> Term
-substituteInTerm substitution term = goSubst term
+substituteInTerm substitution = goSubst
   where
     goSubst t@(Term attributes tF)
         | Set.null attributes.variables = t

@@ -81,7 +81,7 @@ rewriteStep cutLabels terminalLabels pat = do
   where
     processGroups :: [[RewriteRule]] -> RewriteM RewriteFailed (RewriteResult Pattern)
     processGroups [] =
-        throw $ NoApplicableRules
+        throw NoApplicableRules
     processGroups (rules : rest) = do
         -- try all rules of the priority group
         (failures, results) <-
