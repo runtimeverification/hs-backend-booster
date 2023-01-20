@@ -54,9 +54,18 @@ retractPattern (TermAndPredicate patt) = Just patt
 retractPattern _ = Nothing
 
 substituteInTerm :: Map Variable Term -> Term -> Term
-substituteInTerm substitution = cata $ \case
-    VarF v -> fromMaybe (Var v) (Map.lookup v substitution)
-    other -> embed other
+substituteInTerm substitution term = goSubst term
+  where
+    goSubst t@(Term attributes tF)
+        | Set.null attributes.variables = t
+        | otherwise =
+            case tF of
+                VarF v ->
+                    fromMaybe t (Map.lookup v substitution)
+                DomainValueF{} -> t
+                SymbolApplicationF sym sorts args ->
+                    SymbolApplication sym sorts $ map goSubst args
+                AndTermF t1 t2 -> AndTerm (goSubst t1) (goSubst t2)
 
 substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
 substituteInPredicate substitution = cata $ \case
