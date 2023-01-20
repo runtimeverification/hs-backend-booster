@@ -27,10 +27,6 @@ import Kore.Prettyprinter qualified as KPretty
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
 
-----------------------------------------
-
-----------------------------------------
-
 type VarName = Text
 type SymbolName = Text
 type SortName = Text

@@ -366,7 +366,6 @@ performRewrite ::
     io (Natural, RewriteResult Pattern)
 performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
     logRewrite $ "Rewriting pattern " <> prettyText pat
-    -- FIXME could simplify here and log simplified pattern
     doSteps False 0 pat
   where
     logRewrite = logOther (LevelOther "Rewrite")
