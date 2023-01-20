@@ -44,10 +44,7 @@
               inherit index-state;
               version = "0.8.2.0";
             };
-            hlint = {
-              inherit index-state;
-              version = "3.4.1";
-            };
+            hlint = "latest";
           };
           nativeBuildInputs = with nixpkgs.legacyPackages.${pkgs.system}; [
             nixpkgs-fmt
