@@ -113,8 +113,8 @@ type instance Base Term = TermF
 instance Recursive Term where
     project (Term _ t) = t
 
-extract :: Term -> TermAttributes
-extract (Term a _) = a
+getAttributes :: Term -> TermAttributes
+getAttributes (Term a _) = a
 
 instance Corecursive Term where
     embed (AndTermF t1 t2) = AndTerm t1 t2
@@ -132,7 +132,7 @@ pattern SymbolApplication :: Symbol -> [Sort] -> [Term] -> Term
 pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts args)
     where
         SymbolApplication sym sorts args =
-            let argAttributes = mconcat $ map extract args
+            let argAttributes = mconcat $ map getAttributes args
                 newEvaluatedFlag =
                     case sym.attributes.symbolType of
                         -- constructors and injections are evaluated if their arguments are
