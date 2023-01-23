@@ -13,6 +13,7 @@ module Kore.Pattern.Base (
 import Control.DeepSeq (NFData (..))
 import Data.Either (fromRight)
 import Data.Functor.Foldable
+import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -111,8 +112,8 @@ type instance Base Term = TermF
 instance Recursive Term where
     project (Term _ t) = t
 
-extract :: Term -> TermAttributes
-extract (Term a _) = a
+getAttributes :: Term -> TermAttributes
+getAttributes (Term a _) = a
 
 instance Corecursive Term where
     embed (AndTermF t1 t2) = AndTerm t1 t2
@@ -130,7 +131,7 @@ pattern SymbolApplication :: Symbol -> [Sort] -> [Term] -> Term
 pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts args)
     where
         SymbolApplication sym sorts args =
-            let argAttributes = mconcat $ map extract args
+            let argAttributes = mconcat $ map getAttributes args
                 newEvaluatedFlag =
                     case sym.attributes.symbolType of
                         -- constructors and injections are evaluated if their arguments are
@@ -232,6 +233,8 @@ instance Corecursive Predicate where
     embed (NotF p) = Not p
     embed (OrF p1 p2) = Or p1 p2
     embed TopF = Top
+
+--------------------
 
 --------------------
 

@@ -167,7 +167,7 @@ parsePostProcessing =
     ( Expect
         <$> ( flag False True $
                 long "regenerate"
-                    <> help "regenrate the expected file"
+                    <> help "regenerate the expected file"
             )
         <*> strOption
             ( long "expect"

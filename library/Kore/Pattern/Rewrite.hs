@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveFunctor #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -299,16 +301,7 @@ data RewriteResult pat
       -- (signalled by exceptions)
       RewriteAborted pat
     deriving stock (Eq, Show)
-
-instance Functor RewriteResult where
-    fmap f = \case
-        RewriteSingle pat -> RewriteSingle $ f pat
-        RewriteBranch pat pats -> RewriteBranch (f pat) (NE.map f pats)
-        RewriteStuck pat -> RewriteStuck $ f pat
-        RewriteCutPoint lbl pat next -> RewriteCutPoint lbl (f pat) (f next)
-        RewriteTerminal lbl pat -> RewriteTerminal lbl $ f pat
-        RewriteStopped pat -> RewriteStopped $ f pat
-        RewriteAborted pat -> RewriteAborted $ f pat
+    deriving (Functor)
 
 instance Pretty (RewriteResult Pattern) where
     pretty (RewriteSingle pat) =
