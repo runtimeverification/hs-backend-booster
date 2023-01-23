@@ -24,8 +24,8 @@
       allNixpkgsFor = perSystem nixpkgsForSystem;
       nixpkgsFor = system: allNixpkgsFor.${system};
       index-state = "2023-01-19T00:00:00Z";
-
-      boosterBackendFor = compiler: pkgs:
+      
+      boosterBackendFor = { compiler, pkgs, profiling ? false }:
         pkgs.haskell-nix.cabalProject {
           name = "hs-backend-booster";
           compiler-nix-name = compiler;
@@ -42,12 +42,8 @@
           shell = {
             withHoogle = true;
             tools = {
-              cabal = {
-                inherit index-state;
-              };
-              haskell-language-server = {
-                inherit index-state;
-              };
+              cabal = { inherit index-state; };
+              haskell-language-server = { inherit index-state; };
               fourmolu = {
                 inherit index-state;
                 version = "0.8.2.0";
@@ -61,38 +57,37 @@
             ];
             shellHook = "rm -f *.cabal && hpack";
           };
-          modules = [
-          {
+          modules = [{
             enableProfiling = profiling;
             enableLibraryProfiling = profiling;
-            
-            packages = {
-              ghc.components.library.doHaddock = false;
-            };
-          }
-        ];
-      };
-      
+
+            packages = { ghc.components.library.doHaddock = false; };
+          }];
+        };
+
       defaultCompiler = "ghc925";
 
       # Get flake outputs for different GHC versions
-      let compilers = [ defaultCompiler "ghc924" ];
-      in
-      
-      builtins.listToAttrs
-        (
-          lib.lists.forEach compilers
-            (compiler: lib.attrsets.nameValuePair
-              compiler
-              ((boosterBackendFor {inherit compiler pkgs;}).flake { })
-            ) ++
-          lib.lists.forEach compilers
-            (compiler: lib.attrsets.nameValuePair
-              (compiler + "-prof")
-              ((boosterBackendFor {inherit compiler pkgs; profiling = true;}).flake { })
-            )
-        );
+      flakesFor = pkgs:
+        let compilers = [ defaultCompiler "ghc924" ];
 
+        in builtins.listToAttrs (lib.lists.forEach compilers (compiler:
+          lib.attrsets.nameValuePair compiler
+          ((boosterBackendFor { inherit compiler pkgs; }).flake { }))
+          ++ lib.lists.forEach compilers (compiler:
+            lib.attrsets.nameValuePair (compiler + "-prof")
+            ((boosterBackendFor {
+              inherit compiler pkgs;
+              profiling = true;
+            }).flake { })));
+
+      # Takes an attribute set mapping compiler versions to `flake`s generated
+      # by `haskell.nix` (see `flakesFor` above) and suffixes each derivation
+      # in all flake outputs selected by `attr` with the corresponding compiler
+      # version, then flattens the resulting structure to combine all derivations
+      # into a single set
+      #
+      #    collectOutputs
       #      "checks"
       #      {
       #        ghc8107 = { checks = { x:y:z = <drv>; }; };
