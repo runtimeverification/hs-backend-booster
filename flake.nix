@@ -23,7 +23,7 @@
         };
       allNixpkgsFor = perSystem nixpkgsForSystem;
       nixpkgsFor = system: allNixpkgsFor.${system};
-      index-state = "2022-11-16T00:00:00Z";
+      index-state = "2023-01-19T00:00:00Z";
 
       boosterBackendFor = compiler: pkgs:
         pkgs.haskell-nix.cabalProject {
@@ -42,16 +42,17 @@
           shell = {
             withHoogle = true;
             tools = {
-              cabal = { inherit index-state; };
-              haskell-language-server = { inherit index-state; };
+              cabal = {
+                inherit index-state;
+              };
+              haskell-language-server = {
+                inherit index-state;
+              };
               fourmolu = {
                 inherit index-state;
                 version = "0.8.2.0";
               };
-              hlint = {
-                inherit index-state;
-                version = "3.4.1";
-              };
+              hlint = "latest";
             };
             nativeBuildInputs = with nixpkgs.legacyPackages.${pkgs.system}; [
               nixpkgs-fmt
@@ -60,10 +61,15 @@
             ];
             shellHook = "rm -f *.cabal && hpack";
           };
-          modules =
-            [{ packages = { ghc.components.library.doHaddock = false; }; }];
-        };
-
+          modules = [
+          {
+            packages = {
+              ghc.components.library.doHaddock = false;
+            };
+          }
+        ];
+      };
+      
       defaultCompiler = "ghc925";
 
       # Get flake outputs for different GHC versions
