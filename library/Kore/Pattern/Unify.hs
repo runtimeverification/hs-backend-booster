@@ -146,7 +146,6 @@ unify1 ::
 unify1
     d1@(DomainValue s1 t1)
     d2@(DomainValue s2 t2) =
-        {-# SCC "unify1.dvEquality" #-}
         do
             unless (t1 == t2) $
                 failWith (DifferentValues d1 d2)
