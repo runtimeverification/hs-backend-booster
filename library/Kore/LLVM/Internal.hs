@@ -88,14 +88,14 @@ mkAPI dlib = flip runReaderT dlib $ do
     freePattern <- {-# SCC "LLVM.pattern.free" #-} korePatternFreeFunPtr
 
     newCompositePattern <- koreCompositePatternNew
-    let new name =
+    let newPattern name =
             {-# SCC "LLVM.pattern.new" #-}
             liftIO $
                 C.withCString (Text.unpack name) $
                     newCompositePattern >=> newForeignPtr freePattern
 
     addArgumentCompositePattern <- koreCompositePatternAddArgument
-    let addArgument parent child =
+    let addArgumentPattern parent child =
             liftIO $
                 {-# SCC "LLVM.pattern.addArgument" #-}
                 do
@@ -119,62 +119,62 @@ mkAPI dlib = flip runReaderT dlib $ do
     compositePatternFromSymbol <- koreCompositePatternFromSymbol
     let fromSymbol sym = {-# SCC "LLVM.pattern.fromSymbol" #-} liftIO $ withForeignPtr sym $ compositePatternFromSymbol >=> newForeignPtr freePattern
 
-    dump' <- korePatternDump
-    let dump ptr =
+    dumpPattern' <- korePatternDump
+    let dumpPattern ptr =
             {-# SCC "LLVM.pattern.dump" #-}
             liftIO $ withForeignPtr ptr $ \rawPtr -> do
-                strPtr <- dump' rawPtr
+                strPtr <- dumpPattern' rawPtr
                 str <- C.peekCString strPtr
                 Foreign.free strPtr
                 pure str
-    let patt = KorePatternAPI{new, addArgument, string, token, fromSymbol, dump}
+    let patt = KorePatternAPI{new = newPattern, addArgument = addArgumentPattern, string, token, fromSymbol, dump = dumpPattern}
 
     freeSymbol <- {-# SCC "LLVM.symbol.free" #-} koreSymbolFreeFunPtr
 
-    newSymbol <- koreSymbolNew
-    let new name =
+    newSymbol' <- koreSymbolNew
+    let newSymbol name =
             {-# SCC "LLVM.symbol.new" #-}
             liftIO $
                 C.withCString (Text.unpack name) $
-                    newSymbol >=> newForeignPtr freeSymbol
+                    newSymbol' >=> newForeignPtr freeSymbol
 
-    addArgumentSymbol <- koreSymbolAddFormalArgument
-    let addArgument sym sort =
+    addArgumentSymbol' <- koreSymbolAddFormalArgument
+    let addArgumentSymbol sym sort =
             liftIO $
                 {-# SCC "LLVM.symbol.addArgument" #-}
                 do
-                    withForeignPtr sym $ \rawSym -> withForeignPtr sort $ addArgumentSymbol rawSym
+                    withForeignPtr sym $ \rawSym -> withForeignPtr sort $ addArgumentSymbol' rawSym
                     pure sym
 
-    let symbol = KoreSymbolAPI{new, addArgument}
+    let symbol = KoreSymbolAPI{new = newSymbol, addArgument = addArgumentSymbol}
 
     freeSort <- {-# SCC "LLVM.sort.free" #-} koreSortFreeFunPtr
 
-    newSort <- koreCompositeSortNew
-    let new name =
+    newSort' <- koreCompositeSortNew
+    let newSort name =
             {-# SCC "LLVM.sort.new" #-}
             liftIO $
                 C.withCString (Text.unpack name) $
-                    newSort >=> newForeignPtr freeSort
+                    newSort' >=> newForeignPtr freeSort
 
-    addArgumentSort <- koreCompositeSortAddArgument
-    let addArgument parent child =
+    addArgumentSort' <- koreCompositeSortAddArgument
+    let addArgumentSort parent child =
             liftIO $
                 {-# SCC "LLVM.sort.addArgument" #-}
                 do
-                    withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgumentSort rawParent
+                    withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgumentSort' rawParent
                     pure parent
 
-    dump' <- koreSortDump
-    let dump ptr =
+    dumpSort' <- koreSortDump
+    let dumpSort ptr =
             {-# SCC "LLVM.sort.dump" #-}
             liftIO $ withForeignPtr ptr $ \rawPtr -> do
-                strPtr <- dump' rawPtr
+                strPtr <- dumpSort' rawPtr
                 str <- C.peekCString strPtr
                 Foreign.free strPtr
                 pure str
 
-    let sort = KoreSortAPI{new, addArgument, dump}
+    let sort = KoreSortAPI{new = newSort, addArgument = addArgumentSort, dump = dumpSort}
 
     simplifyBool' <- koreSimplifyBool
     let simplifyBool p = {-# SCC "LLVM.simplifyBool" #-} liftIO $ withForeignPtr p $ fmap (== 1) <$> simplifyBool'
