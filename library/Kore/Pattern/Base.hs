@@ -189,52 +189,7 @@ data Predicate
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
-data PredicateF p
-    = AndPredicateF p p
-    | BottomF
-    | CeilF Term
-    | EqualsTermF Term Term
-    | EqualsPredicateF p p
-    | ExistsF VarName p
-    | ForallF VarName p
-    | IffF p p
-    | ImpliesF p p
-    | InF Term Term
-    | NotF p
-    | OrF p p
-    | TopF
-    deriving (Functor, Foldable, Traversable)
-type instance Base Predicate = PredicateF
-instance Recursive Predicate where
-    project (AndPredicate p1 p2) = AndPredicateF p1 p2
-    project Bottom = BottomF
-    project (Ceil t) = CeilF t
-    project (EqualsTerm t1 t2) = EqualsTermF t1 t2
-    project (EqualsPredicate p1 p2) = EqualsPredicateF p1 p2
-    project (Exists v p) = ExistsF v p
-    project (Forall v p) = ForallF v p
-    project (Iff p1 p2) = IffF p1 p2
-    project (Implies p1 p2) = ImpliesF p1 p2
-    project (In t1 t2) = InF t1 t2
-    project (Not p) = NotF p
-    project (Or p1 p2) = OrF p1 p2
-    project Top = TopF
-instance Corecursive Predicate where
-    embed (AndPredicateF p1 p2) = AndPredicate p1 p2
-    embed BottomF = Bottom
-    embed (CeilF t) = Ceil t
-    embed (EqualsTermF t1 t2) = EqualsTerm t1 t2
-    embed (EqualsPredicateF p1 p2) = EqualsPredicate p1 p2
-    embed (ExistsF v p) = Exists v p
-    embed (ForallF v p) = Forall v p
-    embed (IffF p1 p2) = Iff p1 p2
-    embed (ImpliesF p1 p2) = Implies p1 p2
-    embed (InF t1 t2) = In t1 t2
-    embed (NotF p) = Not p
-    embed (OrF p1 p2) = Or p1 p2
-    embed TopF = Top
-
---------------------
+makeBaseFunctor ''Predicate
 
 --------------------
 
