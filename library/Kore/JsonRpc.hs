@@ -42,13 +42,13 @@ import Numeric.Natural
 
 import Kore.Definition.Base (KoreDefinition (..))
 import Kore.JsonRpc.Base
+import Kore.LLVM.Internal qualified as LLVM
 import Kore.Network.JsonRpc (jsonrpcTCPServer)
 import Kore.Pattern.Base (Pattern)
 import Kore.Pattern.Rewrite (RewriteResult (..), performRewrite)
 import Kore.Syntax.Json (KoreJson (..), addHeader)
 import Kore.Syntax.Json.Externalise (externalisePattern)
 import Kore.Syntax.Json.Internalise (PatternError, internalisePattern)
-import Kore.LLVM.Internal qualified as LLVM
 
 respond ::
     forall m.

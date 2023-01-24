@@ -15,7 +15,7 @@ import Data.Text (Text, pack)
 import Options.Applicative
 
 import Kore.JsonRpc (runServer)
-import Kore.LLVM.Internal (withDLib, mkAPI)
+import Kore.LLVM.Internal (mkAPI, withDLib)
 import Kore.Syntax.ParsedKore (loadDefinition)
 import Kore.VersionInfo (VersionInfo (..), versionInfo)
 

@@ -9,8 +9,8 @@ module Kore.Pattern.Simplify (
 ) where
 
 import Kore.Definition.Base
-import Kore.LLVM.Internal qualified as LLVM
 import Kore.LLVM (simplifyBool, simplifyTerm)
+import Kore.LLVM.Internal qualified as LLVM
 import Kore.Pattern.Base
 import Kore.Pattern.Util (isConcrete, sortOfTerm)
 

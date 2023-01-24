@@ -1,5 +1,5 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 module Kore.LLVM.Internal (API (..), KorePatternAPI (..), runLLVM, withDLib, mkAPI, ask, marshallTerm, marshallSort) where
@@ -85,100 +85,117 @@ runLLVM api (LLVM m) = runReaderT m api
 
 mkAPI :: Linker.DL -> IO API
 mkAPI dlib = flip runReaderT dlib $ do
-
     freePattern <- {-# SCC "LLVM.pattern.free" #-} korePatternFreeFunPtr
 
     newCompositePattern <- koreCompositePatternNew
-    let new name = {-# SCC "LLVM.pattern.new" #-}
+    let new name =
+            {-# SCC "LLVM.pattern.new" #-}
             liftIO $
                 C.withCString (Text.unpack name) $
                     newCompositePattern >=> newForeignPtr freePattern
 
     addArgumentCompositePattern <- koreCompositePatternAddArgument
-    let addArgument parent child = liftIO $ {-# SCC "LLVM.pattern.addArgument" #-} do
-            withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgumentCompositePattern rawParent
-            finalizeForeignPtr child
-            pure parent
+    let addArgument parent child =
+            liftIO $
+                {-# SCC "LLVM.pattern.addArgument" #-}
+                do
+                    withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgumentCompositePattern rawParent
+                    finalizeForeignPtr child
+                    pure parent
 
     newString <- koreStringPatternNewWithLen
-    let string = KoreStringPatternAPI $ \name -> {-# SCC "LLVM.pattern.string" #-} liftIO $ C.withCStringLen (Text.unpack name) $ \(rawStr, len) ->
-            newString rawStr (fromIntegral len) >>= newForeignPtr freePattern
+    let string = KoreStringPatternAPI $ \name ->
+            {-# SCC "LLVM.pattern.string" #-}
+            liftIO $ C.withCStringLen (Text.unpack name) $ \(rawStr, len) ->
+                newString rawStr (fromIntegral len) >>= newForeignPtr freePattern
 
     newToken <- korePatternNewTokenWithLen
-    let token = KoreTokenPatternAPI $ \name sort -> {-# SCC "LLVM.pattern.token" #-} liftIO $ C.withCStringLen (Text.unpack name) $ \(rawName, len) ->
-            withForeignPtr sort $
-                newToken rawName (fromIntegral len) >=> newForeignPtr freePattern
+    let token = KoreTokenPatternAPI $ \name sort ->
+            {-# SCC "LLVM.pattern.token" #-}
+            liftIO $ C.withCStringLen (Text.unpack name) $ \(rawName, len) ->
+                withForeignPtr sort $
+                    newToken rawName (fromIntegral len) >=> newForeignPtr freePattern
 
     compositePatternFromSymbol <- koreCompositePatternFromSymbol
     let fromSymbol sym = {-# SCC "LLVM.pattern.fromSymbol" #-} liftIO $ withForeignPtr sym $ compositePatternFromSymbol >=> newForeignPtr freePattern
 
     dump' <- korePatternDump
-    let dump ptr = {-# SCC "LLVM.pattern.dump" #-} liftIO $ withForeignPtr ptr $ \rawPtr -> do
-            strPtr <- dump' rawPtr
-            str <- C.peekCString strPtr
-            Foreign.free strPtr
-            pure str
+    let dump ptr =
+            {-# SCC "LLVM.pattern.dump" #-}
+            liftIO $ withForeignPtr ptr $ \rawPtr -> do
+                strPtr <- dump' rawPtr
+                str <- C.peekCString strPtr
+                Foreign.free strPtr
+                pure str
     let patt = KorePatternAPI{new, addArgument, string, token, fromSymbol, dump}
 
     freeSymbol <- {-# SCC "LLVM.symbol.free" #-} koreSymbolFreeFunPtr
 
     newSymbol <- koreSymbolNew
-    let new name = {-# SCC "LLVM.symbol.new" #-}
-            liftIO $ 
+    let new name =
+            {-# SCC "LLVM.symbol.new" #-}
+            liftIO $
                 C.withCString (Text.unpack name) $
                     newSymbol >=> newForeignPtr freeSymbol
 
     addArgumentSymbol <- koreSymbolAddFormalArgument
-    let addArgument sym sort = liftIO $ {-# SCC "LLVM.symbol.addArgument" #-} do
-            withForeignPtr sym $ \rawSym -> withForeignPtr sort $ addArgumentSymbol rawSym
-            pure sym
+    let addArgument sym sort =
+            liftIO $
+                {-# SCC "LLVM.symbol.addArgument" #-}
+                do
+                    withForeignPtr sym $ \rawSym -> withForeignPtr sort $ addArgumentSymbol rawSym
+                    pure sym
 
     let symbol = KoreSymbolAPI{new, addArgument}
 
     freeSort <- {-# SCC "LLVM.sort.free" #-} koreSortFreeFunPtr
 
     newSort <- koreCompositeSortNew
-    let new name = {-# SCC "LLVM.sort.new" #-}
-            liftIO $ 
+    let new name =
+            {-# SCC "LLVM.sort.new" #-}
+            liftIO $
                 C.withCString (Text.unpack name) $
                     newSort >=> newForeignPtr freeSort
 
     addArgumentSort <- koreCompositeSortAddArgument
-    let addArgument parent child = liftIO $ {-# SCC "LLVM.sort.addArgument" #-}  do
-            withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgumentSort rawParent
-            pure parent
+    let addArgument parent child =
+            liftIO $
+                {-# SCC "LLVM.sort.addArgument" #-}
+                do
+                    withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgumentSort rawParent
+                    pure parent
 
     dump' <- koreSortDump
-    let dump ptr = {-# SCC "LLVM.sort.dump" #-} liftIO $ withForeignPtr ptr $ \rawPtr -> do
-            strPtr <- dump' rawPtr
-            str <- C.peekCString strPtr
-            Foreign.free strPtr
-            pure str
+    let dump ptr =
+            {-# SCC "LLVM.sort.dump" #-}
+            liftIO $ withForeignPtr ptr $ \rawPtr -> do
+                strPtr <- dump' rawPtr
+                str <- C.peekCString strPtr
+                Foreign.free strPtr
+                pure str
 
     let sort = KoreSortAPI{new, addArgument, dump}
-
 
     simplifyBool' <- koreSimplifyBool
     let simplifyBool p = {-# SCC "LLVM.simplifyBool" #-} liftIO $ withForeignPtr p $ fmap (== 1) <$> simplifyBool'
 
-
     simplify' <- koreSimplify
-    let simplify pat srt = {-# SCC "LLVM.simplify" #-} liftIO $
-            withForeignPtr pat $ \patPtr ->
-                withForeignPtr srt $ \sortPtr ->
-                    alloca $ \lenPtr ->
-                        alloca $ \strPtr -> do
-                            simplify' patPtr sortPtr strPtr lenPtr
-                            len <- fromIntegral <$> peek lenPtr
-                            cstr <- peek strPtr
-                            packCStringLen (cstr, len)
+    let simplify pat srt =
+            {-# SCC "LLVM.simplify" #-}
+            liftIO $
+                withForeignPtr pat $ \patPtr ->
+                    withForeignPtr srt $ \sortPtr ->
+                        alloca $ \lenPtr ->
+                            alloca $ \strPtr -> do
+                                simplify' patPtr sortPtr strPtr lenPtr
+                                len <- fromIntegral <$> peek lenPtr
+                                cstr <- peek strPtr
+                                packCStringLen (cstr, len)
 
     pure API{patt, symbol, sort, simplifyBool, simplify}
 
-
 ask :: LLVM API
 ask = LLVM Reader.ask
-
 
 marshallSymbol :: Symbol -> [Sort] -> LLVM KoreSymbolPtr
 marshallSymbol sym sorts = do

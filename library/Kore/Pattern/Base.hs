@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE PatternSynonyms #-}
 
@@ -86,8 +87,8 @@ data TermF t
    patterns below).
 -}
 data TermAttributes = TermAttributes
-    { variables :: Set Variable
-    , isEvaluated :: Bool
+    { variables :: !(Set Variable)
+    , isEvaluated :: !Bool
     }
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
@@ -241,7 +242,7 @@ instance Corecursive Predicate where
 -- | A term (configuration) constrained by a number of predicates.
 data Pattern = Pattern
     { term :: Term
-    , constraints :: [Predicate]
+    , constraints :: ![Predicate]
     }
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)

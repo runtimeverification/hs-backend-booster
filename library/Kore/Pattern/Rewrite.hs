@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveFunctor #-}
 
 {- |
@@ -29,14 +30,13 @@ import Prettyprinter
 
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
+import Kore.LLVM.Internal qualified as LLVM
 import Kore.Pattern.Base
 import Kore.Pattern.Index (TermIndex (..), computeTermIndex)
 import Kore.Pattern.Simplify
 import Kore.Pattern.Unify
 import Kore.Pattern.Util
 import Kore.Prettyprinter
-import Kore.LLVM.Internal qualified as LLVM
-
 
 newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe LLVM.API) (Except err) a}
     deriving newtype (Functor, Applicative, Monad)
@@ -375,7 +375,7 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
     simplify p = p{term = simplifyConcrete mLlvmLibrary def p.term}
 
     doSteps :: Bool -> Natural -> Pattern -> io (Natural, RewriteResult Pattern)
-    doSteps wasSimplified counter pat'
+    doSteps wasSimplified !counter pat'
         | depthReached counter = do
             logRewrite $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
             pure (counter, (if wasSimplified then id else fmap simplify) $ RewriteStopped pat')
