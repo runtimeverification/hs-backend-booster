@@ -72,7 +72,13 @@ respond def@KoreDefinition{} mLlvmLibrary =
                     let cutPoints = fromMaybe [] req.cutPointRules
                         terminals = fromMaybe [] req.terminalRules
                         mbDepth = fmap getNat req.maxDepth
-                    execResponse <$> performRewrite def mLlvmLibrary mbDepth cutPoints terminals pat
+                    res <- performRewrite def mLlvmLibrary mbDepth cutPoints terminals pat
+                    -- cleanup the LLVM backend memory
+                    case mLlvmLibrary of
+                        Just api -> liftIO $ LLVM.freeLlvmMemory api
+                        Nothing -> pure ()
+                    pure $ execResponse res
+
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left $ ErrorObj "Cancel request unsupported in batch mode" (-32001) Null
