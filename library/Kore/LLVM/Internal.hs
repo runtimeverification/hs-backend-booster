@@ -93,6 +93,9 @@ runLLVM api (LLVM m) = runReaderT m api
 
 mkAPI :: Linker.DL -> IO API
 mkAPI dlib = flip runReaderT dlib $ do
+    initLLVM <- kllvmInit
+    liftIO initLLVM
+
     freePattern <- {-# SCC "LLVM.pattern.free" #-} korePatternFreeFunPtr
 
     newCompositePattern <- koreCompositePatternNew
@@ -214,11 +217,11 @@ marshallSymbol :: Symbol -> [Sort] -> LLVM KoreSymbolPtr
 marshallSymbol sym sorts = do
     kore <- ask
     sym' <- liftIO $ kore.symbol.new sym.name
-    liftIO $ Text.appendFile "./trace.txt" ("kore_symbol* " <> hshNm "sym" sym <> " = kore_symbol_new(\"" <> sym.name <> "\");\n")
+    -- liftIO $ Text.appendFile "./trace.txt" ("kore_symbol* " <> hshNm "sym" sym <> " = kore_symbol_new(\"" <> sym.name <> "\");\n")
     res <- foldM (\symbol sort' -> do
         sort <- marshallSort sort'
         -- liftIO $ modifyIORef' kore.sort.cache $ HM.delete sort'
-        liftIO $ Text.appendFile "./trace.txt" ("kore_symbol_add_formal_argument(" <> hshNm "sym" sym <> ", " <> hshNm "srt" sort' <> ");\n")
+        -- liftIO $ Text.appendFile "./trace.txt" ("kore_symbol_add_formal_argument(" <> hshNm "sym" sym <> ", " <> hshNm "srt" sort' <> ");\n")
         liftIO $ kore.symbol.addArgument symbol sort) sym' sorts
     -- liftIO $ modifyIORef' kore.symbol.cache $ HM.insert (sym,sorts) res
     pure res
@@ -235,10 +238,10 @@ marshallSort = \case
             Just ptr -> pure ptr
             Nothing -> do
                 sort <- liftIO $ kore.sort.new name
-                liftIO $ Text.appendFile "./trace.txt" ("kore_sort* " <> hshNm "srt" s <> " = kore_composite_sort_new(\"" <> name <> "\");\n")
+                -- liftIO $ Text.appendFile "./trace.txt" ("kore_sort* " <> hshNm "srt" s <> " = kore_composite_sort_new(\"" <> name <> "\");\n")
                 forM_ args $ \s' -> do
                     sort' <- marshallSort s'
-                    liftIO $ Text.appendFile "./trace.txt" ("kore_composite_sort_add_argument(" <>  hshNm "srt" s <> ", " <> hshNm "srt" s' <> ");\n")
+                    -- liftIO $ Text.appendFile "./trace.txt" ("kore_composite_sort_add_argument(" <>  hshNm "srt" s <> ", " <> hshNm "srt" s' <> ");\n")
                     liftIO $ kore.sort.addArgument sort sort'
                 liftIO $ modifyIORef' kore.sort.cache $ HM.insert s sort
                 pure sort
@@ -249,35 +252,35 @@ marshallTerm t = do
     kore <- ask
     case t of
         SymbolApplication symbol sorts trms -> do
-            liftIO $ Text.appendFile "./trace.txt" ("// begin " <> hshNm "trm" t <> "\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("// begin " <> hshNm "trm" t <> "\n")
             trm <- liftIO . kore.patt.fromSymbol =<< marshallSymbol symbol sorts
-            liftIO $ Text.appendFile "./trace.txt" ("kore_pattern* " <> hshNm "pat" t <> " = kore_composite_pattern_from_symbol(" <> hshNm "sym" symbol <> ");\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("kore_pattern* " <> hshNm "pat" t <> " = kore_composite_pattern_from_symbol(" <> hshNm "sym" symbol <> ");\n")
             forM_ trms $ \childT' -> do
                 childT <- marshallTerm childT'
                 ret <- liftIO $ kore.patt.addArgument trm childT
-                liftIO $ Text.appendFile "./trace.txt" ("kore_composite_pattern_add_argument(" <> hshNm "pat" t <> ", " <> hshNm "pat" childT' <> ");\n")
+                -- liftIO $ Text.appendFile "./trace.txt" ("kore_composite_pattern_add_argument(" <> hshNm "pat" t <> ", " <> hshNm "pat" childT' <> ");\n")
                 pure ret
-            liftIO $ Text.appendFile "./trace.txt" ("// end " <> hshNm "trm" t <> "\n\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("// end " <> hshNm "trm" t <> "\n\n")
             pure trm
         AndTerm l r -> do
-            liftIO $ Text.appendFile "./trace.txt" ("// begin " <> hshNm "trm" t <> "\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("// begin " <> hshNm "trm" t <> "\n")
             andSym <- liftIO $ kore.symbol.new "\\and"
-            liftIO $ Text.appendFile "./trace.txt" ("kore_symbol* " <> hshNm "and" t <> " = kore_symbol_new(\"\\and\");\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("kore_symbol* " <> hshNm "and" t <> " = kore_symbol_new(\"\\and\");\n")
             void $ liftIO . kore.symbol.addArgument andSym =<< marshallSort (sortOfTerm l)
-            liftIO $ Text.appendFile "./trace.txt" ("kore_symbol_add_formal_argument(" <> hshNm "and" t <> ", " <> hshNm "srt" (sortOfTerm l) <> ");\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("kore_symbol_add_formal_argument(" <> hshNm "and" t <> ", " <> hshNm "srt" (sortOfTerm l) <> ");\n")
             andTrm <- liftIO $ kore.patt.fromSymbol andSym
-            liftIO $ Text.appendFile "./trace.txt" ("kore_pattern* " <> hshNm "pat" t <> " = kore_composite_pattern_from_symbol(" <> hshNm "and" t <> ");\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("kore_pattern* " <> hshNm "pat" t <> " = kore_composite_pattern_from_symbol(" <> hshNm "and" t <> ");\n")
             void $ liftIO . kore.patt.addArgument andTrm =<< marshallTerm l
-            liftIO $ Text.appendFile "./trace.txt" ("kore_composite_pattern_add_argument(" <> hshNm "pat" t <> ", " <> hshNm "pat" l <> ");\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("kore_composite_pattern_add_argument(" <> hshNm "pat" t <> ", " <> hshNm "pat" l <> ");\n")
             trm <- liftIO . kore.patt.addArgument andTrm =<< marshallTerm r
-            liftIO $ Text.appendFile "./trace.txt" ("kore_composite_pattern_add_argument(" <> hshNm "pat" t <> ", " <> hshNm "pat" r <> ");\n")
-            liftIO $ Text.appendFile "./trace.txt" ("// end " <> hshNm "trm" t <> "\n\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("kore_composite_pattern_add_argument(" <> hshNm "pat" t <> ", " <> hshNm "pat" r <> ");\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("// end " <> hshNm "trm" t <> "\n\n")
             pure trm
         DomainValue sort' val -> do
-            liftIO $ Text.appendFile "./trace.txt" ("// begin " <> hshNm "trm" t <> "\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("// begin " <> hshNm "trm" t <> "\n")
             sort <- marshallSort sort'
-            liftIO $ Text.appendFile "./trace.txt" ("kore_pattern* " <> hshNm "pat" t <> " = kore_pattern_new_token(\"" <> val <> "\", " <> hshNm "srt" sort' <> ");\n")
-            liftIO $ Text.appendFile "./trace.txt" ("// end " <> hshNm "trm" t <> "\n\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("kore_pattern* " <> hshNm "pat" t <> " = kore_pattern_new_token(\"" <> val <> "\", " <> hshNm "srt" sort' <> ");\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("// end " <> hshNm "trm" t <> "\n\n")
             trm <- liftIO $ kore.patt.token.new val sort
             pure trm
         Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"
@@ -285,10 +288,10 @@ marshallTerm t = do
 
 freeLlvmMemory :: API -> IO ()
 freeLlvmMemory api = do
-    cache <- readIORef api.sort.cache
-    writeIORef api.sort.cache mempty
-    forM_ (toList $ fromList $ HM.elems cache) finalizeForeignPtr
+    -- cache <- readIORef api.sort.cache
+    -- writeIORef api.sort.cache mempty
+    -- forM_ (toList $ fromList $ HM.elems cache) finalizeForeignPtr
     api.freeAllMemory
-    Text.appendFile "./trace.txt" ("\n\n\nkllvm_free_all_memory();\n\n\n")
+    -- Text.appendFile "./trace.txt" ("\n\n\nkllvm_free_all_memory();\n\n\n")
 
 
