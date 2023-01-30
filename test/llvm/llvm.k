@@ -1,5 +1,10 @@
 module LLVM
   imports INT
+  imports BYTES
+  imports BOOL
+  imports MAP
+  imports SET
+  imports K-EQUAL
 
   syntax Num ::= Even | Odd
   syntax Even ::= Zero() | Two() | Four() | Six() | Eight() | Ten()
@@ -21,5 +26,6 @@ module LLVM
 
   rule eval(Zero()) => 0
   rule eval(SomeNum) => 1 +Int eval(pred(SomeNum))
+    requires notBool SomeNum ==K Zero()
 
 endmodule
