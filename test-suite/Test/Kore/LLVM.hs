@@ -15,7 +15,10 @@ import Test.Hspec
 import Test.Tasty
 import Test.Tasty.Hspec
 
-import Kore.LLVM.Internal
+import Kore.Definition.Attributes.Base
+import Kore.LLVM as LLVM
+import Kore.LLVM.Internal as Internal
+import Kore.Pattern.Base
 
 -- A prerequisite for all tests in this suite is that a fixed K
 -- definition was compiled in LLVM 'c' mode to produce a dynamic
@@ -35,6 +38,8 @@ llvmSpec :: Spec
 llvmSpec =
     beforeAll_ runKompile $ do
         llvmLoad
+        beforeAll loadAPI $ do
+            llvmBool
 
 llvmLoad :: Spec
 llvmLoad =
@@ -54,10 +59,33 @@ llvmLoad =
                 api.patt.dump s
                     `shouldReturn` show testString
 
+llvmBool :: SpecWith Internal.API
+llvmBool =
+    describe "LLVM boolean simplification" $ do
+        it "should leave literal booleans as they are" $ \api -> do
+            LLVM.simplifyBool api false `shouldBe` False
+            LLVM.simplifyBool api true `shouldBe` True
+        it "should be able to compare numbers" $ \api -> do
+            LLVM.simplifyBool api equals42 `shouldBe` True
+            LLVM.simplifyBool api unequal `shouldBe` False
+  where
+    -- TODO use hedgehog here
+
+    boolSort = SortApp "SortBool" []
+    intSort = SortApp "SortInt" []
+    false = DomainValue boolSort "false"
+    true = DomainValue boolSort "true"
+    fortytwo = DomainValue intSort "42"
+    fortyone = DomainValue intSort "41"
+
+    equals42 = SymbolApplication eqInt [] [fortytwo, fortytwo]
+    unequal = SymbolApplication eqInt [] [fortyone, fortytwo]
+
+    eqInt = Symbol "Lbl'UndsEqlsEqls'Int'Unds'" [] [intSort, intSort] boolSort (SymbolAttributes TotalFunction False False)
+
 runKompile :: IO ()
 runKompile = do
     putStrLn "[Info] Compiling definition to produce a dynamic LLVM library.."
-    -- FIXME why do I see this more than once?
     callProcess
         "kompile"
         [ definition
@@ -66,3 +94,6 @@ runKompile = do
         , "-o"
         , kompiledPath
         ]
+
+loadAPI :: IO API
+loadAPI = withDLib dlPath mkAPI
