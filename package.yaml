@@ -178,11 +178,14 @@ tests:
     - directory
     - filepath
     - hedgehog
+    - hspec
     - hs-backend-booster
     - monad-logger
+    - process
     - tasty
     - tasty-golden
     - tasty-hedgehog
+    - tasty-hspec
     - tasty-hunit
     - tasty-test-reporter
     - text
