@@ -179,6 +179,7 @@ tests:
     - filepath
     - hedgehog
     - hspec
+    - hspec-hedgehog
     - hs-backend-booster
     - monad-logger
     - process

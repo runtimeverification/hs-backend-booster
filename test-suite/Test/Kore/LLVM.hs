@@ -6,14 +6,19 @@ module Test.Kore.LLVM (
     test_llvmSimplification,
 ) where
 
+import Data.Int (Int64)
 import Data.List (isPrefixOf, isSuffixOf)
-import Data.Text (pack)
+import Data.Text (pack, toLower)
 import GHC.IO.Exception
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 import System.FilePath
 import System.Process
 import Test.Hspec
+import Test.Hspec.Hedgehog
 import Test.Tasty
 import Test.Tasty.Hspec
+import Test.Tasty.Runners
 
 import Kore.Definition.Attributes.Base
 import Kore.LLVM as LLVM
@@ -28,8 +33,6 @@ definition, kompiledPath, dlPath :: FilePath
 definition = "test/llvm/llvm.k"
 kompiledPath = "test/llvm-kompiled"
 dlPath = kompiledPath </> "interpreter"
-
--- TODO integrate with hedgehog: https://hackage.haskell.org/package/hspec-hedgehog
 
 test_llvmSimplification :: IO TestTree
 test_llvmSimplification = testSpec "LLVM simplification library tests" llvmSpec
@@ -62,26 +65,31 @@ llvmLoad =
 llvmBool :: SpecWith Internal.API
 llvmBool =
     describe "LLVM boolean simplification" $ do
-        it "should leave literal booleans as they are" $ \api -> do
-            LLVM.simplifyBool api false `shouldBe` False
-            LLVM.simplifyBool api true `shouldBe` True
-        it "should be able to compare numbers" $ \api -> do
-            LLVM.simplifyBool api equals42 `shouldBe` True
-            LLVM.simplifyBool api unequal `shouldBe` False
+        it "should leave literal booleans as they are" $ \api -> hedgehog $ do
+            b <- forAll Gen.bool
+            let bString = toLower . pack $ show b
+            LLVM.simplifyBool api (DomainValue boolSort bString) === b
+        it "should be able to compare numbers" $ \api -> hedgehog $ do
+            x <- anInt64
+            y <- anInt64
+            LLVM.simplifyBool api (x `equal` x) === True
+            LLVM.simplifyBool api (x `equal` y) === (x == y)
   where
-    -- TODO use hedgehog here
+    anInt64 = forAll $ Gen.integral (Range.constantBounded :: Range Int64)
 
     boolSort = SortApp "SortBool" []
     intSort = SortApp "SortInt" []
-    false = DomainValue boolSort "false"
-    true = DomainValue boolSort "true"
-    fortytwo = DomainValue intSort "42"
-    fortyone = DomainValue intSort "41"
 
-    equals42 = SymbolApplication eqInt [] [fortytwo, fortytwo]
-    unequal = SymbolApplication eqInt [] [fortyone, fortytwo]
+    intDv = DomainValue intSort . pack . show
+    a `equal` b = SymbolApplication eqInt [] [intDv a, intDv b]
 
-    eqInt = Symbol "Lbl'UndsEqlsEqls'Int'Unds'" [] [intSort, intSort] boolSort (SymbolAttributes TotalFunction False False)
+    eqInt =
+        Symbol
+            "Lbl'UndsEqlsEqls'Int'Unds'"
+            []
+            [intSort, intSort]
+            boolSort
+            (SymbolAttributes TotalFunction False False)
 
 runKompile :: IO ()
 runKompile = do
