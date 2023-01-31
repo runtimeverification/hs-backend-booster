@@ -10,27 +10,18 @@ import Kore.Definition.Base
 import Kore.Pattern.Binary
 import Kore.Pattern.Util
 import System.IO.Unsafe (unsafePerformIO)
-import Data.Tree
 
 simplifyBool :: Internal.API -> Term -> Bool
 simplifyBool api trm = unsafePerformIO $ Internal.runLLVM api $ do
     kore <- Internal.ask
-    ptrTree <- Internal.marshallTerm trm 
-    res <- liftIO $ kore.simplifyBool $ rootLabel ptrTree
-    liftIO $ Internal.finalizeKorePatternPtrTree ptrTree
-    Internal.printStats
-    liftIO $ kore.gc
-    pure res
+    Internal.marshallTerm trm >>= liftIO . kore.simplifyBool
 
 simplifyTerm :: Internal.API -> KoreDefinition -> Term -> Sort -> Term
 simplifyTerm api def trm sort = unsafePerformIO $ Internal.runLLVM api $ do
     kore <- Internal.ask
-    trmPtrTree <- Internal.marshallTerm trm
+    trmPtr <- Internal.marshallTerm trm
     sortPtr <- Internal.marshallSort sort
-    binary <- liftIO $ kore.simplify (rootLabel trmPtrTree) sortPtr
-    liftIO $ Internal.finalizeKorePatternPtrTree trmPtrTree
-    Internal.printStats
-    liftIO $ kore.gc
+    binary <- liftIO $ kore.simplify trmPtr sortPtr
     -- strip away the custom injection added by the LLVM backend
     case runGet (decodeKorePattern def) (fromStrict binary) of
         Injection origSort (SortApp "SortKItem" _) result

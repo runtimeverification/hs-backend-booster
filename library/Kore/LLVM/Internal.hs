@@ -2,9 +2,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module Kore.LLVM.Internal (API (..), KorePatternAPI (..), runLLVM, withDLib, mkAPI, ask, marshallTerm, marshallSort, finalizeKorePatternPtrTree, printStats) where
+module Kore.LLVM.Internal (API (..), KorePatternAPI (..), runLLVM, withDLib, mkAPI, ask, marshallTerm, marshallSort) where
 
-import Control.Monad (foldM, forM_, void, (>=>), forM)
+import Control.Monad (foldM, forM_, void, (>=>))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT))
 import Control.Monad.Trans.Reader qualified as Reader
@@ -15,6 +15,7 @@ import Data.HashMap.Strict qualified as HM
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Debug.Trace (trace)
 import Foreign (ForeignPtr, finalizeForeignPtr, newForeignPtr, withForeignPtr)
 import Foreign qualified
 import Foreign.C qualified as C
@@ -25,9 +26,6 @@ import Kore.LLVM.TH (dynamicBindings)
 import Kore.Pattern.Base
 import Kore.Pattern.Util (sortOfTerm)
 import System.Posix.DynamicLinker qualified as Linker
-import Debug.Trace(trace)
-import Data.Tree
-
 
 data KorePattern
 data KoreSort
@@ -51,7 +49,7 @@ newtype KoreTokenPatternAPI = KoreTokenPatternAPI
 
 data KoreSymbolAPI = KoreSymbolAPI
     { new :: Text -> IO KoreSymbolPtr
-    , addArgument :: KoreSymbolPtr -> KoreSortPtr -> IO KoreSymbolPtr    
+    , addArgument :: KoreSymbolPtr -> KoreSortPtr -> IO KoreSymbolPtr
     , cache :: IORef (HashMap (Symbol, [Sort]) KoreSymbolPtr)
     }
 
@@ -78,7 +76,6 @@ data API = API
     , sort :: KoreSortAPI
     , simplifyBool :: KorePatternPtr -> IO Bool
     , simplify :: KorePatternPtr -> KoreSortPtr -> IO ByteString
-    , gc :: IO ()
     }
 
 newtype LLVM a = LLVM (ReaderT API IO a)
@@ -139,7 +136,7 @@ mkAPI dlib = flip runReaderT dlib $ do
                 pure str
 
     pattCache <- liftIO $ newIORef mempty
-    
+
     let patt = KorePatternAPI{new = newPattern, addArgument = addArgumentPattern, string, token, fromSymbol, dump = dumpPattern, cache = pattCache}
 
     freeSymbol <- {-# SCC "LLVM.symbol.free" #-} koreSymbolFreeFunPtr
@@ -209,12 +206,7 @@ mkAPI dlib = flip runReaderT dlib $ do
                                 cstr <- peek strPtr
                                 packCStringLen (cstr, len)
 
-    intitLLVM <- kllvmInit
-    liftIO intitLLVM
-
-    gc <- kllvmFreeAllMemory
-
-    pure API{patt, symbol, sort, simplifyBool, simplify, gc}
+    pure API{patt, symbol, sort, simplifyBool, simplify}
 
 ask :: LLVM API
 ask = LLVM Reader.ask
@@ -230,7 +222,6 @@ marshallSymbol sym sorts = do
             liftIO $ modifyIORef' kore.symbol.cache $ HM.insert (sym, sorts) sym'
             foldM (\symbol sort -> marshallSort sort >>= liftIO . kore.symbol.addArgument symbol) sym' sorts
 
-
 marshallSort :: Sort -> LLVM KoreSortPtr
 marshallSort = \case
     s@(SortApp name args) -> do
@@ -245,53 +236,30 @@ marshallSort = \case
                 pure sort
     SortVar varName -> error $ "marshalling SortVar " <> show varName <> " unsupported"
 
-marshallTerm :: Term -> LLVM (Tree KorePatternPtr)
+marshallTerm :: Term -> LLVM KorePatternPtr
 marshallTerm t = do
     kore <- ask
     -- cache <- liftIO $ readIORef kore.patt.cache
     -- case HM.lookup t cache of
-    --     Just ptr -> do
-    --         -- liftIO $ print ("cache hit" :: String)
-    --         pure ptr
-    --     Nothing -> 
+    -- Just ptr -> do
+    --     -- liftIO $ print ("cache hit" :: String)
+    --     pure ptr
+    -- Nothing ->
     case t of
-            SymbolApplication symbol sorts trms -> do
-                trmPtr <- liftIO . kore.patt.fromSymbol =<< marshallSymbol symbol sorts
-                ptrs <- forM trms $ \t' -> do
-                    ptrs <- marshallTerm t'
-                    _ <- liftIO $ kore.patt.addArgument trmPtr (rootLabel ptrs)
-                    pure ptrs
-                -- liftIO $ modifyIORef' kore.patt.cache $ HM.insert t trm
-                pure $ Node trmPtr ptrs
-            AndTerm l r -> do
-                andSym <- liftIO $ kore.symbol.new "\\and"
-                void $ liftIO . kore.symbol.addArgument andSym =<< marshallSort (sortOfTerm l)
-                trmPtr <- liftIO $ kore.patt.fromSymbol andSym
-                -- liftIO $ modifyIORef' kore.patt.cache $ HM.insert t trm
-                lPtrs <- marshallTerm l
-                rPtrs <- marshallTerm r
-                liftIO $ do
-                    void $ kore.patt.addArgument trmPtr (rootLabel lPtrs)
-                    void $ kore.patt.addArgument trmPtr (rootLabel rPtrs)
-                pure $ Node trmPtr $ [lPtrs, rPtrs]
-            DomainValue sort val -> do
-                trmPtr <- marshallSort sort >>= liftIO . kore.patt.token.new val
-                -- liftIO $ modifyIORef' kore.patt.cache $ HM.insert t trm
-                pure $ Node trmPtr []
-            Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"
-
-
-finalizeKorePatternPtrTree :: Tree KorePatternPtr -> IO ()
-finalizeKorePatternPtrTree (Node root children) = do
-    forM_ children finalizeKorePatternPtrTree
-    finalizeForeignPtr root
-
-
-printStats :: LLVM ()
-printStats = do
-    kore <- ask
-    liftIO $ do
-        sortCache <- readIORef kore.sort.cache
-        symbolCache <- readIORef kore.symbol.cache
-        print $ "sort cache size " <> show (HM.size sortCache)
-        print $ "symbol cache size " <> show (HM.size symbolCache)
+        SymbolApplication symbol sorts trms -> do
+            trm <- liftIO . kore.patt.fromSymbol =<< marshallSymbol symbol sorts
+            forM_ trms $ marshallTerm >=> liftIO . kore.patt.addArgument trm
+            -- liftIO $ modifyIORef' kore.patt.cache $ HM.insert t trm
+            pure trm
+        AndTerm l r -> do
+            andSym <- liftIO $ kore.symbol.new "\\and"
+            void $ liftIO . kore.symbol.addArgument andSym =<< marshallSort (sortOfTerm l)
+            trm <- liftIO $ kore.patt.fromSymbol andSym
+            -- liftIO $ modifyIORef' kore.patt.cache $ HM.insert t trm
+            void $ liftIO . kore.patt.addArgument trm =<< marshallTerm l
+            liftIO . kore.patt.addArgument trm =<< marshallTerm r
+        DomainValue sort val -> do
+            trm <- marshallSort sort >>= liftIO . kore.patt.token.new val
+            -- liftIO $ modifyIORef' kore.patt.cache $ HM.insert t trm
+            pure trm
+        Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"
