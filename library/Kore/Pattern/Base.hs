@@ -54,7 +54,7 @@ data Variable = Variable
     , variableName :: VarName
     }
     deriving stock (Eq, Ord, Show, Generic)
-    deriving anyclass (NFData)
+    deriving anyclass (NFData, Hashable)
 
 data Symbol = Symbol
     { name :: SymbolName
@@ -64,7 +64,7 @@ data Symbol = Symbol
     , attributes :: SymbolAttributes
     }
     deriving stock (Eq, Ord, Show, Generic)
-    deriving anyclass (NFData)
+    deriving anyclass (NFData, Hashable)
 
 {- | A term consists of an AST of constructors and function calls, as
    well as domain values (tokens and built-in types) and (element)
@@ -80,7 +80,7 @@ data TermF t
     | DomainValueF Sort Text
     | VarF Variable
     deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
-    deriving anyclass (NFData)
+    deriving anyclass (NFData, Hashable)
 
 {- | Term attributes are synthetic (bottom-up) attributes that cache
    information about a term to avoid unnecessary AST
@@ -92,7 +92,7 @@ data TermAttributes = TermAttributes
     , isEvaluated :: !Bool
     }
     deriving stock (Eq, Ord, Show, Generic)
-    deriving anyclass (NFData)
+    deriving anyclass (NFData, Hashable)
 
 instance Semigroup TermAttributes where
     a1 <> a2 =
@@ -107,7 +107,7 @@ instance Monoid TermAttributes where
 -- | A term together with its attributes.
 data Term = Term TermAttributes (TermF Term)
     deriving stock (Eq, Ord, Show, Generic)
-    deriving anyclass (NFData)
+    deriving anyclass (NFData, Hashable)
 
 type instance Base Term = TermF
 

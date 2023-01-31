@@ -2,19 +2,25 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module Kore.LLVM.Internal (API (..), KorePatternAPI (..), runLLVM, withDLib, mkAPI, ask, marshallTerm, marshallSort) where
+module Kore.LLVM.Internal (API (..), KorePatternAPI (..), runLLVM, withDLib, mkAPI, ask, marshallTerm, marshallSort, freeLlvmMemory, hshNm) where
 
 import Control.Monad (foldM, forM_, void, (>=>))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT))
 import Control.Monad.Trans.Reader qualified as Reader
 import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
+
 import Data.ByteString.Char8 (packCStringLen)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
-import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef, writeIORef)
+import Data.Set (toList, fromList)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
+import Data.Text.IO qualified as Text
+import Data.Hashable (Hashable, hash)
 import Foreign (ForeignPtr, finalizeForeignPtr, newForeignPtr, withForeignPtr)
 import Foreign qualified
 import Foreign.C qualified as C
@@ -49,6 +55,7 @@ newtype KoreTokenPatternAPI = KoreTokenPatternAPI
 data KoreSymbolAPI = KoreSymbolAPI
     { new :: Text -> IO KoreSymbolPtr
     , addArgument :: KoreSymbolPtr -> KoreSortPtr -> IO KoreSymbolPtr
+    , cache :: IORef (HashMap (Symbol, [Sort]) KoreSymbolPtr)
     }
 
 data KoreSortAPI = KoreSortAPI
@@ -73,6 +80,7 @@ data API = API
     , sort :: KoreSortAPI
     , simplifyBool :: KorePatternPtr -> IO Bool
     , simplify :: KorePatternPtr -> KoreSortPtr -> IO ByteString
+    , freeAllMemory :: IO ()
     }
 
 newtype LLVM a = LLVM (ReaderT API IO a)
@@ -89,6 +97,8 @@ runLLVM api (LLVM m) = runReaderT m api
 
 mkAPI :: Linker.DL -> IO API
 mkAPI dlib = flip runReaderT dlib $ do
+    initLLVM <- kllvmInit
+    liftIO initLLVM
     freePattern <- {-# SCC "LLVM.pattern.free" #-} korePatternFreeFunPtr
 
     newCompositePattern <- koreCompositePatternNew
@@ -150,7 +160,9 @@ mkAPI dlib = flip runReaderT dlib $ do
                     withForeignPtr sym $ \rawSym -> withForeignPtr sort $ addArgumentSymbol' rawSym
                     pure sym
 
-    let symbol = KoreSymbolAPI{new = newSymbol, addArgument = addArgumentSymbol}
+    symbolCache <- liftIO $ newIORef mempty
+
+    let symbol = KoreSymbolAPI{new = newSymbol, addArgument = addArgumentSymbol, cache = symbolCache}
 
     freeSort <- {-# SCC "LLVM.sort.free" #-} koreSortFreeFunPtr
 
@@ -198,7 +210,10 @@ mkAPI dlib = flip runReaderT dlib $ do
                                 cstr <- peek strPtr
                                 packCStringLen (cstr, len)
 
-    pure API{patt, symbol, sort, simplifyBool, simplify}
+
+    freeAllMemory <- kllvmFreeAllMemory
+
+    pure API{patt, symbol, sort, simplifyBool, simplify, freeAllMemory}
 
 ask :: LLVM API
 ask = LLVM Reader.ask
@@ -207,7 +222,16 @@ marshallSymbol :: Symbol -> [Sort] -> LLVM KoreSymbolPtr
 marshallSymbol sym sorts = do
     kore <- ask
     sym' <- liftIO $ kore.symbol.new sym.name
-    foldM (\symbol sort -> marshallSort sort >>= liftIO . kore.symbol.addArgument symbol) sym' sorts
+    liftIO $ Text.appendFile "./trace.txt" ("kore_symbol* " <> hshNm "sym" sym <> " = kore_symbol_new(\"" <> sym.name <> "\");\n")
+    res <- foldM (\symbol sort' -> do
+        sort <- marshallSort sort'
+        liftIO $ kore.symbol.addArgument symbol sort) sym' sorts
+    liftIO $ modifyIORef' kore.symbol.cache $ HM.insert (sym,sorts) res
+    pure res
+
+hshNm :: Hashable o => Text -> o -> Text
+hshNm nm o = let h = hash o in if h < 0 then nm <> "_m" <> (Text.pack $ show $ abs h) else nm <> "_" <> (Text.pack $ show h)
+
 
 marshallSort :: Sort -> LLVM KoreSortPtr
 marshallSort = \case
@@ -218,7 +242,11 @@ marshallSort = \case
             Just ptr -> pure ptr
             Nothing -> do
                 sort <- liftIO $ kore.sort.new name
-                forM_ args $ marshallSort >=> liftIO . kore.sort.addArgument sort
+                liftIO $ Text.appendFile "./trace.txt" ("kore_sort* " <> hshNm "srt" s <> " = kore_composite_sort_new(\"" <> name <> "\");\n")
+                forM_ args $ \s' -> do
+                    sort' <- marshallSort s'
+                    liftIO $ Text.appendFile "./trace.txt" ("kore_composite_sort_add_argument(" <>  hshNm "srt" s <> ", " <> hshNm "srt" s' <> ");\n")
+                    liftIO $ kore.sort.addArgument sort sort'
                 liftIO $ modifyIORef' kore.sort.cache $ HM.insert s sort
                 pure sort
     SortVar varName -> error $ "marshalling SortVar " <> show varName <> " unsupported"
@@ -228,15 +256,46 @@ marshallTerm t = do
     kore <- ask
     case t of
         SymbolApplication symbol sorts trms -> do
+            -- liftIO $ Text.appendFile "./trace.txt" ("// begin " <> hshNm "trm" t <> "\n")
             trm <- liftIO . kore.patt.fromSymbol =<< marshallSymbol symbol sorts
-            forM_ trms $ marshallTerm >=> liftIO . kore.patt.addArgument trm
+            liftIO $ Text.appendFile "./trace.txt" ("kore_pattern* " <> hshNm "pat" t <> " = kore_composite_pattern_from_symbol(" <> hshNm "sym" symbol <> ");\n")
+            forM_ trms $ \childT' -> do
+                childT <- marshallTerm childT'
+                ret <- liftIO $ kore.patt.addArgument trm childT
+                liftIO $ Text.appendFile "./trace.txt" ("kore_composite_pattern_add_argument(" <> hshNm "pat" t <> ", " <> hshNm "pat" childT' <> ");\n")
+                pure ret
+            -- liftIO $ Text.appendFile "./trace.txt" ("// end " <> hshNm "trm" t <> "\n\n")
             pure trm
         AndTerm l r -> do
+            -- liftIO $ Text.appendFile "./trace.txt" ("// begin " <> hshNm "trm" t <> "\n")
             andSym <- liftIO $ kore.symbol.new "\\and"
+            liftIO $ Text.appendFile "./trace.txt" ("kore_symbol* " <> hshNm "and" t <> " = kore_symbol_new(\"\\and\");\n")
             void $ liftIO . kore.symbol.addArgument andSym =<< marshallSort (sortOfTerm l)
-            trm <- liftIO $ kore.patt.fromSymbol andSym
-            void $ liftIO . kore.patt.addArgument trm =<< marshallTerm l
-            liftIO . kore.patt.addArgument trm =<< marshallTerm r
-        DomainValue sort val ->
-            marshallSort sort >>= liftIO . kore.patt.token.new val
+            liftIO $ Text.appendFile "./trace.txt" ("kore_symbol_add_formal_argument(" <> hshNm "and" t <> ", " <> hshNm "srt" (sortOfTerm l) <> ");\n")
+            andTrm <- liftIO $ kore.patt.fromSymbol andSym
+            liftIO $ Text.appendFile "./trace.txt" ("kore_pattern* " <> hshNm "pat" t <> " = kore_composite_pattern_from_symbol(" <> hshNm "and" t <> ");\n")
+            void $ liftIO . kore.patt.addArgument andTrm =<< marshallTerm l
+            liftIO $ Text.appendFile "./trace.txt" ("kore_composite_pattern_add_argument(" <> hshNm "pat" t <> ", " <> hshNm "pat" l <> ");\n")
+            trm <- liftIO . kore.patt.addArgument andTrm =<< marshallTerm r
+            liftIO $ Text.appendFile "./trace.txt" ("kore_composite_pattern_add_argument(" <> hshNm "pat" t <> ", " <> hshNm "pat" r <> ");\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("// end " <> hshNm "trm" t <> "\n\n")
+            pure trm
+        DomainValue sort' val -> do
+            -- liftIO $ Text.appendFile "./trace.txt" ("// begin " <> hshNm "trm" t <> "\n")
+            sort <- marshallSort sort'
+            liftIO $ Text.appendFile "./trace.txt" ("kore_pattern* " <> hshNm "pat" t <> " = kore_pattern_new_token(\"" <> val <> "\", " <> hshNm "srt" sort' <> ");\n")
+            -- liftIO $ Text.appendFile "./trace.txt" ("// end " <> hshNm "trm" t <> "\n\n")
+            trm <- liftIO $ kore.patt.token.new val sort
+            pure trm
         Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"
+
+
+freeLlvmMemory :: API -> IO ()
+freeLlvmMemory api = do
+    cache <- readIORef api.sort.cache
+    writeIORef api.sort.cache mempty
+    forM_ (toList $ fromList $ HM.elems cache) finalizeForeignPtr
+    api.freeAllMemory
+    Text.appendFile "./trace.txt" ("\n\n\nkllvm_free_all_memory();\n\n\n")
+
+
