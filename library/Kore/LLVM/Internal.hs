@@ -66,7 +66,6 @@ data KorePatternAPI = KorePatternAPI
     , string :: KoreStringPatternAPI
     , token :: KoreTokenPatternAPI
     , dump :: KorePatternPtr -> IO String
-    , cache :: IORef (HashMap Term KorePatternPtr)
     }
 
 data API = API
@@ -134,9 +133,7 @@ mkAPI dlib = flip runReaderT dlib $ do
                 Foreign.free strPtr
                 pure str
 
-    pattCache <- liftIO $ newIORef mempty
-
-    let patt = KorePatternAPI{new = newPattern, addArgument = addArgumentPattern, string, token, fromSymbol, dump = dumpPattern, cache = pattCache}
+    let patt = KorePatternAPI{new = newPattern, addArgument = addArgumentPattern, string, token, fromSymbol, dump = dumpPattern}
 
     freeSymbol <- {-# SCC "LLVM.symbol.free" #-} koreSymbolFreeFunPtr
 
