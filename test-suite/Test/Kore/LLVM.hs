@@ -27,7 +27,6 @@ import Test.Hspec
 import Test.Hspec.Hedgehog
 import Test.Tasty
 import Test.Tasty.Hspec
-import Test.Tasty.Runners
 
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
@@ -50,44 +49,37 @@ test_llvmSimplification = testSpec "LLVM simplification library tests" llvmSpec
 llvmSpec :: Spec
 llvmSpec =
     beforeAll_ runKompile $ do
-        llvmLoad
+        describe "Load an LLVM simplification library" $ do
+            it "fails to load a non-existing library" $
+                withDLib "does/not/exist.dl" mkAPI
+                    `shouldThrow` \IOError{ioe_description = msg} ->
+                        "dlopen: does/not/exist"
+                            `isPrefixOf` msg
+                            && "No such file or directory"
+                            `isSuffixOf` msg
+            it ("loads a valid library from " <> dlPath) $ do
+                withDLib dlPath $ \dl -> do
+                    api <- mkAPI dl
+                    let testString = "testing, one, two, three"
+                    s <- api.patt.string.new $ pack testString
+                    api.patt.dump s `shouldReturn` show testString
+
         beforeAll loadAPI . modifyMaxSuccess (* 20) $ do
-            llvmBool
-            llvmBytes
+            describe "LLVM boolean simplification" $ do
+                it "should leave literal booleans as they are" $
+                    propertyTest . boolsRemainProp
+                it "should be able to compare numbers" $
+                    propertyTest . compareNumbersProp
+                it "should simplify boolean terms using `simplify`" $
+                    propertyTest . simplifyComparisonProp
 
-llvmLoad :: Spec
-llvmLoad =
-    describe "Load an LLVM simplification library" $ do
-        it "fails to load a non-existing library" $
-            withDLib "does/not/exist.dl" mkAPI
-                `shouldThrow` \IOError{ioe_description = msg} ->
-                    "dlopen: does/not/exist"
-                        `isPrefixOf` msg
-                        && "No such file or directory"
-                        `isSuffixOf` msg
-        it ("loads a valid library from " <> dlPath) $ do
-            withDLib dlPath $ \dl -> do
-                api <- mkAPI dl
-                let testString = "testing, one, two, three"
-                s <- api.patt.string.new $ pack testString
-                api.patt.dump s
-                    `shouldReturn` show testString
+            describe "LLVM byte array simplification" $ do
+                it "should leave literal byte arrays as they are" $
+                    hedgehog . propertyTest . byteArrayProp
 
-llvmBool :: SpecWith Internal.API
-llvmBool =
-    describe "LLVM boolean simplification" $ do
-        it "should leave literal booleans as they are" $
-            propertyTest . boolsRemainProp
-        it "should be able to compare numbers" $
-            propertyTest . compareNumbersProp
-        it "should simplify boolean terms using `simplify`" $
-            propertyTest . simplifyComparisonProp
-
-llvmBytes :: SpecWith Internal.API
-llvmBytes =
-    describe "LLVM byte array simplification" $ do
-        it "should leave literal byte arrays as they are" $
-            hedgehog . propertyTest . byteArrayProp
+            describe "LLVM String handling" $
+                it "should work with strings" $
+                    hedgehog . propertyTest . textProp
 
 --------------------------------------------------
 -- individual hedgehog property tests and helpers
@@ -119,6 +111,11 @@ byteArrayProp api = property $ do
     ba' <- forAll $ Gen.bytes $ Range.linear 0 1024
     LLVM.simplifyTerm api testDef (bytesTerm ba') bytesSort === bytesTerm ba'
 
+textProp :: Internal.API -> Property
+textProp api = property $ do
+    txt <- forAll $ Gen.text (Range.linear 0 123) Gen.unicode
+    LLVM.simplifyTerm api testDef (DomainValue stringSort txt) stringSort === DomainValue stringSort txt
+
 ------------------------------------------------------------
 
 runKompile :: IO ()
@@ -141,10 +138,11 @@ loadAPI = withDLib dlPath mkAPI
 ------------------------------------------------------------
 -- term construction
 
-boolSort, intSort, bytesSort :: Sort
+boolSort, intSort, bytesSort, stringSort :: Sort
 boolSort = SortApp "SortBool" []
 intSort = SortApp "SortInt" []
 bytesSort = SortApp "SortBytes" []
+stringSort = SortApp "SortString" []
 
 boolTerm :: Bool -> Term
 boolTerm = DomainValue boolSort . toLower . pack . show
