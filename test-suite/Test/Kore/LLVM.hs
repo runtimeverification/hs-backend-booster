@@ -6,6 +6,8 @@ module Test.Kore.LLVM (
     test_llvmSimplification,
 ) where
 
+import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
 import Data.Int (Int64)
 import Data.List (isPrefixOf, isSuffixOf)
 import Data.Map (Map)
@@ -51,6 +53,7 @@ llvmSpec =
         llvmLoad
         beforeAll loadAPI . modifyMaxSuccess (* 20) $ do
             llvmBool
+            llvmBytes
 
 llvmLoad :: Spec
 llvmLoad =
@@ -74,11 +77,17 @@ llvmBool :: SpecWith Internal.API
 llvmBool =
     describe "LLVM boolean simplification" $ do
         it "should leave literal booleans as they are" $
-            hedgehog . propertyTest . boolsRemainProp
+            propertyTest . boolsRemainProp
         it "should be able to compare numbers" $
-            hedgehog . propertyTest . compareNumbersProp
+            propertyTest . compareNumbersProp
         it "should simplify boolean terms using `simplify`" $
-            hedgehog . propertyTest . simplifyComparisonProp
+            propertyTest . simplifyComparisonProp
+
+llvmBytes :: SpecWith Internal.API
+llvmBytes =
+    describe "LLVM byte array simplification" $ do
+        it "should leave literal byte arrays as they are" $
+            hedgehog . propertyTest . byteArrayProp
 
 --------------------------------------------------
 -- individual hedgehog property tests and helpers
@@ -102,6 +111,14 @@ simplifyComparisonProp api = property $ do
 anInt64 :: PropertyT IO Int64
 anInt64 = forAll $ Gen.integral (Range.constantBounded :: Range Int64)
 
+byteArrayProp :: Internal.API -> Property
+byteArrayProp api = property $ do
+    i <- forAll $ Gen.int (Range.linear 0 1024)
+    let ba = BS.pack $ take i $ cycle [255, 254 .. 0]
+    LLVM.simplifyTerm api testDef (bytesTerm ba) bytesSort === bytesTerm ba
+    ba' <- forAll $ Gen.bytes $ Range.linear 0 1024
+    LLVM.simplifyTerm api testDef (bytesTerm ba') bytesSort === bytesTerm ba'
+
 ------------------------------------------------------------
 
 runKompile :: IO ()
@@ -124,15 +141,19 @@ loadAPI = withDLib dlPath mkAPI
 ------------------------------------------------------------
 -- term construction
 
-boolSort, intSort :: Sort
+boolSort, intSort, bytesSort :: Sort
 boolSort = SortApp "SortBool" []
 intSort = SortApp "SortInt" []
+bytesSort = SortApp "SortBytes" []
 
 boolTerm :: Bool -> Term
 boolTerm = DomainValue boolSort . toLower . pack . show
 
 intTerm :: (Integral a, Show a) => a -> Term
 intTerm = DomainValue intSort . pack . show . (+ 0)
+
+bytesTerm :: ByteString -> Term
+bytesTerm = DomainValue bytesSort . pack . show
 
 equal :: (Integral a, Show a) => a -> a -> Term
 a `equal` b = SymbolApplication eqInt [] [intTerm a, intTerm b]
