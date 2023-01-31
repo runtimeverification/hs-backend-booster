@@ -15,7 +15,6 @@ import Data.HashMap.Strict qualified as HM
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Debug.Trace (trace)
 import Foreign (ForeignPtr, finalizeForeignPtr, newForeignPtr, withForeignPtr)
 import Foreign qualified
 import Foreign.C qualified as C
@@ -99,7 +98,7 @@ mkAPI dlib = flip runReaderT dlib $ do
             {-# SCC "LLVM.pattern.new" #-}
             liftIO $
                 C.withCString (Text.unpack name) $
-                    newCompositePattern >=> newForeignPtr (trace "freeing pattern" freePattern)
+                    newCompositePattern >=> newForeignPtr freePattern
 
     addArgumentCompositePattern <- koreCompositePatternAddArgument
     let addArgumentPattern parent child =
@@ -239,27 +238,17 @@ marshallSort = \case
 marshallTerm :: Term -> LLVM KorePatternPtr
 marshallTerm t = do
     kore <- ask
-    -- cache <- liftIO $ readIORef kore.patt.cache
-    -- case HM.lookup t cache of
-    -- Just ptr -> do
-    --     -- liftIO $ print ("cache hit" :: String)
-    --     pure ptr
-    -- Nothing ->
     case t of
         SymbolApplication symbol sorts trms -> do
             trm <- liftIO . kore.patt.fromSymbol =<< marshallSymbol symbol sorts
             forM_ trms $ marshallTerm >=> liftIO . kore.patt.addArgument trm
-            -- liftIO $ modifyIORef' kore.patt.cache $ HM.insert t trm
             pure trm
         AndTerm l r -> do
             andSym <- liftIO $ kore.symbol.new "\\and"
             void $ liftIO . kore.symbol.addArgument andSym =<< marshallSort (sortOfTerm l)
             trm <- liftIO $ kore.patt.fromSymbol andSym
-            -- liftIO $ modifyIORef' kore.patt.cache $ HM.insert t trm
             void $ liftIO . kore.patt.addArgument trm =<< marshallTerm l
             liftIO . kore.patt.addArgument trm =<< marshallTerm r
-        DomainValue sort val -> do
-            trm <- marshallSort sort >>= liftIO . kore.patt.token.new val
-            -- liftIO $ modifyIORef' kore.patt.cache $ HM.insert t trm
-            pure trm
+        DomainValue sort val ->
+            marshallSort sort >>= liftIO . kore.patt.token.new val
         Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"
