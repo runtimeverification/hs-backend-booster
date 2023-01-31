@@ -15,7 +15,9 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (pack, toLower)
 import GHC.IO.Exception
+import Hedgehog
 import Hedgehog.Gen qualified as Gen
+import Hedgehog.Internal.Property (Property (..))
 import Hedgehog.Range qualified as Range
 import System.FilePath
 import System.Process
@@ -47,7 +49,7 @@ llvmSpec :: Spec
 llvmSpec =
     beforeAll_ runKompile $ do
         llvmLoad
-        beforeAll loadAPI $ do
+        beforeAll loadAPI . modifyMaxSuccess (* 20) $ do
             llvmBool
 
 llvmLoad :: Spec
@@ -71,31 +73,36 @@ llvmLoad =
 llvmBool :: SpecWith Internal.API
 llvmBool =
     describe "LLVM boolean simplification" $ do
-        it "should leave literal booleans as they are" $ \api -> hedgehog $ do
-            b <- forAll Gen.bool
-            let bString = toLower . pack $ show b
-            LLVM.simplifyBool api (DomainValue boolSort bString) === b
-        it "should be able to compare numbers" $ \api -> hedgehog $ do
-            x <- anInt64
-            y <- anInt64
-            LLVM.simplifyBool api (x `equal` x) === True
-            LLVM.simplifyBool api (x `equal` y) === (x == y)
-  where
-    anInt64 = forAll $ Gen.integral (Range.constantBounded :: Range Int64)
+        it "should leave literal booleans as they are" $
+            hedgehog . propertyTest . boolsRemainProp
+        it "should be able to compare numbers" $
+            hedgehog . propertyTest . compareNumbersProp
+        it "should simplify boolean terms using `simplify`" $
+            hedgehog . propertyTest . simplifyComparisonProp
 
-    boolSort = SortApp "SortBool" []
-    intSort = SortApp "SortInt" []
+--------------------------------------------------
+-- individual hedgehog property tests and helpers
 
-    intDv = DomainValue intSort . pack . show
-    a `equal` b = SymbolApplication eqInt [] [intDv a, intDv b]
+boolsRemainProp
+    , compareNumbersProp
+    , simplifyComparisonProp ::
+        Internal.API -> Property
+boolsRemainProp api = property $ do
+    b <- forAll Gen.bool
+    LLVM.simplifyBool api (boolTerm b) === b
+compareNumbersProp api = property $ do
+    x <- anInt64
+    y <- anInt64
+    LLVM.simplifyBool api (x `equal` y) === (x == y)
+simplifyComparisonProp api = property $ do
+    x <- anInt64
+    y <- anInt64
+    LLVM.simplifyTerm api testDef (x `equal` y) boolSort === boolTerm (x == y)
 
-    eqInt =
-        Symbol
-            "Lbl'UndsEqlsEqls'Int'Unds'"
-            []
-            [intSort, intSort]
-            boolSort
-            (SymbolAttributes TotalFunction False False)
+anInt64 :: PropertyT IO Int64
+anInt64 = forAll $ Gen.integral (Range.constantBounded :: Range Int64)
+
+------------------------------------------------------------
 
 runKompile :: IO ()
 runKompile = do
@@ -125,7 +132,7 @@ boolTerm :: Bool -> Term
 boolTerm = DomainValue boolSort . toLower . pack . show
 
 intTerm :: (Integral a, Show a) => a -> Term
-intTerm = DomainValue intSort . pack . show . (+0)
+intTerm = DomainValue intSort . pack . show . (+ 0)
 
 equal :: (Integral a, Show a) => a -> a -> Term
 a `equal` b = SymbolApplication eqInt [] [intTerm a, intTerm b]
