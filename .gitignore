@@ -7,4 +7,4 @@
 /.vscode
 result*
 .envrc
-/test/llvm-kompiled/
+/test/llvm-integration/definition/llvm-kompiled/
