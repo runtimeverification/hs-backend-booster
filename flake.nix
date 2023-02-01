@@ -24,7 +24,7 @@
       allNixpkgsFor = perSystem nixpkgsForSystem;
       nixpkgsFor = system: allNixpkgsFor.${system};
       index-state = "2023-01-19T00:00:00Z";
-      
+
       boosterBackendFor = { compiler, pkgs, profiling ? false }:
         pkgs.haskell-nix.cabalProject {
           name = "hs-backend-booster";
@@ -143,12 +143,12 @@
         } // lib.attrsets.mapAttrs'
         (compiler: v: lib.attrsets.nameValuePair compiler v.devShell) flakes);
 
-      # `nix build .#hs-backend-booster:test:test-suite`
+      # `nix build .#hs-backend-booster:test:unit-tests`
       #
       # To run a check for a particular compiler version, prefix the derivation
       # name with the GHC version, e.g.
       #
-      # `nix build .#ghc8107:hs-backend-booster:test:test-suite`
+      # `nix build .#ghc8107:hs-backend-booster:test:unit-tests`
       checks = perSystem (system:
         let flakes = flakesFor (nixpkgsFor system);
         in flakes.${defaultCompiler}.checks // collectOutputs "checks" flakes

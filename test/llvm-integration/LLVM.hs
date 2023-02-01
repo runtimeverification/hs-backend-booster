@@ -2,8 +2,8 @@
 Copyright   : (c) Runtime Verification, 2023
 License     : BSD-3-Clause
 -}
-module Test.Kore.LLVM (
-    test_llvmSimplification,
+module Main (
+    main,
 ) where
 
 import Data.ByteString (ByteString)
@@ -25,8 +25,6 @@ import System.FilePath
 import System.Process
 import Test.Hspec
 import Test.Hspec.Hedgehog
-import Test.Tasty
-import Test.Tasty.Hspec
 
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
@@ -39,12 +37,12 @@ import Kore.Pattern.Base
 -- library, and is available under 'test/llvm-kompiled/interpreter'
 
 definition, kompiledPath, dlPath :: FilePath
-definition = "test/llvm/llvm.k"
-kompiledPath = "test/llvm-kompiled"
+definition = "test/llvm-integration/definition/llvm.k"
+kompiledPath = "test/llvm-integration/definition/llvm-kompiled"
 dlPath = kompiledPath </> "interpreter"
 
-test_llvmSimplification :: IO TestTree
-test_llvmSimplification = testSpec "LLVM simplification library tests" llvmSpec
+main :: IO ()
+main = hspec llvmSpec
 
 llvmSpec :: Spec
 llvmSpec =
