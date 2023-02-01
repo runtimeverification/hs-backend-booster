@@ -193,5 +193,5 @@ jobs:
           echo "${{ matrix.nix }}" > out.md
           cat imp.md >> out.md
           cat out.md >> $GITHUB_STEP_SUMMARY
-          [[ ! -z "${{ github.event.pull_request.head.sha }} ]] && \
+          [[ ! -z "${{ github.event.pull_request.head.sha }}" ]] && \
             gh pr comment ${{ github.event.pull_request.number }} -F out.md
