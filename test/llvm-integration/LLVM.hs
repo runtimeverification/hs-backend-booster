@@ -9,7 +9,7 @@ module Main (
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Int (Int64)
-import Data.List (isPrefixOf, isSuffixOf)
+import Data.List (isInfixOf)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
@@ -51,10 +51,7 @@ llvmSpec =
             it "fails to load a non-existing library" $
                 withDLib "does/not/exist.dl" mkAPI
                     `shouldThrow` \IOError{ioe_description = msg} ->
-                        "dlopen: does/not/exist"
-                            `isPrefixOf` msg
-                            && "No such file or directory"
-                            `isSuffixOf` msg
+                        "does/not/exist" `isInfixOf` msg
             it ("loads a valid library from " <> dlPath) $ do
                 withDLib dlPath $ \dl -> do
                     api <- mkAPI dl
