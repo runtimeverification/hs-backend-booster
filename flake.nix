@@ -31,7 +31,9 @@
           compiler-nix-name = compiler;
           src = pkgs.nix-gitignore.gitignoreSourcePure [
             ''
-              /test
+              /test/parser
+              /test/internalisation
+              /test/rpc-integration
               /scripts
               /.github
             ''
