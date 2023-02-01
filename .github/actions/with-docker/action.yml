@@ -26,6 +26,9 @@ inputs:
   ghc:
     description: 'ghc version to use (determine base image)'
     required: true
+  k:
+    description: 'K version to use for integration tests'
+    required: true
   dockerfile:
     description: 'Hardcode the path of the dockerfile to use.'
     required: false
@@ -48,6 +51,7 @@ runs:
       HLINT_VERSION: ${{ inputs.hlint }}
       HPACK_VERSION: ${{ inputs.hpack }}
       GHC_VERSION: ${{ inputs.ghc }}
+      K_VERSION: ${{ inputs.k }}
       FOURMOLU_VERSION: ${{ inputs.fourmolu }}
       DOCKERFILE: ${{ inputs.dockerfile }}
       DOCKER_RUN_ARGS: ${{ inputs.docker-run-args }}
@@ -66,6 +70,7 @@ runs:
           --build-arg HPACK_VERSION=${HPACK_VERSION}                  \
           --build-arg HLINT_VERSION=${HLINT_VERSION}                  \
           --build-arg GHC_VERSION=${GHC_VERSION}                      \
+          --build-arg K_VERSION=${K_VERSION}                          \
           --build-arg FOURMOLU_VERSION=${FOURMOLU_VERSION}            \
           --build-arg USER=${USER} --build-arg USER_ID=${USER_ID}     \
           --build-arg GROUP=${GROUP} --build-arg GROUP_ID=${GROUP_ID}
