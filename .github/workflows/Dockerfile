@@ -13,7 +13,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 ARG HPACK_VERSION
 ARG FOURMOLU_VERSION
 ARG HLINT_VERSION
-ARG K_VERSION
 
 RUN    apt-get update        \
     && apt-get install --yes \
@@ -23,8 +22,7 @@ RUN    apt-get update        \
         git                  \
         z3
 
-RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
-    && locale-gen en_US.UTF-8
+RUN locale-gen en_US.UTF-8
 ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
@@ -45,12 +43,6 @@ ARG USER_ID=1000
 ARG GROUP_ID=$USER_ID
 RUN groupadd -g $GROUP_ID $GROUP && useradd -m -u $USER_ID -s /bin/sh -g $GROUP $USER
 
-# prepare for nix/kup installation
-RUN mkdir -m 0755 /nix \
-    && chown $USER /nix \
-    && mkdir -p /etc/nix \
-    && echo "trusted-users = root $USER" > /etc/nix/nix.conf
-
 USER $USER:$GROUP
 ENV PATH $PATH:/home/$USER/.cabal/bin
 
@@ -59,9 +51,4 @@ RUN    cd $HOME \
 # install fourmolu from source (binary package not working in this docker image)
 RUN    cd $HOME \
     && cabal install fourmolu-${FOURMOLU_VERSION} \
-    && fourmolu --version
-
-ENV PATH $PATH:/home/$USER/.nix-profile/bin
-RUN curl -sSL https://kframework.org/install -o $HOME/kup-install.sh \
-    && yes | bash $HOME/kup-install.sh
-RUN kup install k --version ${K_VERSION}
+    && fourmolu --version \
