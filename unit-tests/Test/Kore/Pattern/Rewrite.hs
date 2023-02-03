@@ -9,7 +9,7 @@ module Test.Kore.Pattern.Rewrite (
 
 import Control.Exception (ErrorCall, catch)
 import Control.Monad.Logger.CallStack
-import Data.ByteString.Char8 (ByteString)
+import Data.ByteString.UTF8 (ByteString)
 import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map qualified as Map

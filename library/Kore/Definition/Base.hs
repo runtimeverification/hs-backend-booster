@@ -16,7 +16,7 @@ module Kore.Definition.Base (
 ) where
 
 import Control.DeepSeq (NFData)
-import Data.ByteString.Char8 (ByteString)
+import Data.ByteString.UTF8 (ByteString)
 import Data.Map.Strict as Map (Map, empty)
 import Data.Set (Set)
 import GHC.Generics qualified as GHC

@@ -20,8 +20,8 @@ import Control.Monad.Extra
 import Control.Monad.Trans.Except
 import Data.Aeson (ToJSON (..), Value, object, (.=))
 import Data.Bifunctor
-import Data.ByteString.Char8 (ByteString)
-import Data.ByteString.Char8 qualified as BS
+import Data.ByteString.UTF8 (ByteString)
+import Data.ByteString.UTF8 qualified as BS
 import Data.Foldable ()
 import Data.List (foldl1', nub)
 import Data.List.NonEmpty (NonEmpty)
@@ -30,7 +30,7 @@ import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text as Text (Text, intercalate, pack, unpack)
-import Data.Text.Encoding (decodeLatin1)
+import Data.Text.Encoding (decodeUtf8)
 
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base (KoreDefinition (..))
@@ -260,9 +260,8 @@ mkF ::
     Syntax.KorePattern
 mkF symbol argSorts a b = Syntax.KJApp symbol argSorts [a, b]
 
--- primitive solution ignoring text encoding
 textToBS :: Text -> ByteString
-textToBS = BS.pack . Text.unpack
+textToBS = BS.fromString . Text.unpack
 
 ----------------------------------------
 
@@ -350,9 +349,9 @@ ensureSortsAgree ::
     Internal.Sort ->
     Except SortError ()
 ensureSortsAgree (Internal.SortVar n) _ =
-    throwE $ GeneralError ("ensureSortsAgree found variable " <> decodeLatin1 n)
+    throwE $ GeneralError ("ensureSortsAgree found variable " <> decodeUtf8 n)
 ensureSortsAgree _ (Internal.SortVar n) =
-    throwE $ GeneralError ("ensureSortsAgree found variable " <> decodeLatin1 n)
+    throwE $ GeneralError ("ensureSortsAgree found variable " <> decodeUtf8 n)
 ensureSortsAgree
     s1@(Internal.SortApp name1 args1)
     s2@(Internal.SortApp name2 args2) = do
