@@ -12,7 +12,7 @@ module Kore.Pattern.Base (
 ) where
 
 import Control.DeepSeq (NFData (..))
-import Data.ByteString qualified as BS (isPrefixOf, null, tail, unpack)
+import Data.ByteString qualified as BS (isPrefixOf, null, tail)
 import Data.ByteString.UTF8 (ByteString)
 import Data.ByteString.UTF8 qualified as BS
 import Data.Either (fromRight)
@@ -23,6 +23,7 @@ import Data.Hashable qualified as Hashable
 import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
+import Data.Text.Encoding qualified as Text
 import GHC.Generics (Generic)
 import Kore.Definition.Attributes.Base (
     SymbolAttributes (..),
@@ -301,9 +302,9 @@ decodeLabel' :: ByteString -> ByteString
 decodeLabel' orig =
     fromRight orig (decodeLabel orig)
 
--- avoiding to create an orphan
+-- used for printing the string as it appears (with codepoints)
 prettyBS :: ByteString -> Pretty.Doc a
-prettyBS = Pretty.pretty . BS.unpack
+prettyBS = Pretty.pretty . Text.decodeUtf8
 
 instance Pretty Term where
     pretty =
@@ -319,7 +320,8 @@ instance Pretty Term where
             DomainValue sort bs ->
                 "\\dv"
                     <> KPretty.parametersP [sort]
-                    <> KPretty.argumentsP [BS.unpack bs]
+                    -- prints the bytes of the string as data
+                    <> KPretty.argumentsP [show $ Text.decodeLatin1 bs]
             Var var -> pretty var
 
 instance Pretty Sort where
