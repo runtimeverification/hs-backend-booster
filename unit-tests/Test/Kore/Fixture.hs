@@ -6,7 +6,7 @@ module Test.Kore.Fixture (
     module Test.Kore.Fixture,
 ) where
 
-import Data.ByteString.UTF8 (ByteString)
+import Data.ByteString.Char8 (ByteString)
 import Data.Map qualified as Map
 import Data.Set qualified as Set
 

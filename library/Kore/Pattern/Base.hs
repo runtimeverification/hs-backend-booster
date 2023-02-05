@@ -12,9 +12,8 @@ module Kore.Pattern.Base (
 ) where
 
 import Control.DeepSeq (NFData (..))
-import Data.ByteString qualified as BS (isPrefixOf, null, tail)
-import Data.ByteString.UTF8 (ByteString)
-import Data.ByteString.UTF8 qualified as BS
+import Data.ByteString.Char8 (ByteString)
+import Data.ByteString.Char8 qualified as BS
 import Data.Either (fromRight)
 import Data.Functor.Foldable
 import Data.Functor.Foldable.TH (makeBaseFunctor)

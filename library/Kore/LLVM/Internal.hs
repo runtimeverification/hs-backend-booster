@@ -21,8 +21,8 @@ import Control.Monad (foldM, forM_, void, (>=>))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT))
 import Control.Monad.Trans.Reader qualified as Reader
-import Data.ByteString qualified as BS
-import Data.ByteString.UTF8 (ByteString)
+import Data.ByteString.Char8 (ByteString)
+import Data.ByteString.Char8 qualified as BS
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)

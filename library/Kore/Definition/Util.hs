@@ -11,8 +11,8 @@ module Kore.Definition.Util (
 ) where
 
 import Control.DeepSeq (NFData (..))
-import Data.ByteString.UTF8 (ByteString)
-import Data.ByteString.UTF8 qualified as BS
+import Data.ByteString.Char8 (ByteString)
+import Data.ByteString.Char8 qualified as BS
 import Data.Map qualified as Map
 import Data.Set qualified as Set
 import GHC.Generics (Generic)
@@ -67,30 +67,28 @@ prettySummary
         , containAcSymbolsCount
         , termIndexes
         } =
-        BS.toString $
-            bsUnlines $
+        BS.unpack $
+            BS.unlines $
                 [ list decodeLabel' "Modules" modNames
                 , list decodeLabel' "Sorts" sortNames
                 , list decodeLabel' "Symbols" symbolNames
-                , "Axioms: " <> BS.fromString (show axiomCount)
-                , "Axioms preserving definedness: " <> BS.fromString (show preserveDefinednessCount)
-                , "Axioms containing AC symbols: " <> BS.fromString (show containAcSymbolsCount)
+                , "Axioms: " <> BS.pack (show axiomCount)
+                , "Axioms preserving definedness: " <> BS.pack (show preserveDefinednessCount)
+                , "Axioms containing AC symbols: " <> BS.pack (show containAcSymbolsCount)
                 ]
                     <> ("Subsorts:" : tableView decodeLabel' subSorts)
                     <> ("Axioms grouped by term index:" : tableView justShow termIndexes')
       where
-        tableView :: (x -> ByteString) -> Map.Map ByteString [x] -> [ByteString]
         tableView elemShower table =
             map (("- " <>) . uncurry (list elemShower)) (Map.assocs table)
 
-        list :: (x -> ByteString) -> ByteString -> [x] -> ByteString
         list _ header [] = header <> ": -"
         list f header [x] = header <> ": " <> f x
         list f header xs =
             header
                 <> ": "
-                <> BS.fromString (show $ length xs)
-                <> bsConcat (map (("\n  - " <>) . f) xs)
+                <> BS.pack (show $ length xs)
+                <> BS.concat (map (("\n  - " <>) . f) xs)
 
         decodeLabel' = either error id . decodeLabel
 
@@ -101,8 +99,4 @@ prettySummary
         prettyTermIndex (TopSymbol sym) = decodeLabel' sym
         prettyTermIndex None = "None"
 
-        justShow :: (Show x) => x -> ByteString
-        justShow = BS.fromString . show
-
-        bsUnlines = foldr (\a acc -> a <> "\n" <> acc) ""
-        bsConcat = foldr (<>) ""
+        justShow = BS.pack . show

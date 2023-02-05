@@ -5,7 +5,6 @@ License     : BSD-3-Clause
 module Kore.Syntax.Json.Externalise (
     externalisePattern,
     externaliseSort,
-    externaliseTerm,
 ) where
 
 import Data.Foldable ()
@@ -49,7 +48,7 @@ externaliseTerm = \case
             (map externaliseSort sorts)
             (map externaliseTerm args)
     Internal.DomainValue sort bs ->
-        Syntax.KJDV (externaliseSort sort) $ Text.decodeUtf8 bs
+        Syntax.KJDV (externaliseSort sort) $ Text.decodeLatin1 bs
     Internal.Var Internal.Variable{variableSort = iSort, variableName = iName} ->
         Syntax.KJEVar (varNameToId iName) (externaliseSort iSort)
 

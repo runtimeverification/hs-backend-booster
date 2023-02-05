@@ -91,7 +91,6 @@ library:
   - unix
   - unliftio
   - unordered-containers
-  - utf8-string
   source-dirs: library
   build-tools:
     - happy
@@ -184,7 +183,6 @@ tests:
     - tasty-test-reporter
     - text
     - transformers
-    - utf8-string
     ghc-options:
     - -rtsopts
     - -threaded
@@ -204,5 +202,3 @@ tests:
       - hs-backend-booster
       - process
       - text
-      - transformers
-      - utf8-string

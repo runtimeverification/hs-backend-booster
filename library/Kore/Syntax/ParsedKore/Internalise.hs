@@ -19,7 +19,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Bifunctor (first)
-import Data.ByteString.UTF8 (ByteString)
+import Data.ByteString.Char8 (ByteString)
 import Data.Function (on)
 import Data.List (foldl', groupBy, partition, sortOn)
 import Data.List.Extra (groupSort)
