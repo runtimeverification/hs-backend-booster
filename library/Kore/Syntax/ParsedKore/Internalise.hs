@@ -38,7 +38,7 @@ import Kore.Pattern.Base qualified as Def
 import Kore.Pattern.Index (TermIndex, computeTermIndex)
 import Kore.Pattern.Util qualified as Util
 import Kore.Syntax.Json.Base qualified as Json
-import Kore.Syntax.Json.Externalise (decodeUtf8Strict)
+import Kore.Syntax.Json.Externalise (decodeUtf8Lenient)
 import Kore.Syntax.Json.Internalise
 import Kore.Syntax.ParsedKore.Base
 
@@ -155,7 +155,7 @@ mergeDefs k1 k2
         Except DefinitionError (Map ByteString a)
     mergeDisjoint selector m1 m2
         | not (null duplicates) =
-            throwE $ DuplicateNames $ map decodeUtf8Strict $ Set.toList duplicates
+            throwE $ DuplicateNames $ map decodeUtf8Lenient $ Set.toList duplicates
         | otherwise =
             pure $ Map.union (selector m1) (selector m2)
       where
@@ -379,7 +379,7 @@ internaliseRewriteRule ::
     Except DefinitionError RewriteRule
 internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes sortVars = do
     alias <-
-        withExcept (DefinitionAliasError $ decodeUtf8Strict aliasName) $
+        withExcept (DefinitionAliasError $ decodeUtf8Lenient aliasName) $
             Map.lookup aliasName partialDefinition.aliases
                 `orFailWith` UnknownAlias aliasName
     args <- traverse (withExcept DefinitionPatternError . internaliseTerm (Just sortVars) partialDefinition) aliasArgs
@@ -410,7 +410,7 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
     | length alias.args /= length currentArgs =
-        throwE (DefinitionAliasError (decodeUtf8Strict alias.name) $ WrongAliasArgCount alias currentArgs)
+        throwE (DefinitionAliasError (decodeUtf8Lenient alias.name) $ WrongAliasArgCount alias currentArgs)
     | otherwise =
         let substitution = Map.fromList (zip alias.args currentArgs)
          in return $ substitute substitution alias.rhs
