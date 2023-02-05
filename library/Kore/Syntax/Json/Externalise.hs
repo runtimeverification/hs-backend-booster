@@ -6,15 +6,10 @@ module Kore.Syntax.Json.Externalise (
     externalisePattern,
     externaliseSort,
     externaliseTerm,
-    ------------
-    decodeUtf8Lenient,
 ) where
 
-import Data.ByteString.UTF8 (ByteString)
 import Data.Foldable ()
-import Data.Text (Text)
-import Data.Text.Encoding as Text (decodeUtf8With)
-import Data.Text.Encoding.Error as Text (lenientDecode)
+import Data.Text.Encoding qualified as Text
 
 import Kore.Pattern.Base qualified as Internal
 import Kore.Pattern.Util (sortOfTerm)
@@ -54,7 +49,7 @@ externaliseTerm = \case
             (map externaliseSort sorts)
             (map externaliseTerm args)
     Internal.DomainValue sort bs ->
-        Syntax.KJDV (externaliseSort sort) $ decodeUtf8Lenient bs
+        Syntax.KJDV (externaliseSort sort) $ Text.decodeUtf8 bs
     Internal.Var Internal.Variable{variableSort = iSort, variableName = iName} ->
         Syntax.KJEVar (varNameToId iName) (externaliseSort iSort)
 
@@ -106,18 +101,13 @@ externalisePredicate sort =
                 Syntax.KJTop{sort}
 
 varNameToId :: Internal.VarName -> Syntax.Id
-varNameToId = Syntax.Id . decodeUtf8Lenient
+varNameToId = Syntax.Id . Text.decodeLatin1
 
 sortNameToId :: Internal.SortName -> Syntax.Id
-sortNameToId = Syntax.Id . decodeUtf8Lenient
+sortNameToId = Syntax.Id . Text.decodeLatin1
 
 symbolNameToId :: Internal.SymbolName -> Syntax.Id
-symbolNameToId = Syntax.Id . decodeUtf8Lenient
-
--- available in text-2.*
-decodeUtf8Lenient :: ByteString -> Text
-decodeUtf8Lenient = Text.decodeUtf8With Text.lenientDecode
-
+symbolNameToId = Syntax.Id . Text.decodeLatin1
 
 -- | converts an internal sort to an external one
 externaliseSort :: Internal.Sort -> Syntax.Sort

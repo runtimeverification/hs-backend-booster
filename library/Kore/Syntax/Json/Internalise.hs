@@ -30,13 +30,14 @@ import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text as Text (Text, intercalate, pack, unpack)
+import Data.Text.Encoding (decodeUtf8)
 
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base (KoreDefinition (..))
 import Kore.Pattern.Base qualified as Internal
 import Kore.Pattern.Util (sortOfTerm)
 import Kore.Syntax.Json.Base qualified as Syntax
-import Kore.Syntax.Json.Externalise (externaliseSort, decodeUtf8Lenient)
+import Kore.Syntax.Json.Externalise (externaliseSort)
 
 internalisePattern ::
     Maybe [Syntax.Id] ->
@@ -348,9 +349,9 @@ ensureSortsAgree ::
     Internal.Sort ->
     Except SortError ()
 ensureSortsAgree (Internal.SortVar n) _ =
-    throwE $ GeneralError ("ensureSortsAgree found variable " <> decodeUtf8Lenient n)
+    throwE $ GeneralError ("ensureSortsAgree found variable " <> decodeUtf8 n)
 ensureSortsAgree _ (Internal.SortVar n) =
-    throwE $ GeneralError ("ensureSortsAgree found variable " <> decodeUtf8Lenient n)
+    throwE $ GeneralError ("ensureSortsAgree found variable " <> decodeUtf8 n)
 ensureSortsAgree
     s1@(Internal.SortApp name1 args1)
     s2@(Internal.SortApp name2 args2) = do
