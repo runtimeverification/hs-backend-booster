@@ -36,7 +36,7 @@ import Kore.Definition.Base (KoreDefinition (..))
 import Kore.Pattern.Base qualified as Internal
 import Kore.Pattern.Util (sortOfTerm)
 import Kore.Syntax.Json.Base qualified as Syntax
-import Kore.Syntax.Json.Externalise (externaliseSort, decodeUtf8Lenient)
+import Kore.Syntax.Json.Externalise (decodeUtf8Strict, externaliseSort)
 
 internalisePattern ::
     Maybe [Syntax.Id] ->
@@ -348,9 +348,9 @@ ensureSortsAgree ::
     Internal.Sort ->
     Except SortError ()
 ensureSortsAgree (Internal.SortVar n) _ =
-    throwE $ GeneralError ("ensureSortsAgree found variable " <> decodeUtf8Lenient n)
+    throwE $ GeneralError ("ensureSortsAgree found variable " <> decodeUtf8Strict n)
 ensureSortsAgree _ (Internal.SortVar n) =
-    throwE $ GeneralError ("ensureSortsAgree found variable " <> decodeUtf8Lenient n)
+    throwE $ GeneralError ("ensureSortsAgree found variable " <> decodeUtf8Strict n)
 ensureSortsAgree
     s1@(Internal.SortApp name1 args1)
     s2@(Internal.SortApp name2 args2) = do
