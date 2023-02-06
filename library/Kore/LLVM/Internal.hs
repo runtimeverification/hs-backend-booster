@@ -33,7 +33,6 @@ import Foreign.C qualified as C
 import Foreign.C.Types (CSize (..))
 import Foreign.Marshal (alloca)
 import Foreign.Storable (peek)
-import Kore.Definition.Attributes.Base (SymbolAttributes (..), SymbolType (..))
 import Kore.LLVM.TH (dynamicBindings)
 import Kore.Pattern.Base
 import Kore.Pattern.Util (sortOfTerm)
@@ -263,20 +262,6 @@ marshallTerm t = do
             marshallSort sort >>= liftIO . kore.patt.token.new val
         Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"
         Injection (source :| _) target trm -> do
-            inj <- liftIO . kore.patt.fromSymbol =<< marshallSymbol injSymbol [source, target]
+            inj <- liftIO . kore.patt.fromSymbol =<< marshallSymbol injectionSymbol [source, target]
             marshallTerm trm >>= liftIO . kore.patt.addArgument inj
           where
-            -- TODO move to Kore.Pattern.Base?
-            injSymbol =
-                Symbol
-                { name = "inj"
-                , sortVars = ["From", "To"]
-                , argSorts = [SortVar "From"]
-                , resultSort = SortVar "To"
-                , attributes =
-                    SymbolAttributes
-                    { symbolType = SortInjection
-                    , isIdem = False
-                    , isAssoc = False
-                    }
-                }

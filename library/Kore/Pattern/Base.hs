@@ -151,8 +151,9 @@ pattern AndTerm t1 t2 <- Term _ (AndTermF t1 t2)
 pattern SymbolApplication :: Symbol -> [Sort] -> [Term] -> Term
 pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts args)
     where
+        SymbolApplication sym [source, target] [arg]
+            | sym == injectionSymbol = Injection (NE.singleton source) target arg
         SymbolApplication sym sorts args =
-            -- FIXME implement Injection here when symbol matches
             let argAttributes = mconcat $ map getAttributes args
                 newEvaluatedFlag =
                     case sym.attributes.symbolType of
@@ -194,15 +195,37 @@ pattern Injection :: NonEmpty Sort -> Sort -> Term -> Term
 pattern Injection sorts sort t <- Term _ (InjectionF sorts sort t)
     where
         Injection sorts sort t =
-            -- FIXME implement shortening right here
-            let argAttribs = getAttributes t
-                attribs =
-                    argAttribs
-                    { hash = Hashable.hash ("Injection" :: ByteString, sorts, sort, hash argAttribs)
-                    }
-             in Term attribs $ InjectionF sorts sort t
+            case t of
+                Injection sources target sub'
+                    | NE.head sorts == target ->
+                          Injection (sources <> sorts) sort sub'
+                    | otherwise ->
+                          error $ "Unexpected sort injection:" <> show t  -- ???
+                _other ->
+                    let argAttribs = getAttributes t
+                        attribs =
+                            argAttribs
+                            { hash = Hashable.hash ("Injection" :: ByteString, sorts, sort, hash argAttribs)
+                            }
+                     in Term attribs $ InjectionF sorts sort t
 
 {-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var, Injection #-}
+
+-- hard-wired injection symbol
+injectionSymbol :: Symbol
+injectionSymbol =
+    Symbol
+    { name = "inj"
+    , sortVars = ["From", "To"]
+    , argSorts = [SortVar "From"]
+    , resultSort = SortVar "To"
+    , attributes =
+            SymbolAttributes
+            { symbolType = SortInjection
+            , isIdem = False
+            , isAssoc = False
+            }
+    }
 
 -- convenience patterns
 pattern AndBool :: [Term] -> Term
