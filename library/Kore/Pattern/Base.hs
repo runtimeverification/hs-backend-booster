@@ -19,6 +19,8 @@ import Data.Functor.Foldable
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Hashable (Hashable)
 import Data.Hashable qualified as Hashable
+import Data.List.NonEmpty (NonEmpty (..))
+import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -81,6 +83,10 @@ data TermF t
     | SymbolApplicationF Symbol [Sort] [t]
     | DomainValueF Sort ByteString
     | VarF Variable
+    -- | injection node: accumulates all "intermediate" sorts between
+    -- source and target sort in a non-empty list (auto-simplifying).
+    -- The source list is sorted with the most specific sort first.
+    | InjectionF (NonEmpty Sort) Sort t
     deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
     deriving anyclass (NFData, Hashable)
 
@@ -129,6 +135,7 @@ instance Corecursive Term where
     embed (SymbolApplicationF s ss ts) = SymbolApplication s ss ts
     embed (DomainValueF s t) = DomainValue s t
     embed (VarF v) = Var v
+    embed (InjectionF sorts sort t) = Injection sorts sort t
 
 -- smart term constructors, as bidirectional patterns
 pattern AndTerm :: Term -> Term -> Term
@@ -145,6 +152,7 @@ pattern SymbolApplication :: Symbol -> [Sort] -> [Term] -> Term
 pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts args)
     where
         SymbolApplication sym sorts args =
+            -- FIXME implement Injection here when symbol matches
             let argAttributes = mconcat $ map getAttributes args
                 newEvaluatedFlag =
                     case sym.attributes.symbolType of
@@ -182,7 +190,19 @@ pattern Var v <- Term _ (VarF v)
                     }
                 $ VarF v
 
-{-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var #-}
+pattern Injection :: NonEmpty Sort -> Sort -> Term -> Term
+pattern Injection sorts sort t <- Term _ (InjectionF sorts sort t)
+    where
+        Injection sorts sort t =
+            -- FIXME implement shortening right here
+            let argAttribs = getAttributes t
+                attribs =
+                    argAttribs
+                    { hash = Hashable.hash ("Injection" :: ByteString, sorts, sort, hash argAttribs)
+                    }
+             in Term attribs $ InjectionF sorts sort t
+
+{-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var, Injection #-}
 
 -- convenience patterns
 pattern AndBool :: [Term] -> Term
@@ -191,12 +211,6 @@ pattern AndBool ts <-
 
 pattern DV :: Sort -> Symbol
 pattern DV sort <- Symbol "\\dv" _ _ sort _
-
--- NB assumes a particular shape and order of sort variables of the
--- particular symbol "inj". A custom representation would be safer.
-pattern Injection :: Sort -> Sort -> Term -> Term
-pattern Injection fromSort toSort term <-
-    SymbolApplication (Symbol "inj" _ _ _ _) [fromSort, toSort] [term]
 
 {- | A predicate describes constraints on terms. It will always evaluate
    to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.
@@ -322,6 +336,13 @@ instance Pretty Term where
                     -- prints the bytes of the string as data
                     <> KPretty.argumentsP [show $ Text.decodeLatin1 bs]
             Var var -> pretty var
+            -- Injection (sources :| _) target t ->
+            Injection sources target t ->
+                -- TODO should we print all intermediate sorts for
+                -- debugging, or keep output close to actual kore?
+                "\\inj"
+                    <> KPretty.parametersP (NE.toList sources <> [target])
+                    <> KPretty.argumentsP [t]
 
 instance Pretty Sort where
     pretty (SortApp name params) =

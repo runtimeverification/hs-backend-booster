@@ -5,6 +5,7 @@ import Kore.Pattern.Base
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Binary.Get
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.ByteString (fromStrict)
 import Kore.Definition.Base
 import Kore.Pattern.Binary
@@ -24,7 +25,7 @@ simplifyTerm api def trm sort = unsafePerformIO $ Internal.runLLVM api $ do
     binary <- liftIO $ kore.simplify trmPtr sortPtr
     -- strip away the custom injection added by the LLVM backend
     case runGet (decodeKorePattern def) (fromStrict binary) of
-        Injection origSort (SortApp "SortKItem" _) result
+        Injection (origSort :| _) (SortApp "SortKItem" _) result
             | origSort == sort ->
                 pure result
         someTerm
