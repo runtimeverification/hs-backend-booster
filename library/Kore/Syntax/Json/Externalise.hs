@@ -5,6 +5,7 @@ License     : BSD-3-Clause
 module Kore.Syntax.Json.Externalise (
     externalisePattern,
     externaliseSort,
+    externaliseTerm,
 ) where
 
 import Data.Foldable ()
