@@ -18,11 +18,17 @@ import Kore.JsonRpc (runServer)
 import Kore.LLVM.Internal (mkAPI, withDLib)
 import Kore.Syntax.ParsedKore (loadDefinition)
 import Kore.VersionInfo (VersionInfo (..), versionInfo)
+import Kore.Trace
+import Control.Monad (forM_)
 
 main :: IO ()
 main = do
     options <- execParser clParser
-    let CLOptions{definitionFile, mainModuleName, port, logLevels, llvmLibraryFile} = options
+    let CLOptions{definitionFile, mainModuleName, port, logLevels, llvmLibraryFile, eventlogTraces} = options
+
+    forM_ eventlogTraces $ \t -> do
+        putStrLn $ "Tracing " <> show t
+        enableEventlogTrace t
     putStrLn $
         "Loading definition from "
             <> definitionFile
@@ -49,6 +55,7 @@ data CLOptions = CLOptions
     , llvmLibraryFile :: Maybe FilePath
     , port :: Int
     , logLevels :: [LogLevel]
+    , eventlogTraces :: [EventLogTrace]
     }
     deriving (Show)
 
@@ -106,6 +113,16 @@ clOptionsParser =
                         )
                 )
             )
+        <*>  many
+            ( option
+                (eitherReader readEventLogTracing)
+                ( metavar "TRACE"
+                    <> long "trace"
+                    <> short 't'
+                    <> help
+                        "Eventlog tracing: general, llvm-calls"
+                )
+            )
   where
     readLogLevel :: String -> Either String LogLevel
     readLogLevel = \case
@@ -116,6 +133,13 @@ clOptionsParser =
         other
             | other `elem` allowedLogLevels -> Right (LevelOther $ pack other)
             | otherwise -> Left $ other <> ": Unsupported log level"
+
+    readEventLogTracing :: String -> Either String EventLogTrace
+    readEventLogTracing = \case
+     "timing" -> Right Timing
+     "llvm-calls" -> Right LlvmCalls
+     "rewriting" -> Right Rewriting
+     other -> Left $ other <> " not supported in eventlog tracing"
 
 -- custom log levels that can be selected
 allowedLogLevels :: [String]

@@ -58,6 +58,7 @@ ghc-options:
 library:
   dependencies:
   - aeson
+  - aeson-diff
   - aeson-pretty
   - array
   - base
@@ -72,6 +73,7 @@ library:
   - exceptions
   - extra
   - filepath
+  - ghc-trace-events 
   - gitrev
   - hashable
   - hpp
@@ -105,6 +107,7 @@ executables:
     - hs-backend-booster
     ghc-options:
     - -rtsopts
+    - -eventlog
     # - -threaded
     # - -with-rtsopts=-N
   rpc-client:
@@ -157,6 +160,15 @@ executables:
       - directory
       - hs-backend-booster
       - unix
+    ghc-options:
+    - -rtsopts
+  eventlog-parser:
+    source-dirs: tools/eventlog-Parser
+    main: EventlogParser.hs
+    dependencies:
+      - base
+      - ghc-events
+      - hs-backend-booster
     ghc-options:
     - -rtsopts
 

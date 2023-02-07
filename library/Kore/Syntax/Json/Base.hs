@@ -18,6 +18,7 @@ import Data.List.NonEmpty qualified as NE
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
+import Data.Hashable (Hashable)
 
 ------------------------------------------------------------
 
@@ -28,11 +29,12 @@ data KoreJson = KoreJson
     , term :: KorePattern
     }
     deriving stock (Eq, Show, Generic)
-    deriving anyclass (ToJSON, FromJSON)
+    deriving anyclass (ToJSON, FromJSON, Hashable)
 
 data KORE
     = KORE
-    deriving stock (Eq, Show)
+    deriving stock (Eq, Show, Generic)
+    deriving anyclass (Hashable)
 
 instance ToJSON KORE where
     toJSON = const $ String "KORE"
@@ -46,7 +48,8 @@ instance FromJSON KORE where
 data Version
     = -- | Version 1
       KJ1
-    deriving stock (Eq, Show)
+    deriving stock (Eq, Show, Generic)
+    deriving anyclass (Hashable)
 
 kj :: Num a => Int -> a
 kj = fromIntegral
@@ -208,6 +211,7 @@ data KorePattern
         , argss :: NE.NonEmpty KorePattern
         }
     deriving stock (Eq, Show, Generic)
+    deriving anyclass (Hashable)
 
 instance ToJSON KorePattern where
     toJSON = genericToJSON codecOptions
@@ -234,8 +238,8 @@ codecOptions =
 -- Identifiers and lexical checks
 
 newtype Id = Id {getId :: Text}
-    deriving stock (Eq, Show, Ord)
-    deriving newtype (ToJSON, FromJSON)
+    deriving stock (Eq, Show, Ord, Generic)
+    deriving newtype (ToJSON, FromJSON, Hashable)
 
 {- | Performs a (shallow, top-level, no recursion) lexical check of
  identifiers contained in the given node. For details see the check
@@ -339,6 +343,7 @@ data Sort
         { name :: Id
         }
     deriving stock (Eq, Show, Generic)
+    deriving anyclass (Hashable)
 
 instance ToJSON Sort where
     toJSON = genericToJSON codecOptions
@@ -350,7 +355,7 @@ data LeftRight
     = Left
     | Right
     deriving stock (Eq, Show, Generic, Enum, Bounded)
-    deriving anyclass (ToJSON, FromJSON)
+    deriving anyclass (ToJSON, FromJSON, Hashable)
 
 retractVariable :: KorePattern -> Maybe Id
 retractVariable KJEVar{name} = Just name

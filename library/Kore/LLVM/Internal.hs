@@ -36,6 +36,8 @@ import Kore.LLVM.TH (dynamicBindings)
 import Kore.Pattern.Base
 import Kore.Pattern.Util (sortOfTerm)
 import System.Posix.DynamicLinker qualified as Linker
+import Control.Monad.Catch (MonadMask, MonadCatch, MonadThrow)
+import qualified Kore.Trace as Trace
 
 data KorePattern
 data KoreSort
@@ -88,7 +90,7 @@ data API = API
     }
 
 newtype LLVM a = LLVM (ReaderT API IO a)
-    deriving newtype (Functor, Applicative, Monad, MonadIO)
+    deriving newtype (Functor, Applicative, Monad, MonadIO, MonadCatch, MonadThrow, MonadMask)
 
 {- | Uses dlopen to load a .so/.dylib C library at runtime. For doucmentation of flags such as `RTL_LAZY`, consult e.g.
      https://man7.org/linux/man-pages/man3/dlopen.3.html
@@ -198,12 +200,12 @@ mkAPI dlib = flip runReaderT dlib $ do
     let sort = KoreSortAPI{new = newSort, addArgument = addArgumentSort, dump = dumpSort, cache = sortCache}
 
     simplifyBool' <- koreSimplifyBool
-    let simplifyBool p = {-# SCC "LLVM.simplifyBool" #-} liftIO $ withForeignPtr p $ fmap (== 1) <$> simplifyBool'
+    let simplifyBool p = {-# SCC "LLVM.simplifyBool" #-} Trace.event "LLVM.simplifyBool" $ liftIO $ withForeignPtr p $ fmap (== 1) <$> simplifyBool'
 
     simplify' <- koreSimplify
-    let simplify pat srt =
+    let simplify pat srt = 
             {-# SCC "LLVM.simplify" #-}
-            liftIO $
+            Trace.event "LLVM.simplify" $ liftIO $
                 withForeignPtr pat $ \patPtr ->
                     withForeignPtr srt $ \sortPtr ->
                         alloca $ \lenPtr ->
@@ -219,7 +221,8 @@ ask :: LLVM API
 ask = LLVM Reader.ask
 
 marshallSymbol :: Symbol -> [Sort] -> LLVM KoreSymbolPtr
-marshallSymbol sym sorts = do
+marshallSymbol sym sorts = --Trace.event "LLVM.marshallSymbol" $ 
+    do
     kore <- ask
     cache <- liftIO $ readIORef kore.symbol.cache
     case HM.lookup (sym, sorts) cache of
@@ -230,8 +233,9 @@ marshallSymbol sym sorts = do
             foldM (\symbol sort -> marshallSort sort >>= liftIO . kore.symbol.addArgument symbol) sym' sorts
 
 marshallSort :: Sort -> LLVM KoreSortPtr
-marshallSort = \case
-    s@(SortApp name args) -> do
+marshallSort s = -- Trace.event "LLVM.marshallSort" $ 
+    case s of
+    SortApp name args -> do
         kore <- ask
         cache <- liftIO $ readIORef kore.sort.cache
         case HM.lookup s cache of
@@ -244,7 +248,8 @@ marshallSort = \case
     SortVar varName -> error $ "marshalling SortVar " <> show varName <> " unsupported"
 
 marshallTerm :: Term -> LLVM KorePatternPtr
-marshallTerm t = do
+marshallTerm t = --Trace.event "LLVM.marshallTerm" $ 
+    do
     kore <- ask
     case t of
         SymbolApplication symbol sorts trms -> do
