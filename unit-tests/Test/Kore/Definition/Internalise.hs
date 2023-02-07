@@ -19,7 +19,6 @@ import Kore.Definition.Util
 import Kore.Syntax.ParsedKore
 import Test.Kore.Util (testGoldenVsString)
 
-
 -- Assumption: contains textual kore (<name>.kore) and expected
 -- output, either a report <name>.report similar to the one produced
 -- by 'parsetest' or an error message in <name>.error)

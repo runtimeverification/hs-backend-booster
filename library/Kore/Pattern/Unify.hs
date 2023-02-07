@@ -174,24 +174,25 @@ unify1
 unify1
     pat@(Injection source1 target1 trm1)
     subj@(Injection source2 target2 trm2)
-        | target1 /= target2 = -- target sorts don't agree
-              lift $ throwE (UnificationSortError $ IncompatibleSorts [target1, target2])
+        | target1 /= target2 -- target sorts don't agree
+            =
+            lift $ throwE (UnificationSortError $ IncompatibleSorts [target1, target2])
         | source1 == source2 = do
-              enqueueProblem trm1 trm2
+            enqueueProblem trm1 trm2
         | Var v <- trm1 -- variable in pattern, check source sorts and bind
         , SortApp patName [] <- source1
         , SortApp subjName [] <- source2 = do
-              mbSubsorts <- gets $ Map.lookup patName . uSubsorts
-              isSubsort <- case mbSubsorts of
-                     Nothing ->
-                         internalError $ "Sort " <> show patName <> " not found in subsort table"
-                     Just subsorts ->
-                         pure $ subjName `Set.member` subsorts
-              if isSubsort
-                  then bindVariable v (Injection source2 source1 trm2)
-                  else failWith (DifferentSymbols pat subj)
+            mbSubsorts <- gets $ Map.lookup patName . uSubsorts
+            isSubsort <- case mbSubsorts of
+                Nothing ->
+                    internalError $ "Sort " <> show patName <> " not found in subsort table"
+                Just subsorts ->
+                    pure $ subjName `Set.member` subsorts
+            if isSubsort
+                then bindVariable v (Injection source2 source1 trm2)
+                else failWith (DifferentSymbols pat subj)
         | otherwise =
-              lift $ throwE (UnificationSortError $ IncompatibleSorts [source1, source2])
+            lift $ throwE (UnificationSortError $ IncompatibleSorts [source1, source2])
 ----- Symbol Applications
 -- two symbol applications: fail if names differ, recurse
 unify1

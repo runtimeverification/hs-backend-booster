@@ -14,7 +14,7 @@ import Test.Tasty.Golden
 
 gitDiff :: FilePath -> FilePath -> [String]
 gitDiff ref new =
-    [ "git", "diff", "--no-index", "--color-words=.", ref, new]
+    ["git", "diff", "--no-index", "--color-words=.", ref, new]
 
 testGoldenVsString :: TestName -> FilePath -> IO ByteString -> TestTree
 testGoldenVsString name = goldenVsStringDiff name gitDiff

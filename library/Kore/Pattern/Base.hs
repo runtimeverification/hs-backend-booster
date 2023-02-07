@@ -81,9 +81,9 @@ data TermF t
     | SymbolApplicationF Symbol [Sort] [t]
     | DomainValueF Sort ByteString
     | VarF Variable
-    -- | injection node with source and target sort: "intermediate"
-    -- sorts between source and target are shortened out.
-    | InjectionF Sort Sort t
+    | -- | injection node with source and target sort: "intermediate"
+      -- sorts between source and target are shortened out.
+      InjectionF Sort Sort t
     deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
     deriving anyclass (NFData, Hashable)
 
@@ -195,15 +195,15 @@ pattern Injection source target t <- Term _ (InjectionF source target t)
             case t of
                 Injection source' target' sub'
                     | source == target' ->
-                          Injection source' target sub'
+                        Injection source' target sub'
                     | otherwise ->
-                          error $ "Unexpected sort injection:" <> show t  -- ???
+                        error $ "Unexpected sort injection:" <> show t -- ???
                 _other ->
                     let argAttribs = getAttributes t
                         attribs =
                             argAttribs
-                            { hash = Hashable.hash ("Injection" :: ByteString, source, target, hash argAttribs)
-                            }
+                                { hash = Hashable.hash ("Injection" :: ByteString, source, target, hash argAttribs)
+                                }
                      in Term attribs $ InjectionF source target t
 
 {-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var, Injection #-}
@@ -212,17 +212,17 @@ pattern Injection source target t <- Term _ (InjectionF source target t)
 injectionSymbol :: Symbol
 injectionSymbol =
     Symbol
-    { name = "inj"
-    , sortVars = ["From", "To"]
-    , argSorts = [SortVar "From"]
-    , resultSort = SortVar "To"
-    , attributes =
+        { name = "inj"
+        , sortVars = ["From", "To"]
+        , argSorts = [SortVar "From"]
+        , resultSort = SortVar "To"
+        , attributes =
             SymbolAttributes
-            { symbolType = SortInjection
-            , isIdem = False
-            , isAssoc = False
-            }
-    }
+                { symbolType = SortInjection
+                , isIdem = False
+                , isAssoc = False
+                }
+        }
 
 -- convenience patterns
 pattern AndBool :: [Term] -> Term
