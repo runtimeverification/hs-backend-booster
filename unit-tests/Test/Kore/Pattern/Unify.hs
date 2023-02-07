@@ -33,16 +33,16 @@ injections =
         "sort injections"
         [ test
             "same sort injection"
-            (inject aSubsort someSort varSub)
-            (inject aSubsort someSort dSub)
+            (Injection aSubsort someSort varSub)
+            (Injection aSubsort someSort dSub)
             $ success [("X", aSubsort, dSub)]
         , test
             "subsort injection"
-            (inject someSort kItemSort varSome)
-            (inject aSubsort kItemSort dSub)
-            $ success [("Y", someSort, inject aSubsort someSort dSub)]
-        , let t1 = inject someSort kItemSort varSome
-              t2 = inject differentSort kItemSort dOther
+            (Injection someSort kItemSort varSome)
+            (Injection aSubsort kItemSort dSub)
+            $ success [("Y", someSort, Injection aSubsort someSort dSub)]
+        , let t1 = Injection someSort kItemSort varSome
+              t2 = Injection differentSort kItemSort dOther
            in test "sort injection mismatch" t1 t2 $ failed (DifferentSymbols t1 t2)
         ]
   where
@@ -50,9 +50,6 @@ injections =
     varSome = var "Y" someSort
     dSub = dv aSubsort "a subsort"
     dOther = dv differentSort "different sort"
-
-inject :: Sort -> Sort -> Term -> Term
-inject from to t = Injection from to t
 
 sorts :: TestTree
 sorts =
