@@ -723,7 +723,7 @@
         "haskell-backend": "haskell-backend",
         "llvm-backend": "llvm-backend",
         "mavenix": "mavenix_2",
-        "nixpkgs": "nixpkgs_8",
+        "nixpkgs": "nixpkgs_9",
         "rv-utils": "rv-utils"
       },
       "locked": {
@@ -745,21 +745,17 @@
         "fmt-src": "fmt-src",
         "immer-src": "immer-src",
         "mavenix": "mavenix",
-        "nixpkgs": [
-          "k-framework",
-          "haskell-backend",
-          "nixpkgs"
-        ],
+        "nixpkgs": "nixpkgs_7",
         "pybind11-src": "pybind11-src",
         "rapidjson-src": "rapidjson-src",
         "utils": "utils_3"
       },
       "locked": {
-        "lastModified": 1675171776,
-        "narHash": "sha256-CwRxr0Vee8oM7s1nst1rCwq79ZJWj1vTaL1bbgDzcdM=",
+        "lastModified": 1675702987,
+        "narHash": "sha256-6R1Wl7himsAb+FeBDTt5N+C654aBvYmJqt2Jrqqx4Gs=",
         "owner": "runtimeverification",
         "repo": "llvm-backend",
-        "rev": "d91b326d3220affdae9916e88dc0cb036fc602f4",
+        "rev": "3851faf83e1d4c59c916160a4ef903d862f30df8",
         "type": "github"
       },
       "original": {
@@ -821,7 +817,7 @@
     },
     "mavenix_2": {
       "inputs": {
-        "nixpkgs": "nixpkgs_7",
+        "nixpkgs": "nixpkgs_8",
         "utils": "utils_4"
       },
       "locked": {
@@ -1323,6 +1319,21 @@
     },
     "nixpkgs_7": {
       "locked": {
+        "lastModified": 1675769306,
+        "narHash": "sha256-1CS8myiz4zdO+b0ms20JzQSHzlEzj/rsluZ6b8OlnpM=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "9095b7c2ab1269e133b2c9da27c9f8175c399d3e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_8": {
+      "locked": {
         "lastModified": 1621552131,
         "narHash": "sha256-AD/AEXv+QOYAg0PIqMYv2nbGOGTIwfOGKtz3rE+y+Tc=",
         "owner": "NixOS",
@@ -1335,7 +1346,7 @@
         "type": "indirect"
       }
     },
-    "nixpkgs_8": {
+    "nixpkgs_9": {
       "locked": {
         "lastModified": 1672580127,
         "narHash": "sha256-3lW3xZslREhJogoOkjeZtlBtvFMyxHku7I/9IVehhT8=",
