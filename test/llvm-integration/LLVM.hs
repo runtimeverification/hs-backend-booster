@@ -27,6 +27,8 @@ import System.FilePath
 import System.Process
 import Test.Hspec
 import Test.Hspec.Hedgehog
+import Test.Tasty
+import Test.Tasty.Hspec
 
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
@@ -47,7 +49,8 @@ kompiledPath = "test/llvm-integration/definition/llvm-kompiled"
 dlPath = kompiledPath </> "interpreter"
 
 main :: IO ()
-main = hspec llvmSpec
+--main = hspec llvmSpec
+main = testSpec "fail me!" llvmSpec >>= defaultMain . testGroup "do it, fail!" . (:[])
 
 llvmSpec :: Spec
 llvmSpec =

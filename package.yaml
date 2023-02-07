@@ -201,5 +201,11 @@ tests:
       - hspec-hedgehog
       - hs-backend-booster
       - process
+      - tasty
+      - tasty-hspec
       - text
       - transformers
+    ghc-options:
+    - -rtsopts
+    - -threaded
+    - -with-rtsopts=-N
