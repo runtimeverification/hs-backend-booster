@@ -152,12 +152,47 @@ unify1
             unless (s1 == s2) $ -- sorts must be exactly the same for DVs
                 returnAsRemainder d1 d2
 
+-- two injections. Try to unify the contained terms if the sorts
+-- agree. Target sorts must be the same, source sorts may differ if
+-- the contained pattern term is just a variable, otherwise they need
+-- to be identical.
+unify1
+    inj1@(Injection source1 target1 trm1)
+    inj2@(Injection source2 target2 trm2)
+        | target1 /= target2 = -- target sorts don't agree
+              lift $ throwE (UnificationSortError $ IncompatibleSorts [target1, target2])
+        | Var v <- trm1 = do -- variable in pattern
+              -- sources2 must be subsort of sources1 (consider heads only)
+              matchSorts source2 source1
+              bindVariable v (Injection source2 source1 trm2)
+        | otherwise = do
+
+              undefined -- FIXME
+-- injection in pattern, no injection in subject: return as remainder
+unify1
+    inj@Injection{}
+    trm =
+        returnAsRemainder inj trm
+-- no injection in pattern, injection in subject: create binding if
+-- pattern has a variable with suitable sort, otherwise return as
+-- remainder
+unify1
+    (Var _)
+    (Injection sources target trm) =
+        do error "var case"
+-- no injection in pattern, injection in subject: create binding if
+-- pattern has a variable with suitable sort, otherwise return as
+-- remainder
+unify1
+    trm
+    inj@Injection{} =
+        returnAsRemainder trm inj
+----------------------------------------
 -- two sort injections, the pattern one containing just a variable:
 -- accept (adding another injection) if subject's source sort is
 -- subsort of pattern source sort.
 --
--- NB This _assumes the order source-target on injection symbol sort variables!
--- Having a separate injection node in the AST would be much safer.
+-- FIXME delete this!
 unify1
     pat@(SymbolApplication injP [srcP@(SortApp srcPName []), targetP] [Var v@Variable{variableSort}])
     subj@(SymbolApplication injS [srcS@(SortApp srcSName []), targetS] [argS])
@@ -178,7 +213,7 @@ unify1
                 if isSubsort
                     then bindVariable v (SymbolApplication injS [srcS, srcP] [argS])
                     else failWith (DifferentSymbols pat subj)
-
+----------------------------------------
 -- two symbol applications: fail if names differ, recurse
 unify1
     t1@(SymbolApplication symbol1 sorts1 args1)

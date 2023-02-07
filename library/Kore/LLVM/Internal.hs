@@ -26,7 +26,6 @@ import Data.ByteString.Char8 qualified as BS
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
-import Data.List.NonEmpty (NonEmpty ((:|)))
 import Foreign (ForeignPtr, finalizeForeignPtr, newForeignPtr, withForeignPtr)
 import Foreign qualified
 import Foreign.C qualified as C
@@ -261,7 +260,7 @@ marshallTerm t = do
         DomainValue sort val ->
             marshallSort sort >>= liftIO . kore.patt.token.new val
         Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"
-        Injection (source :| _) target trm -> do
+        Injection source target trm -> do
             inj <- liftIO . kore.patt.fromSymbol =<< marshallSymbol injectionSymbol [source, target]
             marshallTerm trm >>= liftIO . kore.patt.addArgument inj
           where
