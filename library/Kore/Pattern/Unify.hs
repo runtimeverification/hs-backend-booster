@@ -192,7 +192,7 @@ unify1
                 then bindVariable v (Injection source2 source1 trm2)
                 else failWith (DifferentSymbols pat subj)
         | otherwise =
-            lift $ throwE (UnificationSortError $ IncompatibleSorts [source1, source2])
+            failWith (DifferentSymbols pat subj)
 ----- Symbol Applications
 -- two symbol applications: fail if names differ, recurse
 unify1
