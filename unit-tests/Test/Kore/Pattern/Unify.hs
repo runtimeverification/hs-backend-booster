@@ -11,7 +11,6 @@ import Data.Map qualified as Map
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Kore.Definition.Attributes.Base
 import Kore.Pattern.Base
 import Kore.Pattern.Unify
 import Test.Kore.Fixture
@@ -53,18 +52,7 @@ injections =
     dOther = dv differentSort "different sort"
 
 inject :: Sort -> Sort -> Term -> Term
-inject from to t = SymbolApplication inj [from, to] [t]
-
--- TODO move to Fixture!
-inj :: Symbol
-inj =
-    Symbol
-        { name = "inj"
-        , sortVars = ["Source", "Target"]
-        , resultSort = SortVar "Target"
-        , argSorts = [SortVar "Source"]
-        , attributes = SymbolAttributes SortInjection False False
-        }
+inject from to t = Injection from to t
 
 sorts :: TestTree
 sorts =

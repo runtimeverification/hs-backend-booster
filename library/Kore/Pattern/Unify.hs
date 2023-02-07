@@ -28,7 +28,6 @@ import Kore.Pattern.Base
 import Kore.Pattern.Util (
     freeVariables,
     isFunctionSymbol,
-    isSortInjectionSymbol,
     sortOfTerm,
     substituteInTerm,
  )
@@ -142,6 +141,7 @@ unify1 ::
     Term ->
     Term ->
     StateT UnificationState (Except UnificationResult) ()
+----- Domain values
 -- two domain values: have to fully agree
 unify1
     d1@(DomainValue s1 t1)
@@ -151,23 +151,32 @@ unify1
                 failWith (DifferentValues d1 d2)
             unless (s1 == s2) $ -- sorts must be exactly the same for DVs
                 returnAsRemainder d1 d2
-
+----- Injections
 -- two injections. Try to unify the contained terms if the sorts
 -- agree. Target sorts must be the same, source sorts may differ if
 -- the contained pattern term is just a variable, otherwise they need
 -- to be identical.
 unify1
-    inj1@(Injection source1 target1 trm1)
-    inj2@(Injection source2 target2 trm2)
+    pat@(Injection source1 target1 trm1)
+    subj@(Injection source2 target2 trm2)
         | target1 /= target2 = -- target sorts don't agree
               lift $ throwE (UnificationSortError $ IncompatibleSorts [target1, target2])
-        | Var v <- trm1 = do -- variable in pattern
-              -- sources2 must be subsort of sources1 (consider heads only)
-              matchSorts source2 source1
-              bindVariable v (Injection source2 source1 trm2)
-        | otherwise = do
-
-              undefined -- FIXME
+        | source1 == source2 = do
+              enqueueProblem trm1 trm2
+        | Var v <- trm1 -- variable in pattern, check sorts and bind
+        , SortApp subName [] <- source2
+        , SortApp superName [] <- source1 = do
+              mbSubsorts <- gets $ Map.lookup superName . uSubsorts
+              isSubsort <- case mbSubsorts of
+                     Nothing ->
+                         internalError $ "Sort " <> show superName <> " not found in subsort table"
+                     Just subsorts ->
+                         pure $ subName `Set.member` subsorts
+              if isSubsort
+                  then bindVariable v (Injection source2 source1 trm2)
+                  else failWith (DifferentSymbols pat subj)
+        | otherwise =
+              lift $ throwE (UnificationSortError $ IncompatibleSorts [source1, source2])
 -- injection in pattern, no injection in subject: return as remainder
 unify1
     inj@Injection{}
@@ -177,43 +186,15 @@ unify1
 -- pattern has a variable with suitable sort, otherwise return as
 -- remainder
 unify1
-    (Var _)
-    (Injection sources target trm) =
-        do error "var case"
--- no injection in pattern, injection in subject: create binding if
--- pattern has a variable with suitable sort, otherwise return as
--- remainder
+    (Var v)
+    inj@(Injection _source target _trm) = do
+        matchSorts v.variableSort target
+        bindVariable v inj
 unify1
     trm
     inj@Injection{} =
         returnAsRemainder trm inj
-----------------------------------------
--- two sort injections, the pattern one containing just a variable:
--- accept (adding another injection) if subject's source sort is
--- subsort of pattern source sort.
---
--- FIXME delete this!
-unify1
-    pat@(SymbolApplication injP [srcP@(SortApp srcPName []), targetP] [Var v@Variable{variableSort}])
-    subj@(SymbolApplication injS [srcS@(SortApp srcSName []), targetS] [argS])
-        | isSortInjectionSymbol injP && injP == injS -- is sort injection
-        , targetP == targetS -- same target sort!
-        , variableSort == srcP -- correct variable sort
-        , srcP /= srcS -- different source sort (same sort handled by next case)
-            =
-            do
-                -- check if subject source sorts subsort of pattern source sort
-                mbSubsorts <- gets (Map.lookup srcPName . uSubsorts)
-                isSubsort <-
-                    case mbSubsorts of
-                        Nothing ->
-                            internalError $ "Sort " <> show srcPName <> " not found in sort table"
-                        Just subsorts ->
-                            pure $ srcSName `Set.member` subsorts
-                if isSubsort
-                    then bindVariable v (SymbolApplication injS [srcS, srcP] [argS])
-                    else failWith (DifferentSymbols pat subj)
-----------------------------------------
+----- Symbol Applications
 -- two symbol applications: fail if names differ, recurse
 unify1
     t1@(SymbolApplication symbol1 sorts1 args1)
@@ -230,6 +211,7 @@ unify1
         | sorts1 /= sorts2 = failWith (DifferentSymbols t1 t2) -- TODO actually DifferentSorts
         | otherwise =
             enqueueProblems $ Seq.fromList $ zip args1 args2
+----- And Terms
 -- and-term in pattern: must unify with both arguments
 unify1
     (AndTerm t1a t1b)
@@ -244,7 +226,7 @@ unify1
         do
             enqueueProblem term1 t2a
             enqueueProblem term1 t2b
-
+----- Variables
 -- twice the exact same variable: verify sorts are equal
 unify1
     (Var var1@(Variable varSort1 varName1))
@@ -268,8 +250,8 @@ unify1
     term1
     v@Var{} =
         unify1 v term1
--- Remaining other cases: mix of DomainValue and SymbolApplication (either side)
--- The remaining unification problems are returned
+------ Remaining other cases: mix of DomainValue and SymbolApplication
+------ (either side). The remaining unification problems are returned.
 unify1
     t1@SymbolApplication{}
     t2@DomainValue{} =
