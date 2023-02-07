@@ -151,6 +151,21 @@ unify1
                 failWith (DifferentValues d1 d2)
             unless (s1 == s2) $ -- sorts must be exactly the same for DVs
                 returnAsRemainder d1 d2
+----- And Terms
+-- and-term in pattern: must unify with both arguments
+unify1
+    (AndTerm t1a t1b)
+    term2 =
+        do
+            enqueueProblem t1a term2
+            enqueueProblem t1b term2
+-- and-term in subject: must unify with both arguments
+unify1
+    term1
+    (AndTerm t2a t2b) =
+        do
+            enqueueProblem term1 t2a
+            enqueueProblem term1 t2b
 ----- Injections
 -- two injections. Try to unify the contained terms if the sorts
 -- agree. Target sorts must be the same, source sorts may differ if
@@ -163,37 +178,20 @@ unify1
               lift $ throwE (UnificationSortError $ IncompatibleSorts [target1, target2])
         | source1 == source2 = do
               enqueueProblem trm1 trm2
-        | Var v <- trm1 -- variable in pattern, check sorts and bind
-        , SortApp subName [] <- source2
-        , SortApp superName [] <- source1 = do
-              mbSubsorts <- gets $ Map.lookup superName . uSubsorts
+        | Var v <- trm1 -- variable in pattern, check source sorts and bind
+        , SortApp patName [] <- source1
+        , SortApp subjName [] <- source2 = do
+              mbSubsorts <- gets $ Map.lookup patName . uSubsorts
               isSubsort <- case mbSubsorts of
                      Nothing ->
-                         internalError $ "Sort " <> show superName <> " not found in subsort table"
+                         internalError $ "Sort " <> show patName <> " not found in subsort table"
                      Just subsorts ->
-                         pure $ subName `Set.member` subsorts
+                         pure $ subjName `Set.member` subsorts
               if isSubsort
                   then bindVariable v (Injection source2 source1 trm2)
                   else failWith (DifferentSymbols pat subj)
         | otherwise =
               lift $ throwE (UnificationSortError $ IncompatibleSorts [source1, source2])
--- injection in pattern, no injection in subject: return as remainder
-unify1
-    inj@Injection{}
-    trm =
-        returnAsRemainder inj trm
--- no injection in pattern, injection in subject: create binding if
--- pattern has a variable with suitable sort, otherwise return as
--- remainder
-unify1
-    (Var v)
-    inj@(Injection _source target _trm) = do
-        matchSorts v.variableSort target
-        bindVariable v inj
-unify1
-    trm
-    inj@Injection{} =
-        returnAsRemainder trm inj
 ----- Symbol Applications
 -- two symbol applications: fail if names differ, recurse
 unify1
@@ -211,21 +209,6 @@ unify1
         | sorts1 /= sorts2 = failWith (DifferentSymbols t1 t2) -- TODO actually DifferentSorts
         | otherwise =
             enqueueProblems $ Seq.fromList $ zip args1 args2
------ And Terms
--- and-term in pattern: must unify with both arguments
-unify1
-    (AndTerm t1a t1b)
-    term2 =
-        do
-            enqueueProblem t1a term2
-            enqueueProblem t1b term2
--- and-term in subject: must unify with both arguments
-unify1
-    term1
-    (AndTerm t2a t2b) =
-        do
-            enqueueProblem term1 t2a
-            enqueueProblem term1 t2b
 ----- Variables
 -- twice the exact same variable: verify sorts are equal
 unify1
@@ -250,6 +233,16 @@ unify1
     term1
     v@Var{} =
         unify1 v term1
+-- injection in pattern, no injection in subject: fail (trm cannot be a variable)
+unify1
+    inj@Injection{}
+    trm =
+        failWith $ DifferentSymbols inj trm
+-- injection in subject but not in pattern: fail (trm cannot be a variable)
+unify1
+    trm
+    inj@Injection{} =
+        failWith $ DifferentSymbols trm inj
 ------ Remaining other cases: mix of DomainValue and SymbolApplication
 ------ (either side). The remaining unification problems are returned.
 unify1
