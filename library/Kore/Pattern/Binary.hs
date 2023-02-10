@@ -1,8 +1,8 @@
 {-# LANGUAGE PatternSynonyms #-}
 
-module Kore.Pattern.Binary (Version(..), decodeTerm, decodeTerm', decodePattern, encodeMagicHeaderAndVersion, encodePattern, encodeTerm, test) where
+module Kore.Pattern.Binary (Version (..), decodeTerm, decodeTerm', decodePattern, encodeMagicHeaderAndVersion, encodePattern, encodeTerm, test) where
 
-import Control.Monad (unless, forM_)
+import Control.Monad (forM_, unless)
 import Control.Monad.Extra (forM)
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask, asks)
@@ -10,6 +10,7 @@ import Control.Monad.Trans.State (StateT, evalStateT, gets, modify)
 import Data.Binary.Get
 import Data.Binary.Put
 import Data.Bits (Bits (complement, shiftL, (.&.), (.|.)), shiftR)
+import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BL
 import Data.Int (Int16)
@@ -20,9 +21,8 @@ import GHC.Word (Word8)
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
 import Kore.Pattern.Base
-import Kore.Syntax.ParsedKore
-import Data.ByteString (ByteString)
 import Kore.Pattern.Util (sortOfTerm)
+import Kore.Syntax.ParsedKore
 
 -- | tags indicating the next element in a block, see @'decodeBlock'@
 pattern KORECompositePattern, KOREStringPattern, KORECompositeSort, KORESortVariable, KORESymbol, KOREVariablePattern, KOREVariable :: Word8
@@ -41,12 +41,12 @@ data Version = Version
     }
     deriving (Show)
 
-data Block = STerm Term
-               | SPredicate Predicate
-               | SString ByteString
-            --    | SVariable ByteString
-               | SSort Sort
-               | SSymbol ByteString [Sort]
+data Block
+    = BTerm Term
+    | BPredicate Predicate
+    | BString ByteString
+    | BSort Sort
+    | BSymbol ByteString [Sort]
     deriving (Show)
 
 data DecoderState = DecoderState
@@ -152,7 +152,6 @@ decodeString = do
                     fail $ "Incorrect offset for interned string at " <> show (position, backref) <> " with table\n " <> unwords offsets
         _ -> fail "Incorrect String encoding"
 
-
 getStack :: DecodeM [Block]
 getStack = DecodeM $ lift $ gets stack
 
@@ -169,13 +168,13 @@ pushStack t = DecodeM $ lift $ do
 
 popStackSorts :: Int -> DecodeM [Sort]
 popStackSorts n =
-    popStack n >>= \stack' -> forM stack' $ \case 
-        SSort s -> pure s
+    popStack n >>= \stack' -> forM stack' $ \case
+        BSort s -> pure s
         _ -> fail "popping a non sort"
 
 pushStackSort :: Sort -> DecodeM ()
 pushStackSort sort = DecodeM $ lift $ do
-    modify (\s@DecoderState{stack} -> s{stack = SSort sort : stack})
+    modify (\s@DecoderState{stack} -> s{stack = BSort sort : stack})
 
 lookupKoreDefinitionSymbol :: SymbolName -> DecodeM (Maybe Symbol)
 lookupKoreDefinitionSymbol name = DecodeM $ do
@@ -202,7 +201,7 @@ decodeBlock = do
             KORECompositePattern ->
                 -- apply node (arity), uses current symbol and the stack of terms
                 popStack 1 >>= \case
-                    [SSymbol symbolName sorts] -> do
+                    [BSymbol symbolName sorts] -> do
                         arity <- decodeLength 2
                         args <- popStack arity
                         mkSymbolApplication symbolName sorts args >>= pushStack
@@ -210,7 +209,7 @@ decodeBlock = do
             KOREStringPattern -> do
                 -- either literal string (length,data) or back-reference (rel.offset)
                 str <- decodeString
-                pushStack $ SString str
+                pushStack $ BString str
             KORECompositeSort -> do
                 -- sort constructor (arity, name)
                 arity <- decodeLength 2
@@ -225,12 +224,12 @@ decodeBlock = do
                 arity <- decodeLength 2
                 symbolName <- decodeString
                 sorts <- popStackSorts arity
-                pushStack $ SSymbol symbolName sorts
+                pushStack $ BSymbol symbolName sorts
             KOREVariablePattern -> pure ()
             KOREVariable -> do
                 var <- decodeString
                 [sort] <- popStackSorts 1
-                pushStack $ STerm $ Var $ Variable sort var
+                pushStack $ BTerm $ Var $ Variable sort var
             h -> fail $ "Invalid header " <> show h
 
     getStack
@@ -241,43 +240,43 @@ decodeBlock = do
             False -> m >> whileNotEmpty m
 
     mkSymbolApplication :: ByteString -> [Sort] -> [Block] -> DecodeM Block
-    mkSymbolApplication "\\and" _ [SPredicate p1, SPredicate p2] = pure $ SPredicate $ AndPredicate p1 p2
-    mkSymbolApplication "\\and" _ [STerm t1, STerm t2] = pure $ STerm $ AndTerm t1 t2
+    mkSymbolApplication "\\and" _ [BPredicate p1, BPredicate p2] = pure $ BPredicate $ AndPredicate p1 p2
+    mkSymbolApplication "\\and" _ [BTerm t1, BTerm t2] = pure $ BTerm $ AndTerm t1 t2
     mkSymbolApplication "\\and" _ _ = fail "Invalid AndTerm/AndPredicate"
-    mkSymbolApplication "\\bottom" _ [] = pure $ SPredicate $ Bottom
+    mkSymbolApplication "\\bottom" _ [] = pure $ BPredicate Bottom
     mkSymbolApplication "\\bottom" _ _ = fail "Invalid Bottom"
-    mkSymbolApplication "\\ceil" _ [STerm t] = pure $ SPredicate $ Ceil t
+    mkSymbolApplication "\\ceil" _ [BTerm t] = pure $ BPredicate $ Ceil t
     mkSymbolApplication "\\ceil" _ _ = fail "Invalid Ceil"
-    mkSymbolApplication "\\dv" [sort] [SString txt] = pure $ STerm $ DomainValue sort txt
-    mkSymbolApplication "\\dv" _ _ =  fail "Invalid DomainValue"
-    mkSymbolApplication "\\equals" _ [STerm t1, STerm t2] = pure $ SPredicate $ EqualsTerm t1 t2
-    mkSymbolApplication "\\equals" _ [SPredicate p1, SPredicate p2] = pure $ SPredicate $ EqualsPredicate p1 p2
-    mkSymbolApplication "\\equals" _ _ = fail "Invalid EqualsTerm/EqualsPredicate"
-    mkSymbolApplication "\\exists" _ [STerm (Var (Variable _ var)), SPredicate p] = pure $ SPredicate $ Exists var p
+    mkSymbolApplication "\\dv" [sort] [BString txt] = pure $ BTerm $ DomainValue sort txt
+    mkSymbolApplication "\\dv" _ _ = fail "Invalid DomainValue"
+    mkSymbolApplication "\\equals" _ [BTerm t1, BTerm t2] = pure $ BPredicate $ EqualsTerm t1 t2
+    mkSymbolApplication "\\equals" _ [BPredicate p1, BPredicate p2] = pure $ BPredicate $ EqualsPredicate p1 p2
+    mkSymbolApplication "\\equals" _ _ = fail "Invalid EqualBTerm/EqualBPredicate"
+    mkSymbolApplication "\\exists" _ [BTerm (Var (Variable _ var)), BPredicate p] = pure $ BPredicate $ Exists var p
     mkSymbolApplication "\\exists" _ _ = fail "Invalid Exists"
-    mkSymbolApplication "\\forall" _ [STerm (Var (Variable _ var)), SPredicate p] = pure $ SPredicate $ Forall var p
+    mkSymbolApplication "\\forall" _ [BTerm (Var (Variable _ var)), BPredicate p] = pure $ BPredicate $ Forall var p
     mkSymbolApplication "\\forall" _ _ = fail "Invalid Forall"
-    mkSymbolApplication "\\iff" _ [SPredicate p1, SPredicate p2] = pure $ SPredicate $ Iff p1 p2
+    mkSymbolApplication "\\iff" _ [BPredicate p1, BPredicate p2] = pure $ BPredicate $ Iff p1 p2
     mkSymbolApplication "\\iff" _ _ = fail "Invalid Iff"
-    mkSymbolApplication "\\implies" _ [SPredicate p1, SPredicate p2] = pure $ SPredicate $ Implies p1 p2
+    mkSymbolApplication "\\implies" _ [BPredicate p1, BPredicate p2] = pure $ BPredicate $ Implies p1 p2
     mkSymbolApplication "\\implies" _ _ = fail "Invalid Implies"
-    mkSymbolApplication "\\in" _ [STerm t1, STerm t2] = pure $ SPredicate $ In t1 t2
+    mkSymbolApplication "\\in" _ [BTerm t1, BTerm t2] = pure $ BPredicate $ In t1 t2
     mkSymbolApplication "\\in" _ _ = fail "Invalid In"
-    mkSymbolApplication "\\inj" [source, target] [STerm t] = pure $ STerm $ Injection source target t
-    mkSymbolApplication "\\inj" _ _ =  fail "Invalid Injection"
-    mkSymbolApplication "\\not" _ [SPredicate p] = pure $ SPredicate $ Not p
+    mkSymbolApplication "\\inj" [source, target] [BTerm t] = pure $ BTerm $ Injection source target t
+    mkSymbolApplication "\\inj" _ _ = fail "Invalid Injection"
+    mkSymbolApplication "\\not" _ [BPredicate p] = pure $ BPredicate $ Not p
     mkSymbolApplication "\\not" _ _ = fail "Invalid Not"
-    mkSymbolApplication "\\or" _ [SPredicate p1, SPredicate p2] = pure $ SPredicate $ Or p1 p2
+    mkSymbolApplication "\\or" _ [BPredicate p1, BPredicate p2] = pure $ BPredicate $ Or p1 p2
     mkSymbolApplication "\\or" _ _ = fail "Invalid Or"
-    mkSymbolApplication "\\top" _ [] = pure $ SPredicate $ Top
+    mkSymbolApplication "\\top" _ [] = pure $ BPredicate Top
     mkSymbolApplication "\\top" _ _ = fail "Invalid Top"
-    mkSymbolApplication name sorts xs = 
+    mkSymbolApplication name sorts xs =
         lookupKoreDefinitionSymbol name >>= \case
             Just symbol@Symbol{sortVars} -> do
                 args <- forM xs $ \case
-                    STerm trm -> pure trm
+                    BTerm trm -> pure trm
                     _ -> fail "Expecting term"
-                pure $ STerm $ SymbolApplication symbol (zipWith (const id) sortVars sorts) args
+                pure $ BTerm $ SymbolApplication symbol (zipWith (const id) sortVars sorts) args
             Nothing -> fail $ "Unknown symbol " <> show name
 
 {- | The term in binary format is stored as follows:
@@ -294,24 +293,23 @@ decodeTerm' :: Maybe KoreDefinition -> Get Term
 decodeTerm' mDef = do
     version <- decodeMagicHeaderAndVersion
     runDecodeM version mDef decodeBlock >>= \case
-        [STerm trm] -> pure trm
+        [BTerm trm] -> pure trm
         _ -> fail "Expecting a single term on the top of the stack"
 
 decodeTerm :: KoreDefinition -> Get Term
 decodeTerm = decodeTerm' . Just
 
-
 decodePattern :: Maybe KoreDefinition -> Get Pattern
 decodePattern mDef = do
     version <- decodeMagicHeaderAndVersion
-    (reverse <$> runDecodeM version mDef decodeBlock) >>= \case
-        (STerm trm:preds') -> do
+    res <- reverse <$> runDecodeM version mDef decodeBlock
+    case res of
+        BTerm trm : preds' -> do
             preds <- forM preds' $ \case
-                SPredicate p -> pure p
+                BPredicate p -> pure p
                 _ -> fail "Expecting a predicate"
             pure $ Pattern trm preds
         _ -> fail "Expecting a term on the top of the stack"
-
 
 test :: Maybe (FilePath, Text.Text) -> FilePath -> IO Term
 test (Just (definitionFile, mainModuleName)) f = do
@@ -322,7 +320,6 @@ test (Just (definitionFile, mainModuleName)) f = do
 test Nothing f =
     runGet (decodeTerm' Nothing) <$> BL.readFile f
 
-
 encodeMagicHeaderAndVersion :: Version -> Put
 encodeMagicHeaderAndVersion (Version major minor patch) = do
     putByteString "\127KORE"
@@ -330,14 +327,11 @@ encodeMagicHeaderAndVersion (Version major minor patch) = do
     putInt16le minor
     putInt16le patch
 
-
 encodeLength :: Int -> Put
-encodeLength len = 
-    let
-        chunk = fromIntegral $ len .&. 0x7f
+encodeLength len =
+    let chunk = fromIntegral $ len .&. 0x7f
         len' = len `shiftR` 7
-    in
-        if len > 0
+     in if len > 0
             then do
                 putWord8 (chunk .|. 0x80)
                 encodeLength len'
@@ -348,7 +342,6 @@ encodeString s = do
     putWord8 0x1
     encodeLength $ BS.length s
     putByteString s
-            
 
 encodeSort :: Sort -> Put
 encodeSort = \case
@@ -360,7 +353,6 @@ encodeSort = \case
         putWord8 KORECompositeSort
         encodeLength $ length args
         encodeString name
-
 
 encodeTerm :: Term -> Put
 encodeTerm = \case
@@ -376,9 +368,8 @@ encodeTerm = \case
         encodeSymbol "\\dv" [sort]
         putWord8 KORECompositePattern
         encodeLength 1
-    AndTerm t1 t2 -> encodeSymbolApplication "\\and" [sortOfTerm t1] [Left t1 , Left t2]
+    AndTerm t1 t2 -> encodeSymbolApplication "\\and" [sortOfTerm t1] [Left t1, Left t2]
     Injection source target t -> encodeSymbolApplication "\\inj" [source, target] [Left t]
-
 
 encodeSymbol :: ByteString -> [Sort] -> Put
 encodeSymbol name sorts = do
@@ -394,31 +385,33 @@ encodeSymbolApplication name sorts args = do
     putWord8 KORECompositePattern
     encodeLength $ length args
 
-
 encodePredicate :: Predicate -> Put
 encodePredicate = \case
-    AndPredicate p1 p2 -> encodeSymbolApplication "\\and" [] [Right p1 , Right p2]
+    AndPredicate p1 p2 -> encodeSymbolApplication "\\and" [] [Right p1, Right p2]
     Bottom -> encodeSymbolApplication "\\bottom" [] []
     Ceil t -> encodeSymbolApplication "\\ceil" [] [Left t]
     EqualsTerm t1 t2 -> encodeSymbolApplication "\\equals" [] [Left t1, Left t2]
-    EqualsPredicate  p1 p2 -> encodeSymbolApplication "\\equals" [] [Right p1 , Right p2]
+    EqualsPredicate p1 p2 -> encodeSymbolApplication "\\equals" [] [Right p1, Right p2]
     Exists v p ->
-        encodeSymbolApplication "\\exists" [] [
-                Left $ Var $ Variable (SortApp "PREDICATE" []) v , 
-                Right p
+        encodeSymbolApplication
+            "\\exists"
+            []
+            [ Left $ Var $ Variable (SortApp "PREDICATE" []) v
+            , Right p
             ]
     Forall v p ->
-        encodeSymbolApplication "\\forall" [] [
-                Left $ Var $ Variable (SortApp "PREDICATE" []) v , 
-                Right p
+        encodeSymbolApplication
+            "\\forall"
+            []
+            [ Left $ Var $ Variable (SortApp "PREDICATE" []) v
+            , Right p
             ]
-    Iff p1 p2 -> encodeSymbolApplication "\\iff" [] [Right p1 , Right p2]
-    Implies p1 p2 -> encodeSymbolApplication "\\implies" [] [Right p1 , Right p2]
+    Iff p1 p2 -> encodeSymbolApplication "\\iff" [] [Right p1, Right p2]
+    Implies p1 p2 -> encodeSymbolApplication "\\implies" [] [Right p1, Right p2]
     In t1 t2 -> encodeSymbolApplication "\\in" [] [Left t1, Left t2]
     Not p -> encodeSymbolApplication "\\not" [] [Right p]
-    Or p1 p2 -> encodeSymbolApplication "\\or" [] [Right p1 , Right p2]
+    Or p1 p2 -> encodeSymbolApplication "\\or" [] [Right p1, Right p2]
     Top -> encodeSymbolApplication "\\top" [] []
-
 
 encodePattern :: Pattern -> Put
 encodePattern Pattern{term, constraints} = do

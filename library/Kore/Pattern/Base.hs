@@ -235,7 +235,6 @@ pattern DV sort <- Symbol "\\dv" _ _ sort _
 pattern And :: Symbol
 pattern And <- Symbol "\\and" _ _ _ _
 
-
 {- | A predicate describes constraints on terms. It will always evaluate
    to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.
 -}

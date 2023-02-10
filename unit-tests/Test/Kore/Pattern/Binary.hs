@@ -5,18 +5,19 @@ License     : BSD-3-Clause
 module Test.Kore.Pattern.Binary (
     test_BinaryRoundTrips,
 ) where
-import Hedgehog(Gen, Property, property, forAll, (===))
-import Kore.Pattern.Base
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
-import Test.Kore.Syntax.Json (upTo)
+
+import Data.Binary.Get (runGet)
+import Data.Binary.Put (runPut)
+import Hedgehog (Gen, Property, forAll, property, (===))
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 import Kore.Definition.Attributes.Base
+import Kore.Pattern.Base
+import Kore.Pattern.Binary
+import Kore.Pattern.Util (sortOfTerm)
+import Test.Kore.Syntax.Json (upTo)
 import Test.Tasty
 import Test.Tasty.Hedgehog
-import Kore.Pattern.Binary
-import Data.Binary.Put(runPut)
-import Data.Binary.Get(runGet)
-import Kore.Pattern.Util (sortOfTerm)
 
 genSort :: Gen Sort
 genSort =
@@ -25,38 +26,33 @@ genSort =
         [SortVar <$> Gen.utf8 (Range.linear 1 32) Gen.alphaNum]
         [SortApp <$> Gen.utf8 (Range.linear 1 32) Gen.alphaNum <*> upTo 10 genSort]
 
-
-
 genVariable :: Gen Variable
 genVariable = Variable <$> genSort <*> Gen.utf8 (Range.linear 1 32) Gen.alphaNum
 
-
-{- | In order to test the binary decoding without needing a proper definition, 
+{- | In order to test the binary decoding without needing a proper definition,
    we generate symbols with dummy sort and attributes.
 -}
 genSymbolUnknownSort :: Gen Symbol
-genSymbolUnknownSort = 
-  (\name -> Symbol name [] [] (SortApp "UNKNOWN" []) $ SymbolAttributes PartialFunction False False) <$> 
-    Gen.utf8 (Range.linear 0 32) Gen.alphaNum
-
+genSymbolUnknownSort =
+    (\name -> Symbol name [] [] (SortApp "UNKNOWN" []) $ SymbolAttributes PartialFunction False False)
+        <$> Gen.utf8 (Range.linear 0 32) Gen.alphaNum
 
 genTerm :: Gen Term
 genTerm =
     Gen.recursive
         Gen.choice
-        [ Var <$> genVariable ]
+        [Var <$> genVariable]
         [ AndTerm <$> genTerm <*> genTerm
-        , SymbolApplication <$> genSymbolUnknownSort <*> (pure []) <*> upTo 10 genTerm
-        , DomainValue <$> genSort <*> Gen.bytes (Range.linear 1 1000) 
+        , SymbolApplication <$> genSymbolUnknownSort <*> pure [] <*> upTo 10 genTerm
+        , DomainValue <$> genSort <*> Gen.bytes (Range.linear 1 1000)
         , (\target t -> Injection (sortOfTerm t) target t) <$> genSort <*> genTerm
         ]
-
 
 genPredicate :: Gen Predicate
 genPredicate =
     Gen.recursive
         Gen.choice
-        [ pure Bottom, pure Top ]
+        [pure Bottom, pure Top]
         [ AndPredicate <$> genPredicate <*> genPredicate
         , Ceil <$> genTerm
         , EqualsTerm <$> genTerm <*> genTerm
@@ -68,8 +64,7 @@ genPredicate =
         , In <$> genTerm <*> genTerm
         , Not <$> genPredicate
         , Or <$> genPredicate <*> genPredicate
-       ]
-
+        ]
 
 genPattern :: Gen Pattern
 genPattern = Pattern <$> genTerm <*> upTo 10 genPredicate
@@ -79,7 +74,6 @@ test_BinaryRoundTrips =
     [ testProperty "Term -> binary -> Term" binaryTermRoundTrip
     , testProperty "Pattern -> binary -> Pattern" binaryPatternRoundTrip
     ]
-
 
 binaryTermRoundTrip :: Property
 binaryTermRoundTrip =
