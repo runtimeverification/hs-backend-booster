@@ -172,10 +172,6 @@ popStackSorts n =
         BSort s -> pure s
         _ -> fail "popping a non sort"
 
-pushStackSort :: Sort -> DecodeM ()
-pushStackSort sort = DecodeM $ lift $ do
-    modify (\s@DecoderState{stack} -> s{stack = BSort sort : stack})
-
 lookupKoreDefinitionSymbol :: SymbolName -> DecodeM (Maybe Symbol)
 lookupKoreDefinitionSymbol name = DecodeM $ do
     (_, mDef) <- ask
@@ -215,10 +211,10 @@ decodeBlock = do
                 arity <- decodeLength 2
                 sortName <- decodeString
                 args <- popStackSorts arity
-                pushStackSort $ SortApp sortName args
+                pushStack $ BSort $ SortApp sortName args
             KORESortVariable -> do
                 var <- decodeString
-                pushStackSort $ SortVar var
+                pushStack $ BSort $ SortVar var
             KORESymbol -> do
                 -- symbol applied to (sort) arguments (arity, name)
                 arity <- decodeLength 2
