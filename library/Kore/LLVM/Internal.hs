@@ -85,6 +85,7 @@ data API = API
     , sort :: KoreSortAPI
     , simplifyBool :: KorePatternPtr -> IO Bool
     , simplify :: KorePatternPtr -> KoreSortPtr -> IO ByteString
+    , simplifyBinary :: ByteString -> KoreSortPtr -> IO ByteString
     }
 
 newtype LLVM a = LLVM (ReaderT API IO a)
@@ -213,7 +214,23 @@ mkAPI dlib = flip runReaderT dlib $ do
                                 cstr <- peek strPtr
                                 BS.packCStringLen (cstr, len)
 
-    pure API{patt, symbol, sort, simplifyBool, simplify}
+
+    simplifyBinary' <- koreSimplifyBinary
+    let simplifyBinary str srt =
+            {-# SCC "LLVM.simplifyBinary" #-}
+            liftIO $
+                BS.useAsCStringLen str $ \(rawStr, len) ->
+                    withForeignPtr srt $ \sortPtr ->
+                        alloca $ \lenPtr ->
+                            alloca $ \strPtr -> do
+                                simplifyBinary' rawStr (fromIntegral len) sortPtr strPtr lenPtr
+                                retLen <- fromIntegral <$> peek lenPtr
+                                retStr <- peek strPtr
+                                BS.packCStringLen (retStr, retLen)
+
+
+
+    pure API{patt, symbol, sort, simplifyBool, simplify, simplifyBinary}
 
 ask :: LLVM API
 ask = LLVM Reader.ask
