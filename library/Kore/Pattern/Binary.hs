@@ -14,6 +14,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BL
 import Data.Int (Int16)
+import Data.List (intercalate)
 import Data.Map qualified as Map
 import Data.Text qualified as Text
 import Data.Word (Word64)
@@ -238,42 +239,61 @@ decodeBlock = do
     mkSymbolApplication :: ByteString -> [Sort] -> [Block] -> DecodeM Block
     mkSymbolApplication "\\and" _ [BPredicate p1, BPredicate p2] = pure $ BPredicate $ AndPredicate p1 p2
     mkSymbolApplication "\\and" _ [BTerm t1, BTerm t2] = pure $ BTerm $ AndTerm t1 t2
-    mkSymbolApplication "\\and" _ _ = fail "Invalid AndTerm/AndPredicate"
+    mkSymbolApplication "\\and" _ bs =
+        argError "AndTerm/AndPredicate" [BTerm undefined, BTerm undefined] bs
     mkSymbolApplication "\\bottom" _ [] = pure $ BPredicate Bottom
-    mkSymbolApplication "\\bottom" _ _ = fail "Invalid Bottom"
+    mkSymbolApplication "\\bottom" _ bs = argError "Bottom" [] bs
     mkSymbolApplication "\\ceil" _ [BTerm t] = pure $ BPredicate $ Ceil t
-    mkSymbolApplication "\\ceil" _ _ = fail "Invalid Ceil"
+    mkSymbolApplication "\\ceil" _ bs = argError "Ceil" [BTerm undefined] bs
     mkSymbolApplication "\\dv" [sort] [BString txt] = pure $ BTerm $ DomainValue sort txt
-    mkSymbolApplication "\\dv" _ _ = fail "Invalid DomainValue"
+    mkSymbolApplication "\\dv" _ bs = argError "DomainValue" [BString undefined] bs
     mkSymbolApplication "\\equals" _ [BTerm t1, BTerm t2] = pure $ BPredicate $ EqualsTerm t1 t2
     mkSymbolApplication "\\equals" _ [BPredicate p1, BPredicate p2] = pure $ BPredicate $ EqualsPredicate p1 p2
-    mkSymbolApplication "\\equals" _ _ = fail "Invalid EqualBTerm/EqualBPredicate"
+    mkSymbolApplication "\\equals" _ bs =
+        argError "EqualBTerm/EqualBPredicate" [BTerm undefined, BTerm undefined] bs
     mkSymbolApplication "\\exists" _ [BTerm (Var (Variable _ var)), BPredicate p] = pure $ BPredicate $ Exists var p
-    mkSymbolApplication "\\exists" _ _ = fail "Invalid Exists"
+    mkSymbolApplication "\\exists" _ bs = argError "Exists" [BTerm undefined, BPredicate undefined] bs
     mkSymbolApplication "\\forall" _ [BTerm (Var (Variable _ var)), BPredicate p] = pure $ BPredicate $ Forall var p
-    mkSymbolApplication "\\forall" _ _ = fail "Invalid Forall"
+    mkSymbolApplication "\\forall" _ bs = argError "Forall" [BTerm undefined, BPredicate undefined] bs
     mkSymbolApplication "\\iff" _ [BPredicate p1, BPredicate p2] = pure $ BPredicate $ Iff p1 p2
-    mkSymbolApplication "\\iff" _ _ = fail "Invalid Iff"
+    mkSymbolApplication "\\iff" _ bs = argError "Iff" [BPredicate undefined, BPredicate undefined] bs
     mkSymbolApplication "\\implies" _ [BPredicate p1, BPredicate p2] = pure $ BPredicate $ Implies p1 p2
-    mkSymbolApplication "\\implies" _ _ = fail "Invalid Implies"
+    mkSymbolApplication "\\implies" _ bs = argError "Implies" [BPredicate undefined, BPredicate undefined] bs
     mkSymbolApplication "\\in" _ [BTerm t1, BTerm t2] = pure $ BPredicate $ In t1 t2
-    mkSymbolApplication "\\in" _ _ = fail "Invalid In"
+    mkSymbolApplication "\\in" _ bs = argError "In" [BTerm undefined, BTerm undefined] bs
     mkSymbolApplication "\\inj" [source, target] [BTerm t] = pure $ BTerm $ Injection source target t
-    mkSymbolApplication "\\inj" _ _ = fail "Invalid Injection"
+    mkSymbolApplication "\\inj" _ bs = argError "Injection" [BTerm undefined] bs
     mkSymbolApplication "\\not" _ [BPredicate p] = pure $ BPredicate $ Not p
-    mkSymbolApplication "\\not" _ _ = fail "Invalid Not"
+    mkSymbolApplication "\\not" _ bs = argError "Not" [BPredicate undefined] bs
     mkSymbolApplication "\\or" _ [BPredicate p1, BPredicate p2] = pure $ BPredicate $ Or p1 p2
-    mkSymbolApplication "\\or" _ _ = fail "Invalid Or"
+    mkSymbolApplication "\\or" _ bs = argError "Or" [BPredicate undefined, BPredicate undefined] bs
     mkSymbolApplication "\\top" _ [] = pure $ BPredicate Top
-    mkSymbolApplication "\\top" _ _ = fail "Invalid Top"
-    mkSymbolApplication name sorts xs =
+    mkSymbolApplication "\\top" _ bs = argError "Top" [] bs
+    mkSymbolApplication name sorts bs =
         lookupKoreDefinitionSymbol name >>= \case
             Just symbol@Symbol{sortVars} -> do
-                args <- forM xs $ \case
+                args <- forM bs $ \case
                     BTerm trm -> pure trm
                     _ -> fail "Expecting term"
                 pure $ BTerm $ SymbolApplication symbol (zipWith (const id) sortVars sorts) args
             Nothing -> fail $ "Unknown symbol " <> show name
+
+    argError cons expectedArgs receivedArgs =
+        fail $
+            "Invalid "
+                <> cons
+                <> "arguments\nExpected ["
+                <> intercalate ", " (map typeOfArg expectedArgs)
+                <> "] but got ["
+                <> intercalate ", " (map typeOfArg receivedArgs)
+                <> "]"
+
+    typeOfArg = \case
+        BTerm _ -> "Term"
+        BPredicate _ -> "Predicate"
+        BString _ -> "String"
+        BSort _ -> "Sort"
+        BSymbol _ _ -> "Symbol"
 
 {- | The term in binary format is stored as follows:
 Bytes   1    4      2         2         2                ?
