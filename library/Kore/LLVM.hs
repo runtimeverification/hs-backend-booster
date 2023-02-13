@@ -26,7 +26,7 @@ simplifyTerm api def trm sort = unsafePerformIO $ Internal.runLLVM api $ do
     -- binary <- liftIO $ kore.simplify trmPtr sortPtr
 
     let trmStr = toStrict $ runPut $ encodeMagicHeaderAndVersion (Version 1 1 0) >> encodeTerm trm
-    liftIO $ BS.writeFile "dump.bin" trmStr
+    -- liftIO $ BS.writeFile "dump.bin" trmStr
     binary <- liftIO $ kore.simplifyBinary trmStr sortPtr
     -- strip away the custom injection added by the LLVM backend
     case runGet (decodeTerm def) (fromStrict binary) of
