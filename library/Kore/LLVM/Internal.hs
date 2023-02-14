@@ -265,3 +265,7 @@ marshallTerm t = --Trace.event "LLVM.marshallTerm" $
         DomainValue sort val ->
             marshallSort sort >>= liftIO . kore.patt.token.new val
         Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"
+        Injection source target trm -> do
+            inj <- liftIO . kore.patt.fromSymbol =<< marshallSymbol injectionSymbol [source, target]
+            marshallTerm trm >>= liftIO . kore.patt.addArgument inj
+          where
