@@ -376,7 +376,9 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
     doSteps :: Bool -> Natural -> Pattern -> io (Natural, RewriteResult Pattern)
     doSteps wasSimplified !counter pat'
         | depthReached counter = do
-            logRewrite $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
+            let title =
+                    pretty $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
+            logRewrite $ pack $ renderDefault $ showPattern title pat'
             pure (counter, (if wasSimplified then id else fmap simplify) $ RewriteStopped pat')
         | otherwise = do
             let res =
@@ -386,7 +388,9 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                 Right (RewriteSingle single) ->
                     doSteps False (counter + 1) single
                 Right terminal@RewriteTerminal{} -> do
-                    logRewrite $ "Terminal rule reached after " <> showCounter (counter + 1)
+                    logRewrite $
+                        "Terminal rule after " <> showCounter (counter + 1)
+                    logRewrite $ prettyText terminal
                     pure (counter + 1, fmap simplify terminal)
                 Right other -> do
                     logRewrite $ "Stopped after " <> showCounter counter
@@ -406,13 +410,14 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                 -- if there were no applicable rules, unification may
                 -- have stumbled over an injection. Simplify and re-try
                 -- FIXME injections should be represented differently!
-                Left NoApplicableRules
-                    | not wasSimplified -> do
-                        let simplifiedPat = simplify pat'
-                        logRewrite $ "No rules found for " <> prettyText pat'
-                        logRewrite $ "Retrying with simplified pattern " <> prettyText simplifiedPat
-                        doSteps True counter simplifiedPat
-                    | otherwise -> pure (counter, RewriteStuck pat')
+                Left NoApplicableRules -> do
+                    logRewrite $ "No rules found for " <> prettyText pat'
+                    if wasSimplified
+                        then pure (counter, RewriteStuck pat')
+                        else do
+                            let simplifiedPat = simplify pat'
+                            logRewrite $ "Retrying with simplified pattern " <> prettyText simplifiedPat
+                            doSteps True counter simplifiedPat
                 Left failure -> do
                     logRewrite $ "Aborted after " <> showCounter counter
                     logRewrite $ prettyText failure
