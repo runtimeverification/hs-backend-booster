@@ -31,7 +31,7 @@ import Kore.Pattern.Util (
     sortOfTerm,
     substituteInTerm,
  )
-import qualified Kore.Trace as Trace
+import Kore.Trace qualified as Trace
 
 -- | Result of a unification (a substitution or an indication of what went wrong)
 data UnificationResult
@@ -85,7 +85,7 @@ type Substitution = Map Variable Term
    catch and handle those errors.
 -}
 unifyTerms :: KoreDefinition -> Term -> Term -> UnificationResult
-unifyTerms KoreDefinition{sorts} term1 term2 = 
+unifyTerms KoreDefinition{sorts} term1 term2 =
     let runUnification :: UnificationState -> UnificationResult
         runUnification =
             fromEither
@@ -123,7 +123,7 @@ data UnificationState = State
 type SortTable = Map SortName (Set SortName)
 
 unification :: StateT UnificationState (Except UnificationResult) ()
-unification = Trace.eventPure "Unify.unification" $ do
+unification = Trace.time "Unify.unification" $ do
     queue <- gets uQueue
     case queue of
         Empty -> checkIndeterminate -- done

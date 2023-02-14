@@ -13,12 +13,12 @@ import Data.Aeson as Json
 import Data.Aeson.Types qualified as Json
 import Data.Char (isAlpha, isDigit)
 import Data.Foldable ()
+import Data.Hashable (Hashable)
 import Data.List (nub)
 import Data.List.NonEmpty qualified as NE
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
-import Data.Hashable (Hashable)
 
 ------------------------------------------------------------
 

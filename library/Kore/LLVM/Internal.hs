@@ -18,6 +18,7 @@ module Kore.LLVM.Internal (
 ) where
 
 import Control.Monad (foldM, forM_, void, (>=>))
+import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT))
 import Control.Monad.Trans.Reader qualified as Reader
@@ -35,9 +36,8 @@ import Foreign.Storable (peek)
 import Kore.LLVM.TH (dynamicBindings)
 import Kore.Pattern.Base
 import Kore.Pattern.Util (sortOfTerm)
+import Kore.Trace qualified as Trace
 import System.Posix.DynamicLinker qualified as Linker
-import Control.Monad.Catch (MonadMask, MonadCatch, MonadThrow)
-import qualified Kore.Trace as Trace
 
 data KorePattern
 data KoreSort
@@ -200,20 +200,21 @@ mkAPI dlib = flip runReaderT dlib $ do
     let sort = KoreSortAPI{new = newSort, addArgument = addArgumentSort, dump = dumpSort, cache = sortCache}
 
     simplifyBool' <- koreSimplifyBool
-    let simplifyBool p = {-# SCC "LLVM.simplifyBool" #-} Trace.event "LLVM.simplifyBool" $ liftIO $ withForeignPtr p $ fmap (== 1) <$> simplifyBool'
+    let simplifyBool p = {-# SCC "LLVM.simplifyBool" #-} Trace.timeIO "LLVM.simplifyBool" $ liftIO $ withForeignPtr p $ fmap (== 1) <$> simplifyBool'
 
     simplify' <- koreSimplify
-    let simplify pat srt = 
+    let simplify pat srt =
             {-# SCC "LLVM.simplify" #-}
-            Trace.event "LLVM.simplify" $ liftIO $
-                withForeignPtr pat $ \patPtr ->
-                    withForeignPtr srt $ \sortPtr ->
-                        alloca $ \lenPtr ->
-                            alloca $ \strPtr -> do
-                                simplify' patPtr sortPtr strPtr lenPtr
-                                len <- fromIntegral <$> peek lenPtr
-                                cstr <- peek strPtr
-                                BS.packCStringLen (cstr, len)
+            Trace.timeIO "LLVM.simplify" $
+                liftIO $
+                    withForeignPtr pat $ \patPtr ->
+                        withForeignPtr srt $ \sortPtr ->
+                            alloca $ \lenPtr ->
+                                alloca $ \strPtr -> do
+                                    simplify' patPtr sortPtr strPtr lenPtr
+                                    len <- fromIntegral <$> peek lenPtr
+                                    cstr <- peek strPtr
+                                    BS.packCStringLen (cstr, len)
 
     pure API{patt, symbol, sort, simplifyBool, simplify}
 
@@ -221,51 +222,54 @@ ask :: LLVM API
 ask = LLVM Reader.ask
 
 marshallSymbol :: Symbol -> [Sort] -> LLVM KoreSymbolPtr
-marshallSymbol sym sorts = --Trace.event "LLVM.marshallSymbol" $ 
+marshallSymbol sym sorts =
+    -- Trace.event "LLVM.marshallSymbol" $
     do
-    kore <- ask
-    cache <- liftIO $ readIORef kore.symbol.cache
-    case HM.lookup (sym, sorts) cache of
-        Just ptr -> pure ptr
-        Nothing -> do
-            sym' <- liftIO $ kore.symbol.new sym.name
-            liftIO $ modifyIORef' kore.symbol.cache $ HM.insert (sym, sorts) sym'
-            foldM (\symbol sort -> marshallSort sort >>= liftIO . kore.symbol.addArgument symbol) sym' sorts
-
-marshallSort :: Sort -> LLVM KoreSortPtr
-marshallSort s = -- Trace.event "LLVM.marshallSort" $ 
-    case s of
-    SortApp name args -> do
         kore <- ask
-        cache <- liftIO $ readIORef kore.sort.cache
-        case HM.lookup s cache of
+        cache <- liftIO $ readIORef kore.symbol.cache
+        case HM.lookup (sym, sorts) cache of
             Just ptr -> pure ptr
             Nothing -> do
-                sort <- liftIO $ kore.sort.new name
-                forM_ args $ marshallSort >=> liftIO . kore.sort.addArgument sort
-                liftIO $ modifyIORef' kore.sort.cache $ HM.insert s sort
-                pure sort
-    SortVar varName -> error $ "marshalling SortVar " <> show varName <> " unsupported"
+                sym' <- liftIO $ kore.symbol.new sym.name
+                liftIO $ modifyIORef' kore.symbol.cache $ HM.insert (sym, sorts) sym'
+                foldM (\symbol sort -> marshallSort sort >>= liftIO . kore.symbol.addArgument symbol) sym' sorts
+
+marshallSort :: Sort -> LLVM KoreSortPtr
+marshallSort s =
+    -- Trace.event "LLVM.marshallSort" $
+    case s of
+        SortApp name args -> do
+            kore <- ask
+            cache <- liftIO $ readIORef kore.sort.cache
+            case HM.lookup s cache of
+                Just ptr -> pure ptr
+                Nothing -> do
+                    sort <- liftIO $ kore.sort.new name
+                    forM_ args $ marshallSort >=> liftIO . kore.sort.addArgument sort
+                    liftIO $ modifyIORef' kore.sort.cache $ HM.insert s sort
+                    pure sort
+        SortVar varName -> error $ "marshalling SortVar " <> show varName <> " unsupported"
 
 marshallTerm :: Term -> LLVM KorePatternPtr
-marshallTerm t = --Trace.event "LLVM.marshallTerm" $ 
+marshallTerm t =
+    -- Trace.event "LLVM.marshallTerm" $
     do
-    kore <- ask
-    case t of
-        SymbolApplication symbol sorts trms -> do
-            trm <- liftIO . kore.patt.fromSymbol =<< marshallSymbol symbol sorts
-            forM_ trms $ marshallTerm >=> liftIO . kore.patt.addArgument trm
-            pure trm
-        AndTerm l r -> do
-            andSym <- liftIO $ kore.symbol.new "\\and"
-            void $ liftIO . kore.symbol.addArgument andSym =<< marshallSort (sortOfTerm l)
-            trm <- liftIO $ kore.patt.fromSymbol andSym
-            void $ liftIO . kore.patt.addArgument trm =<< marshallTerm l
-            liftIO . kore.patt.addArgument trm =<< marshallTerm r
-        DomainValue sort val ->
-            marshallSort sort >>= liftIO . kore.patt.token.new val
-        Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"
-        Injection source target trm -> do
-            inj <- liftIO . kore.patt.fromSymbol =<< marshallSymbol injectionSymbol [source, target]
-            marshallTerm trm >>= liftIO . kore.patt.addArgument inj
-          where
+        kore <- ask
+        case t of
+            SymbolApplication symbol sorts trms -> do
+                trm <- liftIO . kore.patt.fromSymbol =<< marshallSymbol symbol sorts
+                forM_ trms $ marshallTerm >=> liftIO . kore.patt.addArgument trm
+                pure trm
+            AndTerm l r -> do
+                andSym <- liftIO $ kore.symbol.new "\\and"
+                void $ liftIO . kore.symbol.addArgument andSym =<< marshallSort (sortOfTerm l)
+                trm <- liftIO $ kore.patt.fromSymbol andSym
+                void $ liftIO . kore.patt.addArgument trm =<< marshallTerm l
+                liftIO . kore.patt.addArgument trm =<< marshallTerm r
+            DomainValue sort val ->
+                marshallSort sort >>= liftIO . kore.patt.token.new val
+            Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"
+            Injection source target trm -> do
+                inj <- liftIO . kore.patt.fromSymbol =<< marshallSymbol injectionSymbol [source, target]
+                marshallTerm trm >>= liftIO . kore.patt.addArgument inj
+              where

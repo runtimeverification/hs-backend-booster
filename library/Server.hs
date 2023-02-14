@@ -14,21 +14,21 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
 import Options.Applicative
 
+import Control.Monad (forM_)
 import Kore.JsonRpc (runServer)
 import Kore.LLVM.Internal (mkAPI, withDLib)
 import Kore.Syntax.ParsedKore (loadDefinition)
-import Kore.VersionInfo (VersionInfo (..), versionInfo)
 import Kore.Trace
-import Control.Monad (forM_)
+import Kore.VersionInfo (VersionInfo (..), versionInfo)
 
 main :: IO ()
 main = do
     options <- execParser clParser
-    let CLOptions{definitionFile, mainModuleName, port, logLevels, llvmLibraryFile, eventlogTraces} = options
+    let CLOptions{definitionFile, mainModuleName, port, logLevels, llvmLibraryFile, eventlogEnabledUserEvents} = options
 
-    forM_ eventlogTraces $ \t -> do
+    forM_ eventlogEnabledUserEvents $ \t -> do
         putStrLn $ "Tracing " <> show t
-        enableEventlogTrace t
+        enableCustomUserEvent t
     putStrLn $
         "Loading definition from "
             <> definitionFile
@@ -55,7 +55,7 @@ data CLOptions = CLOptions
     , llvmLibraryFile :: Maybe FilePath
     , port :: Int
     , logLevels :: [LogLevel]
-    , eventlogTraces :: [EventLogTrace]
+    , eventlogEnabledUserEvents :: [CustomUserEventType]
     }
     deriving (Show)
 
@@ -113,7 +113,7 @@ clOptionsParser =
                         )
                 )
             )
-        <*>  many
+        <*> many
             ( option
                 (eitherReader readEventLogTracing)
                 ( metavar "TRACE"
@@ -134,12 +134,12 @@ clOptionsParser =
             | other `elem` allowedLogLevels -> Right (LevelOther $ pack other)
             | otherwise -> Left $ other <> ": Unsupported log level"
 
-    readEventLogTracing :: String -> Either String EventLogTrace
+    readEventLogTracing :: String -> Either String CustomUserEventType
     readEventLogTracing = \case
-     "timing" -> Right Timing
-     "llvm-calls" -> Right LlvmCalls
-     "rewriting" -> Right Rewriting
-     other -> Left $ other <> " not supported in eventlog tracing"
+        "timing" -> Right Timing
+        "llvm-calls" -> Right LlvmCalls
+        "rewriting" -> Right Rewriting
+        other -> Left $ other <> " not supported in eventlog tracing"
 
 -- custom log levels that can be selected
 allowedLogLevels :: [String]

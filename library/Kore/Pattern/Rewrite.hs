@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveFunctor #-}
-
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -36,7 +34,8 @@ import Kore.Pattern.Simplify
 import Kore.Pattern.Unify
 import Kore.Pattern.Util
 import Kore.Prettyprinter
-import qualified Kore.Trace as Trace
+import Kore.Trace qualified as Trace
+import Kore.Trace
 
 newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe LLVM.API) (Except err) a}
     deriving newtype (Functor, Applicative, Monad)
@@ -64,7 +63,7 @@ getLLVM = RewriteM $ snd <$> ask
   additional constraints.
 -}
 rewriteStep :: [Text] -> [Text] -> Pattern -> RewriteM RewriteFailed (RewriteResult Pattern)
-rewriteStep cutLabels terminalLabels pat = Trace.eventPure "Rewrite.rewriteStep" $ do
+rewriteStep cutLabels terminalLabels pat = Trace.time "Rewrite.rewriteStep" $ do
     let termIdx = computeTermIndex pat.term
     when (termIdx == None) $ throw TermIndexIsNone
     def <- getDefinition
@@ -144,7 +143,7 @@ applyRule ::
     Pattern ->
     RewriteRule ->
     RewriteM RuleFailed (RewriteRule, Pattern)
-applyRule pat rule = Trace.eventPure "Rewrite.applyRule" $ do
+applyRule pat rule = Trace.time "Rewrite.applyRule" $ do
     def <- getDefinition
     -- unify terms
     let unified = unifyTerms def rule.lhs.term pat.term
@@ -283,67 +282,6 @@ isUnificationUnclear :: RuleFailed -> Bool
 isUnificationUnclear RewriteUnificationUnclear{} = True
 isUnificationUnclear _other = False
 
--- | Different rewrite results (returned from RPC execute endpoint)
-data RewriteResult pat
-    = -- | single result (internal use, not returned)
-      RewriteSingle pat
-    | -- | branch point
-      RewriteBranch pat (NonEmpty pat)
-    | -- | no rules could be applied, config is stuck
-      RewriteStuck pat
-    | -- | cut point rule, return current (lhs) and single next state
-      RewriteCutPoint Text pat pat
-    | -- | terminal rule, return rhs (final state reached)
-      RewriteTerminal Text pat
-    | -- | stopping because maximum depth has been reached
-      RewriteStopped pat
-    | -- | unable to handle the current case with this rewriter
-      -- (signalled by exceptions)
-      RewriteAborted pat
-    deriving stock (Eq, Show)
-    deriving (Functor)
-
-
-getPatternFromRewriteResult :: RewriteResult pat -> pat
-getPatternFromRewriteResult = \case
-    RewriteSingle pat -> pat
-    RewriteBranch pat _ -> pat
-    RewriteStuck pat -> pat
-    RewriteCutPoint _ pat _ -> pat
-    RewriteTerminal _ pat -> pat
-    RewriteStopped pat -> pat
-    RewriteAborted pat -> pat
-
-instance Pretty (RewriteResult Pattern) where
-    pretty (RewriteSingle pat) =
-        showPattern "Rewritten to" pat
-    pretty (RewriteBranch pat nexts) =
-        hang 4 . vsep $
-            [ "Branch reached at:"
-            , pretty pat
-            , "Next states:"
-            ]
-                <> map pretty (NE.toList nexts)
-    pretty (RewriteStuck pat) =
-        showPattern "Stuck at" pat
-    pretty (RewriteCutPoint lbl pat next) =
-        hang 4 $
-            vsep
-                [ "Cut point reached " <> parens (pretty lbl)
-                , pretty pat
-                , "Next state"
-                , pretty next
-                ]
-    pretty (RewriteTerminal lbl pat) =
-        showPattern ("Terminal rule reached " <> parens (pretty lbl)) pat
-    pretty (RewriteStopped pat) =
-        showPattern "Stopped (max depth reached) at" pat
-    pretty (RewriteAborted pat) =
-        showPattern "Rewrite aborted" pat
-
-showPattern :: Doc a -> Pattern -> Doc a
-showPattern title pat = hang 4 $ vsep [title, pretty pat]
-
 {- | Interface for RPC execute: Rewrite given term as long as there is
    exactly one result in each step.
 
@@ -369,9 +307,9 @@ performRewrite ::
     [Text] ->
     Pattern ->
     io (Natural, RewriteResult Pattern)
-performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = Trace.eventPure "Rewrite.performRewrite" $ do
+performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = Trace.time "Rewrite.performRewrite" $ do
     logRewrite $ "Rewriting pattern " <> prettyText pat
-    Trace.traceState Nothing pat 0
+    -- Trace.traceState Nothing pat 0
     doSteps False 0 pat
   where
     logRewrite = logOther (LevelOther "Rewrite")
@@ -396,20 +334,20 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = Trace.
                     runRewriteM def mLlvmLibrary $
                         rewriteStep cutLabels terminalLabels pat'
             case res of
-                Right (RewriteSingle single) -> do
-                    Trace.traceState (Just pat') single counter
-                    doSteps False (counter + 1) single
-                Right terminal@(RewriteTerminal _ tState) -> do
+                Right rr@(RewriteSingle single) -> do
+                    Trace.trace (Rewrite rr) $
+                        doSteps False (counter + 1) single
+                Right terminal@(RewriteTerminal _ _) -> do
                     logRewrite $ "Terminal rule reached after " <> showCounter (counter + 1)
-                    Trace.traceState (Just pat') (simplify tState) counter
-                    pure (counter + 1, fmap simplify terminal)
+                    -- Trace.traceState (Just pat') (simplify tState) counter
+                    Trace.trace (Rewrite terminal) $ pure (counter + 1, fmap simplify terminal)
                 Right other -> do
                     logRewrite $ "Stopped after " <> showCounter counter
                     logRewrite $ prettyText other
                     let simplifiedOther = fmap simplify other
                     logRewrite $ "Simplified: " <> prettyText simplifiedOther
-                    Trace.traceState (Just pat') (getPatternFromRewriteResult simplifiedOther) counter
-                    pure (counter, simplifiedOther)
+                    -- Trace.traceState (Just pat') (getPatternFromRewriteResult simplifiedOther) counter
+                    Trace.trace (Rewrite other) $ pure (counter, simplifiedOther)
                 -- if unification was unclear and the pattern was
                 -- unsimplified, simplify and retry rewriting once
                 Left (RuleApplicationUncertain ruleFails)
@@ -418,7 +356,7 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = Trace.
                         let simplifiedPat = simplify pat'
                         logRewrite $ "Unification unclear for " <> prettyText pat'
                         logRewrite $ "Retrying with simplified pattern " <> prettyText simplifiedPat
-                        Trace.traceState (Just pat') simplifiedPat counter
+                        -- Trace.traceState (Just pat') simplifiedPat counter
                         doSteps True counter simplifiedPat
                 -- if there were no applicable rules, unification may
                 -- have stumbled over an injection. Simplify and re-try
@@ -428,7 +366,7 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = Trace.
                         let simplifiedPat = simplify pat'
                         logRewrite $ "No rules found for " <> prettyText pat'
                         logRewrite $ "Retrying with simplified pattern " <> prettyText simplifiedPat
-                        Trace.traceState (Just pat') simplifiedPat counter
+                        -- Trace.traceState (Just pat') simplifiedPat counter
                         doSteps True counter simplifiedPat
                     | otherwise -> pure (counter, RewriteStuck pat')
                 Left failure -> do

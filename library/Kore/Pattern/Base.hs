@@ -29,8 +29,11 @@ import Kore.Definition.Attributes.Base (
     SymbolType (..),
  )
 import Kore.Prettyprinter qualified as KPretty
-import Prettyprinter (Pretty (..))
+import Prettyprinter
 import Prettyprinter qualified as Pretty
+import Data.List.NonEmpty (NonEmpty)
+import Data.Text (Text)
+import qualified Data.List.NonEmpty as NE
 
 type VarName = ByteString
 type SymbolName = ByteString
@@ -437,3 +440,58 @@ instance Pretty Pattern where
             , "Conditions:"
             ]
                 <> fmap (Pretty.indent 4 . pretty) patt.constraints
+
+
+
+
+-- | Different rewrite results (returned from RPC execute endpoint)
+data RewriteResult pat
+    = -- | single result (internal use, not returned)
+      RewriteSingle pat
+    | -- | branch point
+      RewriteBranch pat (NonEmpty pat)
+    | -- | no rules could be applied, config is stuck
+      RewriteStuck pat
+    | -- | cut point rule, return current (lhs) and single next state
+      RewriteCutPoint Text pat pat
+    | -- | terminal rule, return rhs (final state reached)
+      RewriteTerminal Text pat
+    | -- | stopping because maximum depth has been reached
+      RewriteStopped pat
+    | -- | unable to handle the current case with this rewriter
+      -- (signalled by exceptions)
+      RewriteAborted pat
+    deriving stock (Eq, Show)
+    deriving (Functor)
+
+
+instance Pretty (RewriteResult Pattern) where
+    pretty (RewriteSingle pat) =
+        showPattern "Rewritten to" pat
+    pretty (RewriteBranch pat nexts) =
+        hang 4 . vsep $
+            [ "Branch reached at:"
+            , pretty pat
+            , "Next states:"
+            ]
+                <> map pretty (NE.toList nexts)
+    pretty (RewriteStuck pat) =
+        showPattern "Stuck at" pat
+    pretty (RewriteCutPoint lbl pat next) =
+        hang 4 $
+            vsep
+                [ "Cut point reached " <> parens (pretty lbl)
+                , pretty pat
+                , "Next state"
+                , pretty next
+                ]
+    pretty (RewriteTerminal lbl pat) =
+        showPattern ("Terminal rule reached " <> parens (pretty lbl)) pat
+    pretty (RewriteStopped pat) =
+        showPattern "Stopped (max depth reached) at" pat
+    pretty (RewriteAborted pat) =
+        showPattern "Rewrite aborted" pat
+
+
+showPattern :: Pretty a => Doc ann -> a -> Doc ann
+showPattern title p = hang 4 $ vsep [title, pretty p]
