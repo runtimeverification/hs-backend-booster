@@ -34,8 +34,8 @@ import Kore.Pattern.Simplify
 import Kore.Pattern.Unify
 import Kore.Pattern.Util
 import Kore.Prettyprinter
-import Kore.Trace qualified as Trace
 import Kore.Trace
+import Kore.Trace qualified as Trace
 
 newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe LLVM.API) (Except err) a}
     deriving newtype (Functor, Applicative, Monad)

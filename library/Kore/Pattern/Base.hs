@@ -19,9 +19,12 @@ import Data.Functor.Foldable
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Hashable (Hashable)
 import Data.Hashable qualified as Hashable
+import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
+import Data.Text (Text)
 import Data.Text.Encoding qualified as Text
 import GHC.Generics (Generic)
 import Kore.Definition.Attributes.Base (
@@ -31,9 +34,6 @@ import Kore.Definition.Attributes.Base (
 import Kore.Prettyprinter qualified as KPretty
 import Prettyprinter
 import Prettyprinter qualified as Pretty
-import Data.List.NonEmpty (NonEmpty)
-import Data.Text (Text)
-import qualified Data.List.NonEmpty as NE
 
 type VarName = ByteString
 type SymbolName = ByteString
@@ -153,6 +153,8 @@ pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts
     where
         SymbolApplication sym [source, target] [arg]
             | sym == injectionSymbol = Injection source target arg
+        SymbolApplication sym _ [arg1, arg2]
+            | sym.name == "\\and" = AndTerm arg1 arg2
         SymbolApplication sym sorts args =
             let argAttributes = mconcat $ map getAttributes args
                 newEvaluatedFlag =
@@ -227,6 +229,21 @@ injectionSymbol =
                 }
         }
 
+andSymbol :: Symbol
+andSymbol =
+    Symbol
+        { name = "\\and"
+        , sortVars = ["S"]
+        , argSorts = [SortVar "S"]
+        , resultSort = SortVar "S"
+        , attributes =
+            SymbolAttributes
+                { symbolType = TotalFunction
+                , isIdem = False
+                , isAssoc = False
+                }
+        }
+
 -- convenience patterns
 pattern AndBool :: [Term] -> Term
 pattern AndBool ts <-
@@ -253,7 +270,7 @@ data Predicate
     | Or Predicate Predicate
     | Top
     deriving stock (Eq, Ord, Show, Generic)
-    deriving anyclass (NFData)
+    deriving anyclass (NFData, Hashable)
 
 makeBaseFunctor ''Predicate
 
@@ -441,9 +458,6 @@ instance Pretty Pattern where
             ]
                 <> fmap (Pretty.indent 4 . pretty) patt.constraints
 
-
-
-
 -- | Different rewrite results (returned from RPC execute endpoint)
 data RewriteResult pat
     = -- | single result (internal use, not returned)
@@ -463,7 +477,6 @@ data RewriteResult pat
       RewriteAborted pat
     deriving stock (Eq, Show)
     deriving (Functor)
-
 
 instance Pretty (RewriteResult Pattern) where
     pretty (RewriteSingle pat) =
@@ -491,7 +504,6 @@ instance Pretty (RewriteResult Pattern) where
         showPattern "Stopped (max depth reached) at" pat
     pretty (RewriteAborted pat) =
         showPattern "Rewrite aborted" pat
-
 
 showPattern :: Pretty a => Doc ann -> a -> Doc ann
 showPattern title p = hang 4 $ vsep [title, pretty p]
