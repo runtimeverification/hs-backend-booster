@@ -133,7 +133,7 @@ applyRule pat rule = runMaybeT $ do
     let unified = unifyTerms def rule.lhs.term pat.term
     subst <- case unified of
         UnificationFailed _reason ->
-            fail "Nothing"
+            fail "Unification failed"
         UnificationSortError sortError ->
             failRewrite $ RewriteSortError rule pat.term sortError
         UnificationRemainder remainder ->
@@ -173,7 +173,7 @@ applyRule pat rule = runMaybeT $ do
     checkConstraint p = do
         mApi <- lift getLLVM
         case simplifyPredicate mApi p of
-            Bottom -> fail "False"
+            Bottom -> fail "Rule condition was False"
             Top -> pure ()
             other -> failRewrite $ RuleConditionUnclear rule other
 
