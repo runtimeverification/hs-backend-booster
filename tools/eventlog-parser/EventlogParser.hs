@@ -1,15 +1,64 @@
+module Main (main) where
 
-module Main where
-import qualified GHC.RTS.Events as Events
+import Control.Monad (forM_, void)
+import Data.Binary.Get
+import Data.ByteString qualified as BS
+import Data.ByteString.Builder
+import Data.ByteString.Char8 qualified as Char8
+import Data.ByteString.Lazy qualified as BL
+import Data.List (intersperse, sortOn)
+import GHC.IO.Handle (BufferMode (BlockBuffering), Handle, hSetBinaryMode, hSetBuffering)
+import GHC.IO.Handle.FD (withBinaryFile)
+import GHC.IO.IOMode (IOMode (AppendMode))
+import GHC.RTS.Events
+import Kore.Trace
 import System.Environment (getArgs)
 
 main :: IO ()
 main = do
-  [eventlogFile] <- getArgs
-  eventlog <- either error id <$> Events.readEventLogFromFile eventlogFile
-  pure ()
+    [eventlogFile] <- getArgs
+    eventLogData <- readLog eventlogFile
+    withBinaryFile "llvm-calls.c" AppendMode $ \handle -> do
+        hSetBinaryMode handle True
+        hSetBuffering handle $ BlockBuffering Nothing
+        forM_ eventLogData (analyse handle)
 
+type CustomUserEventData = (Timestamp, Either EventInfo CustomUserEvent, Maybe Int)
+parseEventLog :: GHC.RTS.Events.Event -> CustomUserEventData
+parseEventLog Event{evTime, evSpec, evCap} =
+    ( evTime
+    , case evSpec of
+        UserBinaryMessage msg -> case runGet decodeCustomUserEvent $ BL.fromStrict msg of
+            Just userEvent -> Right userEvent
+            Nothing -> Left evSpec
+        _ -> Left evSpec
+    , evCap
+    )
 
+readLog :: FilePath -> IO [CustomUserEventData]
+readLog file =
+    readEventLogFromFile file
+        >>= either error (pure . map parseEventLog . sortOn evTime . events . dat)
+
+analyse :: Handle -> CustomUserEventData -> IO ()
+analyse llvmCallsFile (evTime, evSpec, evCap) = case evSpec of
+    Right LlvmCall{ret, call, args} -> do
+        let prettyRet = case ret of
+                Just ptr@(BPTerm _) -> lazyByteString "kore_pattern* " <> mkPrettyArg ptr <> lazyByteString " = "
+                Just ptr@(BPSort _) -> lazyByteString "kore_sort* " <> mkPrettyArg ptr <> lazyByteString " = "
+                Just ptr@(BPSymbol _) -> lazyByteString "kore_symbol* " <> mkPrettyArg ptr <> lazyByteString " = "
+                _ -> ""
+            mkPrettyArg = \case
+                BPTerm h -> hshNm "pat" h
+                BPSort h -> hshNm "sort" h
+                BPSymbol h -> hshNm "sym" h
+                BPString s -> charUtf8 '"' <> byteString s <> charUtf8 '"'
+            prettyArgs = charUtf8 '(' <> mconcat (intersperse (charUtf8 ',') $ map mkPrettyArg args) <> charUtf8 ')'
+        hPutBuilder llvmCallsFile $ prettyRet <> byteString call <> prettyArgs <> lazyByteString ";\n"
+    _ -> pure ()
+  where
+    hshNm :: BS.ByteString -> Int -> Builder
+    hshNm nm h = if h < 0 then byteString nm <> lazyByteString "_m" <> (stringUtf8 $ show $ abs h) else byteString nm <> charUtf8 '_' <> (stringUtf8 $ show h)
 
 -- analyze :: Options -> EventLog -> NonEmpty EventAnalysis
 -- analyze log =
@@ -61,7 +110,6 @@ main = do
 --     nonEmptyTail :: NonEmpty a -> NonEmpty a
 --     nonEmptyTail (_ :| (x : xs)) = x :| xs
 --     nonEmptyTail xs              = xs
-
 
 -- sortedEvents :: EventLog -> [Event]
 -- sortedEvents (EventLog _header (Events.Data es)) = Events.sortEvents es
