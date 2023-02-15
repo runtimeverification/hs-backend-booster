@@ -117,10 +117,11 @@ rewriteStep cutLabels terminalLabels pat = do
  * Unifies the LHS term with the pattern term
  * Ensures that the unification is a _match_ (one-sided substitution)
  * prunes any rules that turn out to have trivially-false side conditions
- * returns the rule and the resulting pattern
+ * returns the rule and the resulting pattern if successful, otherwise Nothing
 
 If it cannot be determined whether the rule can be applied or not, an
-exception is thrown which indicates the exact reason why.
+exception is thrown which indicates the exact reason why (this will
+abort the entire rewrite).
 -}
 applyRule ::
     Pattern ->
@@ -140,18 +141,20 @@ applyRule pat rule = runMaybeT $ do
         UnificationSuccess substitution ->
             pure substitution
 
-    -- check it is a matching substitution (fail the entire rewrite if not)
+    -- check it is a "matching" substitution (substitutes variables
+    -- from the subject term only). Fail the entire rewrite if not.
     unless (Map.keysSet subst == freeVariables rule.lhs.term) $
         failRewrite $
             UnificationIsNotMatch rule pat.term subst
 
-    -- fail the rewrite if the rule applies but may introduce an undefined term
+    -- Also fail the whole rewrite if a rule applies but may introduce
+    -- an undefined term.
     unless rule.computedAttributes.preservesDefinedness $
         failRewrite $
             DefinednessUnclear rule pat
 
-    -- apply substitution to rule constraints and simplify (stop if
-    -- false, one by one in isolation)
+    -- apply substitution to rule constraints and simplify (one by one
+    -- in isolation). Stop if false, abort rewrite if indeterminate.
     let newConstraints =
             concatMap (splitBoolPredicates . substituteInPredicate subst) $
                 rule.lhs.constraints <> rule.rhs.constraints
@@ -385,9 +388,8 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                             "Retrying with simplified pattern "
                                 <> prettyText simplifiedPat
                         doSteps True counter simplifiedPat
-                -- if there were no applicable rules, unification may
-                -- have stumbled over an injection. Simplify and re-try
-                -- FIXME injections should be represented differently!
+                -- if there were no applicable rules and the pattern
+                -- was unsimplified, simplify and re-try once
                 Left NoApplicableRules{} -> do
                     logRewrite $ "No rules found for " <> prettyText pat'
                     if wasSimplified
