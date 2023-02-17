@@ -258,8 +258,6 @@ ruleId rule = (<> ": ") $ maybe ruleLoc show rule.attributes.ruleLabel
                 , rule.attributes.location.position.column
                 )
 
-
-
 {- | Interface for RPC execute: Rewrite given term as long as there is
    exactly one result in each step.
 
