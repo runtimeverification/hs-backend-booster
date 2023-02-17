@@ -13,7 +13,6 @@ import Data.Aeson as Json
 import Data.Aeson.Types qualified as Json
 import Data.Char (isAlpha, isDigit)
 import Data.Foldable ()
-import Data.Hashable (Hashable)
 import Data.List (nub)
 import Data.List.NonEmpty qualified as NE
 import Data.Text (Text)
@@ -29,12 +28,11 @@ data KoreJson = KoreJson
     , term :: KorePattern
     }
     deriving stock (Eq, Show, Generic)
-    deriving anyclass (ToJSON, FromJSON, Hashable)
+    deriving anyclass (ToJSON, FromJSON)
 
 data KORE
     = KORE
-    deriving stock (Eq, Show, Generic)
-    deriving anyclass (Hashable)
+    deriving stock (Eq, Show)
 
 instance ToJSON KORE where
     toJSON = const $ String "KORE"
@@ -48,8 +46,7 @@ instance FromJSON KORE where
 data Version
     = -- | Version 1
       KJ1
-    deriving stock (Eq, Show, Generic)
-    deriving anyclass (Hashable)
+    deriving stock (Eq, Show)
 
 kj :: Num a => Int -> a
 kj = fromIntegral
@@ -211,7 +208,6 @@ data KorePattern
         , argss :: NE.NonEmpty KorePattern
         }
     deriving stock (Eq, Show, Generic)
-    deriving anyclass (Hashable)
 
 instance ToJSON KorePattern where
     toJSON = genericToJSON codecOptions
@@ -238,8 +234,8 @@ codecOptions =
 -- Identifiers and lexical checks
 
 newtype Id = Id {getId :: Text}
-    deriving stock (Eq, Show, Ord, Generic)
-    deriving newtype (ToJSON, FromJSON, Hashable)
+    deriving stock (Eq, Show, Ord)
+    deriving newtype (ToJSON, FromJSON)
 
 {- | Performs a (shallow, top-level, no recursion) lexical check of
  identifiers contained in the given node. For details see the check
@@ -343,7 +339,6 @@ data Sort
         { name :: Id
         }
     deriving stock (Eq, Show, Generic)
-    deriving anyclass (Hashable)
 
 instance ToJSON Sort where
     toJSON = genericToJSON codecOptions
@@ -355,7 +350,7 @@ data LeftRight
     = Left
     | Right
     deriving stock (Eq, Show, Generic, Enum, Bounded)
-    deriving anyclass (ToJSON, FromJSON, Hashable)
+    deriving anyclass (ToJSON, FromJSON)
 
 retractVariable :: KorePattern -> Maybe Id
 retractVariable KJEVar{name} = Just name
