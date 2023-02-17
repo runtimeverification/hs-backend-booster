@@ -505,5 +505,5 @@ instance Pretty (RewriteResult Pattern) where
     pretty (RewriteAborted pat) =
         showPattern "Rewrite aborted" pat
 
-showPattern :: Pretty a => Doc ann -> a -> Doc ann
-showPattern title p = hang 4 $ vsep [title, pretty p]
+showPattern :: Doc a -> Pattern -> Doc a
+showPattern title pat = hang 4 $ vsep [title, pretty pat]
