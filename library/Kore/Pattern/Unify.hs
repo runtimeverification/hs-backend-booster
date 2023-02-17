@@ -31,7 +31,6 @@ import Kore.Pattern.Util (
     sortOfTerm,
     substituteInTerm,
  )
-import Kore.Trace qualified as Trace
 
 -- | Result of a unification (a substitution or an indication of what went wrong)
 data UnificationResult
@@ -123,14 +122,16 @@ data UnificationState = State
 type SortTable = Map SortName (Set SortName)
 
 unification :: StateT UnificationState (Except UnificationResult) ()
-unification = Trace.time "Unify.unification" $ do
-    queue <- gets uQueue
-    case queue of
-        Empty -> checkIndeterminate -- done
-        (term1, term2) :<| rest -> do
-            modify $ \s -> s{uQueue = rest}
-            unify1 term1 term2
-            unification
+unification =
+    -- Trace.time "Unify.unification" $
+    do
+        queue <- gets uQueue
+        case queue of
+            Empty -> checkIndeterminate -- done
+            (term1, term2) :<| rest -> do
+                modify $ \s -> s{uQueue = rest}
+                unify1 term1 term2
+                unification
 
 checkIndeterminate :: StateT UnificationState (Except UnificationResult) ()
 checkIndeterminate = do

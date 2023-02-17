@@ -25,6 +25,7 @@ import Data.Text (Text, pack, split, unpack)
 import Numeric.Natural
 import Prettyprinter
 
+import Control.Monad.Catch (MonadMask)
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
 import Kore.LLVM.Internal qualified as LLVM
@@ -63,23 +64,25 @@ getLLVM = RewriteM $ snd <$> ask
   additional constraints.
 -}
 rewriteStep :: [Text] -> [Text] -> Pattern -> RewriteM RewriteFailed (RewriteResult Pattern)
-rewriteStep cutLabels terminalLabels pat = Trace.time "Rewrite.rewriteStep" $ do
-    let termIdx = computeTermIndex pat.term
-    when (termIdx == None) $ throw TermIndexIsNone
-    def <- getDefinition
-    let idxRules = fromMaybe Map.empty $ Map.lookup termIdx def.rewriteTheory
-        anyRules = fromMaybe Map.empty $ Map.lookup Anything def.rewriteTheory
-        rules =
-            map snd . Map.toAscList $
-                if termIdx == Anything
-                    then idxRules
-                    else Map.unionWith (<>) idxRules anyRules
+rewriteStep cutLabels terminalLabels pat =
+    -- Trace.time "Rewrite.rewriteStep" $
+    do
+        let termIdx = computeTermIndex pat.term
+        when (termIdx == None) $ throw TermIndexIsNone
+        def <- getDefinition
+        let idxRules = fromMaybe Map.empty $ Map.lookup termIdx def.rewriteTheory
+            anyRules = fromMaybe Map.empty $ Map.lookup Anything def.rewriteTheory
+            rules =
+                map snd . Map.toAscList $
+                    if termIdx == Anything
+                        then idxRules
+                        else Map.unionWith (<>) idxRules anyRules
 
-    when (null rules) $ throw NoRulesForTerm
+        when (null rules) $ throw NoRulesForTerm
 
-    -- process one priority group at a time (descending priority),
-    -- until a result is obtained or the entire rewrite fails.
-    processGroups rules
+        -- process one priority group at a time (descending priority),
+        -- until a result is obtained or the entire rewrite fails.
+        processGroups rules
   where
     processGroups :: [[RewriteRule]] -> RewriteM RewriteFailed (RewriteResult Pattern)
     processGroups [] =
@@ -143,37 +146,39 @@ applyRule ::
     Pattern ->
     RewriteRule ->
     RewriteM RuleFailed (RewriteRule, Pattern)
-applyRule pat rule = Trace.time "Rewrite.applyRule" $ do
-    def <- getDefinition
-    -- unify terms
-    let unified = unifyTerms def rule.lhs.term pat.term
-    subst <- case unified of
-        UnificationFailed reason ->
-            throw $ RewriteUnificationFailed reason
-        UnificationSortError sortError ->
-            throw $ RewriteSortError sortError
-        UnificationRemainder remainder ->
-            throw $ RewriteUnificationUnclear rule remainder
-        UnificationSuccess substitution ->
-            pure substitution
+applyRule pat rule =
+    -- Trace.time "Rewrite.applyRule" $
+    do
+        def <- getDefinition
+        -- unify terms
+        let unified = unifyTerms def rule.lhs.term pat.term
+        subst <- case unified of
+            UnificationFailed reason ->
+                throw $ RewriteUnificationFailed reason
+            UnificationSortError sortError ->
+                throw $ RewriteSortError sortError
+            UnificationRemainder remainder ->
+                throw $ RewriteUnificationUnclear rule remainder
+            UnificationSuccess substitution ->
+                pure substitution
 
-    -- check it is a matching substitution (stop if not)
-    unless (Map.keysSet subst == freeVariables rule.lhs.term) $
-        throw $
-            UnificationIsNotMatch rule subst
+        -- check it is a matching substitution (stop if not)
+        unless (Map.keysSet subst == freeVariables rule.lhs.term) $
+            throw $
+                UnificationIsNotMatch rule subst
 
-    -- apply substitution to rule constraints and simplify (stop if
-    -- false, one by one in isolation)
-    let newConstraints =
-            concatMap (splitBoolPredicates . substituteInPredicate subst) $
-                rule.lhs.constraints <> rule.rhs.constraints
-    mapM_ checkConstraint newConstraints
+        -- apply substitution to rule constraints and simplify (stop if
+        -- false, one by one in isolation)
+        let newConstraints =
+                concatMap (splitBoolPredicates . substituteInPredicate subst) $
+                    rule.lhs.constraints <> rule.rhs.constraints
+        mapM_ checkConstraint newConstraints
 
-    let rewritten =
-            Pattern
-                (substituteInTerm subst rule.rhs.term)
-                (map (substituteInPredicate subst) $ pat.constraints)
-    return (rule, rewritten)
+        let rewritten =
+                Pattern
+                    (substituteInTerm subst rule.rhs.term)
+                    (map (substituteInPredicate subst) $ pat.constraints)
+        return (rule, rewritten)
   where
     checkConstraint :: Predicate -> RewriteM RuleFailed ()
     checkConstraint p = do
@@ -297,6 +302,7 @@ isUnificationUnclear _other = False
 performRewrite ::
     forall io.
     MonadLoggerIO io =>
+    MonadMask io =>
     KoreDefinition ->
     Maybe LLVM.API ->
     -- | maximum depth
@@ -307,7 +313,7 @@ performRewrite ::
     [Text] ->
     Pattern ->
     io (Natural, RewriteResult Pattern)
-performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = Trace.time "Rewrite.performRewrite" $ do
+performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = Trace.timeIO "Rewrite.performRewrite" $ do
     logRewrite $ "Rewriting pattern " <> prettyText pat
     -- Trace.traceState Nothing pat 0
     doSteps False 0 pat

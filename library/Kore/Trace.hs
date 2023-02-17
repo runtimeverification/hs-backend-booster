@@ -1,34 +1,26 @@
 {-# OPTIONS_GHC -Wno-partial-fields #-}
 
-module Kore.Trace where
+module Kore.Trace (module Kore.Trace) where
 
-import Control.Applicative ((<|>))
 import Control.Monad (forM, forM_, when)
 import Control.Monad.Catch (MonadMask, bracket_)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Aeson (ToJSON (toJSON), encode)
-import Data.Aeson.Diff (diff)
 import Data.Binary (Binary (get, put), Get, Put, Word32, get, getWord8, putWord8)
 import Data.Binary.Get (getByteString)
 import Data.Binary.Put (putByteString, runPut)
 import Data.Bits
-import Data.ByteString (ByteString, toStrict)
+import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
-import Data.ByteString.Char8 (pack)
 import Data.ByteString.Lazy qualified as BL
 import Data.Hashable
 import Data.IORef
-import Data.List.NonEmpty (fromList, toList)
+import Data.List.NonEmpty (fromList)
 import Debug.Trace.Binary (traceBinaryEvent, traceBinaryEventIO)
-import Debug.Trace.ByteString (traceEvent, traceEventIO)
 import Debug.Trace.Flags
 import GHC.Generics (Generic)
 import GHC.IO (unsafePerformIO)
-import GHC.Natural (Natural)
-import Kore.Pattern.Base (Pattern, RewriteResult (..), Sort, Term)
-import Kore.Pattern.Binary (Block (..), Version (Version), decodePattern, decodeSingleBlock, decodeTerm', encodeMagicHeaderAndVersion, encodePattern, encodeSingleBlock, encodeTerm)
-import Kore.Syntax.Json (KoreJson, addHeader)
-import Kore.Syntax.Json.Externalise (externalisePattern)
+import Kore.Pattern.Base (Pattern, RewriteResult (..))
+import Kore.Pattern.Binary
 
 data CustomUserEventType = Timing | LlvmCalls | Rewriting deriving (Show, Enum)
 
@@ -147,45 +139,9 @@ timeIO label
             (traceIO $ Stop label)
     | otherwise = id
 
-time :: (Monad m) => ByteString -> m a -> m a
-time label m
-    | userTracingEnabled && customUserEventEnabled Timing = do
-        trace (Start label) $ pure ()
-        res <- m
-        trace (Stop label) $ pure ()
-        pure res
-    | otherwise = m
-
--- data TracingState = TracingState
---     { term :: KoreJson
---     , predicate :: Maybe KoreJson
---     }
---     deriving (Eq, Generic, ToJSON, Hashable)
-
--- traceState :: MonadIO m => Maybe Pattern -> Pattern -> Natural -> m ()
--- traceState Nothing curr _
---     | userTracingEnabled && eventlogTraceEnabled Rewriting =
---         do
---             let (t, p) = externalisePattern curr
---                 term = TracingState{term = addHeader t, predicate = fmap addHeader p}
---                 hashCurr = pack $ show $ hash term
---                 message = "LLVMC" <> hashCurr <> " " <> toStrict (encode term)
---             when (BS.length message > 2 ^ 16) $ error "LLVM message too long"
---             liftIO $ traceEventIO message
---     | otherwise = pure ()
--- traceState (Just pred) curr counter
---     | userTracingEnabled && eventlogTraceEnabled Rewriting =
---         if counter `mod` 10 == 0
---             then traceState Nothing curr counter
---             else do
---                 let (tCurr, pCurr) = externalisePattern curr
---                     termCurr = TracingState{term = addHeader tCurr, predicate = fmap addHeader pCurr}
---                     (tPred, pPred) = externalisePattern pred
---                     termPred = TracingState{term = addHeader tPred, predicate = fmap addHeader pPred}
---                     hashPred = pack $ show $ hash termPred
---                     hashCurr = pack $ show $ hash termCurr
---                     patch = encode $ diff (toJSON termPred) (toJSON termCurr)
---                     message = "LLVMP" <> hashPred <> " " <> hashCurr <> " " <> toStrict patch
---                 when (BS.length message > 2 ^ 16) $ error "LLVM message too long"
---                 liftIO $ traceEventIO message
---     | otherwise = pure ()
+-- time :: (Monad m) => ByteString -> m a -> m a
+-- time label m
+--     | userTracingEnabled && customUserEventEnabled Timing = do
+--         !res <- trace (Start label) $ m
+--         trace (Stop label) $ pure res
+--     | otherwise = m
