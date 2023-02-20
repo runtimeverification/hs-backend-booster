@@ -32,7 +32,7 @@ import GHC.IO.IOMode (IOMode (AppendMode))
 import GHC.RTS.Events qualified as Events
 import GHC.Stack (HasCallStack)
 import Kore.LLVM.Internal (LlvmCall (..), SomePtr (..))
-import Kore.Trace
+import Kore.Trace hiding (eventType)
 import Kore.Trace.TH
 import Options.Applicative qualified as Options
 import System.Directory (removeFile)
