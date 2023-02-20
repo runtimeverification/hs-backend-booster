@@ -1,3 +1,5 @@
+{-# OPTIONS -fno-warn-unrecognised-pragmas #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
