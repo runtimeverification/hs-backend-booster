@@ -53,9 +53,9 @@ mkPattern name pos = do
     ty <- mkEitherType pos
 
     pure
-        [ -- pattern <name'>E :: a -> ... Either a ...
+        [ -- pattern <name> :: a -> ... Either a ...
           TH.PatSynSigD name ty
-        , -- pattern <name'>E x = Right (... Left x ...)
+        , -- pattern <name> x = Right (... Left x ...)
           TH.PatSynD
             name
             (TH.PrefixPatSyn [x])
@@ -69,9 +69,9 @@ mkUnmatchedPattern pos names = do
     ty <- mkUnmatchedType pos
 
     pure
-        [ -- pattern Unmatched :: a -> ... Either a ...
+        [ -- pattern Unmatched :: Either (... Either a () ...)
           TH.PatSynSigD name ty
-        , -- pattern Unmatched x = Right (... Right () ...)
+        , -- pattern Unmatched = Right (... Right () ...)
           TH.PatSynD
             name
             (TH.PrefixPatSyn [])
