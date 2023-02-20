@@ -58,7 +58,6 @@ ghc-options:
 library:
   dependencies:
   - aeson
-  - aeson-diff
   - aeson-pretty
   - array
   - base
@@ -73,7 +72,7 @@ library:
   - exceptions
   - extra
   - filepath
-  - ghc-trace-events 
+  - ghc-trace-events
   - gitrev
   - hashable
   - hpp

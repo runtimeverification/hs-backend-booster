@@ -15,14 +15,17 @@ module Kore.LLVM.Internal (
     KoreStringPatternAPI (..),
     KoreSymbolAPI (..),
     KoreSortAPI (..),
+    SomePtr(..),
+    somePtr,
+    LlvmCall(..),
+    LlvmVar(..),
 ) where
 
 import Control.Monad (foldM, forM_, void, (>=>))
-import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT))
 import Control.Monad.Trans.Reader qualified as Reader
-import Data.ByteString.Char8 (ByteString)
+import Data.ByteString.Char8 (ByteString, pack)
 import Data.ByteString.Char8 qualified as BS
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
@@ -35,11 +38,13 @@ import Foreign.Marshal (alloca)
 import Foreign.Storable (peek)
 import Kore.LLVM.TH (dynamicBindings)
 import Kore.Pattern.Base
-import Kore.Pattern.Binary qualified as Binary
 import Kore.Pattern.Util (sortOfTerm)
-import Kore.Trace (CustomUserEvent (LlvmCall, LlvmVar), toPtr, toPtrList)
-import Kore.Trace qualified as Trace
 import System.Posix.DynamicLinker qualified as Linker
+import Kore.Trace
+import Data.Binary (put, get, Binary)
+import Kore.Pattern.Binary hiding (Block)
+import qualified Kore.Trace as Trace
+import Control.Monad.Catch (MonadMask, MonadCatch, MonadThrow)
 
 data KorePattern
 data KoreSort
@@ -92,7 +97,37 @@ data API = API
     }
 
 newtype LLVM a = LLVM (ReaderT API IO a)
-    deriving newtype (Functor, Applicative, Monad, MonadIO, MonadCatch, MonadThrow, MonadMask)
+    deriving newtype (Functor, Applicative, Monad, MonadIO, MonadThrow, MonadCatch, MonadMask)
+
+
+newtype SomePtr = SomePtr ByteString 
+    deriving newtype Binary
+
+
+somePtr :: Show a => a -> SomePtr
+somePtr ptr = SomePtr $ pack $ show ptr
+
+data LlvmCall = LlvmCall
+        { ret :: Maybe (ByteString, SomePtr)
+        , call :: ByteString
+        , args :: [Either ByteString SomePtr]
+        }
+instance CustomUserEvent LlvmCall where
+    encodeUserEvent (LlvmCall{ret, call, args}) = put ret <> put call <> put args
+    decodeUserEvent = LlvmCall <$> get <*> get <*> get
+    userEventTag _ = "LLVM "
+    eventType _ = LlvmCalls
+
+
+data LlvmVar = LlvmVar SomePtr Term
+
+instance CustomUserEvent LlvmVar where
+    encodeUserEvent (LlvmVar ptr trm) = put ptr <> encodeMagicHeaderAndVersion (Version 1 1 0) <> encodeTerm trm
+    decodeUserEvent = LlvmVar <$> get <*> decodeTerm' Nothing
+    userEventTag _ = "LLVMV"
+    eventType _ = LlvmCalls
+
+
 
 {- | Uses dlopen to load a .so/.dylib C library at runtime. For doucmentation of flags such as `RTL_LAZY`, consult e.g.
      https://man7.org/linux/man-pages/man3/dlopen.3.html
@@ -110,39 +145,50 @@ mkAPI dlib = flip runReaderT dlib $ do
     newCompositePattern <- koreCompositePatternNew
     let newPattern name =
             {-# SCC "LLVM.pattern.new" #-}
-            liftIO $
-                BS.useAsCString name $
-                    newCompositePattern >=> newForeignPtr freePattern
+            BS.useAsCString name $ 
+                newCompositePattern >=> 
+                    newForeignPtr freePattern >=> 
+                        traceCall "kore_composite_pattern_new" [Left name] "kore_pattern*"
 
     addArgumentCompositePattern <- koreCompositePatternAddArgument
     let addArgumentPattern parent child =
-            liftIO $
-                {-# SCC "LLVM.pattern.addArgument" #-}
-                do
-                    withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgumentCompositePattern rawParent
-                    finalizeForeignPtr child
-                    pure parent
+            {-# SCC "LLVM.pattern.addArgument" #-}
+            do
+                withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgumentCompositePattern rawParent
+                finalizeForeignPtr child
+                Trace.traceIO $ LlvmCall{
+                    call = "kore_composite_pattern_add_argument", 
+                    args = [Right $ somePtr parent, Right $ somePtr child],
+                    ret = Nothing
+                    }
+                pure parent
 
     newString <- koreStringPatternNewWithLen
     let string = KoreStringPatternAPI $ \name ->
             {-# SCC "LLVM.pattern.string" #-}
-            liftIO $ BS.useAsCStringLen name $ \(rawStr, len) ->
-                newString rawStr (fromIntegral len) >>= newForeignPtr freePattern
+            BS.useAsCStringLen name $ \(rawStr, len) ->
+                newString rawStr (fromIntegral len) >>= 
+                    (newForeignPtr freePattern >=> 
+                        traceCall "kore_string_pattern_new_with_len" [Left name] "kore_pattern*")
 
     newToken <- korePatternNewTokenWithLen
     let token = KoreTokenPatternAPI $ \name sort ->
             {-# SCC "LLVM.pattern.token" #-}
-            liftIO $ BS.useAsCStringLen name $ \(rawName, len) ->
+            BS.useAsCStringLen name $ \(rawName, len) ->
                 withForeignPtr sort $
-                    newToken rawName (fromIntegral len) >=> newForeignPtr freePattern
+                    newToken rawName (fromIntegral len) >=> newForeignPtr freePattern >=>
+                        traceCall "kore_pattern_new_token_with_len" [Left name] "kore_pattern*"
 
     compositePatternFromSymbol <- koreCompositePatternFromSymbol
-    let fromSymbol sym = {-# SCC "LLVM.pattern.fromSymbol" #-} liftIO $ withForeignPtr sym $ compositePatternFromSymbol >=> newForeignPtr freePattern
+    let fromSymbol sym = 
+            {-# SCC "LLVM.pattern.fromSymbol" #-} 
+            withForeignPtr sym $ compositePatternFromSymbol >=> newForeignPtr freePattern >=> 
+                traceCall "kore_composite_pattern_from_symbol" [Right $ somePtr sym] "kore_pattern*"
 
     dumpPattern' <- korePatternDump
     let dumpPattern ptr =
             {-# SCC "LLVM.pattern.dump" #-}
-            liftIO $ withForeignPtr ptr $ \rawPtr -> do
+            withForeignPtr ptr $ \rawPtr -> do
                 strPtr <- dumpPattern' rawPtr
                 str <- C.peekCString strPtr
                 Foreign.free strPtr
@@ -157,14 +203,19 @@ mkAPI dlib = flip runReaderT dlib $ do
             {-# SCC "LLVM.symbol.new" #-}
             liftIO $
                 BS.useAsCString name $
-                    newSymbol' >=> newForeignPtr freeSymbol
+                    newSymbol' >=> newForeignPtr freeSymbol >=>
+                        traceCall "kore_symbol_new" [Left name] "kore_symbol*"
 
     addArgumentSymbol' <- koreSymbolAddFormalArgument
     let addArgumentSymbol sym sort =
-            liftIO $
                 {-# SCC "LLVM.symbol.addArgument" #-}
                 do
                     withForeignPtr sym $ \rawSym -> withForeignPtr sort $ addArgumentSymbol' rawSym
+                    Trace.traceIO $ LlvmCall{
+                        call = "kore_symbol_add_formal_argument", 
+                        args = [Right $ somePtr sym, Right $ somePtr sort],
+                        ret = Nothing
+                        }
                     pure sym
 
     symbolCache <- liftIO $ newIORef mempty
@@ -176,17 +227,21 @@ mkAPI dlib = flip runReaderT dlib $ do
     newSort' <- koreCompositeSortNew
     let newSort name =
             {-# SCC "LLVM.sort.new" #-}
-            liftIO $
-                BS.useAsCString name $
-                    newSort' >=> newForeignPtr freeSort
+            BS.useAsCString name $
+                newSort' >=> newForeignPtr freeSort >=>
+                    traceCall "kore_composite_sort_new" [Left name] "kore_sort*"
 
     addArgumentSort' <- koreCompositeSortAddArgument
     let addArgumentSort parent child =
-            liftIO $
-                {-# SCC "LLVM.sort.addArgument" #-}
-                do
-                    withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgumentSort' rawParent
-                    pure parent
+            {-# SCC "LLVM.sort.addArgument" #-}
+            do
+                withForeignPtr parent $ \rawParent -> withForeignPtr child $ addArgumentSort' rawParent
+                Trace.traceIO $ LlvmCall{
+                        call = "kore_composite_sort_add_formal_argument", 
+                        args = [Right $ somePtr parent, Right $ somePtr child],
+                        ret = Nothing
+                        }
+                pure parent
 
     dumpSort' <- koreSortDump
     let dumpSort ptr =
@@ -202,160 +257,87 @@ mkAPI dlib = flip runReaderT dlib $ do
     let sort = KoreSortAPI{new = newSort, addArgument = addArgumentSort, dump = dumpSort, cache = sortCache}
 
     simplifyBool' <- koreSimplifyBool
-    let simplifyBool p = {-# SCC "LLVM.simplifyBool" #-} Trace.timeIO "LLVM.simplifyBool" $ liftIO $ withForeignPtr p $ fmap (== 1) <$> simplifyBool'
+    let simplifyBool p = 
+            {-# SCC "LLVM.simplifyBool" #-} 
+            do
+                Trace.traceIO $ LlvmCall{
+                        call = "kore_simplify_bool", 
+                        args = [Right $ somePtr p],
+                        ret = Nothing
+                        }
+                withForeignPtr p $ fmap (== 1) <$> simplifyBool'
 
     simplify' <- koreSimplify
     let simplify pat srt =
             {-# SCC "LLVM.simplify" #-}
-            Trace.timeIO "LLVM.simplify" $
-                liftIO $
-                    withForeignPtr pat $ \patPtr ->
-                        withForeignPtr srt $ \sortPtr ->
-                            alloca $ \lenPtr ->
-                                alloca $ \strPtr -> do
-                                    simplify' patPtr sortPtr strPtr lenPtr
-                                    len <- fromIntegral <$> peek lenPtr
-                                    cstr <- peek strPtr
-                                    BS.packCStringLen (cstr, len)
+            liftIO $
+                withForeignPtr pat $ \patPtr ->
+                    withForeignPtr srt $ \sortPtr ->
+                        alloca $ \lenPtr ->
+                            alloca $ \strPtr -> do
+                                simplify' patPtr sortPtr strPtr lenPtr
+                                Trace.traceIO $ LlvmCall{
+                                    call = "kore_simplify", 
+                                    args = [Right $ somePtr patPtr, Right $ somePtr sortPtr, Right $ somePtr strPtr, Right $ somePtr lenPtr],
+                                    ret = Nothing
+                                }
+                                len <- fromIntegral <$> peek lenPtr
+                                cstr <- peek strPtr
+                                BS.packCStringLen (cstr, len)
 
     pure API{patt, symbol, sort, simplifyBool, simplify}
+
+    where
+        traceCall call args retTy retPtr = do
+            Trace.traceIO $ LlvmCall{ret = Just (retTy, somePtr retPtr), call, args}
+            pure retPtr
 
 ask :: LLVM API
 ask = LLVM Reader.ask
 
 marshallSymbol :: Symbol -> [Sort] -> LLVM KoreSymbolPtr
-marshallSymbol sym sorts =
-    do
-        kore <- ask
-        cache <- liftIO $ readIORef kore.symbol.cache
-        case HM.lookup (sym, sorts) cache of
-            Just ptr -> pure ptr
-            Nothing -> do
-                sym' <- liftIO $ kore.symbol.new sym.name
-                Trace.traceIO $
-                    LlvmCall
-                        { ret = Just $ toPtr $ Binary.BSymbol sym.name sorts
-                        , call = "kore_symbol_new"
-                        , args = toPtrList [Binary.BString sym.name]
-                        }
-                Trace.traceIO $ LlvmVar $ Binary.BSymbol sym.name sym.argSorts
-                liftIO $ modifyIORef' kore.symbol.cache $ HM.insert (sym, sorts) sym'
-                foldM
-                    ( \symbol sort -> do
-                        sortPtr <- marshallSort sort
-                        symPtr <- liftIO $ kore.symbol.addArgument symbol sortPtr
-                        Trace.traceIO $
-                            LlvmCall
-                                { ret = Nothing
-                                , call = "kore_symbol_add_formal_argument"
-                                , args = toPtrList [Binary.BSymbol sym.name sorts, Binary.BSort sort]
-                                }
-                        pure symPtr
-                    )
-                    sym'
-                    sorts
+marshallSymbol sym sorts = do
+    kore <- ask
+    cache <- liftIO $ readIORef kore.symbol.cache
+    case HM.lookup (sym, sorts) cache of
+        Just ptr -> pure ptr
+        Nothing -> do
+            sym' <- liftIO $ kore.symbol.new sym.name
+            liftIO $ modifyIORef' kore.symbol.cache $ HM.insert (sym, sorts) sym'
+            foldM (\symbol sort -> marshallSort sort >>= liftIO . kore.symbol.addArgument symbol) sym' sorts
 
 marshallSort :: Sort -> LLVM KoreSortPtr
-marshallSort s =
-    case s of
-        SortApp name args -> do
-            kore <- ask
-            cache <- liftIO $ readIORef kore.sort.cache
-            case HM.lookup s cache of
-                Just ptr -> pure ptr
-                Nothing -> do
-                    sort <- liftIO $ kore.sort.new name
-                    Trace.traceIO $
-                        LlvmCall
-                            { ret = Just $ toPtr $ Binary.BSort s
-                            , call = "kore_composite_sort_new"
-                            , args = toPtrList [Binary.BString name]
-                            }
-                    Trace.traceIO $ LlvmVar $ Binary.BSort s
-                    forM_ args $ \s' -> do
-                        sort' <- marshallSort s'
-                        void $ liftIO $ kore.sort.addArgument sort sort'
-                        Trace.traceIO $
-                            LlvmCall
-                                { ret = Nothing
-                                , call = "kore_composite_sort_add_argument"
-                                , args = toPtrList [Binary.BSort s, Binary.BSort s']
-                                }
-                    liftIO $ modifyIORef' kore.sort.cache $ HM.insert s sort
-                    pure sort
-        SortVar varName -> error $ "marshalling SortVar " <> show varName <> " unsupported"
+marshallSort = \case
+    s@(SortApp name args) -> do
+        kore <- ask
+        cache <- liftIO $ readIORef kore.sort.cache
+        case HM.lookup s cache of
+            Just ptr -> pure ptr
+            Nothing -> do
+                sort <- liftIO $ kore.sort.new name
+                forM_ args $ marshallSort >=> liftIO . kore.sort.addArgument sort
+                liftIO $ modifyIORef' kore.sort.cache $ HM.insert s sort
+                pure sort
+    SortVar varName -> error $ "marshalling SortVar " <> show varName <> " unsupported"
 
 marshallTerm :: Term -> LLVM KorePatternPtr
-marshallTerm t =
-    do
-        kore <- ask
-        case t of
-            SymbolApplication symbol sorts trms -> do
-                trm <- liftIO . kore.patt.fromSymbol =<< marshallSymbol symbol sorts
-                Trace.traceIO $
-                    LlvmCall
-                        { ret = Just $ toPtr $ Binary.BTerm t
-                        , call = "kore_composite_pattern_from_symbol"
-                        , args = toPtrList [Binary.BSymbol symbol.name sorts]
-                        }
-                forM_ trms $ \childT' -> do
-                    childT <- marshallTerm childT'
-                    ret <- liftIO $ kore.patt.addArgument trm childT
-                    Trace.traceIO $
-                        LlvmCall
-                            { ret = Nothing
-                            , call = "kore_composite_pattern_add_argument"
-                            , args = toPtrList [Binary.BTerm t, Binary.BTerm childT']
-                            }
-                    pure ret
-                pure trm
-            AndTerm l r -> do
-                andTrm <- liftIO . kore.patt.fromSymbol =<< marshallSymbol andSymbol [sortOfTerm l]
-                Trace.traceIO $
-                    LlvmCall
-                        { ret = Just $ toPtr $ Binary.BTerm t
-                        , call = "kore_composite_pattern_from_symbol"
-                        , args = toPtrList [Binary.BSymbol andSymbol.name [sortOfTerm l]]
-                        }
-                void $ liftIO . kore.patt.addArgument andTrm =<< marshallTerm l
-                Trace.traceIO $
-                    LlvmCall
-                        { ret = Nothing
-                        , call = "kore_composite_pattern_add_argument"
-                        , args = toPtrList [Binary.BTerm t, Binary.BTerm l]
-                        }
-                trm <- liftIO . kore.patt.addArgument andTrm =<< marshallTerm r
-                Trace.traceIO $
-                    LlvmCall
-                        { ret = Nothing
-                        , call = "kore_composite_pattern_add_argument"
-                        , args = toPtrList [Binary.BTerm t, Binary.BTerm r]
-                        }
-                pure trm
-            DomainValue sort' val -> do
-                sort <- marshallSort sort'
-                trm <- liftIO $ kore.patt.token.new val sort
-                Trace.traceIO $
-                    LlvmCall
-                        { ret = Just $ toPtr $ Binary.BTerm t
-                        , call = "kore_pattern_new_token"
-                        , args = toPtrList [Binary.BString val, Binary.BSort sort']
-                        }
-                pure trm
-            Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"
-            Injection source target child -> do
-                inj <- liftIO . kore.patt.fromSymbol =<< marshallSymbol injectionSymbol [source, target]
-                Trace.traceIO $
-                    LlvmCall
-                        { ret = Just $ toPtr $ Binary.BTerm t
-                        , call = "kore_composite_pattern_from_symbol"
-                        , args = toPtrList [Binary.BSymbol injectionSymbol.name [source, target]]
-                        }
-                trm <- liftIO . kore.patt.addArgument inj =<< marshallTerm child
-                Trace.traceIO $
-                    LlvmCall
-                        { ret = Nothing
-                        , call = "kore_composite_pattern_add_argument"
-                        , args = toPtrList [Binary.BTerm t, Binary.BTerm child]
-                        }
-                pure trm
+marshallTerm t = do
+    kore <- ask
+    case t of
+        SymbolApplication symbol sorts trms -> do
+            trm <- liftIO . kore.patt.fromSymbol =<< marshallSymbol symbol sorts
+            forM_ trms $ marshallTerm >=> liftIO . kore.patt.addArgument trm
+            pure trm
+        AndTerm l r -> do
+            andSym <- liftIO $ kore.symbol.new "\\and"
+            void $ liftIO . kore.symbol.addArgument andSym =<< marshallSort (sortOfTerm l)
+            trm <- liftIO $ kore.patt.fromSymbol andSym
+            void $ liftIO . kore.patt.addArgument trm =<< marshallTerm l
+            liftIO . kore.patt.addArgument trm =<< marshallTerm r
+        DomainValue sort val ->
+            marshallSort sort >>= liftIO . kore.patt.token.new val
+        Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"
+        Injection source target trm -> do
+            inj <- liftIO . kore.patt.fromSymbol =<< marshallSymbol injectionSymbol [source, target]
+            marshallTerm trm >>= liftIO . kore.patt.addArgument inj
+          where

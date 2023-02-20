@@ -19,12 +19,9 @@ import Data.Functor.Foldable
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Hashable (Hashable)
 import Data.Hashable qualified as Hashable
-import Data.List.NonEmpty (NonEmpty)
-import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Data.Text (Text)
 import Data.Text.Encoding qualified as Text
 import GHC.Generics (Generic)
 import Kore.Definition.Attributes.Base (
@@ -32,7 +29,7 @@ import Kore.Definition.Attributes.Base (
     SymbolType (..),
  )
 import Kore.Prettyprinter qualified as KPretty
-import Prettyprinter
+import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
 
 type VarName = ByteString
@@ -153,8 +150,6 @@ pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts
     where
         SymbolApplication sym [source, target] [arg]
             | sym == injectionSymbol = Injection source target arg
-        SymbolApplication sym _ [arg1, arg2]
-            | sym.name == "\\and" = AndTerm arg1 arg2
         SymbolApplication sym sorts args =
             let argAttributes = mconcat $ map getAttributes args
                 newEvaluatedFlag =
@@ -229,21 +224,6 @@ injectionSymbol =
                 }
         }
 
-andSymbol :: Symbol
-andSymbol =
-    Symbol
-        { name = "\\and"
-        , sortVars = ["S"]
-        , argSorts = [SortVar "S"]
-        , resultSort = SortVar "S"
-        , attributes =
-            SymbolAttributes
-                { symbolType = TotalFunction
-                , isIdem = False
-                , isAssoc = False
-                }
-        }
-
 -- convenience patterns
 pattern AndBool :: [Term] -> Term
 pattern AndBool ts <-
@@ -270,7 +250,7 @@ data Predicate
     | Or Predicate Predicate
     | Top
     deriving stock (Eq, Ord, Show, Generic)
-    deriving anyclass (NFData, Hashable)
+    deriving anyclass (NFData)
 
 makeBaseFunctor ''Predicate
 
@@ -457,53 +437,3 @@ instance Pretty Pattern where
             , "Conditions:"
             ]
                 <> fmap (Pretty.indent 4 . pretty) patt.constraints
-
--- | Different rewrite results (returned from RPC execute endpoint)
-data RewriteResult pat
-    = -- | single result (internal use, not returned)
-      RewriteSingle pat
-    | -- | branch point
-      RewriteBranch pat (NonEmpty pat)
-    | -- | no rules could be applied, config is stuck
-      RewriteStuck pat
-    | -- | cut point rule, return current (lhs) and single next state
-      RewriteCutPoint Text pat pat
-    | -- | terminal rule, return rhs (final state reached)
-      RewriteTerminal Text pat
-    | -- | stopping because maximum depth has been reached
-      RewriteStopped pat
-    | -- | unable to handle the current case with this rewriter
-      -- (signalled by exceptions)
-      RewriteAborted pat
-    deriving stock (Eq, Show)
-    deriving (Functor)
-
-instance Pretty (RewriteResult Pattern) where
-    pretty (RewriteSingle pat) =
-        showPattern "Rewritten to" pat
-    pretty (RewriteBranch pat nexts) =
-        hang 4 . vsep $
-            [ "Branch reached at:"
-            , pretty pat
-            , "Next states:"
-            ]
-                <> map pretty (NE.toList nexts)
-    pretty (RewriteStuck pat) =
-        showPattern "Stuck at" pat
-    pretty (RewriteCutPoint lbl pat next) =
-        hang 4 $
-            vsep
-                [ "Cut point reached " <> parens (pretty lbl)
-                , pretty pat
-                , "Next state"
-                , pretty next
-                ]
-    pretty (RewriteTerminal lbl pat) =
-        showPattern ("Terminal rule reached " <> parens (pretty lbl)) pat
-    pretty (RewriteStopped pat) =
-        showPattern "Stopped (max depth reached) at" pat
-    pretty (RewriteAborted pat) =
-        showPattern "Rewrite aborted" pat
-
-showPattern :: Doc a -> Pattern -> Doc a
-showPattern title pat = hang 4 $ vsep [title, pretty pat]

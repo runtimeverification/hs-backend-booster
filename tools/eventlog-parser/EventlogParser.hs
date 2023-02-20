@@ -1,6 +1,8 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 {-# HLINT ignore "Redundant <$>" #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE PatternSynonyms #-}
 module Main (main) where
 
 import Control.Exception (catch, throwIO)
@@ -11,7 +13,6 @@ import Data.Aeson (ToJSON, encode)
 import Data.Aeson qualified as Aeson
 import Data.Binary.Get
 import Data.ByteString (ByteString)
-import Data.ByteString qualified as BS
 import Data.ByteString.Builder
 import Data.ByteString.Lazy qualified as BL
 import Data.IntMap (IntMap)
@@ -31,20 +32,27 @@ import GHC.IO.IOMode (IOMode (AppendMode))
 import GHC.RTS.Events qualified as Events
 import GHC.Stack (HasCallStack)
 import Kore.Trace
+import Kore.Trace.TH
+import Kore.LLVM.Internal(LlvmCall(..), SomePtr(..))
 import Options.Applicative qualified as Options
 import System.Directory (removeFile)
 import System.FilePath ((<.>))
 import System.IO.Error (isDoesNotExistError)
 
-type CustomUserEventData = (Events.Timestamp, Either Events.EventInfo CustomUserEvent, Maybe Int)
+
+type CustomUserEvents = '[Start, Stop, LlvmCall]
+
+$(mkSumPatterns @CustomUserEvents)
+
+type CustomUserEventData = (Events.Timestamp, Either Events.EventInfo (Sum CustomUserEvents), Maybe Int)
 
 parseEventLog :: Events.Event -> CustomUserEventData
 parseEventLog Events.Event{evTime, evSpec, evCap} =
     ( evTime
     , case evSpec of
-        Events.UserBinaryMessage msg -> case runGet decodeCustomUserEvent $ BL.fromStrict msg of
-            Just userEvent -> Right userEvent
-            Nothing -> Left evSpec
+        Events.UserBinaryMessage msg -> case runGet (decodeCustomUserEvent @CustomUserEvents) $ BL.fromStrict msg of
+            Unmatched -> Left evSpec
+            userEvent -> Right userEvent
         _ -> Left evSpec
     , evCap
     )
@@ -189,30 +197,19 @@ emitSpeedscopeProfile file frames threads endTime = do
                 hPutBuilder jsonHandle $ events <> lazyByteString "]}"
         hPutBuilder jsonHandle $ lazyByteString "]}"
 
-emitLlvmCall :: Handle -> Maybe BlockPtr -> ByteString -> [BlockPtr] -> IO ()
+emitLlvmCall :: Handle -> Maybe (ByteString, SomePtr) -> ByteString -> [Either ByteString SomePtr] -> IO ()
 emitLlvmCall llvmCallsHandle ret call args = do
     let prettyRet = case ret of
-            Just ptr@(BPTerm _) -> lazyByteString "kore_pattern* " <> emitLlvmCallArg ptr <> lazyByteString " = "
-            Just ptr@(BPSort _) -> lazyByteString "kore_sort* " <> emitLlvmCallArg ptr <> lazyByteString " = "
-            Just ptr@(BPSymbol _) -> lazyByteString "kore_symbol* " <> emitLlvmCallArg ptr <> lazyByteString " = "
+            Just (ty, SomePtr ptr) -> byteString ty <> lazyByteString " v" <> byteString ptr <> lazyByteString " = "
             _ -> ""
 
-        prettyArgs = charUtf8 '(' <> mconcat (intersperse (charUtf8 ',') $ map emitLlvmCallArg args) <> charUtf8 ')'
+        prettyArgs = 
+            charUtf8 '(' <> 
+            mconcat (intersperse (charUtf8 ',') $ 
+                map (either (\str -> charUtf8 '"' <> byteString str <> charUtf8 '"') (\(SomePtr ptr) -> charUtf8 'v' <> byteString ptr)) args) <> 
+            charUtf8 ')'
     hPutBuilder llvmCallsHandle $ prettyRet <> byteString call <> prettyArgs <> lazyByteString ";\n"
 
-emitLlvmCallArg :: BlockPtr -> Builder
-emitLlvmCallArg = \case
-    BPTerm h -> hshNm "pat" h
-    BPSort h -> hshNm "sort" h
-    BPSymbol h -> hshNm "sym" h
-    BPString s -> charUtf8 '"' <> byteString s <> charUtf8 '"'
-  where
-    hshNm :: BS.ByteString -> Int -> Builder
-    hshNm nm h =
-        byteString nm
-            <> if h < 0
-                then lazyByteString "_m" <> (stringUtf8 $ show $ abs h)
-                else charUtf8 '_' <> (stringUtf8 $ show h)
 
 analyse :: [Text] -> [Text] -> [Text] -> Handle -> CustomUserEventData -> StateT ProcessAnalysis IO ()
 analyse matching nonMatching notMatchingChildren llvmCallsHandle (evTime, evSpec, evCap) = do
@@ -226,7 +223,7 @@ analyse matching nonMatching notMatchingChildren llvmCallsHandle (evTime, evSpec
         Left Events.StopThread{} -> do
             cap <- maybe (error "expected capability") pure evCap
             modify' $ \s@ProcessAnalysis{caps} -> s{caps = IntMap.delete cap caps}
-        Right (Start ident) -> do
+        Right (StartE (Start ident)) -> do
             cap <- maybe (error "expected capability") pure evCap
             eventThreadId <- expectThreadId cap
             frameDict <- gets frames
@@ -249,7 +246,7 @@ analyse matching nonMatching notMatchingChildren llvmCallsHandle (evTime, evSpec
             -- if we aren't filtering an event, emit it to the json builder
             when (applyFrameFilter frameFilter stack eventFrameId) $
                 emitFrameEvent eventThreadId frame
-        Right (Stop ident) -> do
+        Right (StopE (Stop ident)) -> do
             cap <- maybe (error "expected capability") pure evCap
             eventThreadId <- expectThreadId cap
             frameDict <- gets frames
@@ -271,7 +268,7 @@ analyse matching nonMatching notMatchingChildren llvmCallsHandle (evTime, evSpec
             stack <- popAndExtractTail eventThreadId eventFrameId
             when (applyFrameFilter frameFilter stack eventFrameId) $
                 emitFrameEvent eventThreadId frame
-        Right LlvmCall{ret, call, args} -> lift $ emitLlvmCall llvmCallsHandle ret call args
+        Right (LlvmCallE LlvmCall{ret, call, args}) -> lift $ emitLlvmCall llvmCallsHandle ret call args
         _ -> pure ()
 
 removeFileIfExists :: FilePath -> IO ()

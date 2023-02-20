@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveFunctor #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -6,6 +8,7 @@ module Kore.Pattern.Rewrite (
     performRewrite,
     rewriteStep,
     RewriteFailed (..),
+    RewriteResult (..),
     runRewriteM,
 ) where
 
@@ -23,7 +26,6 @@ import Data.Text (Text, pack, split, unpack)
 import Numeric.Natural
 import Prettyprinter
 
-import Control.Monad.Catch (MonadMask)
 import Kore.Definition.Attributes.Base
 import Kore.Definition.Base
 import Kore.LLVM.Internal qualified as LLVM
@@ -33,8 +35,6 @@ import Kore.Pattern.Simplify
 import Kore.Pattern.Unify
 import Kore.Pattern.Util
 import Kore.Prettyprinter
-import Kore.Trace
-import Kore.Trace qualified as Trace
 
 newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe LLVM.API) (Except err) a}
     deriving newtype (Functor, Applicative, Monad)
@@ -258,6 +258,56 @@ ruleId rule = (<> ": ") $ maybe ruleLoc show rule.attributes.ruleLabel
                 , rule.attributes.location.position.column
                 )
 
+-- | Different rewrite results (returned from RPC execute endpoint)
+data RewriteResult pat
+    = -- | single result (internal use, not returned)
+      RewriteSingle pat
+    | -- | branch point
+      RewriteBranch pat (NonEmpty pat)
+    | -- | no rules could be applied, config is stuck
+      RewriteStuck pat
+    | -- | cut point rule, return current (lhs) and single next state
+      RewriteCutPoint Text pat pat
+    | -- | terminal rule, return rhs (final state reached)
+      RewriteTerminal Text pat
+    | -- | stopping because maximum depth has been reached
+      RewriteStopped pat
+    | -- | unable to handle the current case with this rewriter
+      -- (signalled by exceptions)
+      RewriteAborted pat
+    deriving stock (Eq, Show)
+    deriving (Functor)
+
+instance Pretty (RewriteResult Pattern) where
+    pretty (RewriteSingle pat) =
+        showPattern "Rewritten to" pat
+    pretty (RewriteBranch pat nexts) =
+        hang 4 . vsep $
+            [ "Branch reached at:"
+            , pretty pat
+            , "Next states:"
+            ]
+                <> map pretty (NE.toList nexts)
+    pretty (RewriteStuck pat) =
+        showPattern "Stuck at" pat
+    pretty (RewriteCutPoint lbl pat next) =
+        hang 4 $
+            vsep
+                [ "Cut point reached " <> parens (pretty lbl)
+                , pretty pat
+                , "Next state"
+                , pretty next
+                ]
+    pretty (RewriteTerminal lbl pat) =
+        showPattern ("Terminal rule reached " <> parens (pretty lbl)) pat
+    pretty (RewriteStopped pat) =
+        showPattern "Stopped (max depth reached) at" pat
+    pretty (RewriteAborted pat) =
+        showPattern "Rewrite aborted" pat
+
+showPattern :: Doc a -> Pattern -> Doc a
+showPattern title pat = hang 4 $ vsep [title, pretty pat]
+
 {- | Interface for RPC execute: Rewrite given term as long as there is
    exactly one result in each step.
 
@@ -273,7 +323,6 @@ ruleId rule = (<> ": ") $ maybe ruleLoc show rule.attributes.ruleLabel
 performRewrite ::
     forall io.
     MonadLoggerIO io =>
-    MonadMask io =>
     KoreDefinition ->
     Maybe LLVM.API ->
     -- | maximum depth
@@ -284,9 +333,8 @@ performRewrite ::
     [Text] ->
     Pattern ->
     io (Natural, RewriteResult Pattern)
-performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = Trace.timeIO "Rewrite.performRewrite" $ do
+performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
     logRewrite $ "Rewriting pattern " <> prettyText pat
-    -- Trace.traceState Nothing pat 0
     doSteps False 0 pat
   where
     logRewrite = logOther (LevelOther "Rewrite")
@@ -319,14 +367,13 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = Trace.
                     logRewrite $
                         "Terminal rule after " <> showCounter (counter + 1)
                     logRewrite $ prettyText terminal
-                    Trace.trace (Rewrite terminal) $ pure (counter + 1, fmap simplify terminal)
+                    pure (counter + 1, fmap simplify terminal)
                 Right other -> do
                     logRewrite $ "Stopped after " <> showCounter counter
                     logRewrite $ prettyText other
                     let simplifiedOther = fmap simplify other
                     logRewrite $ "Simplified: " <> prettyText simplifiedOther
-                    -- Trace.traceState (Just pat') (getPatternFromRewriteResult simplifiedOther) counter
-                    Trace.trace (Rewrite other) $ pure (counter, simplifiedOther)
+                    pure (counter, simplifiedOther)
                 -- if unification was unclear and the pattern was
                 -- unsimplified, simplify and retry rewriting once
                 Left (RuleApplicationUnclear rule term _)
@@ -354,5 +401,4 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = Trace.
                 Left failure -> do
                     logRewrite $ "Aborted after " <> showCounter counter
                     logRewrite $ prettyText failure
-                    -- Trace.traceState (Just pat') simplifiedPat counter
                     pure (counter, (if wasSimplified then id else fmap simplify) $ RewriteAborted pat')
