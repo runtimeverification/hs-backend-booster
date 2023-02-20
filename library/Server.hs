@@ -21,6 +21,9 @@ import Kore.Syntax.ParsedKore (loadDefinition)
 import Kore.Trace
 import Kore.VersionInfo (VersionInfo (..), versionInfo)
 
+import Text.Casing
+import Text.Read
+
 main :: IO ()
 main = do
     options <- execParser clParser
@@ -135,11 +138,8 @@ clOptionsParser =
             | otherwise -> Left $ other <> ": Unsupported log level"
 
     readEventLogTracing :: String -> Either String CustomUserEventType
-    readEventLogTracing = \case
-        "timing" -> Right Timing
-        "llvm-calls" -> Right LlvmCalls
-        "rewriting" -> Right Rewriting
-        other -> Left $ other <> " not supported in eventlog tracing"
+    readEventLogTracing =
+        (\s -> maybe (Left $ s <> " not supported in eventlog tracing") Right $ readMaybe s) . toPascal . fromKebab
 
 -- custom log levels that can be selected
 allowedLogLevels :: [String]
