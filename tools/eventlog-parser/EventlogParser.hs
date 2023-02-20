@@ -1,8 +1,8 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
+{-# LANGUAGE PatternSynonyms #-}
 {-# HLINT ignore "Redundant <$>" #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
 module Main (main) where
 
 import Control.Exception (catch, throwIO)
@@ -31,14 +31,13 @@ import GHC.IO.Handle.FD (withBinaryFile)
 import GHC.IO.IOMode (IOMode (AppendMode))
 import GHC.RTS.Events qualified as Events
 import GHC.Stack (HasCallStack)
+import Kore.LLVM.Internal (LlvmCall (..), SomePtr (..))
 import Kore.Trace
 import Kore.Trace.TH
-import Kore.LLVM.Internal(LlvmCall(..), SomePtr(..))
 import Options.Applicative qualified as Options
 import System.Directory (removeFile)
 import System.FilePath ((<.>))
 import System.IO.Error (isDoesNotExistError)
-
 
 type CustomUserEvents = '[Start, Stop, LlvmCall]
 
@@ -203,13 +202,14 @@ emitLlvmCall llvmCallsHandle ret call args = do
             Just (ty, SomePtr ptr) -> byteString ty <> lazyByteString " v" <> byteString ptr <> lazyByteString " = "
             _ -> ""
 
-        prettyArgs = 
-            charUtf8 '(' <> 
-            mconcat (intersperse (charUtf8 ',') $ 
-                map (either (\str -> charUtf8 '"' <> byteString str <> charUtf8 '"') (\(SomePtr ptr) -> charUtf8 'v' <> byteString ptr)) args) <> 
-            charUtf8 ')'
+        prettyArgs =
+            charUtf8 '('
+                <> mconcat
+                    ( intersperse (charUtf8 ',') $
+                        map (either (\str -> charUtf8 '"' <> byteString str <> charUtf8 '"') (\(SomePtr ptr) -> charUtf8 'v' <> byteString ptr)) args
+                    )
+                <> charUtf8 ')'
     hPutBuilder llvmCallsHandle $ prettyRet <> byteString call <> prettyArgs <> lazyByteString ";\n"
-
 
 analyse :: [Text] -> [Text] -> [Text] -> Handle -> CustomUserEventData -> StateT ProcessAnalysis IO ()
 analyse matching nonMatching notMatchingChildren llvmCallsHandle (evTime, evSpec, evCap) = do

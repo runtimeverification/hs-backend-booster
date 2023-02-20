@@ -15,7 +15,7 @@ simplifyBool :: Internal.API -> Term -> Bool
 simplifyBool api trm = unsafePerformIO $ Internal.runLLVM api $ do
     kore <- Internal.ask
     trmPtr <- Trace.timeIO "LLVM.simplifyBool.marshallTerm" (Internal.marshallTerm trm)
-    
+
     Trace.traceIO $ Internal.LlvmVar (Internal.somePtr trmPtr) trm
 
     liftIO $ kore.simplifyBool trmPtr

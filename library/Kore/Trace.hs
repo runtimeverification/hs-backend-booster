@@ -1,11 +1,11 @@
-{-# OPTIONS_GHC -Wno-partial-fields #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
+{-# OPTIONS_GHC -Wno-partial-fields #-}
 
 module Kore.Trace (module Kore.Trace) where
 
+import Control.Monad (when)
 import Control.Monad.Catch (MonadMask, bracket_)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Binary (Binary (get, put), Get, Put, Word32, get)
@@ -16,14 +16,13 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BL
 import Data.IORef
+import Data.Kind (Type)
 import Debug.Trace.Binary (traceBinaryEvent, traceBinaryEventIO)
 import Debug.Trace.Flags
 import GHC.IO (unsafePerformIO)
-import Data.Kind (Type)
-import Control.Monad (when)
 
 type family Sum a :: Type where
-    Sum '[]  = ()
+    Sum '[] = ()
     Sum (a ': as) = Either a (Sum as)
 
 data CustomUserEventType = Timing | LlvmCalls | Rewriting deriving (Show, Enum)
@@ -34,19 +33,17 @@ class CustomUserEvent e where
     userEventTag :: proxy e -> ByteString
     eventType :: proxy e -> CustomUserEventType
 
-
 class DecodeUserEvents es where
     decodeUserEvents' :: ByteString -> Get (Sum es)
 
 instance DecodeUserEvents '[] where
-    decodeUserEvents' _tag = pure ()            
+    decodeUserEvents' _tag = pure ()
 
 instance (CustomUserEvent e, DecodeUserEvents es) => DecodeUserEvents (e ': es) where
     decodeUserEvents' tag =
         if userEventTag (undefined :: proxy e) == tag
-        then Left <$> decodeUserEvent @e
-        else
-            Right <$> decodeUserEvents' @es tag
+            then Left <$> decodeUserEvent @e
+            else Right <$> decodeUserEvents' @es tag
 
 decodeCustomUserEvent :: forall es. DecodeUserEvents es => Get (Sum es)
 decodeCustomUserEvent = getByteString 5 >>= decodeUserEvents' @es
@@ -72,7 +69,6 @@ instance CustomUserEvent Start where
     userEventTag _ = "START"
     eventType _ = Timing
 
-
 newtype Stop = Stop ByteString
 
 instance CustomUserEvent Stop where
@@ -81,12 +77,10 @@ instance CustomUserEvent Stop where
     userEventTag _ = "STOP "
     eventType _ = Timing
 
-
 encodeCustomUserEvent :: forall e. CustomUserEvent e => e -> Put
 encodeCustomUserEvent e = do
     putByteString $ userEventTag (undefined :: proxy e)
     encodeUserEvent e
-
 
 traceIO :: forall m e. MonadIO m => CustomUserEvent e => e -> m ()
 traceIO e
