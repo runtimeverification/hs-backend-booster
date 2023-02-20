@@ -1,5 +1,4 @@
 {-# LANGUAGE PatternSynonyms #-}
-{-# HLINT ignore "Redundant <$>" #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
