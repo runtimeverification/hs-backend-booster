@@ -3,7 +3,7 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 
 Attributes stored together with different entities in a
-@BoosterDefinition@.
+@KoreDefinition@.
 -}
 module Booster.Definition.Attributes.Base (
     DefinitionAttributes (..),
