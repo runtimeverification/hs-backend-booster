@@ -25,7 +25,7 @@ type family Sum a :: Type where
     Sum '[] = ()
     Sum (a ': as) = Either a (Sum as)
 
-data CustomUserEventType = Timing | LlvmCalls | Rewriting deriving (Show, Enum, Read)
+data CustomUserEventType = Timing | LlvmCalls deriving (Show, Enum, Read, Bounded)
 
 class CustomUserEvent e where
     encodeUserEvent :: e -> Put

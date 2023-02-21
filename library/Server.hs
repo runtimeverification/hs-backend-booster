@@ -9,7 +9,7 @@ module Server (main) where
 import Control.DeepSeq (force)
 import Control.Exception (evaluate)
 import Control.Monad.Logger (LogLevel (..))
-import Data.List (partition)
+import Data.List (intercalate, partition)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
 import Options.Applicative
@@ -123,7 +123,9 @@ clOptionsParser =
                     <> long "trace"
                     <> short 't'
                     <> help
-                        "Eventlog tracing: general, llvm-calls"
+                        ( "Eventlog tracing options: "
+                            <> intercalate ", " [toKebab $ fromHumps $ show t | t <- [minBound .. maxBound] :: [CustomUserEventType]]
+                        )
                 )
             )
   where
