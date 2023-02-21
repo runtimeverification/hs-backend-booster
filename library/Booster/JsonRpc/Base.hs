@@ -6,6 +6,7 @@ module Booster.JsonRpc.Base (
     module Booster.JsonRpc.Base,
 ) where
 
+import Booster.Syntax.Json (KoreJson)
 import Control.Exception (Exception)
 import Data.Aeson.Encode.Pretty qualified as PrettyJson
 import Data.Aeson.Types (FromJSON (..), ToJSON (..))
@@ -19,7 +20,6 @@ import Deriving.Aeson (
     StripPrefix,
  )
 import GHC.Generics (Generic)
-import Booster.Syntax.Json (KoreJson)
 import Network.JSONRPC (
     FromRequest (..),
  )

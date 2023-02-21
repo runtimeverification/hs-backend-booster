@@ -1,14 +1,14 @@
 module Booster.LLVM (simplifyBool, simplifyTerm) where
 
-import Control.Monad.IO.Class (MonadIO (..))
-import Data.Binary.Get
-import Data.ByteString (fromStrict)
 import Booster.Definition.Base
 import Booster.LLVM.Internal qualified as Internal
 import Booster.Pattern.Base
 import Booster.Pattern.Binary
 import Booster.Pattern.Util
 import Booster.Trace qualified as Trace
+import Control.Monad.IO.Class (MonadIO (..))
+import Data.Binary.Get
+import Data.ByteString (fromStrict)
 import System.IO.Unsafe (unsafePerformIO)
 
 simplifyBool :: Internal.API -> Term -> Bool

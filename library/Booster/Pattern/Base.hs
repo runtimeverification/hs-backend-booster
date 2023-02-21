@@ -11,6 +11,11 @@ module Booster.Pattern.Base (
     module Booster.Pattern.Base,
 ) where
 
+import Booster.Definition.Attributes.Base (
+    SymbolAttributes (..),
+    SymbolType (..),
+ )
+import Booster.Prettyprinter qualified as KPretty
 import Control.DeepSeq (NFData (..))
 import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
@@ -24,11 +29,6 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text.Encoding qualified as Text
 import GHC.Generics (Generic)
-import Booster.Definition.Attributes.Base (
-    SymbolAttributes (..),
-    SymbolType (..),
- )
-import Booster.Prettyprinter qualified as KPretty
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
 

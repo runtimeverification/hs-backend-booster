@@ -2,6 +2,11 @@
 
 module Booster.Pattern.Binary (Version (..), Block (..), decodeTerm, decodeTerm', decodePattern, encodeMagicHeaderAndVersion, encodePattern, encodeTerm, test, encodeSingleBlock, decodeSingleBlock) where
 
+import Booster.Definition.Attributes.Base
+import Booster.Definition.Base
+import Booster.Pattern.Base
+import Booster.Pattern.Util (sortOfTerm)
+import Booster.Syntax.ParsedKore
 import Control.Monad (forM_, unless)
 import Control.Monad.Extra (forM)
 import Control.Monad.Trans.Class (MonadTrans (..))
@@ -19,11 +24,6 @@ import Data.Map qualified as Map
 import Data.Text qualified as Text
 import Data.Word (Word64)
 import GHC.Word (Word8)
-import Booster.Definition.Attributes.Base
-import Booster.Definition.Base
-import Booster.Pattern.Base
-import Booster.Pattern.Util (sortOfTerm)
-import Booster.Syntax.ParsedKore
 
 -- | tags indicating the next element in a block, see @'decodeBlock'@
 pattern KORECompositePattern, KOREStringPattern, KORECompositeSort, KORESortVariable, KORESymbol, KOREVariablePattern, KOREVariable :: Word8

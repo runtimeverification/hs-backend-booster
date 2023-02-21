@@ -15,6 +15,8 @@ module Test.Booster.Syntax.Json (
     upTo,
 ) where
 
+import Booster.Syntax.Json
+import Booster.Syntax.Json.Base -- for testing and generating test data
 import Control.Monad (forever, void)
 import Data.Bifunctor qualified as Bifunctor
 import Data.ByteString.Lazy.Char8 qualified as BS
@@ -28,8 +30,6 @@ import Data.Text qualified as T
 import Hedgehog
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
-import Booster.Syntax.Json
-import Booster.Syntax.Json.Base -- for testing and generating test data
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((<.>), (</>))
 import Test.Tasty (TestTree, testGroup)

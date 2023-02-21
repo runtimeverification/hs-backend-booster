@@ -24,14 +24,14 @@ module Booster.Pattern.Util (
     decodeLabel,
 ) where
 
+import Booster.Definition.Attributes.Base (SymbolAttributes (..), SymbolType (..))
+import Booster.Pattern.Base
 import Data.Functor.Foldable (Corecursive (embed), cata)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Booster.Definition.Attributes.Base (SymbolAttributes (..), SymbolType (..))
-import Booster.Pattern.Base
 
 -- | Returns the sort of a term
 sortOfTerm :: Term -> Sort

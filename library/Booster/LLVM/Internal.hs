@@ -21,6 +21,12 @@ module Booster.LLVM.Internal (
     LlvmVar (..),
 ) where
 
+import Booster.LLVM.TH (dynamicBindings)
+import Booster.Pattern.Base
+import Booster.Pattern.Binary hiding (Block)
+import Booster.Pattern.Util (sortOfTerm)
+import Booster.Trace
+import Booster.Trace qualified as Trace
 import Control.Monad (foldM, forM_, void, (>=>))
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.IO.Class (MonadIO (..))
@@ -38,12 +44,6 @@ import Foreign.C qualified as C
 import Foreign.C.Types (CSize (..))
 import Foreign.Marshal (alloca)
 import Foreign.Storable (peek)
-import Booster.LLVM.TH (dynamicBindings)
-import Booster.Pattern.Base
-import Booster.Pattern.Binary hiding (Block)
-import Booster.Pattern.Util (sortOfTerm)
-import Booster.Trace
-import Booster.Trace qualified as Trace
 import System.Posix.DynamicLinker qualified as Linker
 
 data KorePattern

@@ -6,15 +6,15 @@ module Test.Booster.Pattern.Binary (
     test_BinaryRoundTrips,
 ) where
 
+import Booster.Definition.Attributes.Base
+import Booster.Pattern.Base
+import Booster.Pattern.Binary
+import Booster.Pattern.Util (sortOfTerm)
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
 import Hedgehog (Gen, Property, forAll, property, (===))
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
-import Booster.Definition.Attributes.Base
-import Booster.Pattern.Base
-import Booster.Pattern.Binary
-import Booster.Pattern.Util (sortOfTerm)
 import Test.Booster.Syntax.Json (upTo)
 import Test.Tasty
 import Test.Tasty.Hedgehog

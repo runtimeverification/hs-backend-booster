@@ -7,11 +7,11 @@ module Main (
     main,
 ) where
 
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.List (isPrefixOf, partition)
 import Booster.Definition.Attributes.Base
 import Booster.LLVM.Internal as LLVM
 import Booster.Pattern.Base
+import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.List (isPrefixOf, partition)
 import System.Environment (getArgs)
 
 main :: IO ()

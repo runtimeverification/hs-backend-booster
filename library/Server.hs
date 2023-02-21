@@ -14,12 +14,12 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
 import Options.Applicative
 
-import Control.Monad (forM_)
 import Booster.JsonRpc (runServer)
 import Booster.LLVM.Internal (mkAPI, withDLib)
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
 import Booster.VersionInfo (VersionInfo (..), versionInfo)
+import Control.Monad (forM_)
 
 import Text.Casing
 import Text.Read
