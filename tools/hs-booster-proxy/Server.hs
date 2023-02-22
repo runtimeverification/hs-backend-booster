@@ -8,45 +8,44 @@ module Main (main) where
 
 import Control.DeepSeq (force)
 import Control.Exception (evaluate)
-import Control.Monad.Catch(bracket)
+import Control.Monad.Catch (bracket)
 import Control.Monad.Logger (LogLevel (..))
 import Data.List (intercalate, partition)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
 import Options.Applicative
 
-import Control.Monad (forM_, void)
 import Booster.LLVM.Internal (mkAPI, withDLib)
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
 import Booster.VersionInfo (VersionInfo (..), versionInfo)
+import Control.Monad (forM_, void)
 
-import Text.Casing
-import Text.Read
-import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
-import qualified GlobalMain
-import qualified Control.Concurrent.MVar as MVar
-import Kore.JsonRpc (ServerState(..))
-import qualified SMT
-import qualified Data.Map as Map
-import qualified Kore.Log as Log
-import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
-import Kore.Attribute.Symbol (StepperAttributes)
-import Kore.Syntax.Definition (SentenceAxiom, ModuleName (ModuleName))
-import Kore.Internal.TermLike (TermLike, VariableName)
+import Control.Concurrent.MVar (newMVar)
+import Control.Concurrent.MVar qualified as MVar
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.IORef (writeIORef)
 import Data.InternedText (globalInternedTextCache)
-import Control.Monad.IO.Class (MonadIO(liftIO))
+import Data.Map qualified as Map
+import GlobalMain qualified
+import Kore.Attribute.Symbol (StepperAttributes)
+import Kore.BugReport (BugReportOption (..), ExitCode (ExitSuccess), withBugReport)
+import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
+import Kore.Internal.TermLike (TermLike, VariableName)
+import Kore.JsonRpc (ServerState (..))
+import Kore.Log (ExeName (..), KoreLogType (..), defaultKoreLogOptions, logType, swappableLogger, withLogger)
+import Kore.Log qualified as Log
 import Kore.Rewrite.SMT.Lemma (declareSMTLemmas)
+import Kore.Syntax.Definition (ModuleName (ModuleName), SentenceAxiom)
+import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
 import Proxy qualified
-import Kore.Log (withLogger, defaultKoreLogOptions, swappableLogger, logType, KoreLogType (..), ExeName (..))
-import Kore.BugReport (withBugReport, BugReportOption (..), ExitCode (ExitSuccess))
-import Control.Concurrent.MVar (newMVar)
+import SMT qualified
 import System.Clock (
     Clock (..),
     getTime,
  )
-
+import Text.Casing
+import Text.Read
 
 main :: IO ()
 main = do
@@ -71,19 +70,19 @@ main = do
             mvarLogAction <- newMVar actualLogAction
             let logAction = swappableLogger mvarLogAction
 
-
             kore <- mkKoreServer Log.LoggerEnv{logAction} options
 
             withMDLib llvmLibraryFile $ \mdl -> do
                 mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
 
                 let (logLevel, customLevels) = adjustLogLevels logLevels
-                    booster = Proxy.BoosterServer{
-                        definition
-                        , mLlvmLibrary
-                        , logLevel
-                        , customLevels
-                        }
+                    booster =
+                        Proxy.BoosterServer
+                            { definition
+                            , mLlvmLibrary
+                            , logLevel
+                            , customLevels
+                            }
 
                 putStrLn "Starting RPC server"
 
@@ -107,7 +106,6 @@ data CLOptions = CLOptions
     , eventlogEnabledUserEvents :: [CustomUserEventType]
     , koreSolverOptions :: !KoreSolverOptions
     }
-    
 
 parserInfoModifiers :: InfoMod options
 parserInfoModifiers =
@@ -215,13 +213,8 @@ versionInfoStr =
   where
     VersionInfo{gitHash, gitDirty, gitBranch, gitCommitDate} = $versionInfo
 
-
-
-
-
-
 mkKoreServer :: Log.LoggerEnv IO -> CLOptions -> IO Proxy.KoreServer
-mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions { definitionFile, mainModuleName, koreSolverOptions} = 
+mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainModuleName, koreSolverOptions} =
     flip Log.runLoggerT logAction $ do
         sd@GlobalMain.SerializedDefinition{internedTextCache} <-
             GlobalMain.deserializeDefinition
@@ -239,13 +232,13 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions { definitionFile, main
                         , loadedDefinition
                         }
 
-        pure $ Proxy.KoreServer {
-            serverState,
-            mainModule = mainModuleName,
-            runSMT,
-            loggerEnv
-        }
-    
+        pure $
+            Proxy.KoreServer
+                { serverState
+                , mainModule = mainModuleName
+                , runSMT
+                , loggerEnv
+                }
   where
     KoreSolverOptions{timeOut, rLimit, resetInterval, prelude} = koreSolverOptions
     smtConfig =
@@ -255,7 +248,6 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions { definitionFile, main
             , SMT.resetInterval = resetInterval
             , SMT.prelude = prelude
             }
-
 
     -- SMT solver with user declared lemmas
     runSMT ::

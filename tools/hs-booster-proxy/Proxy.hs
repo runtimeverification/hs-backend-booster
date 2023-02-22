@@ -1,69 +1,73 @@
+{-# LANGUAGE RankNTypes #-}
+
 {- |
 Module      : Proxy
 Copyright   : (c) Runtime Verification, 2023
 License     : BSD-3-Clause
 -}
-{-# LANGUAGE RankNTypes #-}
-
 module Proxy (
-    KoreServer(..),
-    BoosterServer(..),
+    KoreServer (..),
+    BoosterServer (..),
     runServer,
 ) where
-import  Control.Concurrent.MVar qualified as MVar
-import Kore.JsonRpc (ServerState)
-import Booster.JsonRpc.Base (ModuleName, rpcJsonConfig, API (..), ReqOrRes (..), ReqException (..), ExecuteResult (..), HaltReason (..))
-import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
-import Kore.Attribute.Symbol (StepperAttributes)
-import Kore.Syntax.Definition (SentenceAxiom)
-import Kore.Internal.TermLike (TermLike, VariableName)
-import  SMT qualified
-import  Kore.Log qualified
-import Kore.Syntax.Module qualified as Kore
-import Booster.Definition.Base (KoreDefinition)
-import Booster.LLVM.Internal qualified as LLVM
-import Control.Monad.Logger (LogLevel (..), LogSource)
-import qualified Control.Monad.Logger as Log
-import Booster.Network.JsonRpc (jsonrpcTCPServer)
-import Network.JSONRPC hiding (jsonrpcTCPServer)
-import Data.Conduit.Network (serverSettings)
-import qualified Data.Text as Text
 
+import Booster.Definition.Base (KoreDefinition)
+import Booster.JsonRpc.Base (API (..), ExecuteResult (..), HaltReason (..), ModuleName, ReqException (..), ReqOrRes (..), rpcJsonConfig)
+import Booster.LLVM.Internal qualified as LLVM
+import Booster.Network.JsonRpc (jsonrpcTCPServer)
+import Control.Concurrent.MVar qualified as MVar
+import Control.Monad.Logger (LogLevel (..), LogSource)
+import Control.Monad.Logger qualified as Log
+import Data.Conduit.Network (serverSettings)
+import Data.Text qualified as Text
+import Kore.Attribute.Symbol (StepperAttributes)
+import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
+import Kore.Internal.TermLike (TermLike, VariableName)
+import Kore.JsonRpc (ServerState)
+import Kore.Log qualified
+import Kore.Syntax.Definition (SentenceAxiom)
+import Kore.Syntax.Module qualified as Kore
+import Network.JSONRPC hiding (jsonrpcTCPServer)
+import SMT qualified
 
 import Control.Concurrent.STM.TChan (newTChan, readTChan, writeTChan)
 import Control.Monad.STM (atomically)
+
 -- import Control.Monad.Trans.Except (runExcept)
 import Control.Monad.Trans.Reader (ask, runReaderT)
+
 -- import Data.Aeson (object, toJSON, (.=))
-import Data.Aeson.Types (Value (..), ToJSON (toJSON))
-import Control.Monad.IO.Class (MonadIO(liftIO))
-import Control.Concurrent (throwTo, forkIO)
+
+import Booster.JsonRpc qualified as Booster
+import Booster.JsonRpc.Base qualified as Booster
+import Control.Concurrent (forkIO, throwTo)
 import Control.Exception (mask)
-import Control.Monad.Catch (catch)
-import Data.Maybe (catMaybes, isJust)
 import Control.Monad (forever)
-import qualified Booster.JsonRpc as Booster
-import qualified Kore.JsonRpc as Kore
-import qualified Booster.JsonRpc.Base as Booster
-import qualified Kore.JsonRpc.Base as Kore
+import Control.Monad.Catch (catch)
+import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.Aeson.Types (ToJSON (toJSON), Value (..))
+import Data.Maybe (catMaybes, isJust)
+import Kore.JsonRpc qualified as Kore
+import Kore.JsonRpc.Base qualified as Kore
 
+data KoreServer = KoreServer
+    { serverState :: MVar.MVar ServerState
+    , mainModule :: ModuleName
+    , runSMT ::
+        forall a.
+        SmtMetadataTools StepperAttributes ->
+        [SentenceAxiom (TermLike VariableName)] ->
+        SMT.SMT a ->
+        IO a
+    , loggerEnv :: Kore.Log.LoggerEnv IO
+    }
 
-data KoreServer = KoreServer {
-    serverState :: MVar.MVar ServerState,
-    mainModule :: ModuleName,
-    runSMT :: forall a.
-      SmtMetadataTools StepperAttributes
-                      -> [SentenceAxiom (TermLike VariableName)] -> SMT.SMT a -> IO a,
-    loggerEnv :: Kore.Log.LoggerEnv IO
-}
-
-
-data BoosterServer = BoosterServer {
-    definition :: KoreDefinition
+data BoosterServer = BoosterServer
+    { definition :: KoreDefinition
     , mLlvmLibrary :: Maybe LLVM.API
     , logLevel :: LogLevel
     , customLevels :: [LogLevel]
-}
+    }
 
 runServer :: Int -> KoreServer -> BoosterServer -> IO ()
 runServer port kore booster =
@@ -73,8 +77,8 @@ runServer port kore booster =
             rpcJsonConfig
             V2
             False
-            srvSettings $
-            srv kore booster
+            srvSettings
+        $ srv kore booster
   where
     levelFilter :: LogSource -> LogLevel -> Bool
     levelFilter _source lvl =
@@ -123,14 +127,12 @@ srv kore@KoreServer{runSMT} booster = do
                 case (fromRequest req, fromRequest req) of
                     (Left e, _) -> return . Just $ ResponseError v e i
                     (_, Left e) -> return . Just $ ResponseError v e i
-                    (Right (boosterR :: Booster.API 'Booster.Req), Right (koreR :: Kore.API 'Kore.Req)) -> 
+                    (Right (boosterR :: Booster.API 'Booster.Req), Right (koreR :: Kore.API 'Kore.Req)) ->
                         respondEither v i boosterRespond koreRespond boosterR koreR
             respondTo _ = return Nothing
 
             boosterRespond = Booster.respond booster.definition booster.mLlvmLibrary
             koreRespond = Kore.respond kore.serverState (Kore.ModuleName kore.mainModule) runSMT
-
-            
 
             cancelReq :: BatchRequest -> Log.LoggingT IO ()
             cancelReq = \case
@@ -159,31 +161,33 @@ srv kore@KoreServer{runSMT} booster = do
                         (withLog . cancelReq)
                         (withLog . processReq)
 
-respondEither :: Monad m =>
-    Ver
-    -> Id
-    -> Respond (Booster.API 'Booster.Req) m (Booster.API 'Booster.Res)
-    -> Respond (Kore.API 'Kore.Req) m (Kore.API 'Kore.Res)
-    -> Booster.API 'Booster.Req
-    -> Kore.API 'Kore.Req
-    -> m (Maybe Response)
+respondEither ::
+    Monad m =>
+    Ver ->
+    Id ->
+    Respond (Booster.API 'Booster.Req) m (Booster.API 'Booster.Res) ->
+    Respond (Kore.API 'Kore.Req) m (Kore.API 'Kore.Res) ->
+    Booster.API 'Booster.Req ->
+    Kore.API 'Kore.Req ->
+    m (Maybe Response)
 respondEither v i booster kore boosterR koreR = case boosterR of
     Execute req
         | isJust req._module -> mkResponse =<< kore koreR
         | isJust req.stepTimeout -> mkResponse =<< kore koreR
         | isJust req.movingAverageStepTimeout -> mkResponse =<< kore koreR
-    Execute _ -> booster boosterR >>= \case
-        Right (Execute (ExecuteResult{reason}))
-            -- TODO: we want to make a step in the old backend and then resume here
-            | reason == Aborted -> mkResponse =<< kore koreR
-            | reason == Stuck -> mkResponse =<< kore koreR
-        res -> mkResponse res
+    Execute _ ->
+        booster boosterR >>= \case
+            Right (Execute (ExecuteResult{reason}))
+                -- TODO: we want to make a step in the old backend and then resume here
+                | reason == Aborted -> mkResponse =<< kore koreR
+                | reason == Stuck -> mkResponse =<< kore koreR
+            res -> mkResponse res
     Implies _ -> mkResponse =<< kore koreR
     Simplify _ -> mkResponse =<< kore koreR
     AddModule _ -> mkResponse =<< kore koreR
     Cancel -> mkResponse =<< booster boosterR
-    where
-        mkResponse :: Monad m => ToJSON a => Either ErrorObj a -> m (Maybe Response)
-        mkResponse = \case
-                    Left  e -> return . Just $ ResponseError v e i
-                    Right r -> return . Just $ Response v (toJSON r) i
+  where
+    mkResponse :: Monad m => ToJSON a => Either ErrorObj a -> m (Maybe Response)
+    mkResponse = \case
+        Left e -> return . Just $ ResponseError v e i
+        Right r -> return . Just $ Response v (toJSON r) i
