@@ -10,8 +10,9 @@ import Control.DeepSeq (force)
 import Control.Exception (evaluate)
 import Control.Monad.Logger (LogLevel (..))
 import Data.List (intercalate, partition)
+import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
-import Data.Text (Text, pack)
+import Data.Text (Text, pack, unpack)
 import Options.Applicative
 
 import Booster.JsonRpc (runServer)
@@ -37,9 +38,12 @@ main = do
             <> definitionFile
             <> ", main module "
             <> show mainModuleName
-    internalModule <-
-        loadDefinition mainModuleName definitionFile
+    definitionMap <-
+        loadDefinition definitionFile
             >>= evaluate . force . either (error . show) id
+    let internalModule =
+            fromMaybe (error $ unpack mainModuleName <> ": No such module") $
+                Map.lookup mainModuleName definitionMap
     putStrLn "Starting RPC server"
     case llvmLibraryFile of
         Nothing -> runServer port internalModule Nothing (adjustLogLevels logLevels)

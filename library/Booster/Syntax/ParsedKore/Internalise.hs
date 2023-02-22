@@ -86,9 +86,6 @@ addToDefinitions m prior
     -- Invariant: all KoreDefinitions in the map must have the same attributes.
     priorAttributes = head $ Map.elems $ Map.map (.attributes) prior
 
-
-
-
 lookupModule :: Text -> Map Text a -> Except DefinitionError a
 lookupModule k =
     maybe (throwE $ NoSuchModule k) pure . Map.lookup k
@@ -125,9 +122,9 @@ descendFrom m = do
             defMap <- gets definitionMap
             def <-
                 foldM
-                    (\def modName -> do
-                            modu <- lift $ lookupModule modName defMap
-                            lift (mergeDefs def modu)
+                    ( \def modName -> do
+                        modu <- lift $ lookupModule modName defMap
+                        lift (mergeDefs def modu)
                     )
                     (emptyKoreDefinition definitionAttributes)
                     imported
@@ -197,7 +194,8 @@ addModule
             --
             let modName = textToBS n
             when (modName `Map.member` currentModules) $
-                throwE $ DuplicateModule n
+                throwE $
+                    DuplicateModule n
             let modules = Map.insert modName (extract m) currentModules
 
             -- ensure sorts are unique and only refer to known other sorts
@@ -312,7 +310,7 @@ addModule
             newSubsortMap =
                 transitiveClosure $ Map.unionWith (<>) (Map.map snd priorSortMap) newSubsorts
             newSubsorts =
-                Map.fromListWith (<>) $ map (second Set.singleton) $ map swap subsortPairs
+                Map.fromListWith (<>) $ map (second Set.singleton . swap) subsortPairs
 
 -- Result type from internalisation of different axioms
 data AxiomResult

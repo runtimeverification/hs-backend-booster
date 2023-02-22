@@ -22,6 +22,7 @@ import Data.Aeson qualified as Json
 import Data.Aeson.Encode.Pretty qualified as Json
 import Data.Bifunctor (first)
 import Data.ByteString.Lazy (ByteString)
+import Data.Map.Strict (Map)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -90,12 +91,14 @@ internalise mbMainModule definition =
     mainModule = fromMaybe defaultMain mbMainModule
     defaultMain = (last definition.modules).name.getId
 
-{- | Loads a Kore definition from the given file, using the given name
-as the main module (combined parsing and internalisation)
+{- | Loads Kore definitions from the given file (combined parsing and
+internalisation). The map of module names to definitions is returned
+so the main module can be changed.
 -}
-loadDefinition :: Text -> FilePath -> IO (Either DefinitionError KoreDefinition)
-loadDefinition mainModuleName file = runExceptT $ do
+loadDefinition ::
+    FilePath -> IO (Either DefinitionError (Map Text KoreDefinition))
+loadDefinition file = runExceptT $ do
     parsedDef <-
         liftIO (Text.readFile file)
             >>= except . first (ParseError . Text.pack) . parseKoreDefinition file
-    except $ internalise (Just mainModuleName) parsedDef
+    except $ runExcept $ Internalise.buildDefinitions parsedDef
