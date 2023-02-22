@@ -22,12 +22,14 @@ import Data.Aeson qualified as Json
 import Data.Aeson.Encode.Pretty qualified as Json
 import Data.Bifunctor (first)
 import Data.ByteString.Lazy (ByteString)
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 
 import Booster.Definition.Base
 import Booster.Syntax.Json qualified as KoreJson
+import Booster.Syntax.Json.Base (Id (..))
 import Booster.Syntax.ParsedKore.Base
 import Booster.Syntax.ParsedKore.Internalise as Internalise
 import Booster.Syntax.ParsedKore.Parser qualified as Parser
@@ -82,7 +84,11 @@ encodeJsonKoreDefinition = Json.encodePretty' KoreJson.prettyJsonOpts
 -- internalising parsed data
 
 internalise :: Maybe Text -> ParsedDefinition -> Either DefinitionError KoreDefinition
-internalise mbMainModule = runExcept . Internalise.buildDefinition mbMainModule
+internalise mbMainModule definition =
+    runExcept $ Internalise.buildDefinitions definition >>= Internalise.lookupModule mainModule
+  where
+    mainModule = fromMaybe defaultMain mbMainModule
+    defaultMain = (last definition.modules).name.getId
 
 {- | Loads a Kore definition from the given file, using the given name
 as the main module (combined parsing and internalisation)

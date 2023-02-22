@@ -8,7 +8,9 @@ Converts a @ParsedDefinition@ to a @KoreDefinition@, extracting all
 data needed internally from the parsed entities.
 -}
 module Booster.Syntax.ParsedKore.Internalise (
-    buildDefinition,
+    buildDefinitions,
+    addToDefinitions,
+    lookupModule,
     DefinitionError (..),
 ) where
 
@@ -42,19 +44,17 @@ import Booster.Syntax.Json.Base qualified as Json
 import Booster.Syntax.Json.Internalise
 import Booster.Syntax.ParsedKore.Base
 
-{- | Traverses all modules of a parsed definition, to build an internal
-@KoreDefinition@. Traversal starts on the given module name if
-present, otherwise it starts at the last module in the file ('kompile'
-default).
+{- | Traverses all modules of a parsed definition, to build internal
+@KoreDefinition@s for each of the modules (when used as the main
+module). The returned mapping can be retained to switch main module
+for RPC requests.
 
 Only very few validations are performed on the parsed data.
 -}
-buildDefinition :: Maybe Text -> ParsedDefinition -> Except DefinitionError KoreDefinition
-buildDefinition mbMainModule def@ParsedDefinition{modules} = do
-    endState <- execStateT (descendFrom mainModule) startState
-    pure $ expectPresent mainModule endState.definitionMap
+buildDefinitions :: ParsedDefinition -> Except DefinitionError (Map Text KoreDefinition)
+buildDefinitions def@ParsedDefinition{modules} = do
+    definitionMap <$> execStateT buildAllModules startState
   where
-    mainModule = fromMaybe (last modules).name.getId mbMainModule
     moduleMap = Map.fromList [(m.name.getId, m) | m <- modules]
     startState =
         State
@@ -62,10 +62,36 @@ buildDefinition mbMainModule def@ParsedDefinition{modules} = do
             , definitionMap = Map.empty
             , definitionAttributes = extract def
             }
+    buildAllModules = mapM descendFrom $ Map.keys moduleMap
 
-expectPresent :: (Ord k, Show k) => k -> Map k a -> a
-expectPresent k =
-    fromMaybe (error $ show k <> " not present in map") . Map.lookup k
+{- | Adds a module to an existing mapping of modules to definitions.
+Used
+-}
+addToDefinitions ::
+    ParsedModule ->
+    Map Text KoreDefinition ->
+    Except DefinitionError (Map Text KoreDefinition)
+addToDefinitions m prior
+    | Map.null prior =
+        throwE $ DefinitionAttributeError []
+    | otherwise = do
+        definitionMap <$> execStateT (descendFrom m.name.getId) currentState
+  where
+    currentState =
+        State
+            { moduleMap = Map.singleton m.name.getId m
+            , definitionMap = prior
+            , definitionAttributes = priorAttributes
+            }
+    -- Invariant: all KoreDefinitions in the map must have the same attributes.
+    priorAttributes = head $ Map.elems $ Map.map (.attributes) prior
+
+
+
+
+lookupModule :: Text -> Map Text a -> Except DefinitionError a
+lookupModule k =
+    maybe (throwE $ NoSuchModule k) pure . Map.lookup k
 
 {- | The state while traversing the module import graph. The definition
  map contains internalisations of all modules that were touched in the
@@ -99,9 +125,12 @@ descendFrom m = do
             defMap <- gets definitionMap
             def <-
                 foldM
-                    (\d1 d2 -> lift (mergeDefs d1 d2))
+                    (\def modName -> do
+                            modu <- lift $ lookupModule modName defMap
+                            lift (mergeDefs def modu)
+                    )
                     (emptyKoreDefinition definitionAttributes)
-                    $ map (`expectPresent` defMap) imported
+                    imported
 
             -- validate and add new module in context of the existing
             -- definition
@@ -168,7 +197,7 @@ addModule
             --
             let modName = textToBS n
             when (modName `Map.member` currentModules) $
-                error "internal error while loading: traversing module twice"
+                throwE $ DuplicateModule n
             let modules = Map.insert modName (extract m) currentModules
 
             -- ensure sorts are unique and only refer to known other sorts
@@ -487,6 +516,7 @@ transitiveClosure adjacencies = snd $ update adjacencies
 data DefinitionError
     = ParseError Text
     | NoSuchModule Text
+    | DuplicateModule Text
     | DuplicateSorts [ParsedSort]
     | DuplicateSymbols [ParsedSymbol]
     | DuplicateAliases [ParsedAlias]
