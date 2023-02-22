@@ -4,7 +4,7 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Booster.JsonRpc (
-    runServer,
+    module Booster.JsonRpc,
 ) where
 
 import Control.Concurrent (forkIO, throwTo)
