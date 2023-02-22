@@ -10,7 +10,6 @@ data needed internally from the parsed entities.
 module Booster.Syntax.ParsedKore.Internalise (
     buildDefinition,
     DefinitionError (..),
-    computeTermIndex,
 ) where
 
 import Control.Monad
@@ -18,7 +17,7 @@ import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
-import Data.Bifunctor (first)
+import Data.Bifunctor (first, second)
 import Data.ByteString.Char8 (ByteString)
 import Data.Function (on)
 import Data.List (foldl', groupBy, partition, sortOn)
@@ -31,6 +30,7 @@ import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
+import Data.Tuple (swap)
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Attributes.Reader
@@ -52,11 +52,7 @@ Only very few validations are performed on the parsed data.
 buildDefinition :: Maybe Text -> ParsedDefinition -> Except DefinitionError KoreDefinition
 buildDefinition mbMainModule def@ParsedDefinition{modules} = do
     endState <- execStateT (descendFrom mainModule) startState
-    let mainDef = expectPresent mainModule endState.definitionMap
-        finalSorts =
-            foldr addSubsortInfo mainDef.sorts $
-                Map.assocs (transitiveClosure endState.subsorts)
-    pure (mainDef{sorts = finalSorts} :: KoreDefinition)
+    pure $ expectPresent mainModule endState.definitionMap
   where
     mainModule = fromMaybe (last modules).name.getId mbMainModule
     moduleMap = Map.fromList [(m.name.getId, m) | m <- modules]
@@ -65,27 +61,20 @@ buildDefinition mbMainModule def@ParsedDefinition{modules} = do
             { moduleMap
             , definitionMap = Map.empty
             , definitionAttributes = extract def
-            , subsorts = Map.empty
             }
-    addSubsortInfo ::
-        (Def.SortName, Set Def.SortName) ->
-        Map Def.SortName (SortAttributes, Set Def.SortName) ->
-        Map Def.SortName (SortAttributes, Set Def.SortName)
-    addSubsortInfo (super, subs) = Map.update (\(a, b) -> Just (a, b <> subs)) super
 
 expectPresent :: (Ord k, Show k) => k -> Map k a -> a
 expectPresent k =
     fromMaybe (error $ show k <> " not present in map") . Map.lookup k
 
-{- | The state while traversing the module import graph. This is
- internal only, but the definition map contains the result of the
+{- | The state while traversing the module import graph. The definition
+ map contains internalisations of all modules that were touched in the
  traversal.
 -}
 data DefinitionState = State
     { moduleMap :: Map Text ParsedModule
     , definitionMap :: Map Text KoreDefinition
     , definitionAttributes :: DefinitionAttributes
-    , subsorts :: Map Def.SortName (Set Def.SortName)
     }
 
 {- | Traverses the import graph bottom up, ending in the given named
@@ -116,20 +105,9 @@ descendFrom m = do
 
             -- validate and add new module in context of the existing
             -- definition
-            (newSubsorts, newDef) <- lift $ addModule theModule def
+            newDef <- lift $ addModule theModule def
 
-            modify (updateState newDef newSubsorts)
-  where
-    updateState ::
-        KoreDefinition ->
-        Map Def.SortName (Set Def.SortName) ->
-        DefinitionState ->
-        DefinitionState
-    updateState newDef newSubsorts prior =
-        prior
-            { definitionMap = Map.insert m newDef prior.definitionMap
-            , subsorts = Map.unionWith (<>) prior.subsorts newSubsorts
-            }
+            modify (\s -> s{definitionMap = Map.insert m newDef s.definitionMap})
 
 -- | Merges kore definitions, but collisions are forbidden (DefinitionError on collisions)
 mergeDefs :: KoreDefinition -> KoreDefinition -> Except DefinitionError KoreDefinition
@@ -162,14 +140,14 @@ mergeDefs k1 k2
         duplicates =
             Map.keysSet (selector m1) `Set.intersection` Map.keysSet (selector m2)
 
-{- | Adds a module to the given definition, returning a subsort map
- and the new definition. Some validations are performed, e.g., name
- collisions are forbidden.
+{- | Adds a module to the given definition, returning the resulting new
+ definition. Some validations are performed, e.g., name collisions are
+ forbidden.
 -}
 addModule ::
     ParsedModule ->
     KoreDefinition ->
-    Except DefinitionError (Map Def.SortName (Set Def.SortName), KoreDefinition)
+    Except DefinitionError KoreDefinition
 addModule
     m@ParsedModule
         { name = Json.Id n
@@ -194,8 +172,6 @@ addModule
             let modules = Map.insert modName (extract m) currentModules
 
             -- ensure sorts are unique and only refer to known other sorts
-            -- TODO, will need sort attributes to determine sub-sorts
-
             let (newSorts, sortDups) = parsedSorts `mappedBy` (textToBS . (.name.getId))
             unless (null sortDups) $
                 throwE $
@@ -206,7 +182,8 @@ addModule
             unless (null sortCollisions) $
                 throwE $
                     DuplicateSorts sortCollisions
-            let sorts =
+            -- prior and locally-defined sorts, no subsort information
+            let sorts' =
                     Map.map (\s -> (extract s, Set.singleton (textToBS s.name.getId))) newSorts
                         <> currentSorts
 
@@ -221,8 +198,18 @@ addModule
             unless (null symCollisions) $
                 throwE $
                     DuplicateSymbols symCollisions
-            newSymbols' <- traverse (internaliseSymbol sorts) parsedSymbols
+            newSymbols' <- traverse (internaliseSymbol sorts') parsedSymbols
             let symbols = Map.fromList newSymbols' <> currentSymbols
+
+            let defWithNewSortsAndSymbols =
+                    KoreDefinition
+                        { attributes
+                        , modules
+                        , sorts = sorts' -- no subsort information yet
+                        , symbols
+                        , aliases = currentAliases -- no aliases yet
+                        , rewriteTheory = currentRewriteTheory -- no rules yet
+                        }
 
             let internaliseAlias ::
                     ParsedAlias ->
@@ -234,13 +221,12 @@ addModule
                         params = Def.SortVar . textToBS <$> paramNames
                         argNames = textToBS . Json.getId <$> args
                         internalName = textToBS $ Json.getId name
-                    internalArgSorts <- traverse (withExcept DefinitionSortError . checkSort (Set.fromList paramNames) sorts) argSorts
-                    internalResSort <- withExcept DefinitionSortError $ checkSort (Set.fromList paramNames) sorts sort
+                    internalArgSorts <- traverse (withExcept DefinitionSortError . checkSort (Set.fromList paramNames) sorts') argSorts
+                    internalResSort <- withExcept DefinitionSortError $ checkSort (Set.fromList paramNames) sorts' sort
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
-                    let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases = currentAliases, rewriteTheory = currentRewriteTheory}
                     internalRhs <-
                         withExcept (DefinitionAliasError (Json.getId name) . InconsistentAliasPattern) $
-                            internaliseTermOrPredicate (Just sortVars) partialDefinition rhs
+                            internaliseTermOrPredicate (Just sortVars) defWithNewSortsAndSymbols rhs
                     let rhsSort = Util.sortOfTermOrPredicate internalRhs
                     unless (fromMaybe internalResSort rhsSort == internalResSort) (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
                     return (internalName, Alias{name = internalName, params, args = internalArgs, rhs = internalRhs})
@@ -251,31 +237,17 @@ addModule
             newAliases <- traverse internaliseAlias $ filter notPriority parsedAliases
             let aliases = Map.fromList newAliases <> currentAliases
 
-            let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory}
+            let defWithAliases :: KoreDefinition
+                defWithAliases = defWithNewSortsAndSymbols{aliases}
 
             (newRewriteRules, subsortPairs) <-
                 partitionAxioms
-                    <$> mapMaybeM (internaliseAxiom partialDefinition) parsedAxioms
+                    <$> mapMaybeM (internaliseAxiom defWithAliases) parsedAxioms
 
             let rewriteTheory = addToTheory newRewriteRules currentRewriteTheory
+                sorts = subsortClosure sorts' subsortPairs
 
-            -- add subsorts to the subsort map
-            let newSubsorts =
-                    Map.fromListWith
-                        (<>)
-                        [(super, Set.singleton sub) | (sub, super) <- subsortPairs]
-
-            pure
-                ( newSubsorts
-                , KoreDefinition
-                    { attributes
-                    , modules
-                    , sorts
-                    , symbols
-                    , aliases
-                    , rewriteTheory
-                    }
-                )
+            pure $ defWithAliases{sorts, rewriteTheory}
       where
         -- Uses 'getKey' to construct a finite mapping from the list,
         -- returning elements that yield the same key separately.
@@ -299,6 +271,19 @@ addModule
             go rules sorts [] = (rules, sorts)
             go rules sorts (RewriteRuleAxiom r : rest) = go (r : rules) sorts rest
             go rules sorts (SubsortAxiom pair : rest) = go rules (pair : sorts) rest
+
+        subsortClosure ::
+            Map Def.SortName (SortAttributes, Set Def.SortName) ->
+            [(Def.SortName, Def.SortName)] ->
+            Map Def.SortName (SortAttributes, Set Def.SortName)
+        subsortClosure priorSortMap subsortPairs =
+            Map.intersectionWith (,) attributeMap newSubsortMap
+          where
+            attributeMap = Map.map fst priorSortMap
+            newSubsortMap =
+                transitiveClosure $ Map.unionWith (<>) (Map.map snd priorSortMap) newSubsorts
+            newSubsorts =
+                Map.fromListWith (<>) $ map (second Set.singleton) $ map swap subsortPairs
 
 -- Result type from internalisation of different axioms
 data AxiomResult
@@ -325,9 +310,9 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars} = case axiom of
             throwE $ DefinitionRewriteRuleError $ MalformedRewriteRule parsedAx
     -- subsort axiom formulated as an existential rule
     Json.KJExists{var, varSort = super, arg}
-        | Json.KJEquals{first = aVar, second} <- arg
+        | Json.KJEquals{first = aVar, second = anApp} <- arg
         , aVar == Json.KJEVar{name = var, sort = super}
-        , Json.KJApp{name, args} <- second
+        , Json.KJApp{name, args} <- anApp
         , Json.Id "inj" <- name
         , [Json.KJEVar{name = _, sort = sub}] <- args ->
             pure $ Just $ SubsortAxiom' sub super
