@@ -1,0 +1,12 @@
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "error": {
+        "code": -32101,
+        "data": {
+            "context": null,
+            "error": "NONEXISTENT: No such module"
+        },
+        "message": "Definition error"
+    }
+}
