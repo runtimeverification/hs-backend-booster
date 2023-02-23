@@ -12,9 +12,10 @@ extra-deps:
   - typerep-map-0.6.0.0
   - monad-validate-1.2.0.0@sha256:9850f408431098b28806dd464b6825a88a0b56c84f380d7fe0454c1df9d6f881,3505
   - git: https://github.com/runtimeverification/haskell-backend.git
-    commit: 1feeb9b58145247581ebec350694c3bbb9632265
+    commit: 40d7bfcf6c97f0eec957ddd0eea699eb63e69c29
     subdirs:
       - kore
+      - kore-rpc-types
 
 # Control whether we use the GHC we find on the path
 # system-ghc: true
