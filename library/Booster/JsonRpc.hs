@@ -7,7 +7,7 @@ module Booster.JsonRpc (
     runServer,
 ) where
 
-import Control.Concurrent (forkIO, throwTo)
+import Control.Concurrent (MVar, forkIO, newMVar, putMVar, readMVar, takeMVar, throwTo)
 import Control.Concurrent.STM.TChan (newTChan, readTChan, writeTChan)
 import Control.Exception (ErrorCall (..), mask)
 import Control.Monad (forever)
@@ -22,7 +22,10 @@ import Data.Aeson (object, toJSON, (.=))
 import Data.Aeson.Types (Value (..))
 import Data.Conduit.Network (serverSettings)
 import Data.Foldable
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes, fromMaybe, isJust)
+import Data.Text (Text)
 import Data.Text qualified as Text
 import Network.JSONRPC (
     BatchRequest (BatchRequest, SingleRequest),
@@ -47,23 +50,26 @@ import Booster.Network.JsonRpc (jsonrpcTCPServer)
 import Booster.Pattern.Base (Pattern)
 import Booster.Pattern.Rewrite (RewriteResult (..), performRewrite)
 import Booster.Syntax.Json (KoreJson (..), addHeader)
+import Booster.Syntax.Json.Base (Id (..))
 import Booster.Syntax.Json.Externalise (externalisePattern)
 import Booster.Syntax.Json.Internalise (PatternError, internalisePattern)
+import Booster.Syntax.ParsedKore (parseKoreDefinition)
+import Booster.Syntax.ParsedKore.Base (ParsedDefinition (..), ParsedModule (..))
+import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinitions)
 
 respond ::
     forall m.
     MonadMask m =>
     MonadLoggerIO m =>
-    KoreDefinition ->
+    MVar ServerState ->
     Maybe LLVM.API ->
     Respond (API 'Req) m (API 'Res)
-respond def@KoreDefinition{} mLlvmLibrary =
+respond stateVar mLlvmLibrary =
     catchingServerErrors . \case
         Execute req
-            | isJust req._module -> unsupportedField "module"
             | isJust req.stepTimeout -> unsupportedField "step-timeout"
             | isJust req.movingAverageStepTimeout -> unsupportedField "moving-average-step-timeout"
-        Execute req -> do
+        Execute req -> withMainModule req._module $ \def -> do
             -- internalise given constrained term
             let internalised = runExcept $ internalisePattern Nothing def req.state.term
 
@@ -76,13 +82,48 @@ respond def@KoreDefinition{} mLlvmLibrary =
                         terminals = fromMaybe [] req.terminalRules
                         mbDepth = fmap getNat req.maxDepth
                     execResponse <$> performRewrite def mLlvmLibrary mbDepth cutPoints terminals pat
+        AddModule req -> do
+            -- block other request executions while modifying the server state
+            state <- liftIO $ takeMVar stateVar
+            let abortWith err = do
+                    liftIO (putMVar stateVar state)
+                    pure $ Left $ reportDefinitionError err
+
+            case parseKoreDefinition (Text.unpack req.name) req._module of
+                Left errMsg ->
+                    abortWith $ ParseError (Text.pack errMsg)
+                -- we expect exactly one module in the source
+                Right ParsedDefinition{modules = []} ->
+                    abortWith $ ParseError "Found no modules in input"
+                Right ParsedDefinition{modules = _ : _ : _} ->
+                    abortWith $ ParseError "Found more than one module in input"
+                Right ParsedDefinition{modules = [newModule]}
+                    | newModule.name.getId /= req.name ->
+                        abortWith $ ParseError ("Module name mismatch: expected " <> req.name)
+                    | otherwise ->
+                        case runExcept (addToDefinitions newModule state.definitions) of
+                            Left err -> abortWith err
+                            Right newDefinitions -> do
+                                liftIO $ putMVar stateVar state{definitions = newDefinitions}
+                                Log.logInfo $ "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
+                                pure $ Right $ AddModule ()
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left $ ErrorObj "Cancel request unsupported in batch mode" (-32001) Null
         -- using "Method does not exist" error code
-
         _ -> pure $ Left $ ErrorObj "Not implemented" (-32601) Null
   where
+    withMainModule ::
+        Maybe Text ->
+        (KoreDefinition -> m (Either ErrorObj (API 'Res))) ->
+        m (Either ErrorObj (API 'Res))
+    withMainModule mbMainModule action = do
+        state <- liftIO $ readMVar stateVar
+        let mainName = fromMaybe state.defaultMain mbMainModule
+        case Map.lookup mainName state.definitions of
+            Nothing -> pure $ Left $ reportDefinitionError $ NoSuchModule mainName
+            Just d -> action d
+
     execResponse :: (Natural, RewriteResult Pattern) -> Either ErrorObj (API 'Res)
     execResponse (_, RewriteSingle{}) =
         error "Single rewrite result"
@@ -157,6 +198,10 @@ respond def@KoreDefinition{} mLlvmLibrary =
     reportPatternError pErr =
         ErrorObj "Could not verify KORE pattern" (-32002) $ toJSON pErr
 
+    reportDefinitionError :: DefinitionError -> ErrorObj
+    reportDefinitionError defErr =
+        ErrorObj "Definition error" (-32101) $ toJSON defErr
+
     unsupportedField name = pure $ Left $ ErrorObj ("Unsupported option: " <> name) (-32100) Null
 
 {- | Catches all calls to `error` from the guts of the engine, and
@@ -174,24 +219,42 @@ catchingServerErrors =
             Log.logError $ "Server error: " <> Text.pack (show err)
             pure $ Left (ErrorObj "Server error" (-32032) $ mkError err)
 
-runServer :: Int -> KoreDefinition -> Maybe LLVM.API -> (LogLevel, [LogLevel]) -> IO ()
-runServer port internalizedModule mLlvmLibrary (logLevel, customLevels) =
+runServer ::
+    Int ->
+    Map Text KoreDefinition ->
+    Text ->
+    Maybe LLVM.API ->
+    (LogLevel, [LogLevel]) ->
+    IO ()
+runServer port definitions defaultMain mLlvmLibrary (logLevel, customLevels) =
     do
-        Log.runStderrLoggingT . Log.filterLogger levelFilter
-        $ jsonrpcTCPServer
-            rpcJsonConfig
-            V2
-            False
-            srvSettings
-            (srv internalizedModule mLlvmLibrary)
+        stateVar <- newMVar ServerState{definitions, defaultMain}
+        Log.runStderrLoggingT . Log.filterLogger levelFilter $
+            jsonrpcTCPServer
+                rpcJsonConfig
+                V2
+                False
+                srvSettings
+                (srv stateVar mLlvmLibrary)
   where
     levelFilter _source lvl =
         lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
 
     srvSettings = serverSettings port "*"
 
-srv :: MonadLoggerIO m => KoreDefinition -> Maybe LLVM.API -> JSONRPCT m ()
-srv internalizedModule mLlvmLibrary = do
+data ServerState = ServerState
+    { definitions :: Map Text KoreDefinition
+    -- ^ definitions for each loaded module as main module
+    , defaultMain :: Text
+    -- ^ default main module (initially from command line, could be changed later)
+    }
+
+srv ::
+    MonadLoggerIO m =>
+    MVar ServerState ->
+    Maybe LLVM.API ->
+    JSONRPCT m ()
+srv stateVar mLlvmLibrary = do
     reqQueue <- liftIO $ atomically newTChan
     let mainLoop tid =
             receiveBatchRequest >>= \case
@@ -202,7 +265,7 @@ srv internalizedModule mLlvmLibrary = do
                     liftIO $ throwTo tid CancelRequest
                     mainLoop tid
                 Just req -> do
-                    Log.logInfoN $ Text.pack (show req)
+                    Log.logInfoN $ Text.pack (show req) -- FIXME reduce logged payload data here!
                     liftIO $ atomically $ writeTChan reqQueue req
                     mainLoop tid
     spawnWorker reqQueue >>= mainLoop
@@ -227,7 +290,7 @@ srv internalizedModule mLlvmLibrary = do
             sendResponses :: BatchResponse -> Log.LoggingT IO ()
             sendResponses r = flip Log.runLoggingT logger $ flip runReaderT rpcSession $ sendBatchResponse r
             respondTo :: Request -> Log.LoggingT IO (Maybe Response)
-            respondTo = buildResponse (respond internalizedModule mLlvmLibrary)
+            respondTo = buildResponse (respond stateVar mLlvmLibrary)
 
             cancelReq :: BatchRequest -> Log.LoggingT IO ()
             cancelReq = \case

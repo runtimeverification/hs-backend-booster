@@ -10,6 +10,7 @@ module Booster.Syntax.Json.Internalise (
     PatternError (..),
     checkSort,
     SortError (..),
+    renderSortError,
     ----------------
     textToBS,
 ) where

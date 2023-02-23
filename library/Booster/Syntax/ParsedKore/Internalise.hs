@@ -19,6 +19,7 @@ import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
+import Data.Aeson (ToJSON (..), Value (..), object, (.=))
 import Data.Bifunctor (first, second)
 import Data.ByteString.Char8 (ByteString)
 import Data.Function (on)
@@ -33,6 +34,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Tuple (swap)
+import Prettyprinter
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Attributes.Reader
@@ -40,6 +42,7 @@ import Booster.Definition.Base as Def
 import Booster.Pattern.Base qualified as Def
 import Booster.Pattern.Index (TermIndex, computeTermIndex)
 import Booster.Pattern.Util qualified as Util
+import Booster.Prettyprinter hiding (attributes)
 import Booster.Syntax.Json.Base qualified as Json
 import Booster.Syntax.Json.Internalise
 import Booster.Syntax.ParsedKore.Base
@@ -527,6 +530,57 @@ data DefinitionError
     | DefinitionTermOrPredicateError TermOrPredicateError
     deriving stock (Eq, Show)
 
+instance Pretty DefinitionError where
+    pretty = \case
+        ParseError msg ->
+            "Parse error: " <> pretty msg
+        NoSuchModule name ->
+            pretty $ name <> ": No such module"
+        DuplicateModule name ->
+            pretty $ name <> ": Duplicate module"
+        DuplicateSorts sorts ->
+            pretty $ "Duplicate sorts: " <> show (map (.name.getId) sorts)
+        DuplicateSymbols syms ->
+            pretty $ "Duplicate symbols: " <> show (map (.name.getId) syms)
+        DuplicateAliases aliases ->
+            pretty $ "Duplicate aliases: " <> show (map (.name.getId) aliases)
+        DuplicateNames names ->
+            pretty $ "Duplicate names (import clashes): " <> show names
+        DefinitionAttributeError attrs ->
+            pretty $ "Definition attributes differ: " <> show attrs
+        DefinitionSortError sortErr ->
+            pretty $ "Sort error: " <> renderSortError sortErr
+        DefinitionPatternError patErr ->
+            pretty $ "Pattern error: " <> show patErr -- TODO define a pretty instance?
+        DefinitionAliasError name err ->
+            pretty $ "Alias error in " <> Text.unpack name <> ": " <> show err
+        DefinitionRewriteRuleError (MalformedRewriteRule rule) ->
+            pretty $ "Malformed rewrite rule " <> show (extract rule).location
+        DefinitionTermOrPredicateError (PatternExpected p) ->
+            pretty $ "Expected a pattern but found a predicate: " <> show p
+
+{- | ToJSON instance (user-facing for add-module endpoint):
+Renders the error string as 'error', with minimal context.
+-}
+instance ToJSON DefinitionError where
+    toJSON = \case
+        DuplicateSorts sorts ->
+            "Duplicate sorts" `withContext` map toJSON sorts
+        DuplicateSymbols syms ->
+            "Duplicate symbols" `withContext` map toJSON syms
+        DuplicateAliases aliases ->
+            "DuplicateAliases" `withContext` map toJSON aliases
+        DefinitionPatternError patErr ->
+            "Pattern error in definition" `withContext` [toJSON patErr]
+        DefinitionRewriteRuleError (MalformedRewriteRule rule) ->
+            "Malformed rewrite rule" `withContext` [toJSON rule]
+        other ->
+            object ["error" .= renderOneLineText (pretty other), "context" .= Null]
+      where
+        withContext :: Text -> [Value] -> Value
+        withContext errMsg context =
+            object ["error" .= errMsg, "context" .= context]
+
 data AliasError
     = UnknownAlias AliasName
     | WrongAliasSortCount ParsedAlias
@@ -538,7 +592,6 @@ newtype RewriteRuleError
     = MalformedRewriteRule ParsedAxiom
     deriving stock (Eq, Show)
 
-data TermOrPredicateError
+newtype TermOrPredicateError
     = PatternExpected Def.TermOrPredicate
-    | TOPNotSupported Def.TermOrPredicate
     deriving stock (Eq, Show)

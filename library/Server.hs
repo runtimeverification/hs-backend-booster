@@ -8,22 +8,21 @@ module Server (main) where
 
 import Control.DeepSeq (force)
 import Control.Exception (evaluate)
+import Control.Monad (forM_, when)
 import Control.Monad.Logger (LogLevel (..))
 import Data.List (intercalate, partition)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isNothing)
 import Data.Text (Text, pack, unpack)
 import Options.Applicative
+import Text.Casing
+import Text.Read
 
 import Booster.JsonRpc (runServer)
 import Booster.LLVM.Internal (mkAPI, withDLib)
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
 import Booster.VersionInfo (VersionInfo (..), versionInfo)
-import Control.Monad (forM_)
-
-import Text.Casing
-import Text.Read
 
 main :: IO ()
 main = do
@@ -41,15 +40,16 @@ main = do
     definitionMap <-
         loadDefinition definitionFile
             >>= evaluate . force . either (error . show) id
-    let internalModule =
-            fromMaybe (error $ unpack mainModuleName <> ": No such module") $
-                Map.lookup mainModuleName definitionMap
+    -- ensure the (default) main module is present in the definition
+    when (isNothing $ Map.lookup mainModuleName definitionMap) $
+        error $
+            "Module " <> unpack mainModuleName <> " does not exist in the given definition."
     putStrLn "Starting RPC server"
     case llvmLibraryFile of
-        Nothing -> runServer port internalModule Nothing (adjustLogLevels logLevels)
+        Nothing -> runServer port definitionMap mainModuleName Nothing (adjustLogLevels logLevels)
         Just fp -> withDLib fp $ \dl -> do
             api <- mkAPI dl
-            runServer port internalModule (Just api) (adjustLogLevels logLevels)
+            runServer port definitionMap mainModuleName (Just api) (adjustLogLevels logLevels)
   where
     clParser =
         info
