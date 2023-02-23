@@ -12,7 +12,7 @@ module Proxy (
 ) where
 
 import Booster.Definition.Base (KoreDefinition)
-import Booster.JsonRpc.Base (API (..), ExecuteResult (..), HaltReason (..), ModuleName, ReqException (..), ReqOrRes (..), rpcJsonConfig)
+-- import Kore.JsonRpc.Base (API (..), ExecuteResult (..), HaltReason (..), ModuleName, ReqException (..), ReqOrRes (..), rpcJsonConfig)
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Network.JsonRpc (jsonrpcTCPServer)
 import Control.Concurrent.MVar qualified as MVar
@@ -39,7 +39,6 @@ import Control.Monad.Trans.Reader (ask, runReaderT)
 -- import Data.Aeson (object, toJSON, (.=))
 
 import Booster.JsonRpc qualified as Booster
-import Booster.JsonRpc.Base qualified as Booster
 import Control.Concurrent (forkIO, throwTo)
 import Control.Exception (mask)
 import Control.Monad (forever)
@@ -48,11 +47,14 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Aeson.Types (ToJSON (toJSON), Value (..))
 import Data.Maybe (catMaybes, isJust)
 import Kore.JsonRpc qualified as Kore
-import Kore.JsonRpc.Base qualified as Kore
+import Kore.JsonRpc.Types
+import Data.Text (Text)
+import Kore.Syntax.Json.Types qualified as KoreJson
+
 
 data KoreServer = KoreServer
     { serverState :: MVar.MVar ServerState
-    , mainModule :: ModuleName
+    , mainModule :: Text
     , runSMT ::
         forall a.
         SmtMetadataTools StepperAttributes ->
@@ -122,14 +124,14 @@ srv kore@KoreServer{runSMT} booster = do
 
             sendResponses :: BatchResponse -> Log.LoggingT IO ()
             sendResponses r = flip Log.runLoggingT logger $ flip runReaderT rpcSession $ sendBatchResponse r
+
             respondTo :: Request -> Log.LoggingT IO (Maybe Response)
             respondTo req@(Request v _ _ i) =
-                case (fromRequest req, fromRequest req) of
-                    (Left e, _) -> return . Just $ ResponseError v e i
-                    (_, Left e) -> return . Just $ ResponseError v e i
-                    (Right (boosterR :: Booster.API 'Booster.Req), Right (koreR :: Kore.API 'Kore.Req)) ->
-                        respondEither v i boosterRespond koreRespond boosterR koreR
-            respondTo _ = return Nothing
+                case fromRequest req of
+                    Left e -> pure . Just $ ResponseError v e i
+                    Right parsed ->
+                        respondEither v i boosterRespond koreRespond parsed
+            respondTo _ = pure Nothing
 
             boosterRespond = Booster.respond booster.definition booster.mLlvmLibrary
             koreRespond = Kore.respond kore.serverState (Kore.ModuleName kore.mainModule) runSMT
@@ -165,29 +167,49 @@ respondEither ::
     Monad m =>
     Ver ->
     Id ->
-    Respond (Booster.API 'Booster.Req) m (Booster.API 'Booster.Res) ->
-    Respond (Kore.API 'Kore.Req) m (Kore.API 'Kore.Res) ->
-    Booster.API 'Booster.Req ->
-    Kore.API 'Kore.Req ->
+    Respond (API 'Req) m (API 'Res) ->
+    Respond (API 'Req) m (API 'Res) ->
+    API 'Req ->
     m (Maybe Response)
-respondEither v i booster kore boosterR koreR = case boosterR of
-    Execute req
-        | isJust req._module -> mkResponse =<< kore koreR
-        | isJust req.stepTimeout -> mkResponse =<< kore koreR
-        | isJust req.movingAverageStepTimeout -> mkResponse =<< kore koreR
-    Execute _ ->
-        booster boosterR >>= \case
-            Right (Execute (ExecuteResult{reason}))
-                -- TODO: we want to make a step in the old backend and then resume here
-                | reason == Aborted -> mkResponse =<< kore koreR
-                | reason == Stuck -> mkResponse =<< kore koreR
-            res -> mkResponse res
-    Implies _ -> mkResponse =<< kore koreR
-    Simplify _ -> mkResponse =<< kore koreR
-    AddModule _ -> mkResponse =<< kore koreR
-    Cancel -> mkResponse =<< booster boosterR
+respondEither v i booster kore req = case req of
+    Execute execReq
+        | isJust execReq._module -> mkResponse =<< kore req
+        | isJust execReq.stepTimeout -> mkResponse =<< kore req
+        | isJust execReq.movingAverageStepTimeout -> mkResponse =<< kore req
+        | otherwise -> loop 0 execReq
+    Implies _ -> mkResponse =<< kore req
+    Simplify _ -> mkResponse =<< kore req
+    AddModule _ -> mkResponse =<< kore req
+    Cancel -> mkResponse =<< booster req
   where
-    mkResponse :: Monad m => ToJSON a => Either ErrorObj a -> m (Maybe Response)
     mkResponse = \case
         Left e -> return . Just $ ResponseError v e i
         Right r -> return . Just $ Response v (toJSON r) i
+
+    toRequestState :: ExecuteState -> KoreJson.KoreJson
+    toRequestState ExecuteState{term=t, substitution, predicate} =
+        let subAndPred = catMaybes [KoreJson.term <$> substitution, KoreJson.term <$> predicate]
+        in t{KoreJson.term = foldr (KoreJson.KJAnd $ KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []) t.term subAndPred}
+
+    loop currentDepth r = booster (Execute r{maxDepth = flip (-) currentDepth <$> r.maxDepth}) >>= \case
+        Right (Execute boosterResult)
+            | boosterResult.reason == Stuck -> 
+                -- if we are stuck in the new backend we try to re-run in the old one to work around any potential unification bugs
+                mkResponse =<< kore (Execute r)
+            | boosterResult.reason == Aborted ->
+                -- attempt to do one step in the old backend
+                kore (Execute r{ state = toRequestState boosterResult.state, maxDepth = Just $ Depth 1 }) >>= \case
+                    Right (Execute koreResult)
+                        | koreResult.reason == DepthBound ->
+                            -- if we made one step, add the number of steps we have taken to the counter and attempt with booster again
+                            loop (currentDepth + boosterResult.depth + koreResult.depth) (r { state = toRequestState koreResult.state } :: ExecuteRequest)
+                        | otherwise -> 
+                            -- otherwise we have either hit a different HaltReason, at which point we should return, setting the correct depth
+                            mkResponse $ Right $ Execute koreResult { depth = currentDepth + boosterResult.depth + koreResult.depth }
+                    -- can only be an error at this point
+                    res -> mkResponse res
+            | otherwise -> 
+                -- we were successfull with the booster, thus we return the booster result with the updated depth, in case we previously looped
+                mkResponse $ Right $ Execute boosterResult { depth = currentDepth + boosterResult.depth }
+        -- can only be an error at this point
+        res -> mkResponse res

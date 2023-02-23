@@ -5,6 +5,7 @@ License     : BSD-3-Clause
 -}
 module Booster.JsonRpc (
     module Booster.JsonRpc,
+    rpcJsonConfig
 ) where
 
 import Control.Concurrent (forkIO, throwTo)
@@ -41,7 +42,7 @@ import Network.JSONRPC (
 import Numeric.Natural
 
 import Booster.Definition.Base (KoreDefinition (..))
-import Booster.JsonRpc.Base
+import Kore.JsonRpc.Types
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Network.JsonRpc (jsonrpcTCPServer)
 import Booster.Pattern.Base (Pattern)
@@ -149,7 +150,7 @@ respond def@KoreDefinition{} mLlvmLibrary =
 
     toExecState :: Pattern -> ExecuteState
     toExecState pat =
-        ExecuteState{term = addHeader t, predicate = fmap addHeader p}
+        ExecuteState{term = addHeader t, predicate = fmap addHeader p, substitution = Nothing}
       where
         (t, p) = externalisePattern pat
 
