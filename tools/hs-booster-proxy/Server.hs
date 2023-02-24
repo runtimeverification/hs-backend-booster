@@ -6,27 +6,32 @@ License     : BSD-3-Clause
 -}
 module Main (main) where
 
+import Control.Concurrent.MVar (newMVar)
+import Control.Concurrent.MVar qualified as MVar
 import Control.DeepSeq (force)
 import Control.Exception (evaluate)
+import Control.Monad (forM_, void)
 import Control.Monad.Catch (bracket)
+import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Logger (LogLevel (..))
+import Data.IORef (writeIORef)
+import Data.InternedText (globalInternedTextCache)
 import Data.List (intercalate, partition)
+import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
 import Options.Applicative
+import System.Clock (
+    Clock (..),
+    getTime,
+ )
+import Text.Casing
+import Text.Read
 
 import Booster.LLVM.Internal (mkAPI, withDLib)
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
 import Booster.VersionInfo (VersionInfo (..), versionInfo)
-import Control.Monad (forM_, void)
-
-import Control.Concurrent.MVar (newMVar)
-import Control.Concurrent.MVar qualified as MVar
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.IORef (writeIORef)
-import Data.InternedText (globalInternedTextCache)
-import Data.Map qualified as Map
 import GlobalMain qualified
 import Kore.Attribute.Symbol (StepperAttributes)
 import Kore.BugReport (BugReportOption (..), ExitCode (ExitSuccess), withBugReport)
@@ -40,12 +45,6 @@ import Kore.Syntax.Definition (ModuleName (ModuleName), SentenceAxiom)
 import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
 import Proxy qualified
 import SMT qualified
-import System.Clock (
-    Clock (..),
-    getTime,
- )
-import Text.Casing
-import Text.Read
 
 main :: IO ()
 main = do

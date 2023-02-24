@@ -42,7 +42,6 @@ import Network.JSONRPC (
 import Numeric.Natural
 
 import Booster.Definition.Base (KoreDefinition (..))
-import Kore.JsonRpc.Types
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Network.JsonRpc (jsonrpcTCPServer)
 import Booster.Pattern.Base (Pattern)
@@ -50,6 +49,7 @@ import Booster.Pattern.Rewrite (RewriteResult (..), performRewrite)
 import Booster.Syntax.Json (KoreJson (..), addHeader)
 import Booster.Syntax.Json.Externalise (externalisePattern)
 import Booster.Syntax.Json.Internalise (PatternError, internalisePattern)
+import Kore.JsonRpc.Types
 
 respond ::
     forall m.

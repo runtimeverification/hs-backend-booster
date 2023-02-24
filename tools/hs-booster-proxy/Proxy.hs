@@ -11,46 +11,40 @@ module Proxy (
     runServer,
 ) where
 
-import Booster.Definition.Base (KoreDefinition)
--- import Kore.JsonRpc.Base (API (..), ExecuteResult (..), HaltReason (..), ModuleName, ReqException (..), ReqOrRes (..), rpcJsonConfig)
-import Booster.LLVM.Internal qualified as LLVM
-import Booster.Network.JsonRpc (jsonrpcTCPServer)
-import Control.Concurrent.MVar qualified as MVar
-import Control.Monad.Logger (LogLevel (..), LogSource)
-import Control.Monad.Logger qualified as Log
-import Data.Conduit.Network (serverSettings)
-import Data.Text qualified as Text
-import Kore.Attribute.Symbol (StepperAttributes)
-import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
-import Kore.Internal.TermLike (TermLike, VariableName)
-import Kore.JsonRpc (ServerState)
-import Kore.Log qualified
-import Kore.Syntax.Definition (SentenceAxiom)
-import Kore.Syntax.Module qualified as Kore
-import Network.JSONRPC hiding (jsonrpcTCPServer)
-import SMT qualified
-
-import Control.Concurrent.STM.TChan (newTChan, readTChan, writeTChan)
-import Control.Monad.STM (atomically)
-
--- import Control.Monad.Trans.Except (runExcept)
-import Control.Monad.Trans.Reader (ask, runReaderT)
-
--- import Data.Aeson (object, toJSON, (.=))
-
-import Booster.JsonRpc qualified as Booster
 import Control.Concurrent (forkIO, throwTo)
+import Control.Concurrent.MVar qualified as MVar
+import Control.Concurrent.STM.TChan (newTChan, readTChan, writeTChan)
 import Control.Exception (mask)
 import Control.Monad (forever)
 import Control.Monad.Catch (catch)
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Control.Monad.Logger (LogLevel (..), LogSource)
+import Control.Monad.Logger qualified as Log
+import Control.Monad.STM (atomically)
+import Control.Monad.Trans.Reader (ask, runReaderT)
 import Data.Aeson.Types (ToJSON (toJSON), Value (..))
+import Data.Conduit.Network (serverSettings)
 import Data.Maybe (catMaybes, isJust)
+import Data.Text (Text)
+import Data.Text qualified as Text
+import Network.JSONRPC hiding (jsonrpcTCPServer)
+import SMT qualified
+
+import Booster.Definition.Base (KoreDefinition)
+import Booster.JsonRpc qualified as Booster
+import Booster.LLVM.Internal qualified as LLVM
+import Booster.Network.JsonRpc (jsonrpcTCPServer)
+
+import Kore.Attribute.Symbol (StepperAttributes)
+import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
+import Kore.Internal.TermLike (TermLike, VariableName)
+import Kore.JsonRpc (ServerState)
 import Kore.JsonRpc qualified as Kore
 import Kore.JsonRpc.Types
-import Data.Text (Text)
+import Kore.Log qualified
+import Kore.Syntax.Definition (SentenceAxiom)
 import Kore.Syntax.Json.Types qualified as KoreJson
-
+import Kore.Syntax.Module qualified as Kore
 
 data KoreServer = KoreServer
     { serverState :: MVar.MVar ServerState
