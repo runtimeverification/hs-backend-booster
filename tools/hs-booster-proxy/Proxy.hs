@@ -8,7 +8,7 @@ License     : BSD-3-Clause
 module Proxy (
     KoreServer (..),
     BoosterServer (..),
-    runServer,
+    srv,
 ) where
 
 import Control.Concurrent (forkIO, throwTo)
@@ -18,22 +18,19 @@ import Control.Exception (mask)
 import Control.Monad (forever)
 import Control.Monad.Catch (catch)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.Logger (LogLevel (..), LogSource)
 import Control.Monad.Logger qualified as Log
 import Control.Monad.STM (atomically)
 import Control.Monad.Trans.Reader (ask, runReaderT)
 import Data.Aeson.Types (ToJSON (toJSON), Value (..))
-import Data.Conduit.Network (serverSettings)
 import Data.Maybe (catMaybes, isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Network.JSONRPC hiding (jsonrpcTCPServer)
+import Network.JSONRPC
 import SMT qualified
 
 import Booster.Definition.Base (KoreDefinition)
 import Booster.JsonRpc qualified as Booster
 import Booster.LLVM.Internal qualified as LLVM
-import Booster.Network.JsonRpc (jsonrpcTCPServer)
 
 import Kore.Attribute.Symbol (StepperAttributes)
 import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
@@ -61,26 +58,7 @@ data KoreServer = KoreServer
 data BoosterServer = BoosterServer
     { definition :: KoreDefinition
     , mLlvmLibrary :: Maybe LLVM.API
-    , logLevel :: LogLevel
-    , customLevels :: [LogLevel]
     }
-
-runServer :: Int -> KoreServer -> BoosterServer -> IO ()
-runServer port kore booster =
-    do
-        Log.runFileLoggingT "booster.log" . Log.filterLogger levelFilter
-        $ jsonrpcTCPServer
-            rpcJsonConfig
-            V2
-            False
-            srvSettings
-        $ srv kore booster
-  where
-    levelFilter :: LogSource -> LogLevel -> Bool
-    levelFilter _source lvl =
-        lvl `elem` booster.customLevels || lvl >= booster.logLevel && lvl <= LevelError
-
-    srvSettings = serverSettings port "*"
 
 srv :: KoreServer -> BoosterServer -> JSONRPCT (Log.LoggingT IO) ()
 srv kore@KoreServer{runSMT} booster = do
@@ -187,7 +165,7 @@ respondEither v i booster kore req = case req of
 
     loop currentDepth r = booster (Execute r{maxDepth = flip (-) currentDepth <$> r.maxDepth}) >>= \case
         Right (Execute boosterResult)
-            | boosterResult.reason == Stuck -> 
+            | boosterResult.reason == Stuck ->
                 -- if we are stuck in the new backend we try to re-run in the old one to work around any potential unification bugs
                 mkResponse =<< kore (Execute r)
             | boosterResult.reason == Aborted ->
@@ -197,12 +175,12 @@ respondEither v i booster kore req = case req of
                         | koreResult.reason == DepthBound ->
                             -- if we made one step, add the number of steps we have taken to the counter and attempt with booster again
                             loop (currentDepth + boosterResult.depth + koreResult.depth) (r { state = toRequestState koreResult.state } :: ExecuteRequest)
-                        | otherwise -> 
+                        | otherwise ->
                             -- otherwise we have either hit a different HaltReason, at which point we should return, setting the correct depth
                             mkResponse $ Right $ Execute koreResult { depth = currentDepth + boosterResult.depth + koreResult.depth }
                     -- can only be an error at this point
                     res -> mkResponse res
-            | otherwise -> 
+            | otherwise ->
                 -- we were successfull with the booster, thus we return the booster result with the updated depth, in case we previously looped
                 mkResponse $ Right $ Execute boosterResult { depth = currentDepth + boosterResult.depth }
         -- can only be an error at this point

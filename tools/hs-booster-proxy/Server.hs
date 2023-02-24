@@ -14,12 +14,15 @@ import Control.Monad (forM_, void)
 import Control.Monad.Catch (bracket)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Logger (LogLevel (..))
+import Control.Monad.Logger qualified as Logger
+import Data.Conduit.Network (serverSettings)
 import Data.IORef (writeIORef)
 import Data.InternedText (globalInternedTextCache)
 import Data.List (intercalate, partition)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
+import Network.JSONRPC (Ver (V2))
 import Options.Applicative
 import System.Clock (
     Clock (..),
@@ -29,16 +32,18 @@ import Text.Casing
 import Text.Read
 
 import Booster.LLVM.Internal (mkAPI, withDLib)
+import Booster.Network.JsonRpc (jsonrpcTCPServer)
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
 import Booster.VersionInfo (VersionInfo (..), versionInfo)
 import GlobalMain qualified
 import Kore.Attribute.Symbol (StepperAttributes)
-import Kore.BugReport (BugReportOption (..), ExitCode (ExitSuccess), withBugReport)
+import Kore.BugReport (BugReportOption (..), withBugReport)
 import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
 import Kore.Internal.TermLike (TermLike, VariableName)
 import Kore.JsonRpc (ServerState (..))
-import Kore.Log (ExeName (..), KoreLogType (..), defaultKoreLogOptions, logType, swappableLogger, withLogger)
+import Kore.JsonRpc.Types (rpcJsonConfig)
+import Kore.Log (ExeName (..), defaultKoreLogOptions, swappableLogger, withLogger)
 import Kore.Log qualified as Log
 import Kore.Rewrite.SMT.Lemma (declareSMTLemmas)
 import Kore.Syntax.Definition (ModuleName (ModuleName), SentenceAxiom)
@@ -64,8 +69,18 @@ main = do
         loadDefinition mainModuleName definitionFile
             >>= evaluate . force . either (error . show) id
 
+    let (logLevel, customLevels) = adjustLogLevels logLevels
+        levelFilter :: Logger.LogSource -> LogLevel -> Bool
+        levelFilter _source lvl =
+            lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
+
+        coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
+        koreLogOptions =
+            (defaultKoreLogOptions (ExeName "hs-booster-proxy") startTime){Log.logLevel = coLogLevel}
+        srvSettings = serverSettings port "*"
+
     void $ withBugReport (ExeName "hs-booster-proxy") BugReportOnError $ \reportDirectory ->
-        withLogger reportDirectory (defaultKoreLogOptions (ExeName "hs-booster-proxy") startTime){logType = LogFileText "kore.log"} $ \actualLogAction -> do
+        withLogger reportDirectory koreLogOptions $ \actualLogAction -> do
             mvarLogAction <- newMVar actualLogAction
             let logAction = swappableLogger mvarLogAction
 
@@ -74,19 +89,19 @@ main = do
             withMDLib llvmLibraryFile $ \mdl -> do
                 mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
 
-                let (logLevel, customLevels) = adjustLogLevels logLevels
-                    booster =
+                let booster =
                         Proxy.BoosterServer
                             { definition
                             , mLlvmLibrary
-                            , logLevel
-                            , customLevels
                             }
 
                 putStrLn "Starting RPC server"
 
-                Proxy.runServer port kore booster
-                pure ExitSuccess
+                -- Proxy.runServer port kore booster
+                let server =
+                        jsonrpcTCPServer rpcJsonConfig V2 False srvSettings $
+                            Proxy.srv kore booster
+                Logger.runStderrLoggingT $ Logger.filterLogger levelFilter server
   where
     clParser =
         info
@@ -95,6 +110,13 @@ main = do
 
     withMDLib Nothing f = f Nothing
     withMDLib (Just fp) f = withDLib fp $ \dl -> f (Just dl)
+
+toSeverity :: LogLevel -> Maybe Log.Severity
+toSeverity LevelDebug = Just Log.Debug
+toSeverity LevelInfo = Just Log.Info
+toSeverity LevelWarn = Just Log.Warning
+toSeverity LevelError = Just Log.Error
+toSeverity LevelOther{} = Nothing
 
 data CLOptions = CLOptions
     { definitionFile :: FilePath
