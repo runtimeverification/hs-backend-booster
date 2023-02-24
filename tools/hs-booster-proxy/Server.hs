@@ -76,7 +76,7 @@ main = do
 
         coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
         koreLogOptions =
-            (defaultKoreLogOptions (ExeName "hs-booster-proxy") startTime){Log.logLevel = coLogLevel}
+            (defaultKoreLogOptions (ExeName $ "[" <> show coLogLevel <> "#kore]") startTime){Log.logLevel = coLogLevel}
         srvSettings = serverSettings port "*"
 
     void $ withBugReport (ExeName "hs-booster-proxy") BugReportOnError $ \reportDirectory ->

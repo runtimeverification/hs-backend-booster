@@ -68,11 +68,11 @@ srv kore@KoreServer{runSMT} booster = do
                 Nothing -> do
                     return ()
                 Just (SingleRequest req) | Right (Cancel :: API 'Req) <- fromRequest req -> do
-                    Log.logInfoN "Cancel Request"
+                    Log.logInfoNS "proxy" "Cancel Request"
                     liftIO $ throwTo tid CancelRequest
                     mainLoop tid
                 Just req -> do
-                    Log.logInfoN $ Text.pack (show req)
+                    Log.logInfoNS "proxy" . (<> "...") . Text.take 200 . Text.pack $ show req
                     liftIO $ atomically $ writeTChan reqQueue req
                     mainLoop tid
     spawnWorker reqQueue >>= mainLoop
@@ -136,7 +136,8 @@ srv kore@KoreServer{runSMT} booster = do
                         (withLog . processReq)
 
 respondEither ::
-    Monad m =>
+    forall m.
+    Log.MonadLogger m =>
     Ver ->
     Id ->
     Respond (API 'Req) m (API 'Res) ->
@@ -149,11 +150,13 @@ respondEither v i booster kore req = case req of
         | isJust execReq.stepTimeout -> mkResponse =<< kore req
         | isJust execReq.movingAverageStepTimeout -> mkResponse =<< kore req
         | otherwise -> loop 0 execReq
-    Implies _ -> mkResponse =<< kore req
-    Simplify _ -> mkResponse =<< kore req
-    AddModule _ -> mkResponse =<< kore req
-    Cancel -> mkResponse =<< booster req
+    Implies _ -> mkResponse =<< loggedKore "Implies" req
+    Simplify _ -> mkResponse =<< loggedKore "Simplify" req
+    AddModule _ -> mkResponse =<< loggedKore "AddModule" req -- FIXME should go to both
+    Cancel -> mkResponse $ Left $ ErrorObj "Cancel not supported" (-32601) Null
   where
+    loggedKore msg r = Log.logInfoNS "proxy" (msg <> " (using kore)") >> kore r
+
     mkResponse = \case
         Left e -> return . Just $ ResponseError v e i
         Right r -> return . Just $ Response v (toJSON r) i
@@ -163,7 +166,10 @@ respondEither v i booster kore req = case req of
         let subAndPred = catMaybes [KoreJson.term <$> substitution, KoreJson.term <$> predicate]
          in t{KoreJson.term = foldr (KoreJson.KJAnd $ KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []) t.term subAndPred}
 
-    loop currentDepth r =
+    loop :: Depth -> ExecuteRequest -> m (Maybe Response)
+    loop currentDepth r = do
+        Log.logInfoNS "proxy" . Text.pack $
+            "Iterating execute request at " <> show currentDepth
         let mbDepthLimit = flip (-) currentDepth <$> r.maxDepth
          in booster (Execute r{maxDepth = mbDepthLimit}) >>= \case
                 Right (Execute boosterResult)
@@ -172,8 +178,10 @@ respondEither v i booster kore req = case req of
                     -- if we are stuck in the new backend we try to re-run
                     -- in the old one to work around any potential
                     -- unification bugs.
-                    | boosterResult.reason `elem` [Aborted, Stuck] ->
+                    | boosterResult.reason `elem` [Aborted, Stuck] -> do
                         -- attempt to do one step in the old backend
+                        Log.logInfoNS "proxy" . Text.pack $
+                            "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                         kore
                             ( Execute
                                 r
@@ -183,26 +191,31 @@ respondEither v i booster kore req = case req of
                             )
                             >>= \case
                                 Right (Execute koreResult)
-                                    | koreResult.reason == DepthBound ->
+                                    | koreResult.reason == DepthBound -> do
                                         -- if we made one step, add the number of
                                         -- steps we have taken to the counter and
                                         -- attempt with booster again
+                                        Log.logInfoNS "proxy" "kore depth-bound, continuing"
                                         loop
                                             (currentDepth + boosterResult.depth + koreResult.depth)
                                             (r{state = toRequestState koreResult.state} :: ExecuteRequest)
-                                    | otherwise ->
+                                    | otherwise -> do
                                         -- otherwise we have hit a different
                                         -- HaltReason, at which point we should
                                         -- return, setting the correct depth
+                                        Log.logInfoNS "proxy" . Text.pack $
+                                            "Kore " <> show koreResult.reason
                                         mkResponse $
                                             Right $
                                                 Execute koreResult{depth = currentDepth + boosterResult.depth + koreResult.depth}
                                 -- can only be an error at this point
                                 res -> mkResponse res
-                    | otherwise ->
+                    | otherwise -> do
                         -- we were successful with the booster, thus we
                         -- return the booster result with the updated
                         -- depth, in case we previously looped
+                        Log.logInfoNS "proxy" . Text.pack $
+                            "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                         mkResponse $ Right $ Execute boosterResult{depth = currentDepth + boosterResult.depth}
                 -- can only be an error at this point
                 res -> mkResponse res
