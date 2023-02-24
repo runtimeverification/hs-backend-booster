@@ -5,7 +5,7 @@ License     : BSD-3-Clause
 -}
 module Booster.JsonRpc (
     module Booster.JsonRpc,
-    rpcJsonConfig
+    rpcJsonConfig,
 ) where
 
 import Control.Concurrent (forkIO, throwTo)

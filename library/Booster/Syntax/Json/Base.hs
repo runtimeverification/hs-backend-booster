@@ -7,11 +7,12 @@ License     : BSD-3-Clause
 module Booster.Syntax.Json.Base (
     -- export everything for debugging and testing only
     module Booster.Syntax.Json.Base,
-    module Kore.Syntax.Json.Types
+    module Kore.Syntax.Json.Types,
 ) where
 
 import Data.Foldable ()
 import Kore.Syntax.Json.Types
+
 ------------------------------------------------------------
 
 retractVariable :: KorePattern -> Maybe Id
