@@ -164,25 +164,45 @@ respondEither v i booster kore req = case req of
          in t{KoreJson.term = foldr (KoreJson.KJAnd $ KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []) t.term subAndPred}
 
     loop currentDepth r =
-        booster (Execute r{maxDepth = flip (-) currentDepth <$> r.maxDepth}) >>= \case
-            Right (Execute boosterResult)
-                | boosterResult.reason == Stuck ->
-                    -- if we are stuck in the new backend we try to re-run in the old one to work around any potential unification bugs
-                    mkResponse =<< kore (Execute r)
-                | boosterResult.reason == Aborted ->
-                    -- attempt to do one step in the old backend
-                    kore (Execute r{state = toRequestState boosterResult.state, maxDepth = Just $ Depth 1}) >>= \case
-                        Right (Execute koreResult)
-                            | koreResult.reason == DepthBound ->
-                                -- if we made one step, add the number of steps we have taken to the counter and attempt with booster again
-                                loop (currentDepth + boosterResult.depth + koreResult.depth) (r{state = toRequestState koreResult.state} :: ExecuteRequest)
-                            | otherwise ->
-                                -- otherwise we have either hit a different HaltReason, at which point we should return, setting the correct depth
-                                mkResponse $ Right $ Execute koreResult{depth = currentDepth + boosterResult.depth + koreResult.depth}
-                        -- can only be an error at this point
-                        res -> mkResponse res
-                | otherwise ->
-                    -- we were successfull with the booster, thus we return the booster result with the updated depth, in case we previously looped
-                    mkResponse $ Right $ Execute boosterResult{depth = currentDepth + boosterResult.depth}
-            -- can only be an error at this point
-            res -> mkResponse res
+        let mbDepthLimit = flip (-) currentDepth <$> r.maxDepth
+         in booster (Execute r{maxDepth = mbDepthLimit}) >>= \case
+                Right (Execute boosterResult)
+                    -- if the new backend aborts or gets stuck, revert to the old one
+                    --
+                    -- if we are stuck in the new backend we try to re-run
+                    -- in the old one to work around any potential
+                    -- unification bugs.
+                    | boosterResult.reason `elem` [Aborted, Stuck] ->
+                        -- attempt to do one step in the old backend
+                        kore
+                            ( Execute
+                                r
+                                    { state = toRequestState boosterResult.state
+                                    , maxDepth = Just $ Depth 1
+                                    }
+                            )
+                            >>= \case
+                                Right (Execute koreResult)
+                                    | koreResult.reason == DepthBound ->
+                                        -- if we made one step, add the number of
+                                        -- steps we have taken to the counter and
+                                        -- attempt with booster again
+                                        loop
+                                            (currentDepth + boosterResult.depth + koreResult.depth)
+                                            (r{state = toRequestState koreResult.state} :: ExecuteRequest)
+                                    | otherwise ->
+                                        -- otherwise we have hit a different
+                                        -- HaltReason, at which point we should
+                                        -- return, setting the correct depth
+                                        mkResponse $
+                                            Right $
+                                                Execute koreResult{depth = currentDepth + boosterResult.depth + koreResult.depth}
+                                -- can only be an error at this point
+                                res -> mkResponse res
+                    | otherwise ->
+                        -- we were successful with the booster, thus we
+                        -- return the booster result with the updated
+                        -- depth, in case we previously looped
+                        mkResponse $ Right $ Execute boosterResult{depth = currentDepth + boosterResult.depth}
+                -- can only be an error at this point
+                res -> mkResponse res
