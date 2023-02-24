@@ -11,9 +11,10 @@ source-repository-package
     tag: v0.5.0.0
     --sha256: sha256-zs+cQf2bIQEaN10eEg8VJkCp0pQcTuXpUovCev5C6dc=
 
+-- Do not move the order of `location`, `tag` and `--sha256` fields below as this will break the update script
 source-repository-package
     type: git
     location: https://github.com/runtimeverification/haskell-backend.git
-    tag: 40d7bfcf6c97f0eec957ddd0eea699eb63e69c29
+    tag: 2721d2ef7b6913cf4eea0a158a53bf49be51893b
+    --sha256: sha256-Ipg6Jrm/A47n0PJJI2q5htiLl9xMcGC15NwdR2Ixa0k=
     subdir: kore kore-rpc-types
-    --sha256: sha256-i13sl2NBSiGKTkXtGma+GlQALgC6RtGRwHyDK6adLYI=
