@@ -14,7 +14,7 @@ module Proxy (
 import Control.Concurrent (forkIO, throwTo)
 import Control.Concurrent.MVar qualified as MVar
 import Control.Concurrent.STM.TChan (newTChan, readTChan, writeTChan)
-import Control.Exception (mask)
+import Control.Exception (mask, SomeException)
 import Control.Monad (forever)
 import Control.Monad.Catch (catch)
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -60,6 +60,10 @@ data BoosterServer = BoosterServer
     , mLlvmLibrary :: Maybe LLVM.API
     }
 
+serverError :: String -> Value -> ErrorObj
+serverError detail = ErrorObj ("Server error: " <> detail) (-32032)
+
+
 srv :: KoreServer -> BoosterServer -> JSONRPCT (Log.LoggingT IO) ()
 srv kore@KoreServer{runSMT} booster = do
     reqQueue <- liftIO $ atomically newTChan
@@ -83,10 +87,11 @@ srv kore@KoreServer{runSMT} booster = do
 
     cancelError = ErrorObj "Request cancelled" (-32000) Null
 
-    bracketOnReqException before onCancel thing =
+    bracketOnReqException withLog before onError thing =
         mask $ \restore -> do
             a <- before
-            restore (thing a) `catch` \(_ :: ReqException) -> onCancel a
+            (restore (thing a) `catch` \(_ :: ReqException) -> onError cancelError a)
+                `catch` \(err :: SomeException) -> withLog (Log.logInfoNS "proxy" (Text.pack $ show err)) >> onError (serverError "crashed" $ toJSON $ show err) a
 
     spawnWorker reqQueue = do
         rpcSession <- ask
@@ -108,15 +113,15 @@ srv kore@KoreServer{runSMT} booster = do
             boosterRespond = Booster.respond booster.definition booster.mLlvmLibrary
             koreRespond = Kore.respond kore.serverState (Kore.ModuleName kore.mainModule) runSMT
 
-            cancelReq :: BatchRequest -> Log.LoggingT IO ()
-            cancelReq = \case
+            -- cancelReq :: BatchRequest -> Log.LoggingT IO ()
+            onError err = \case
                 SingleRequest req@Request{} -> do
                     let reqVersion = getReqVer req
                         reqId = getReqId req
-                    sendResponses $ SingleResponse $ ResponseError reqVersion cancelError reqId
+                    sendResponses $ SingleResponse $ ResponseError reqVersion err reqId
                 SingleRequest Notif{} -> pure ()
                 BatchRequest reqs -> do
-                    sendResponses $ BatchResponse $ [ResponseError (getReqVer req) cancelError (getReqId req) | req <- reqs, isRequest req]
+                    sendResponses $ BatchResponse $ [ResponseError (getReqVer req) err (getReqId req) | req <- reqs, isRequest req]
 
             processReq :: BatchRequest -> Log.LoggingT IO ()
             processReq = \case
@@ -131,8 +136,9 @@ srv kore@KoreServer{runSMT} booster = do
             forkIO $
                 forever $
                     bracketOnReqException
+                        withLog
                         (atomically $ readTChan reqQueue)
-                        (withLog . cancelReq)
+                        (\e x -> withLog $ onError e x)
                         (withLog . processReq)
 
 respondEither ::
