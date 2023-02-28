@@ -13,7 +13,7 @@ import Control.Exception (evaluate)
 import Control.Monad (forM_, void)
 import Control.Monad.Catch (bracket)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.Logger (LogLevel (..))
+import Control.Monad.Logger (LogLevel (..), MonadLoggerIO (askLoggerIO), LoggingT (runLoggingT), defaultLoc, ToLogStr (toLogStr))
 import Control.Monad.Logger qualified as Logger
 import Data.Conduit.Network (serverSettings)
 import Data.IORef (writeIORef)
@@ -43,65 +43,74 @@ import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
 import Kore.Internal.TermLike (TermLike, VariableName)
 import Kore.JsonRpc (ServerState (..))
 import Kore.JsonRpc.Types (rpcJsonConfig)
-import Kore.Log (ExeName (..), defaultKoreLogOptions, swappableLogger, withLogger)
+import Kore.Log (ExeName (..), defaultKoreLogOptions, swappableLogger, withLogger, TimestampsSwitch (TimestampsDisable), KoreLogType (LogSomeAction), LogAction (LogAction))
 import Kore.Log qualified as Log
 import Kore.Rewrite.SMT.Lemma (declareSMTLemmas)
 import Kore.Syntax.Definition (ModuleName (ModuleName), SentenceAxiom)
 import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
 import Proxy qualified
 import SMT qualified
+import qualified Data.Text as Text
 
 main :: IO ()
 main = do
     startTime <- getTime Monotonic
     options <- execParser clParser
     let CLOptions{definitionFile, mainModuleName, port, logLevels, llvmLibraryFile, eventlogEnabledUserEvents} = options
-
-    forM_ eventlogEnabledUserEvents $ \t -> do
-        putStrLn $ "Tracing " <> show t
-        enableCustomUserEvent t
-    putStrLn $
-        "Loading definition from "
-            <> definitionFile
-            <> ", main module "
-            <> show mainModuleName
-    definition <-
-        loadDefinition mainModuleName definitionFile
-            >>= evaluate . force . either (error . show) id
-
-    let (logLevel, customLevels) = adjustLogLevels logLevels
+        (logLevel, customLevels) = adjustLogLevels logLevels
         levelFilter :: Logger.LogSource -> LogLevel -> Bool
         levelFilter _source lvl =
             lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
+        
+    Logger.runStderrLoggingT $ Logger.filterLogger levelFilter $ do
+    
+        liftIO $ forM_ eventlogEnabledUserEvents $ \t -> do
+            putStrLn $ "Tracing " <> show t
+            enableCustomUserEvent t
+        Logger.logInfoNS "proxy" $ Text.pack $
+            "Loading definition from "
+                <> definitionFile
+                <> ", main module "
+                <> show mainModuleName
+        definition <- liftIO $
+            loadDefinition mainModuleName definitionFile
+                >>= evaluate . force . either (error . show) id
 
-        coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
-        koreLogOptions =
-            (defaultKoreLogOptions (ExeName $ "[" <> show coLogLevel <> "#kore]") startTime){Log.logLevel = coLogLevel}
-        srvSettings = serverSettings port "*"
 
-    void $ withBugReport (ExeName "hs-booster-proxy") BugReportOnError $ \reportDirectory ->
-        withLogger reportDirectory koreLogOptions $ \actualLogAction -> do
-            mvarLogAction <- newMVar actualLogAction
-            let logAction = swappableLogger mvarLogAction
+        monadLogger <- askLoggerIO
 
-            kore <- mkKoreServer Log.LoggerEnv{logAction} options
+        let coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
+            koreLogOptions =
+                (defaultKoreLogOptions (ExeName $ "") startTime){
+                    Log.logLevel = coLogLevel,
+                    Log.timestampsSwitch = TimestampsDisable,
+                    Log.logType = LogSomeAction $ LogAction $ \txt -> liftIO $ monadLogger defaultLoc "kore" logLevel $ toLogStr txt
+                    }
+            srvSettings = serverSettings port "*"
 
-            withMDLib llvmLibraryFile $ \mdl -> do
-                mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
+        liftIO $ void $ withBugReport (ExeName "hs-booster-proxy") BugReportOnError $ \reportDirectory ->
+            withLogger reportDirectory koreLogOptions $ \actualLogAction -> do
+                mvarLogAction <- newMVar actualLogAction
+                let logAction = swappableLogger mvarLogAction
 
-                let booster =
-                        Proxy.BoosterServer
-                            { definition
-                            , mLlvmLibrary
-                            }
+                kore <- mkKoreServer Log.LoggerEnv{logAction} options
 
-                putStrLn "Starting RPC server"
+                withMDLib llvmLibraryFile $ \mdl -> do
+                    mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
 
-                -- Proxy.runServer port kore booster
-                let server =
-                        jsonrpcTCPServer rpcJsonConfig V2 False srvSettings $
-                            Proxy.srv kore booster
-                Logger.runStderrLoggingT $ Logger.filterLogger levelFilter server
+                    let booster =
+                            Proxy.BoosterServer
+                                { definition
+                                , mLlvmLibrary
+                                }
+
+                    runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
+
+                    -- Proxy.runServer port kore booster
+                    let server =
+                            jsonrpcTCPServer rpcJsonConfig V2 False srvSettings $
+                                Proxy.srv kore booster
+                    runLoggingT server monadLogger
   where
     clParser =
         info
