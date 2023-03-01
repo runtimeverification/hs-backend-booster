@@ -8,6 +8,10 @@ module Booster.Pattern.Simplify (
     simplifyConcrete,
 ) where
 
+import Control.Monad
+import Data.ByteString.Char8 qualified as BS
+import Data.Maybe (fromMaybe, isJust)
+
 import Booster.Definition.Base
 import Booster.LLVM (simplifyBool, simplifyTerm)
 import Booster.LLVM.Internal qualified as LLVM
@@ -36,12 +40,21 @@ simplifyPredicate mApi = \case
     Bottom -> Bottom
     p@(Ceil _) -> p
     p@(EqualsTerm l r) ->
-        case (mApi, sortOfTerm l == SortBool && isConcrete l && isConcrete r) of
-            (Just api, True) ->
-                if simplifyBool api l == simplifyBool api r
-                    then Top
-                    else Bottom
-            _ -> p
+        fromMaybe p $ do
+            api <- mApi
+            guard (sortOfTerm l == SortBool)
+            let adjustTerm t = do
+                    if (isConcrete t)
+                        then pure t
+                        else do
+                            tNew <- evalSizeWordStack t
+                            guard (isConcrete tNew)
+                            pure tNew
+            l' <- adjustTerm l
+            r' <- adjustTerm r
+            pure $ if simplifyBool api l' == simplifyBool api r'
+                       then Top
+                       else Bottom
     EqualsPredicate l r -> EqualsPredicate (simplifyPredicate mApi l) (simplifyPredicate mApi r)
     p@(Exists _ _) -> p
     p@(Forall _ _) -> p
@@ -84,3 +97,42 @@ simplifyConcrete (Just mApi) def trm = recurse trm
                     SymbolApplication sym sorts (map recurse args)
                 Injection sources target sub ->
                     Injection sources target $ recurse sub
+
+----------------------------------------
+-- gross hack: implement #sizeWordStack evaluation for use in predicates
+--
+-- If a term's function symbol is '#sizeWordStack' with a single
+-- argument, traverse the spine of the cons (_:_) chain (until
+-- .WordStack is found). Return 'Nothing' if unexpected structure is
+-- found.
+evalSizeWordStack :: Term -> Maybe Term
+evalSizeWordStack t@(Term attributes _)
+    | attributes.isEvaluated = -- Var, DomainValue
+        Nothing
+    | SymbolApplication sym _sorts [ws] <- t
+    , sym.name == sizeWordStackName =
+        fmap (DomainValue intSort . BS.pack . show) $ countSpine 0 ws
+    | SymbolApplication sym sorts args <- t =
+        let evaluatedArgs :: [Maybe Term]
+            evaluatedArgs = map evalSizeWordStack args
+            changesMade = any isJust evaluatedArgs
+            newArgs = zipWith fromMaybe args evaluatedArgs
+         in if changesMade then Just (SymbolApplication sym sorts newArgs) else Nothing
+    | Injection source target sub <- t =
+          fmap (Injection source target) $ evalSizeWordStack sub
+    | AndTerm _t1 _t2 <- t = -- this is not going to appear in predicates anyway
+          Nothing
+    | otherwise = Nothing
+  where
+    sizeWordStackName = "Lbl'Hash'sizeWordStack'LParUndsRParUnds'EVM-TYPES'Unds'Int'Unds'WordStack"
+    intSort = SortApp "SortInt" []
+    consWordStackName = "Lbl'UndsColnUndsUnds'EVM-TYPES'Unds'WordStack'Unds'Int'Unds'WordStack"
+    nilWordStackName = "Lbl'Stop'WordStack'Unds'EVM-TYPES'Unds'WordStack"
+
+    countSpine :: Int -> Term -> Maybe Int
+    countSpine n = \case
+        SymbolApplication sym _ []
+            | sym.name == nilWordStackName -> Just n
+        SymbolApplication sym _ [_hd, tl]
+            | sym.name == consWordStackName -> countSpine (n + 1) tl
+        _other -> Nothing
