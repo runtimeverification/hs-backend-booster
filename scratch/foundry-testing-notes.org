@@ -1,0 +1,135 @@
+
+* Timings and results
+
+| Test                          | kore       | --use-booster | Startup Overhead |
+|-------------------------------+------------+---------------+------------------|
+| test_assert_bool_passing      | 1m45.1s    | 1m15.4s       | 26s              |
+| test_assert_bool_failing      | 1m41.1s F  | 1m11.4s F     | 25s              |
+| test_wmul_increasing_overflow | 11m31.3s F | 39m07.2s F    | 26s              |
+
+
+* Problems
+** different end states for wmul_increasing_overflow (both back-ends failing)
+- unsure how to observe those.
+** test_wmul_increasing throws ErrorDecidePredicateUnknown
+- reproduced
+- tested with commit 2b96e26eb275ee590d4e05d6df52fe955180f5f9 (one
+  before SMT variable naming change): errors out after 3-4 min
+- tested with commit d2b439a05 (before check-impl. changed): same
+- tested with commit a745c3e37 (before Immediately prune remainders of
+  axiom applications, before ghc-9): same
+
+* Performance Analysis
+** switching back to kore (from --verbose piped to log file)
+
+# grep "\[Rewrite\] Aborted after" output-wmul-overflow.log  -A1 | sed  -e '/Aborted after/d' -e '/--/d' > reasons
+# BS.readFile "reasons" >>= mapM_ (uncurry $ printf "%s\t%-3d\n") . map (B.first $ drop 27 . show) . sortBy (comparing snd) . HM.toList . Map.fromListWith (+) . map (,1) . BS.lines
+
+
+| Reason for uncertainty                                          | count | condition/operation                 |
+|-----------------------------------------------------------------+-------+-------------------------------------|
+| unification of rule evm.md)(1151,10):                           |     2 |                                     |
+| unification of rule evm.md)(1186,10):                           |     4 |                                     |
+| definedness of rule  evm.md)(511,10):                           |     6 |                                     |
+| definedness of rule  \"FOUNDRY-CHEAT-CODES.foundry.call.sign\": |     8 |                                     |
+| unification of rule evm.md)(1250,10):                           |     8 |                                     |
+| unification of rule evm.md)(2044,10):                           |     8 |                                     |
+| unification of rule evm.md)(2351,10):                           |     8 |                                     |
+| unification of rule foundry.md)(1131,10):                       |     8 |                                     |
+| a condition in rule optimizations.md)(252,6):                   |     9 | #sizeWS, .. <= GAVAIL               |
+| a condition in rule \"EVM.jumpi.false\":                        |    10 |                                     |
+| unification of rule evm.md)(1383,10):                           |    12 |                                     |
+| unification of rule evm.md)(1260,10):                           |    16 |                                     |
+| a condition in rule optimizations.md)(188,6):                   |    17 | #sizeWS, .. <= GAVAIL               |
+| a condition in rule optimizations.md)(156,6):                   |    18 | #sizeWS, .. <= GAVAIL               |
+| a condition in rule optimizations.md)(220,6):                   |    39 | #sizeWS, .. <= GAVAIL               |
+| a condition in rule optimizations.md)(91,6):                    |   157 | #sizeWS, #stackNeeded, .. <= GAVAIL |
+| a condition in rule optimizations.md)(124,6):                   |   175 | #sizeWS, .. <= GAVAIL               |
+| a condition in rule evm.md)(1925,10):                           |   216 | GAVAIL < G ??                       |
+| a condition in rule optimizations.md)(23,6):                    |   371 | #sizeWS, .. <= GAVAIL               |
+| a condition in rule optimizations.md)(58,6):                    |   402 | #sizeWS, #stackNeeded, .. <= GAVAIL |
+| a condition in rule evm.md)(356,10):                            |   793 | #stackunderflow                     |
+
+Earlier during the execution:
+
+| Reason for uncertainty                                                   | count |
+| unification of rule evm.md)(1151,10):   with term  Lbl<generatedTop>{}(" | 2     |
+|--------------------------------------------------------------------------+-------|
+| unification of rule evm.md)(2351,10):   with term  Lbl<generatedTop>{}(" | 4     |
+| unification of rule evm.md)(1186,10):   with term  Lbl<generatedTop>{}(" | 4     |
+| definedness of rule  evm.md)(511,10):   applied to  Term:"               | 4     |
+| a condition in rule optimizations.md)(188,6):  :  \\equalsTerm{}("       | 5     |
+| a condition in rule optimizations.md)(252,6):  :  \\equalsTerm{}("       | 9     |
+| a condition in rule \"EVM.jumpi.false\":  :  \\equalsTerm{}("            | 10    |
+| a condition in rule optimizations.md)(156,6):  :  \\equalsTerm{}("       | 16    |
+| a condition in rule optimizations.md)(220,6):  :  \\equalsTerm{}("       | 39    |
+| a condition in rule optimizations.md)(91,6):  :  \\equalsTerm{}("        | 123   |
+| a condition in rule optimizations.md)(124,6):  :  \\equalsTerm{}("       | 159   |
+| a condition in rule optimizations.md)(23,6):  :  \\equalsTerm{}("        | 300   |
+| a condition in rule optimizations.md)(58,6):  :  \\equalsTerm{}("        | 358   |
+| a condition in rule evm.md)(356,10):  :  \\equalsTerm{}("                | 487   |
+
+(missing evm.md(1925,10), and some other evm.md rules with small counts)
+
+*** Targeted optimisations:
+- optimizations.md: implement `#sizeWordStack` evaluation
+  - by counting `Lbl'UndsColnUndsUnds'EVM-TYPES'Unds'WordStack...`
+    without inspecting their head cell contents.
+  - if there is a variable in the tail (instead of a cons or
+    `.WordStack`), revert to the original term.
+  - this needs to happen before sending the comparison to the LLVM simplifier
+
+| Reason for uncertainty                                                               | count |
+|--------------------------------------------------------------------------------------+-------|
+| unification of rule evm.md)(1151,10):   with term  Lbl<generatedTop>{}("             |     2 |
+| unification of rule evm.md)(1186,10):   with term  Lbl<generatedTop>{}("             |     4 |
+| definedness of rule  evm.md)(511,10):   applied to  Term:"                           |     6 |
+| definedness of rule  \"FOUNDRY-CHEAT-CODES.foundry.call.sign\":   applied to  Term:" |     8 |
+| unification of rule evm.md)(1250,10):   with term  Lbl<generatedTop>{}("             |     8 |
+| unification of rule evm.md)(2044,10):   with term  Lbl<generatedTop>{}("             |     8 |
+| unification of rule evm.md)(2351,10):   with term  Lbl<generatedTop>{}("             |     8 |
+| unification of rule foundry.md)(1131,10):   with term  Lbl<generatedTop>{}("         |     8 |
+| a condition in rule \"EVM.jumpi.false\":  :  \\equalsTerm{}("                        |    10 |
+| unification of rule evm.md)(1383,10):   with term  Lbl<generatedTop>{}("             |    12 |
+| unification of rule evm.md)(1260,10):   with term  Lbl<generatedTop>{}("             |    16 |
+| a condition in rule optimizations.md)(91,6):  :  \\equalsTerm{}("                    |   157 |
+| a condition in rule evm.md)(1925,10):  :  \\equalsTerm{}("                           |   216 |
+| a condition in rule evm.md)(356,10):  :  \\equalsTerm{}("                            |   796 |
+
+
+- evm.md:356, rewrite #stackunderflow
+  - 2 versions, #stackunderflow(WS, Op) ~> #stackunderflow(WS, N) with N = #stackNeeded(Op)
+  - second version is basically #sizeWordStack(WS) < #stackNeeded(Op)
+    - modify semantics to directly compute it
+    - replace both stackoverflow and stackunderflow
+  - again, need to compute #sizeWordStack(WS) before passing this to LLVM
+- For both: need to search for #sizeWordStack inside the argument list
+  of a function application, _before_ passing the app.term to LLVM
+- The function call could be buried under other function calls,
+  conditions need to be traversed to find it.
+
+| Reason                                                         | count |
+|----------------------------------------------------------------+-------|
+| unification of rule evm.md)(1155,10)                           |     2 |
+| unification of rule evm.md)(1190,10)                           |     4 |
+| definedness of rule  evm.md)(515,10)                           |     6 |
+| definedness of rule  \"FOUNDRY-CHEAT-CODES.foundry.call.sign\" |     8 |
+| unification of rule evm.md)(1254,10)                           |     8 |
+| unification of rule evm.md)(2048,10)                           |     8 |
+| unification of rule evm.md)(2355,10)                           |     8 |
+| unification of rule foundry.md)(1131,10)                       |     8 |
+| a condition in rule \"EVM.jumpi.false\"                        |    10 |
+| unification of rule evm.md)(1387,10)                           |    12 |
+| unification of rule evm.md)(1264,10)                           |    16 |
+| a condition in rule optimizations.md)(91,6)                    |   157 |
+| a condition in rule evm.md)(1929,10)                           |   216 |
+| a condition in rule evm.md)(345,10)                            |   796 |
+
+- in addition, changed the booster to not abort immediately when _one_
+  condition is indeterminate. If anything is outright false, we can
+  continue! :facepalm:
+
+
+
+
+** Profiling
