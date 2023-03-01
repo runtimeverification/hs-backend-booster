@@ -158,7 +158,7 @@ applyRule pat rule = runMaybeT $ do
     let newConstraints =
             concatMap (splitBoolPredicates . substituteInPredicate subst) $
                 rule.lhs.constraints <> rule.rhs.constraints
-    unclearConditions <- catMaybes <$> mapM checkConstraint newConstraints
+    unclearConditions <- catMaybes <$> mapM (checkConstraint def) newConstraints
 
     unless (null unclearConditions) $
         failRewrite $ head unclearConditions
@@ -172,10 +172,10 @@ applyRule pat rule = runMaybeT $ do
   where
     failRewrite = lift . throw
 
-    checkConstraint :: Predicate -> MaybeT (RewriteM RewriteFailed) (Maybe RewriteFailed)
-    checkConstraint p = do
+    checkConstraint :: KoreDefinition -> Predicate -> MaybeT (RewriteM RewriteFailed) (Maybe RewriteFailed)
+    checkConstraint def p = do
         mApi <- lift getLLVM
-        case simplifyPredicate mApi p of
+        case simplifyPredicate mApi def p of
             Bottom -> fail "Rule condition was False"
             Top -> pure Nothing
             other -> pure $ Just $ RuleConditionUnclear rule other
@@ -350,7 +350,7 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
     showCounter = (<> " steps.") . pack . show
 
     simplify :: Pattern -> Pattern
-    simplify p = p{term = simplifyConcrete mLlvmLibrary def p.term}
+    simplify p = p{term = simplifyTerm mLlvmLibrary def p.term}
 
     doSteps :: Bool -> Natural -> Pattern -> io (Natural, RewriteResult Pattern)
     doSteps wasSimplified !counter pat'

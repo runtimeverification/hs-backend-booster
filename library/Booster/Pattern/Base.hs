@@ -47,8 +47,9 @@ data Sort
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData, Hashable)
 
-pattern SortBool :: Sort
+pattern SortBool,SortInt :: Sort
 pattern SortBool = SortApp "SortBool" []
+pattern SortInt = SortApp "SortInt" []
 
 -- | A variable for symbolic execution or for terms in a rule.
 data Variable = Variable
@@ -224,10 +225,108 @@ injectionSymbol =
                 }
         }
 
+
+boolSymbolAttributes :: SymbolAttributes
+boolSymbolAttributes = SymbolAttributes
+    { symbolType = TotalFunction
+    , isIdem = False
+    , isAssoc = False
+    }
+
 -- convenience patterns
-pattern AndBool :: [Term] -> Term
-pattern AndBool ts <-
-    SymbolApplication (Symbol "Lbl'Unds'andBool'Unds'" _ _ _ _) _ ts
+pattern AndBool :: Term -> Term -> Term
+pattern AndBool a b <-
+    SymbolApplication (Symbol "Lbl'Unds'andBool'Unds'" _ _ _ _) _ [a,b]
+    where
+        AndBool a b = SymbolApplication (Symbol "Lbl'Unds'andBool'Unds'" [] [SortBool,SortBool] SortBool boolSymbolAttributes) [] [a,b]
+
+
+pattern OrBool :: Term -> Term -> Term
+pattern OrBool a b <-
+    SymbolApplication (Symbol "Lbl'Unds'orBool'Unds'" _ _ _ _) _ [a,b]
+    where
+        OrBool a b = SymbolApplication (Symbol "Lbl'Unds'orBool'Unds'" [] [SortBool,SortBool] SortBool boolSymbolAttributes) [] [a,b]
+
+
+pattern NotBool :: Term -> Term
+pattern NotBool t <-
+    SymbolApplication (Symbol "LblnotBool'Unds'" _ _ _ _) _ [t]
+    where
+        NotBool t = SymbolApplication (Symbol "LblnotBool'Unds'" [] [SortBool] SortBool boolSymbolAttributes) [] [t]
+
+
+pattern TrueBool :: Term
+pattern TrueBool = DomainValue SortBool "true"
+
+pattern FalseBool :: Term
+pattern FalseBool = DomainValue SortBool "false"
+
+pattern LTEqInt :: Term -> Term -> Term
+pattern LTEqInt a b <-
+    SymbolApplication (Symbol "Lbl'Unds-LT-Eqls'Int'Unds'" _ _ _ _) _ [a,b]
+    where
+        LTEqInt a b = SymbolApplication (Symbol "Lbl'Unds-LT-Eqls'Int'Unds'" [] [SortInt,SortInt] SortBool boolSymbolAttributes) [] [a,b]
+
+
+pattern LTInt :: Term -> Term -> Term
+pattern LTInt a b <-
+    SymbolApplication (Symbol "Lbl'Unds-LT-'Int'Unds'" _ _ _ _) _ [a,b]
+    where
+        LTInt a b = SymbolApplication (Symbol "Lbl'Unds-LT-'Int'Unds'" [] [SortInt,SortInt] SortBool boolSymbolAttributes) [] [a,b]
+
+
+
+pattern GTEqInt :: Term -> Term -> Term
+pattern GTEqInt a b <-
+    SymbolApplication (Symbol "Lbl'Unds-GT-Eqls'Int'Unds'" _ _ _ _) _ [a,b]
+    where
+        GTEqInt a b = SymbolApplication (Symbol "Lbl'Unds-GT-Eqls'Int'Unds'" [] [SortInt,SortInt] SortBool boolSymbolAttributes) [] [a,b]
+
+
+pattern GTInt :: Term -> Term -> Term
+pattern GTInt a b <-
+    SymbolApplication (Symbol "Lbl'Unds-GT-'Int'Unds'" _ _ _ _) _ [a,b]
+    where
+        GTInt a b = SymbolApplication (Symbol "Lbl'Unds-GT-'Int'Unds'" [] [SortInt,SortInt] SortBool boolSymbolAttributes) [] [a,b]
+
+
+
+pattern InfGas :: Term -> Term
+pattern InfGas t <-
+    SymbolApplication (Symbol "LblinfGas" _ _ _ _) _ [t]
+    where
+        InfGas a = SymbolApplication (Symbol "LblinfGas" [] [SortInt] SortInt boolSymbolAttributes) [] [a]
+
+
+pattern PlusInt :: Term -> Term -> Term
+pattern PlusInt a b <-
+    SymbolApplication (Symbol "Lbl'UndsPlus'Int'Unds'" _ _ _ _) _ [a,b]
+    where
+        PlusInt a b = SymbolApplication (Symbol "Lbl'UndsPlus'Int'Unds'" [] [SortInt,SortInt] SortInt boolSymbolAttributes) [] [a,b]
+
+pattern MinusInt :: Term -> Term -> Term
+pattern MinusInt a b <-
+    SymbolApplication (Symbol "Lbl'Unds'-Int'Unds'" _ _ _ _) _ [a,b]
+    where
+        MinusInt a b = SymbolApplication (Symbol "Lbl'Unds'-Int'Unds'" [] [SortInt,SortInt] SortInt boolSymbolAttributes) [] [a,b]
+
+
+pattern TimesInt :: Term -> Term -> Term
+pattern TimesInt a b <-
+    SymbolApplication (Symbol "Lbl'UndsStar'Int'Unds'" _ _ _ _) _ [a,b]
+    where
+        TimesInt a b = SymbolApplication (Symbol "Lbl'UndsStar'Int'Unds'" [] [SortInt,SortInt] SortInt boolSymbolAttributes) [] [a,b]
+
+pattern DivInt :: Term -> Term -> Term
+pattern DivInt a b <-
+    SymbolApplication (Symbol "Lbl'UndsSlsh'Int'Unds'" _ _ _ _) _ [a,b]
+    where
+        DivInt a b = SymbolApplication (Symbol "Lbl'UndsSlsh'Int'Unds'" [] [SortInt,SortInt] SortInt boolSymbolAttributes) [] [a,b]
+
+
+
+
+    
 
 pattern DV :: Sort -> Symbol
 pattern DV sort <- Symbol "\\dv" _ _ sort _
