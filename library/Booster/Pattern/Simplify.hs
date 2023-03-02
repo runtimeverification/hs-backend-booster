@@ -152,20 +152,20 @@ simplifyTerm (Just mApi) def trm = recurse trm
                     (InfGas a', b') -> InfGas $ MinusInt a' b'
                     (a', b') | isConcrete a' && isConcrete b' -> recurse $ MinusInt a' b'
                              | otherwise -> MinusInt a' b'
-                
+
                 TimesInt a b -> case (recurse a, recurse b) of
                     (InfGas a', InfGas b') -> InfGas $ TimesInt a' b'
                     (InfGas a', b') -> InfGas $ TimesInt a' b'
                     (a', InfGas b') -> InfGas $ TimesInt a' b'
                     (a', b') | isConcrete a' && isConcrete b' -> recurse $ TimesInt a' b'
                              | otherwise -> TimesInt a' b'
-                
+
                 DivInt a b -> case (recurse a, recurse b) of
                     (InfGas a', b') -> InfGas $ DivInt a' b'
                     (_, InfGas _) -> DomainValue SortInt "0"
                     (a', b') | isConcrete a' && isConcrete b' -> recurse $ DivInt a' b'
                              | otherwise -> DivInt a' b'
-                
+
                 SymbolApplication sym sorts args ->
                     SymbolApplication sym sorts (map recurse args)
                 Injection sources target sub ->
@@ -201,6 +201,7 @@ evalSizeWordStack t@(Term attributes _)
     intSort = SortApp "SortInt" []
     consWordStackName = "Lbl'UndsColnUndsUnds'EVM-TYPES'Unds'WordStack'Unds'Int'Unds'WordStack"
     nilWordStackName = "Lbl'Stop'WordStack'Unds'EVM-TYPES'Unds'WordStack"
+    updateWordStackName = "Lbl'UndsLSqBUndsColnEqlsUndsRSqBUnds'EVM-TYPES'Unds'WordStack'Unds'WordStack'Unds'Int'Unds'Int"
 
     countSpine :: Int -> Term -> Maybe Int
     countSpine n = \case
@@ -208,4 +209,6 @@ evalSizeWordStack t@(Term attributes _)
             | sym.name == nilWordStackName -> Just n
         SymbolApplication sym _ [_hd, tl]
             | sym.name == consWordStackName -> countSpine (n + 1) tl
+        SymbolApplication sym _ [wordStack, _pos, _val]
+            | sym.name == updateWordStackName -> countSpine n wordStack
         _other -> Nothing
