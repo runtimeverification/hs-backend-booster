@@ -129,7 +129,64 @@ Earlier during the execution:
   condition is indeterminate. If anything is outright false, we can
   continue! :facepalm:
 
+  real	27m27.895s
+  user	27m3.417s
+  sys	0m30.041s
 
+*** More optimisations were added:
+  infinite gas, including evaluation rules for it, and short-cut
+  evaluation for boolean connectives. Result:
+
+  | Reason for uncertainty                                         | count |
+  |----------------------------------------------------------------+-------|
+  | unification of rule evm.md)(1155,10)                           |     2 |
+  | unification of rule evm.md)(1190,10)                           |     4 |
+  | definedness of rule  evm.md)(515,10)                           |     6 |
+  | a condition in rule evm.md)(1458,27)                           |     8 |
+  | definedness of rule  \"FOUNDRY-CHEAT-CODES.foundry.call.sign\" |     8 |
+  | unification of rule evm.md)(1254,10)                           |     8 |
+  | unification of rule evm.md)(2048,10)                           |     8 |
+  | unification of rule evm.md)(2355,10)                           |     8 |
+  | unification of rule foundry.md)(1131,10)                       |     8 |
+  | unification of rule evm.md)(1387,10)                           |    12 |
+  | unification of rule evm.md)(1264,10)                           |    16 |
+  | a condition in rule \"EVM.jumpi.false\"                        |    66 |
+  | a condition in rule optimizations.md)(91,6)                    |   157 |
+
+  real	15m20.755s
+  user	15m8.813s
+  sys	0m15.267s
+
+- Next steps:
+  1. optimise more to avoid remaining abort states
+  2. double-check newly-introduced code for inefficiencies
+  3. Profiling run to check newly-introduced code (again)
+
+*** optimizations.md:91 problem: _ [ _ := _ ] operator on word stack
+    - this replaces an element in the stack, but does not change the size
+    - can be skipped for the #sizeWordStack computation
+
+  | unification of rule evm.md)(1155,10)                           |  2 |
+  | unification of rule optimizations.md)(156,6)                   |  2 |
+  | a condition in rule evm.md)(1064,10)                           |  4 |
+  | unification of rule evm.md)(1190,10)                           |  4 |
+  | definedness of rule  evm.md)(515,10)                           |  6 |
+  | a condition in rule evm.md)(1458,27)                           |  8 |
+  | definedness of rule  \"FOUNDRY-CHEAT-CODES.foundry.call.sign\" |  8 |
+  | unification of rule evm.md)(1254,10)                           |  8 |
+  | unification of rule evm.md)(2048,10)                           |  8 |
+  | unification of rule evm.md)(2355,10)                           |  8 |
+  | unification of rule foundry.md)(1131,10)                       |  8 |
+  | unification of rule optimizations.md)(124,6)                   |  9 |
+  | unification of rule evm.md)(1387,10)                           | 12 |
+  | unification of rule evm.md)(1264,10)                           | 16 |
+  | unification of rule evm.md)(480,10)                            | 28 |
+  | unification of rule evm.md)(479,10)                            | 30 |
+  | a condition in rule \"EVM.jumpi.false\"                        | 66 |
+
+  real	14m42.843s
+  user	14m31.750s
+  sys	0m14.276s
 
 
 ** Profiling
