@@ -10,7 +10,7 @@ module Booster.JsonRpc (
 
 import Control.Concurrent (forkIO, throwTo)
 import Control.Concurrent.STM.TChan (newTChan, readTChan, writeTChan)
-import Control.Exception (ErrorCall (..), mask)
+import Control.Exception (ErrorCall (..), mask, SomeException)
 import Control.Monad (forever)
 import Control.Monad.Catch (MonadCatch, MonadMask, catch, handle)
 import Control.Monad.IO.Class
@@ -43,13 +43,14 @@ import Numeric.Natural
 
 import Booster.Definition.Base (KoreDefinition (..))
 import Booster.LLVM.Internal qualified as LLVM
-import Booster.Network.JsonRpc (jsonrpcTCPServer)
 import Booster.Pattern.Base (Pattern)
 import Booster.Pattern.Rewrite (RewriteResult (..), performRewrite)
 import Booster.Syntax.Json (KoreJson (..), addHeader)
 import Booster.Syntax.Json.Externalise (externalisePattern)
 import Booster.Syntax.Json.Internalise (PatternError, internalisePattern)
 import Kore.JsonRpc.Types
+import Kore.Network.JsonRpc
+import Control.Monad.Logger (logInfoN)
 
 respond ::
     forall m.
@@ -179,80 +180,15 @@ runServer :: Int -> KoreDefinition -> Maybe LLVM.API -> (LogLevel, [LogLevel]) -
 runServer port internalizedModule mLlvmLibrary (logLevel, customLevels) =
     do
         Log.runStderrLoggingT . Log.filterLogger levelFilter
-        $ jsonrpcTCPServer
+        $ jsonRpcServer
             rpcJsonConfig
             V2
             False
             srvSettings
-            (srv internalizedModule mLlvmLibrary)
+            (const $ respond internalizedModule mLlvmLibrary)
+            [JsonRpcHandler $ \(err :: SomeException) -> logInfoN (Text.pack $ show err) >> pure (ErrorObj "Server error: crashed" (-32032) $ toJSON $ show err)]
   where
     levelFilter _source lvl =
         lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
 
     srvSettings = serverSettings port "*"
-
-srv :: MonadLoggerIO m => KoreDefinition -> Maybe LLVM.API -> JSONRPCT m ()
-srv internalizedModule mLlvmLibrary = do
-    reqQueue <- liftIO $ atomically newTChan
-    let mainLoop tid =
-            receiveBatchRequest >>= \case
-                Nothing -> do
-                    return ()
-                Just (SingleRequest req) | Right (Cancel :: API 'Req) <- fromRequest req -> do
-                    Log.logInfoN "Cancel Request"
-                    liftIO $ throwTo tid CancelRequest
-                    mainLoop tid
-                Just req -> do
-                    Log.logInfoN $ Text.pack (show req)
-                    liftIO $ atomically $ writeTChan reqQueue req
-                    mainLoop tid
-    spawnWorker reqQueue >>= mainLoop
-  where
-    isRequest = \case
-        Request{} -> True
-        _ -> False
-
-    cancelError = ErrorObj "Request cancelled" (-32000) Null
-
-    bracketOnReqException before onCancel thing =
-        mask $ \restore -> do
-            a <- before
-            restore (thing a) `catch` \(_ :: ReqException) -> onCancel a
-
-    spawnWorker reqQueue = do
-        rpcSession <- ask
-        logger <- Log.askLoggerIO
-        let withLog :: Log.LoggingT IO a -> IO a
-            withLog = flip Log.runLoggingT logger
-
-            sendResponses :: BatchResponse -> Log.LoggingT IO ()
-            sendResponses r = flip Log.runLoggingT logger $ flip runReaderT rpcSession $ sendBatchResponse r
-            respondTo :: Request -> Log.LoggingT IO (Maybe Response)
-            respondTo = buildResponse (respond internalizedModule mLlvmLibrary)
-
-            cancelReq :: BatchRequest -> Log.LoggingT IO ()
-            cancelReq = \case
-                SingleRequest req@Request{} -> do
-                    let reqVersion = getReqVer req
-                        reqId = getReqId req
-                    sendResponses $ SingleResponse $ ResponseError reqVersion cancelError reqId
-                SingleRequest Notif{} -> pure ()
-                BatchRequest reqs -> do
-                    sendResponses $ BatchResponse $ [ResponseError (getReqVer req) cancelError (getReqId req) | req <- reqs, isRequest req]
-
-            processReq :: BatchRequest -> Log.LoggingT IO ()
-            processReq = \case
-                SingleRequest req -> do
-                    rM <- respondTo req
-                    mapM_ (sendResponses . SingleResponse) rM
-                BatchRequest reqs -> do
-                    rs <- catMaybes <$> mapM respondTo reqs
-                    sendResponses $ BatchResponse rs
-
-        liftIO $
-            forkIO $
-                forever $
-                    bracketOnReqException
-                        (atomically $ readTChan reqQueue)
-                        (withLog . cancelReq)
-                        (withLog . processReq)
