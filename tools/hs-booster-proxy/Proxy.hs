@@ -53,7 +53,6 @@ data BoosterServer = BoosterServer
 serverError :: String -> Value -> ErrorObj
 serverError detail = ErrorObj ("Server error: " <> detail) (-32032)
 
-
 respondEither ::
     forall m.
     Log.MonadLogger m =>
@@ -68,7 +67,7 @@ respondEither booster kore req = case req of
         | otherwise -> loop 0 execReq
     Implies _ -> loggedKore "Implies" req
     Simplify _ -> loggedKore "Simplify" req
-    AddModule _ ->loggedKore "AddModule" req -- FIXME should go to both
+    AddModule _ -> loggedKore "AddModule" req -- FIXME should go to both
     Cancel -> pure $ Left $ ErrorObj "Cancel not supported" (-32601) Null
   where
     loggedKore msg r = Log.logInfoNS "proxy" (msg <> " (using kore)") >> kore r

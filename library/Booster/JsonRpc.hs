@@ -28,9 +28,9 @@ import Booster.Pattern.Rewrite (RewriteResult (..), performRewrite)
 import Booster.Syntax.Json (KoreJson (..), addHeader)
 import Booster.Syntax.Json.Externalise (externalisePattern)
 import Booster.Syntax.Json.Internalise (PatternError, internalisePattern)
-import Kore.JsonRpc.Types
-import Kore.JsonRpc.Server
 import Control.Monad.Logger (logInfoN)
+import Kore.JsonRpc.Server
+import Kore.JsonRpc.Types
 
 respond ::
     forall m.

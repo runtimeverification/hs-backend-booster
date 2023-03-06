@@ -1,5 +1,5 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
 {- |
@@ -11,11 +11,11 @@ module Main (main) where
 import Control.Concurrent.MVar (newMVar)
 import Control.Concurrent.MVar qualified as MVar
 import Control.DeepSeq (force)
-import Control.Exception (evaluate, SomeException)
+import Control.Exception (SomeException, evaluate)
 import Control.Monad (forM_, void)
 import Control.Monad.Catch (bracket)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.Logger (LogLevel (..), MonadLoggerIO (askLoggerIO), LoggingT (runLoggingT), defaultLoc, ToLogStr (toLogStr), logInfoN)
+import Control.Monad.Logger (LogLevel (..), LoggingT (runLoggingT), MonadLoggerIO (askLoggerIO), ToLogStr (toLogStr), defaultLoc, logInfoN)
 import Control.Monad.Logger qualified as Logger
 import Data.Conduit.Network (serverSettings)
 import Data.IORef (writeIORef)
@@ -32,30 +32,30 @@ import System.Clock (
 import Text.Casing
 import Text.Read
 
+import Booster.JsonRpc qualified as Booster
 import Booster.LLVM.Internal (mkAPI, withDLib)
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
 import Booster.VersionInfo (VersionInfo (..), versionInfo)
+import Data.Aeson (toJSON)
+import Data.Text qualified as Text
 import GlobalMain qualified
 import Kore.Attribute.Symbol (StepperAttributes)
 import Kore.BugReport (BugReportOption (..), withBugReport)
 import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
 import Kore.Internal.TermLike (TermLike, VariableName)
-import Kore.JsonRpc.Server
 import Kore.JsonRpc (ServerState (..), serverError)
-import Kore.JsonRpc.Types (rpcJsonConfig, API, ReqOrRes (Req, Res))
-import Kore.Log (ExeName (..), defaultKoreLogOptions, swappableLogger, withLogger, TimestampsSwitch (TimestampsDisable), KoreLogType (LogSomeAction), LogAction (LogAction))
+import Kore.JsonRpc qualified as Kore
+import Kore.JsonRpc.Server
+import Kore.JsonRpc.Types (API, ReqOrRes (Req, Res), rpcJsonConfig)
+import Kore.Log (ExeName (..), KoreLogType (LogSomeAction), LogAction (LogAction), TimestampsSwitch (TimestampsDisable), defaultKoreLogOptions, swappableLogger, withLogger)
 import Kore.Log qualified as Log
 import Kore.Rewrite.SMT.Lemma (declareSMTLemmas)
 import Kore.Syntax.Definition (ModuleName (ModuleName), SentenceAxiom)
 import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
+import Proxy (KoreServer (..))
 import Proxy qualified
 import SMT qualified
-import qualified Data.Text as Text
-import qualified Booster.JsonRpc as Booster
-import qualified Kore.JsonRpc as Kore
-import Data.Aeson (toJSON)
-import Proxy (KoreServer(..))
 
 main :: IO ()
 main = do
@@ -66,30 +66,30 @@ main = do
         levelFilter :: Logger.LogSource -> LogLevel -> Bool
         levelFilter _source lvl =
             lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
-        
+
     Logger.runStderrLoggingT $ Logger.filterLogger levelFilter $ do
-    
         liftIO $ forM_ eventlogEnabledUserEvents $ \t -> do
             putStrLn $ "Tracing " <> show t
             enableCustomUserEvent t
-        Logger.logInfoNS "proxy" $ Text.pack $
-            "Loading definition from "
-                <> definitionFile
-                <> ", main module "
-                <> show mainModuleName
-        definition <- liftIO $
-            loadDefinition mainModuleName definitionFile
-                >>= evaluate . force . either (error . show) id
-
+        Logger.logInfoNS "proxy" $
+            Text.pack $
+                "Loading definition from "
+                    <> definitionFile
+                    <> ", main module "
+                    <> show mainModuleName
+        definition <-
+            liftIO $
+                loadDefinition mainModuleName definitionFile
+                    >>= evaluate . force . either (error . show) id
 
         monadLogger <- askLoggerIO
 
         let coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
             koreLogOptions =
-                (defaultKoreLogOptions (ExeName $ "") startTime){
-                    Log.logLevel = coLogLevel,
-                    Log.timestampsSwitch = TimestampsDisable,
-                    Log.logType = LogSomeAction $ LogAction $ \txt -> liftIO $ monadLogger defaultLoc "kore" logLevel $ toLogStr txt
+                (defaultKoreLogOptions (ExeName $ "") startTime)
+                    { Log.logLevel = coLogLevel
+                    , Log.timestampsSwitch = TimestampsDisable
+                    , Log.logType = LogSomeAction $ LogAction $ \txt -> liftIO $ monadLogger defaultLoc "kore" logLevel $ toLogStr txt
                     }
             srvSettings = serverSettings port "*"
 
@@ -116,7 +116,9 @@ main = do
                         koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
                         boosterRespond = Booster.respond booster.definition booster.mLlvmLibrary
                         server =
-                            jsonRpcServer rpcJsonConfig srvSettings
+                            jsonRpcServer
+                                rpcJsonConfig
+                                srvSettings
                                 (const $ Proxy.respondEither boosterRespond koreRespond)
                                 [JsonRpcHandler $ \(err :: SomeException) -> logInfoN (Text.pack $ show err) >> pure (serverError "crashed" $ toJSON $ show err)]
                     runLoggingT server monadLogger
