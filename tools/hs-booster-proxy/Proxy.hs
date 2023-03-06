@@ -29,6 +29,7 @@ import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
 import Kore.Internal.TermLike (TermLike, VariableName)
 import Kore.JsonRpc (ServerState)
 import Kore.JsonRpc.Types
+import Kore.JsonRpc.Types qualified as ExecuteRequest (ExecuteRequest (..))
 import Kore.Log qualified
 import Kore.Syntax.Definition (SentenceAxiom)
 import Kore.Syntax.Json.Types qualified as KoreJson
@@ -109,7 +110,7 @@ respondEither booster kore req = case req of
                                         Log.logInfoNS "proxy" "kore depth-bound, continuing"
                                         loop
                                             (currentDepth + boosterResult.depth + koreResult.depth)
-                                            (r{state = toRequestState koreResult.state} :: ExecuteRequest)
+                                            r{ExecuteRequest.state = toRequestState koreResult.state}
                                     | otherwise -> do
                                         -- otherwise we have hit a different
                                         -- HaltReason, at which point we should
