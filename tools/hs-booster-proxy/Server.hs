@@ -86,7 +86,7 @@ main = do
 
         let coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
             koreLogOptions =
-                (defaultKoreLogOptions (ExeName $ "") startTime)
+                (defaultKoreLogOptions (ExeName "") startTime)
                     { Log.logLevel = coLogLevel
                     , Log.timestampsSwitch = TimestampsDisable
                     , Log.logType = LogSomeAction $ LogAction $ \txt -> liftIO $ monadLogger defaultLoc "kore" logLevel $ toLogStr txt
