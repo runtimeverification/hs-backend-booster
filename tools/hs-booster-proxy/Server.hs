@@ -112,7 +112,6 @@ main = do
                         boosterRespond = Booster.respond booster.definition booster.mLlvmLibrary
                         server =
                             jsonRpcServer
-                                rpcJsonConfig
                                 srvSettings
                                 (const $ Proxy.respondEither boosterRespond koreRespond)
                                 [JsonRpcHandler $ \(err :: SomeException) -> logInfoN (Text.pack $ show err) >> pure (serverError "crashed" $ toJSON $ show err)]

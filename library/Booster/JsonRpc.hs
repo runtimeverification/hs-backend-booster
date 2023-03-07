@@ -161,7 +161,6 @@ runServer port internalizedModule mLlvmLibrary (logLevel, customLevels) =
     do
         Log.runStderrLoggingT . Log.filterLogger levelFilter
         $ jsonRpcServer
-            rpcJsonConfig
             srvSettings
             (const $ respond internalizedModule mLlvmLibrary)
             [JsonRpcHandler $ \(err :: SomeException) -> logInfoN (Text.pack $ show err) >> pure (ErrorObj "Server error: crashed" (-32032) $ toJSON $ show err)]
