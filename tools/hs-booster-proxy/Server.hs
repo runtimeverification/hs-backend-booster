@@ -42,7 +42,7 @@ import Kore.Internal.TermLike (TermLike, VariableName)
 import Kore.JsonRpc (ServerState (..), serverError)
 import Kore.JsonRpc qualified as Kore
 import Kore.JsonRpc.Server
-import Kore.JsonRpc.Types (API, ReqOrRes (Req, Res), rpcJsonConfig)
+import Kore.JsonRpc.Types (API, ReqOrRes (Req, Res))
 import Kore.Log (ExeName (..), KoreLogType (LogSomeAction), LogAction (LogAction), TimestampsSwitch (TimestampsDisable), defaultKoreLogOptions, swappableLogger, withLogger)
 import Kore.Log qualified as Log
 import Kore.Rewrite.SMT.Lemma (declareSMTLemmas)
