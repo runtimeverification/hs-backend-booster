@@ -15,7 +15,6 @@ import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
 import Control.Monad (forM_)
 
-
 main :: IO ()
 main = do
     options <- execParser clParser
@@ -43,7 +42,6 @@ main = do
         info
             (clOptionsParser <**> versionInfoParser <**> helper)
             parserInfoModifiers
-
 
 parserInfoModifiers :: InfoMod options
 parserInfoModifiers =

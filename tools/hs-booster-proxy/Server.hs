@@ -27,6 +27,7 @@ import System.Clock (
     getTime,
  )
 
+import Booster.CLOptions
 import Booster.JsonRpc qualified as Booster
 import Booster.LLVM.Internal (mkAPI, withDLib)
 import Booster.Syntax.ParsedKore (loadDefinition)
@@ -50,7 +51,6 @@ import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
 import Proxy (KoreServer (..))
 import Proxy qualified
 import SMT qualified
-import Booster.CLOptions
 
 main :: IO ()
 main = do

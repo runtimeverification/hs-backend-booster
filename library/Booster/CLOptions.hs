@@ -1,15 +1,16 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Booster.CLOptions (CLOptions(..), clOptionsParser, adjustLogLevels, versionInfoParser) where
-import Data.Text (Text, pack)
-import Control.Monad.Logger (LogLevel (..))
+module Booster.CLOptions (CLOptions (..), clOptionsParser, adjustLogLevels, versionInfoParser) where
+
 import Booster.Trace (CustomUserEventType)
-import Options.Applicative
-import Text.Casing (toKebab, fromHumps, toPascal, fromKebab)
-import Text.Read (readMaybe)
+import Booster.VersionInfo (VersionInfo (..), versionInfo)
+import Control.Monad.Logger (LogLevel (..))
 import Data.List (intercalate, partition)
-import Booster.VersionInfo (VersionInfo(..), versionInfo)
 import Data.Maybe (fromMaybe)
+import Data.Text (Text, pack)
+import Options.Applicative
+import Text.Casing (fromHumps, fromKebab, toKebab, toPascal)
+import Text.Read (readMaybe)
 
 data CLOptions = CLOptions
     { definitionFile :: FilePath
@@ -20,7 +21,6 @@ data CLOptions = CLOptions
     , eventlogEnabledUserEvents :: [CustomUserEventType]
     }
     deriving (Show)
-
 
 clOptionsParser :: Parser CLOptions
 clOptionsParser =
@@ -102,8 +102,6 @@ adjustLogLevels ls = (standardLevel, customLevels)
     (stds, customLevels) = partition (<= LevelError) ls
     standardLevel = if null stds then LevelInfo else minimum stds
 
-
-
 versionInfoParser :: Parser (a -> a)
 versionInfoParser =
     infoOption
@@ -112,7 +110,6 @@ versionInfoParser =
             <> long "version"
             <> help "Print version info."
         )
-
 
 versionInfoStr :: String
 versionInfoStr =
