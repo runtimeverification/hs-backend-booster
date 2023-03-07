@@ -16,4 +16,6 @@ if [ $REV != $OLD_REV ]; then
   # correct sha back into cabal.project
   SHA=$(nix build 2>&1 | grep -oP 'got:\s+\K.+') || true
   sed -i -r "/haskell-backend.git/{n;s/tag:.*$/tag: $REV/;n;s|--sha256:.*$|--sha256: $SHA|}" cabal.project
+  # Update the stack.yaml.lock file by running a stack command that accesses dependencies
+  stack ls dependencies --test > /dev/null
 fi
