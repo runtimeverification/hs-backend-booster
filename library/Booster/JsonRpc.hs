@@ -58,7 +58,7 @@ respond def@KoreDefinition{} mLlvmLibrary =
         Cancel -> pure $ Left cancelUnsupportedInBatchMode
         -- using "Method does not exist" error code
 
-        _ -> pure $ Left $ notImplemented
+        _ -> pure $ Left notImplemented
   where
     execResponse :: (Natural, RewriteResult Pattern) -> Either ErrorObj (API 'Res)
     execResponse (_, RewriteSingle{}) =
