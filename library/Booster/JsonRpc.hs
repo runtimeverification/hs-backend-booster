@@ -24,9 +24,9 @@ import Booster.Pattern.Rewrite (RewriteResult (..), performRewrite)
 import Booster.Syntax.Json (KoreJson (..), addHeader)
 import Booster.Syntax.Json.Externalise (externalisePattern)
 import Booster.Syntax.Json.Internalise (internalisePattern)
+import Kore.JsonRpc.Error
 import Kore.JsonRpc.Server
 import Kore.JsonRpc.Types
-import Kore.JsonRpc.Error
 
 respond ::
     forall m.
@@ -129,7 +129,6 @@ respond def@KoreDefinition{} mLlvmLibrary =
         ExecuteState{term = addHeader t, predicate = fmap addHeader p, substitution = Nothing}
       where
         (t, p) = externalisePattern pat
-
 
 runServer :: Int -> KoreDefinition -> Maybe LLVM.API -> (LogLevel, [LogLevel]) -> IO ()
 runServer port internalizedModule mLlvmLibrary (logLevel, customLevels) =

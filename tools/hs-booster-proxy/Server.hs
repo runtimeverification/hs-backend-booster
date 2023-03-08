@@ -40,6 +40,7 @@ import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
 import Kore.Internal.TermLike (TermLike, VariableName)
 import Kore.JsonRpc (ServerState (..))
 import Kore.JsonRpc qualified as Kore
+import Kore.JsonRpc.Error
 import Kore.JsonRpc.Server
 import Kore.JsonRpc.Types (API, ReqOrRes (Req, Res))
 import Kore.Log (ExeName (..), KoreLogType (LogSomeAction), LogAction (LogAction), TimestampsSwitch (TimestampsDisable), defaultKoreLogOptions, swappableLogger, withLogger)
@@ -50,7 +51,6 @@ import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
 import Proxy (KoreServer (..))
 import Proxy qualified
 import SMT qualified
-import Kore.JsonRpc.Error
 
 main :: IO ()
 main = do
