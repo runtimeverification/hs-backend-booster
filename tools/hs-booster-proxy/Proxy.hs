@@ -53,13 +53,17 @@ respondEither ::
     Respond (API 'Req) m (API 'Res)
 respondEither booster kore req = case req of
     Execute execReq
-        | isJust execReq._module -> kore req
         | isJust execReq.stepTimeout -> kore req
         | isJust execReq.movingAverageStepTimeout -> kore req
         | otherwise -> loop 0 execReq
     Implies _ -> loggedKore "Implies" req
     Simplify _ -> loggedKore "Simplify" req
-    AddModule _ -> loggedKore "AddModule" req -- FIXME should go to both
+    AddModule _ -> do
+        -- execute in booster first, assuming that kore won't throw an
+        -- error if booster did not. The response is empty anyway.
+        booster req >>= \case
+            Left err -> pure $ Left err
+            Right _ -> kore req
     Cancel -> pure $ Left $ ErrorObj "Cancel not supported" (-32601) Null
   where
     loggedKore msg r = Log.logInfoNS "proxy" (msg <> " (using kore)") >> kore r
