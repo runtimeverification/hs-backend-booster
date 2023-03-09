@@ -7,14 +7,10 @@ module Server (main) where
 import Control.DeepSeq (force)
 import Control.Exception (evaluate)
 import Control.Monad (forM_, when)
-import Control.Monad.Logger (LogLevel (..))
-import Data.List (intercalate, partition)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe, isNothing)
-import Data.Text (Text, pack, unpack)
+import Data.Maybe (isNothing)
+import Data.Text (unpack)
 import Options.Applicative
-import Text.Casing
-import Text.Read
 
 import Booster.CLOptions
 import Booster.JsonRpc (runServer)

@@ -39,7 +39,7 @@ import Kore.Attribute.Symbol (StepperAttributes)
 import Kore.BugReport (BugReportOption (..), withBugReport)
 import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
 import Kore.Internal.TermLike (TermLike, VariableName)
-import Kore.JsonRpc (ServerState (..), serverError)
+import Kore.JsonRpc (serverError)
 import Kore.JsonRpc qualified as Kore
 import Kore.JsonRpc.Server
 import Kore.JsonRpc.Types (API, ReqOrRes (Req, Res))
@@ -72,9 +72,9 @@ main = do
                     <> definitionFile
                     <> ", main module "
                     <> show mainModuleName
-        definition <-
+        definitions <-
             liftIO $
-                loadDefinition mainModuleName definitionFile
+                loadDefinition definitionFile
                     >>= evaluate . force . either (error . show) id
 
         monadLogger <- askLoggerIO
@@ -97,19 +97,19 @@ main = do
 
                 withMDLib llvmLibraryFile $ \mdl -> do
                     mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
+                    stateVar <- liftIO $ newMVar Booster.ServerState{definitions, defaultMain = mainModuleName}
 
                     let booster =
                             Proxy.BoosterServer
-                                { definition
+                                { serverState = stateVar
                                 , mLlvmLibrary
                                 }
 
                     runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
-                    -- Proxy.runServer port kore booster
-                    let koreRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
+                    let koreRespond, boosterRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
                         koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
-                        boosterRespond = Booster.respond booster.definition booster.mLlvmLibrary
+                        boosterRespond = Booster.respond booster.serverState booster.mLlvmLibrary
                         server =
                             jsonRpcServer
                                 srvSettings
@@ -162,7 +162,7 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
         serverState <-
             liftIO $
                 MVar.newMVar
-                    ServerState
+                    Kore.ServerState
                         { serializedModules = Map.singleton (ModuleName mainModuleName) sd
                         , loadedDefinition
                         }

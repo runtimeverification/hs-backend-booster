@@ -21,13 +21,13 @@ import Data.Text qualified as Text
 import Network.JSONRPC
 import SMT qualified
 
-import Booster.Definition.Base (KoreDefinition)
+import Booster.JsonRpc qualified as Booster (ServerState)
 import Booster.LLVM.Internal qualified as LLVM
 
 import Kore.Attribute.Symbol (StepperAttributes)
 import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
 import Kore.Internal.TermLike (TermLike, VariableName)
-import Kore.JsonRpc (ServerState)
+import Kore.JsonRpc qualified as Kore (ServerState)
 import Kore.JsonRpc.Types
 import Kore.JsonRpc.Types qualified as ExecuteRequest (ExecuteRequest (..))
 import Kore.Log qualified
@@ -35,7 +35,7 @@ import Kore.Syntax.Definition (SentenceAxiom)
 import Kore.Syntax.Json.Types qualified as KoreJson
 
 data KoreServer = KoreServer
-    { serverState :: MVar.MVar ServerState
+    { serverState :: MVar.MVar Kore.ServerState
     , mainModule :: Text
     , runSMT ::
         forall a.
@@ -47,7 +47,7 @@ data KoreServer = KoreServer
     }
 
 data BoosterServer = BoosterServer
-    { definition :: KoreDefinition
+    { serverState :: MVar.MVar Booster.ServerState
     , mLlvmLibrary :: Maybe LLVM.API
     }
 

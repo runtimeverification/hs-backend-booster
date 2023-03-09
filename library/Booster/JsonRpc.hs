@@ -8,8 +8,10 @@ module Booster.JsonRpc (
     rpcJsonConfig,
 ) where
 
+import Control.Concurrent (MVar, newMVar, putMVar, readMVar, takeMVar)
 import Control.Exception (ErrorCall (..), SomeException)
 import Control.Monad.Catch (MonadCatch, MonadMask, handle)
+import Control.Monad.IO.Class
 import Control.Monad.Logger.CallStack (LogLevel (LevelError), MonadLoggerIO)
 import Control.Monad.Logger.CallStack qualified as Log
 import Control.Monad.Trans.Except (runExcept)
@@ -19,7 +21,7 @@ import Data.Conduit.Network (serverSettings)
 import Data.Foldable
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (catMaybes, fromMaybe, isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Numeric.Natural
@@ -210,11 +212,11 @@ runServer ::
 runServer port definitions defaultMain mLlvmLibrary (logLevel, customLevels) =
     do
         stateVar <- newMVar ServerState{definitions, defaultMain}
-        Log.runStderrLoggingT . Log.filterLogger levelFilter
-        $ jsonRpcServer
-            srvSettings
-            (const $ respond stateVar mLlvmLibrary)
-            [JsonRpcHandler $ \(err :: SomeException) -> Log.logInfoN (Text.pack $ show err) >> pure (ErrorObj "Server error: crashed" (-32032) $ toJSON $ show err)]
+        Log.runStderrLoggingT . Log.filterLogger levelFilter $
+            jsonRpcServer
+                srvSettings
+                (const $ respond stateVar mLlvmLibrary)
+                [JsonRpcHandler $ \(err :: SomeException) -> Log.logInfoN (Text.pack $ show err) >> pure (ErrorObj "Server error: crashed" (-32032) $ toJSON $ show err)]
   where
     levelFilter _source lvl =
         lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
