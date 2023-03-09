@@ -7,7 +7,6 @@ License     : BSD-3-Clause
 -}
 module Proxy (
     KoreServer (..),
-    BoosterServer (..),
     serverError,
     respondEither,
 ) where
@@ -20,9 +19,6 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Network.JSONRPC
 import SMT qualified
-
-import Booster.JsonRpc qualified as Booster (ServerState)
-import Booster.LLVM.Internal qualified as LLVM
 
 import Kore.Attribute.Symbol (StepperAttributes)
 import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
@@ -44,11 +40,6 @@ data KoreServer = KoreServer
         SMT.SMT a ->
         IO a
     , loggerEnv :: Kore.Log.LoggerEnv IO
-    }
-
-data BoosterServer = BoosterServer
-    { serverState :: MVar.MVar Booster.ServerState
-    , mLlvmLibrary :: Maybe LLVM.API
     }
 
 serverError :: String -> Value -> ErrorObj
