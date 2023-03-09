@@ -45,14 +45,13 @@ respond ::
     MonadMask m =>
     MonadLoggerIO m =>
     MVar ServerState ->
-    Maybe LLVM.API ->
     Respond (API 'Req) m (API 'Res)
-respond stateVar mLlvmLibrary =
+respond stateVar =
     catchingServerErrors . \case
         Execute req
             | isJust req.stepTimeout -> unsupportedField "step-timeout"
             | isJust req.movingAverageStepTimeout -> unsupportedField "moving-average-step-timeout"
-        Execute req -> withMainModule req._module $ \def -> do
+        Execute req -> withContext req._module $ \(def, mLlvmLibrary) -> do
             -- internalise given constrained term
             let internalised = runExcept $ internalisePattern Nothing def req.state.term
 
@@ -96,16 +95,16 @@ respond stateVar mLlvmLibrary =
         -- using "Method does not exist" error code
         _ -> pure $ Left $ ErrorObj "Not implemented" (-32601) Null
   where
-    withMainModule ::
+    withContext ::
         Maybe Text ->
-        (KoreDefinition -> m (Either ErrorObj (API 'Res))) ->
+        ((KoreDefinition, Maybe LLVM.API) -> m (Either ErrorObj (API 'Res))) ->
         m (Either ErrorObj (API 'Res))
-    withMainModule mbMainModule action = do
+    withContext mbMainModule action = do
         state <- liftIO $ readMVar stateVar
         let mainName = fromMaybe state.defaultMain mbMainModule
         case Map.lookup mainName state.definitions of
             Nothing -> pure $ Left $ reportDefinitionError $ NoSuchModule mainName
-            Just d -> action d
+            Just d -> action (d, state.mLlvmLibrary)
 
     execResponse :: (Natural, RewriteResult Pattern) -> Either ErrorObj (API 'Res)
     execResponse (_, RewriteSingle{}) =
@@ -211,11 +210,11 @@ runServer ::
     IO ()
 runServer port definitions defaultMain mLlvmLibrary (logLevel, customLevels) =
     do
-        stateVar <- newMVar ServerState{definitions, defaultMain}
+        stateVar <- newMVar ServerState{definitions, defaultMain, mLlvmLibrary}
         Log.runStderrLoggingT . Log.filterLogger levelFilter $
             jsonRpcServer
                 srvSettings
-                (const $ respond stateVar mLlvmLibrary)
+                (const $ respond stateVar)
                 [JsonRpcHandler $ \(err :: SomeException) -> Log.logInfoN (Text.pack $ show err) >> pure (ErrorObj "Server error: crashed" (-32032) $ toJSON $ show err)]
   where
     levelFilter _source lvl =
@@ -228,4 +227,6 @@ data ServerState = ServerState
     -- ^ definitions for each loaded module as main module
     , defaultMain :: Text
     -- ^ default main module (initially from command line, could be changed later)
+    , mLlvmLibrary :: Maybe LLVM.API
+    -- ^ optional LLVM simplification library
     }

@@ -97,19 +97,15 @@ main = do
 
                 withMDLib llvmLibraryFile $ \mdl -> do
                     mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
-                    stateVar <- liftIO $ newMVar Booster.ServerState{definitions, defaultMain = mainModuleName}
-
-                    let booster =
-                            Proxy.BoosterServer
-                                { serverState = stateVar
-                                , mLlvmLibrary
-                                }
+                    boosterState <-
+                        liftIO $
+                            newMVar Booster.ServerState{definitions, defaultMain = mainModuleName, mLlvmLibrary}
 
                     runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
                     let koreRespond, boosterRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
                         koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
-                        boosterRespond = Booster.respond booster.serverState booster.mLlvmLibrary
+                        boosterRespond = Booster.respond boosterState
                         server =
                             jsonRpcServer
                                 srvSettings
