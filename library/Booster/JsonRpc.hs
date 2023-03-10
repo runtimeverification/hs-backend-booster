@@ -37,9 +37,9 @@ respond ::
 respond def@KoreDefinition{} mLlvmLibrary =
     \case
         Execute req
-            | isJust req._module -> pure $ Left $ unsupportedField "module"
-            | isJust req.stepTimeout -> pure $ Left $ unsupportedField "step-timeout"
-            | isJust req.movingAverageStepTimeout -> pure $ Left $ unsupportedField "moving-average-step-timeout"
+            | isJust req._module -> pure $ Left $ unsupportedOption ("module" :: String)
+            | isJust req.stepTimeout -> pure $ Left $ unsupportedOption ("step-timeout" :: String)
+            | isJust req.movingAverageStepTimeout -> pure $ Left $ unsupportedOption ("moving-average-step-timeout" :: String)
         Execute req -> do
             -- internalise given constrained term
             let internalised = runExcept $ internalisePattern Nothing def req.state.term
