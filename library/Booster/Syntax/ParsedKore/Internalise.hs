@@ -142,11 +142,12 @@ mergeDefs k1 k2
             <*> mergeDisjoint sorts k1 k2
             <*> mergeDisjoint symbols k1 k2
             <*> mergeDisjoint aliases k1 k2
-            <*> pure (mergeTheories k1 k2)
+            <*> pure (mergeTheories (rewriteTheory k1) (rewriteTheory k2))
+            <*> pure (mergeTheories (equationalTheory k1) (equationalTheory k2))
+            <*> pure (mergeTheories (equationalSimplificationTheory k1) (equationalSimplificationTheory k2))
   where
-    mergeTheories :: KoreDefinition -> KoreDefinition -> RewriteTheory
-    mergeTheories m1 m2 =
-        Map.unionWith (Map.unionWith (<>)) (rewriteTheory m1) (rewriteTheory m2)
+    mergeTheories :: RewriteTheory -> RewriteTheory -> RewriteTheory
+    mergeTheories m1 m2 = Map.unionWith (Map.unionWith (<>)) m1 m2
 
     mergeDisjoint ::
         (KoreDefinition -> Map ByteString a) ->
@@ -185,6 +186,8 @@ addModule
         , symbols = currentSymbols
         , aliases = currentAliases
         , rewriteTheory = currentRewriteTheory
+        , equationalTheory = currentEquationalTheory
+        , equationalSimplificationTheory = currentEquationalSimplificationTheory
         } =
         do
             --
@@ -237,7 +240,7 @@ addModule
                     internalArgSorts <- traverse (withExcept DefinitionSortError . checkSort (Set.fromList paramNames) sorts) argSorts
                     internalResSort <- withExcept DefinitionSortError $ checkSort (Set.fromList paramNames) sorts sort
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
-                    let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases = currentAliases, rewriteTheory = currentRewriteTheory}
+                    let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases = currentAliases, rewriteTheory = currentRewriteTheory, equationalTheory = currentEquationalTheory, equationalSimplificationTheory = currentEquationalSimplificationTheory}
                     internalRhs <-
                         withExcept (DefinitionAliasError (Json.getId name) . InconsistentAliasPattern) $
                             internaliseTermOrPredicate (Just sortVars) partialDefinition rhs
@@ -251,13 +254,15 @@ addModule
             newAliases <- traverse internaliseAlias $ filter notPriority parsedAliases
             let aliases = Map.fromList newAliases <> currentAliases
 
-            let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory}
+            let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory, equationalTheory = currentEquationalTheory, equationalSimplificationTheory = currentEquationalSimplificationTheory}
 
             (newRewriteRules, subsortPairs) <-
                 partitionAxioms
                     <$> mapMaybeM (internaliseAxiom partialDefinition) parsedAxioms
 
             let rewriteTheory = addToTheory newRewriteRules currentRewriteTheory
+            let equationalTheory = equationalTheory
+            let equationalSimplificationTheory = equationalSimplificationTheory
 
             -- add subsorts to the subsort map
             let newSubsorts =
@@ -274,6 +279,8 @@ addModule
                     , symbols
                     , aliases
                     , rewriteTheory
+                    , equationalTheory
+                    , equationalSimplificationTheory
                     }
                 )
       where

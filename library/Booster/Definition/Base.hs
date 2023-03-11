@@ -41,6 +41,8 @@ data KoreDefinition = KoreDefinition
     , symbols :: Map SymbolName Symbol -- constructors and functions
     , aliases :: Map AliasName Alias
     , rewriteTheory :: RewriteTheory
+    , equationalTheory :: RewriteTheory
+    , equationalSimplificationTheory :: RewriteTheory
     }
     deriving stock (Eq, Show, GHC.Generic)
     deriving anyclass (NFData)
@@ -60,6 +62,8 @@ emptyKoreDefinition attributes =
         , symbols = Map.empty
         , aliases = Map.empty
         , rewriteTheory = Map.empty
+        , equationalTheory = Map.empty
+        , equationalSimplificationTheory = Map.empty
         }
 
 data RewriteRule = RewriteRule
