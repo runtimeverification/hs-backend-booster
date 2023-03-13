@@ -529,6 +529,7 @@ data DefinitionError
     | DefinitionAliasError Text AliasError
     | DefinitionRewriteRuleError RewriteRuleError
     | DefinitionTermOrPredicateError TermOrPredicateError
+    | AddModuleError Text
     deriving stock (Eq, Show)
 
 instance Pretty DefinitionError where
@@ -559,6 +560,8 @@ instance Pretty DefinitionError where
             pretty $ "Malformed rewrite rule " <> show (extract rule).location
         DefinitionTermOrPredicateError (PatternExpected p) ->
             pretty $ "Expected a pattern but found a predicate: " <> show p
+        AddModuleError msg ->
+            pretty $ "Add-module error: " <> msg
 
 {- | ToJSON instance (user-facing for add-module endpoint):
 Renders the error string as 'error', with minimal context.

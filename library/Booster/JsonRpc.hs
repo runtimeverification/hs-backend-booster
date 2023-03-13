@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {- |
 Module      : Booster.JsonRpc
 Copyright   : (c) Runtime Verification, 2022
@@ -9,10 +10,11 @@ module Booster.JsonRpc (
 ) where
 
 import Control.Concurrent (MVar, newMVar, putMVar, readMVar, takeMVar)
+import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Logger.CallStack (LogLevel (LevelError), MonadLoggerIO)
 import Control.Monad.Logger.CallStack qualified as Log
-import Control.Monad.Trans.Except (runExcept)
+import Control.Monad.Trans.Except (runExcept, throwE)
 import Data.Conduit.Network (serverSettings)
 import Data.Foldable
 import Data.Map.Strict (Map)
@@ -20,6 +22,7 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import GHC.Records
 import Numeric.Natural
 
 import Booster.Definition.Base (KoreDefinition (..))
@@ -31,8 +34,8 @@ import Booster.Syntax.Json.Base (Id (..))
 import Booster.Syntax.Json.Externalise (externalisePattern)
 import Booster.Syntax.Json.Internalise (internalisePattern)
 import Booster.Syntax.ParsedKore (parseKoreDefinition)
-import Booster.Syntax.ParsedKore.Base (ParsedDefinition (..), ParsedModule (..))
-import Booster.Syntax.ParsedKore.Internalise (addToDefinitions)
+import Booster.Syntax.ParsedKore.Base
+import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinitions)
 import Kore.JsonRpc.Error
 import Kore.JsonRpc.Server
 import Kore.JsonRpc.Types
@@ -85,7 +88,19 @@ respond stateVar =
                             backendError CouldNotFindModule $
                                 "Module name mismatch: expected " <> req.name
                     | otherwise ->
-                        case runExcept (addToDefinitions newModule state.definitions) of
+                        -- constraints on add-module imposed by LLVM simplification library:
+                        let listNames :: (GHC.Records.HasField "name" a b,
+                                          GHC.Records.HasField "getId" b Text) =>
+                                         [a] -> Text
+                            listNames = Text.intercalate ", " . map (.name.getId)
+                            checkModule = do
+                                unless (null newModule.sorts) $
+                                    throwE . AddModuleError $
+                                        "Module introduces new sorts: " <> listNames newModule.sorts
+                                unless (null $ newModule.symbols) $
+                                    throwE . AddModuleError $
+                                        "Module introduces new symbols: " <> listNames newModule.symbols
+                         in case runExcept (checkModule >> addToDefinitions newModule state.definitions) of
                             Left err ->
                                 abortWith $ backendError CouldNotFindModule err -- FIXME introduce new error
                             Right newDefinitions -> do
