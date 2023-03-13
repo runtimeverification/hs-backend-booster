@@ -75,8 +75,8 @@ addToDefinitions ::
     Map Text KoreDefinition ->
     Except DefinitionError (Map Text KoreDefinition)
 addToDefinitions m prior
-    | Map.null prior =
-        throwE $ DefinitionAttributeError []
+    | Map.member m.name.getId prior =
+        throwE $ DuplicateModule m.name.getId
     | otherwise = do
         definitionMap <$> execStateT (descendFrom m.name.getId) currentState
   where
@@ -84,10 +84,8 @@ addToDefinitions m prior
         State
             { moduleMap = Map.singleton m.name.getId m
             , definitionMap = prior
-            , definitionAttributes = priorAttributes
+            , definitionAttributes = DefinitionAttributes
             }
-    -- Invariant: all KoreDefinitions in the map must have the same attributes.
-    priorAttributes = head $ Map.elems $ Map.map (.attributes) prior
 
 lookupModule :: Text -> Map Text a -> Except DefinitionError a
 lookupModule k =
