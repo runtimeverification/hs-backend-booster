@@ -70,12 +70,7 @@ respond stateVar =
             let abortWith err = do
                     liftIO (putMVar stateVar state)
                     pure $ Left err
-                listNames ::
-                    ( GHC.Records.HasField "name" a b
-                    , GHC.Records.HasField "getId" b Text
-                    ) =>
-                    [a] ->
-                    Text
+                listNames :: (HasField "name" a b, HasField "getId" b Text) => [a] -> Text
                 listNames = Text.intercalate ", " . map (.name.getId)
 
             case parseKoreDefinition (Text.unpack req.name) req._module of
