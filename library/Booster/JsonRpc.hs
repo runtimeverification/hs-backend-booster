@@ -9,14 +9,10 @@ module Booster.JsonRpc (
 ) where
 
 import Control.Concurrent (MVar, newMVar, putMVar, readMVar, takeMVar)
-import Control.Exception (ErrorCall (..), SomeException)
-import Control.Monad.Catch (MonadCatch, MonadMask, handle)
 import Control.Monad.IO.Class
 import Control.Monad.Logger.CallStack (LogLevel (LevelError), MonadLoggerIO)
 import Control.Monad.Logger.CallStack qualified as Log
 import Control.Monad.Trans.Except (runExcept)
-import Data.Aeson (object, toJSON, (.=))
-import Data.Aeson.Types (Value (..))
 import Data.Conduit.Network (serverSettings)
 import Data.Foldable
 import Data.Map.Strict (Map)
@@ -33,24 +29,24 @@ import Booster.Pattern.Rewrite (RewriteResult (..), performRewrite)
 import Booster.Syntax.Json (KoreJson (..), addHeader)
 import Booster.Syntax.Json.Base (Id (..))
 import Booster.Syntax.Json.Externalise (externalisePattern)
-import Booster.Syntax.Json.Internalise (PatternError, internalisePattern)
+import Booster.Syntax.Json.Internalise (internalisePattern)
 import Booster.Syntax.ParsedKore (parseKoreDefinition)
 import Booster.Syntax.ParsedKore.Base (ParsedDefinition (..), ParsedModule (..))
-import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinitions)
+import Booster.Syntax.ParsedKore.Internalise (addToDefinitions)
+import Kore.JsonRpc.Error
 import Kore.JsonRpc.Server
 import Kore.JsonRpc.Types
 
 respond ::
     forall m.
-    MonadMask m =>
     MonadLoggerIO m =>
     MVar ServerState ->
     Respond (API 'Req) m (API 'Res)
 respond stateVar =
-    catchingServerErrors . \case
+    \case
         Execute req
-            | isJust req.stepTimeout -> unsupportedField "step-timeout"
-            | isJust req.movingAverageStepTimeout -> unsupportedField "moving-average-step-timeout"
+            | isJust req.stepTimeout -> pure $ Left $ unsupportedOption ("step-timeout" :: String)
+            | isJust req.movingAverageStepTimeout -> pure $ Left $ unsupportedOption ("moving-average-step-timeout" :: String)
         Execute req -> withContext req._module $ \(def, mLlvmLibrary) -> do
             -- internalise given constrained term
             let internalised = runExcept $ internalisePattern Nothing def req.state.term
@@ -58,7 +54,7 @@ respond stateVar =
             case internalised of
                 Left patternError -> do
                     Log.logDebug $ "Error internalising cterm" <> Text.pack (show patternError)
-                    pure $ Left $ reportPatternError patternError
+                    pure $ Left $ backendError CouldNotVerifyPattern patternError
                 Right pat -> do
                     let cutPoints = fromMaybe [] req.cutPointRules
                         terminals = fromMaybe [] req.terminalRules
@@ -69,31 +65,38 @@ respond stateVar =
             state <- liftIO $ takeMVar stateVar
             let abortWith err = do
                     liftIO (putMVar stateVar state)
-                    pure $ Left $ reportDefinitionError err
+                    pure $ Left err
 
             case parseKoreDefinition (Text.unpack req.name) req._module of
                 Left errMsg ->
-                    abortWith $ ParseError (Text.pack errMsg)
-                -- we expect exactly one module in the source
+                    abortWith $ backendError CouldNotParsePattern errMsg
+                -- expect exactly one module in the source
                 Right ParsedDefinition{modules = []} ->
-                    abortWith $ ParseError "Found no modules in input"
-                Right ParsedDefinition{modules = _ : _ : _} ->
-                    abortWith $ ParseError "Found more than one module in input"
+                    abortWith $
+                        backendError CouldNotFindModule $
+                            Text.pack "Found no modules in input"
+                Right def@ParsedDefinition{modules = _ : _ : _} ->
+                    abortWith $
+                        backendError CouldNotFindModule $
+                            "Found more than one module in input: " <> show def.modules
                 Right ParsedDefinition{modules = [newModule]}
                     | newModule.name.getId /= req.name ->
-                        abortWith $ ParseError ("Module name mismatch: expected " <> req.name)
+                        abortWith $
+                            backendError CouldNotFindModule $
+                                "Module name mismatch: expected " <> req.name
                     | otherwise ->
                         case runExcept (addToDefinitions newModule state.definitions) of
-                            Left err -> abortWith err
+                            Left err ->
+                                abortWith $ backendError CouldNotFindModule err -- FIXME introduce new error
                             Right newDefinitions -> do
                                 liftIO $ putMVar stateVar state{definitions = newDefinitions}
                                 Log.logInfo $ "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
                                 pure $ Right $ AddModule ()
 
         -- this case is only reachable if the cancel appeared as part of a batch request
-        Cancel -> pure $ Left $ ErrorObj "Cancel request unsupported in batch mode" (-32001) Null
+        Cancel -> pure $ Left cancelUnsupportedInBatchMode
         -- using "Method does not exist" error code
-        _ -> pure $ Left $ ErrorObj "Not implemented" (-32601) Null
+        _ -> pure $ Left notImplemented
   where
     withContext ::
         Maybe Text ->
@@ -103,7 +106,7 @@ respond stateVar =
         state <- liftIO $ readMVar stateVar
         let mainName = fromMaybe state.defaultMain mbMainModule
         case Map.lookup mainName state.definitions of
-            Nothing -> pure $ Left $ reportDefinitionError $ NoSuchModule mainName
+            Nothing -> pure $ Left $ backendError CouldNotFindModule mainName
             Just d -> action (d, state.mLlvmLibrary)
 
     execResponse :: (Natural, RewriteResult Pattern) -> Either ErrorObj (API 'Res)
@@ -163,7 +166,7 @@ respond stateVar =
         Right $
             Execute
                 ExecuteResult
-                    { reason = Aborted
+                    { reason = Kore.JsonRpc.Types.Aborted
                     , depth = Depth d
                     , state = toExecState p
                     , nextStates = Nothing
@@ -175,31 +178,6 @@ respond stateVar =
         ExecuteState{term = addHeader t, predicate = fmap addHeader p, substitution = Nothing}
       where
         (t, p) = externalisePattern pat
-
-    reportPatternError :: PatternError -> ErrorObj
-    reportPatternError pErr =
-        ErrorObj "Could not verify KORE pattern" (-32002) $ toJSON pErr
-
-    reportDefinitionError :: DefinitionError -> ErrorObj
-    reportDefinitionError defErr =
-        ErrorObj "Definition error" (-32101) $ toJSON defErr
-
-    unsupportedField name = pure $ Left $ ErrorObj ("Unsupported option: " <> name) (-32100) Null
-
-{- | Catches all calls to `error` from the guts of the engine, and
-     returns json with the message and location as context.
--}
-catchingServerErrors ::
-    MonadCatch m =>
-    MonadLoggerIO m =>
-    m (Either ErrorObj res) ->
-    m (Either ErrorObj res)
-catchingServerErrors =
-    let mkError (ErrorCallWithLocation msg loc) =
-            object ["error" .= msg, "context" .= loc]
-     in handle $ \err -> do
-            Log.logError $ "Server error: " <> Text.pack (show err)
-            pure $ Left (ErrorObj "Server error" (-32032) $ mkError err)
 
 runServer ::
     Int ->
@@ -215,7 +193,7 @@ runServer port definitions defaultMain mLlvmLibrary (logLevel, customLevels) =
             jsonRpcServer
                 srvSettings
                 (const $ respond stateVar)
-                [JsonRpcHandler $ \(err :: SomeException) -> Log.logInfoN (Text.pack $ show err) >> pure (ErrorObj "Server error: crashed" (-32032) $ toJSON $ show err)]
+                [handleErrorCall, handleSomeException]
   where
     levelFilter _source lvl =
         lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
