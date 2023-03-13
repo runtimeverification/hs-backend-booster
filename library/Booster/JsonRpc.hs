@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+
 {- |
 Module      : Booster.JsonRpc
 Copyright   : (c) Runtime Verification, 2022
@@ -69,6 +70,13 @@ respond stateVar =
             let abortWith err = do
                     liftIO (putMVar stateVar state)
                     pure $ Left err
+                listNames ::
+                    ( GHC.Records.HasField "name" a b
+                    , GHC.Records.HasField "getId" b Text
+                    ) =>
+                    [a] ->
+                    Text
+                listNames = Text.intercalate ", " . map (.name.getId)
 
             case parseKoreDefinition (Text.unpack req.name) req._module of
                 Left errMsg ->
@@ -81,7 +89,7 @@ respond stateVar =
                 Right def@ParsedDefinition{modules = _ : _ : _} ->
                     abortWith $
                         backendError CouldNotFindModule $
-                            "Found more than one module in input: " <> show def.modules
+                            "Found more than one module in input: " <> listNames def.modules
                 Right ParsedDefinition{modules = [newModule]}
                     | newModule.name.getId /= req.name ->
                         abortWith $
@@ -89,11 +97,7 @@ respond stateVar =
                                 "Module name mismatch: expected " <> req.name
                     | otherwise ->
                         -- constraints on add-module imposed by LLVM simplification library:
-                        let listNames :: (GHC.Records.HasField "name" a b,
-                                          GHC.Records.HasField "getId" b Text) =>
-                                         [a] -> Text
-                            listNames = Text.intercalate ", " . map (.name.getId)
-                            checkModule = do
+                        let checkModule = do
                                 unless (null newModule.sorts) $
                                     throwE . AddModuleError $
                                         "Module introduces new sorts: " <> listNames newModule.sorts
@@ -101,12 +105,12 @@ respond stateVar =
                                     throwE . AddModuleError $
                                         "Module introduces new symbols: " <> listNames newModule.symbols
                          in case runExcept (checkModule >> addToDefinitions newModule state.definitions) of
-                            Left err ->
-                                abortWith $ backendError CouldNotFindModule err -- FIXME introduce new error
-                            Right newDefinitions -> do
-                                liftIO $ putMVar stateVar state{definitions = newDefinitions}
-                                Log.logInfo $ "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
-                                pure $ Right $ AddModule ()
+                                Left err ->
+                                    abortWith $ backendError CouldNotFindModule err -- FIXME introduce new error
+                                Right newDefinitions -> do
+                                    liftIO $ putMVar stateVar state{definitions = newDefinitions}
+                                    Log.logInfo $ "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
+                                    pure $ Right $ AddModule ()
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left cancelUnsupportedInBatchMode
