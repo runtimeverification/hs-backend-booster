@@ -6,6 +6,7 @@ module Booster.Syntax.ParsedKore (
     -- * Parsing
     parseKoreDefinition,
     parseKorePattern,
+    parseKoreModule,
     decodeJsonKoreDefinition,
     encodeJsonKoreDefinition,
 
@@ -63,6 +64,15 @@ parseKorePattern ::
     Text ->
     Either String KoreJson.KorePattern
 parseKorePattern = Parser.parsePattern
+
+-- | Parse a string representing a Kore module (for add-module)
+parseKoreModule ::
+    -- | Filename used for error messages
+    FilePath ->
+    -- | concrete kore syntax of a Kore module
+    Text ->
+    Either String ParsedModule
+parseKoreModule = Parser.parseModule
 
 -- Parsing and encoding Json
 

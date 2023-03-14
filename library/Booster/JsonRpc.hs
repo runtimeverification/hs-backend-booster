@@ -73,7 +73,7 @@ respond stateVar =
                 listNames :: (HasField "name" a b, HasField "getId" b Text) => [a] -> Text
                 listNames = Text.intercalate ", " . map (.name.getId)
 
-            case parseKoreDefinition (Text.unpack req.name) req._module of
+            case parseKoreDefinition "rpc-request" req._module of
                 Left errMsg ->
                     abortWith $ backendError CouldNotParsePattern errMsg
                 -- expect exactly one module in the source
@@ -86,10 +86,6 @@ respond stateVar =
                         backendError CouldNotFindModule $
                             "Found more than one module in input: " <> listNames def.modules
                 Right ParsedDefinition{modules = [newModule]}
-                    | newModule.name.getId /= req.name ->
-                        abortWith $
-                            backendError CouldNotFindModule $
-                                "Module name mismatch: expected " <> req.name
                     | otherwise ->
                         -- constraints on add-module imposed by LLVM simplification library:
                         let checkModule = do
