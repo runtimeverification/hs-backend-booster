@@ -34,7 +34,7 @@ import Booster.Syntax.Json (KoreJson (..), addHeader)
 import Booster.Syntax.Json.Base (Id (..))
 import Booster.Syntax.Json.Externalise (externalisePattern)
 import Booster.Syntax.Json.Internalise (internalisePattern)
-import Booster.Syntax.ParsedKore (parseKoreDefinition)
+import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base
 import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinitions)
 import Kore.JsonRpc.Error
@@ -73,20 +73,10 @@ respond stateVar =
                 listNames :: (HasField "name" a b, HasField "getId" b Text) => [a] -> Text
                 listNames = Text.intercalate ", " . map (.name.getId)
 
-            case parseKoreDefinition "rpc-request" req._module of
+            case parseKoreModule "rpc-request" req._module of
                 Left errMsg ->
                     abortWith $ backendError CouldNotParsePattern errMsg
-                -- expect exactly one module in the source
-                Right ParsedDefinition{modules = []} ->
-                    abortWith $
-                        backendError CouldNotFindModule $
-                            Text.pack "Found no modules in input"
-                Right def@ParsedDefinition{modules = _ : _ : _} ->
-                    abortWith $
-                        backendError CouldNotFindModule $
-                            "Found more than one module in input: " <> listNames def.modules
-                Right ParsedDefinition{modules = [newModule]}
-                    | otherwise ->
+                Right newModule ->
                         -- constraints on add-module imposed by LLVM simplification library:
                         let checkModule = do
                                 unless (null newModule.sorts) $
@@ -97,7 +87,7 @@ respond stateVar =
                                         "Module introduces new symbols: " <> listNames newModule.symbols
                          in case runExcept (checkModule >> addToDefinitions newModule state.definitions) of
                                 Left err ->
-                                    abortWith $ backendError CouldNotFindModule err -- FIXME introduce new error
+                                    abortWith $ backendError CouldNotVerifyPattern err
                                 Right newDefinitions -> do
                                     liftIO $ putMVar stateVar state{definitions = newDefinitions}
                                     Log.logInfo $ "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
