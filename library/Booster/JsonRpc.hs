@@ -77,21 +77,21 @@ respond stateVar =
                 Left errMsg ->
                     abortWith $ backendError CouldNotParsePattern errMsg
                 Right newModule ->
-                        -- constraints on add-module imposed by LLVM simplification library:
-                        let checkModule = do
-                                unless (null newModule.sorts) $
-                                    throwE . AddModuleError $
-                                        "Module introduces new sorts: " <> listNames newModule.sorts
-                                unless (null $ newModule.symbols) $
-                                    throwE . AddModuleError $
-                                        "Module introduces new symbols: " <> listNames newModule.symbols
-                         in case runExcept (checkModule >> addToDefinitions newModule state.definitions) of
-                                Left err ->
-                                    abortWith $ backendError CouldNotVerifyPattern err
-                                Right newDefinitions -> do
-                                    liftIO $ putMVar stateVar state{definitions = newDefinitions}
-                                    Log.logInfo $ "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
-                                    pure $ Right $ AddModule ()
+                    -- constraints on add-module imposed by LLVM simplification library:
+                    let checkModule = do
+                            unless (null newModule.sorts) $
+                                throwE . AddModuleError $
+                                    "Module introduces new sorts: " <> listNames newModule.sorts
+                            unless (null $ newModule.symbols) $
+                                throwE . AddModuleError $
+                                    "Module introduces new symbols: " <> listNames newModule.symbols
+                     in case runExcept (checkModule >> addToDefinitions newModule state.definitions) of
+                            Left err ->
+                                abortWith $ backendError CouldNotVerifyPattern err
+                            Right newDefinitions -> do
+                                liftIO $ putMVar stateVar state{definitions = newDefinitions}
+                                Log.logInfo $ "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
+                                pure $ Right $ AddModule ()
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left cancelUnsupportedInBatchMode
