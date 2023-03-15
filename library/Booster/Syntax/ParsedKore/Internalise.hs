@@ -267,8 +267,13 @@ addModule
                         params = Def.SortVar . textToBS <$> paramNames
                         argNames = textToBS . Json.getId <$> args
                         internalName = textToBS $ Json.getId name
-                    internalArgSorts <- traverse (withExcept DefinitionSortError . checkSort (Set.fromList paramNames) sorts') argSorts
-                    internalResSort <- withExcept DefinitionSortError $ checkSort (Set.fromList paramNames) sorts' sort
+                    internalArgSorts <-
+                        traverse
+                            (withExcept DefinitionSortError . internaliseSort (Set.fromList paramNames) sorts')
+                            argSorts
+                    internalResSort <-
+                        withExcept DefinitionSortError $
+                            internaliseSort (Set.fromList paramNames) sorts' sort
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
                     internalRhs <-
                         withExcept (DefinitionAliasError (Json.getId name) . InconsistentAliasPattern) $
@@ -413,7 +418,10 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
         withExcept (DefinitionAliasError $ Text.decodeLatin1 aliasName) $
             Map.lookup aliasName partialDefinition.aliases
                 `orFailWith` UnknownAlias aliasName
-    args <- traverse (withExcept DefinitionPatternError . internaliseTerm (Just sortVars) partialDefinition) aliasArgs
+    args <-
+        traverse
+            (withExcept DefinitionPatternError . internaliseTerm (Just sortVars) partialDefinition)
+            aliasArgs
     result <- expandAlias alias args
 
     -- prefix all variables in lhs and rhs with "Rule#" to avoid
@@ -442,7 +450,9 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
     | length alias.args /= length currentArgs =
-        throwE (DefinitionAliasError (Text.decodeLatin1 alias.name) $ WrongAliasArgCount alias currentArgs)
+        throwE $
+            DefinitionAliasError (Text.decodeLatin1 alias.name) $
+                WrongAliasArgCount alias currentArgs
     | otherwise =
         let substitution = Map.fromList (zip alias.args currentArgs)
          in return $ substitute substitution alias.rhs
@@ -502,7 +512,7 @@ internaliseSymbol sorts parsedSymbol = do
     check :: Json.Sort -> Except DefinitionError Def.Sort
     check =
         mapExcept (first DefinitionSortError)
-            . checkSort knownVars sorts
+            . internaliseSort knownVars sorts
 
 {- | Computes all-pairs reachability in a directed graph given as an
    adjacency list mapping. Using a naive algorithm because the subsort
