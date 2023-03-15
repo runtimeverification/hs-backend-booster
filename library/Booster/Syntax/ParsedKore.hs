@@ -31,10 +31,10 @@ import Data.Text.IO qualified as Text
 
 import Booster.Definition.Base
 import Booster.Syntax.Json qualified as KoreJson
-import Booster.Syntax.Json.Base (Id (..))
 import Booster.Syntax.ParsedKore.Base
 import Booster.Syntax.ParsedKore.Internalise as Internalise
 import Booster.Syntax.ParsedKore.Parser qualified as Parser
+import Kore.Syntax.Json.Types (Id (..))
 
 -- Parsing text
 

@@ -31,7 +31,6 @@ import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.Base (Pattern)
 import Booster.Pattern.Rewrite (RewriteResult (..), performRewrite)
 import Booster.Syntax.Json (KoreJson (..), addHeader)
-import Booster.Syntax.Json.Base (Id (..))
 import Booster.Syntax.Json.Externalise (externalisePattern)
 import Booster.Syntax.Json.Internalise (internalisePattern)
 import Booster.Syntax.ParsedKore (parseKoreModule)
@@ -40,6 +39,7 @@ import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinit
 import Kore.JsonRpc.Error
 import Kore.JsonRpc.Server
 import Kore.JsonRpc.Types
+import Kore.Syntax.Json.Types (Id (..))
 
 respond ::
     forall m.
