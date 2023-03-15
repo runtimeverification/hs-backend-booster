@@ -346,17 +346,17 @@ data AxiomResult
 -- helper type to carry relevant extracted data from a pattern (what
 -- is passed to the internalising function later)
 data AxiomData
-    = RewriteRuleAxiom' Text [Json.KorePattern] Json.KorePattern AxiomAttributes [Json.Id]
+    = RewriteRuleAxiom' Text [Json.KorePattern] Json.KorePattern AxiomAttributes
     | SubsortAxiom' Json.Sort Json.Sort
 
 classifyAxiom :: ParsedAxiom -> Except DefinitionError (Maybe AxiomData)
-classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars} = case axiom of
+classifyAxiom parsedAx@ParsedAxiom{axiom} = case axiom of
     -- rewrite: an actual rewrite rule
     Json.KJRewrites _ lhs rhs
         | Json.KJAnd _ (Json.KJNot _ _) (Json.KJApp (Json.Id aliasName) _ aliasArgs) <- lhs ->
-            pure $ Just $ RewriteRuleAxiom' aliasName aliasArgs rhs (extract parsedAx) sortVars
+            pure $ Just $ RewriteRuleAxiom' aliasName aliasArgs rhs (extract parsedAx)
         | Json.KJApp (Json.Id aliasName) _ aliasArgs <- lhs ->
-            pure $ Just $ RewriteRuleAxiom' aliasName aliasArgs rhs (extract parsedAx) sortVars
+            pure $ Just $ RewriteRuleAxiom' aliasName aliasArgs rhs (extract parsedAx)
         | otherwise ->
             throwE $ DefinitionRewriteRuleError $ MalformedRewriteRule parsedAx
     -- subsort axiom formulated as an existential rule
@@ -398,9 +398,9 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
             throwE $
                 DefinitionSortError $
                     GeneralError ("Sort variable " <> super <> " in subsort axiom")
-        RewriteRuleAxiom' alias args rhs attribs sortVars ->
+        RewriteRuleAxiom' alias args rhs attribs ->
             Just . RewriteRuleAxiom
-                <$> internaliseRewriteRule partialDefinition (textToBS alias) args rhs attribs sortVars
+                <$> internaliseRewriteRule partialDefinition (textToBS alias) args rhs attribs
 
 orFailWith :: Maybe a -> e -> Except e a
 mbX `orFailWith` err = maybe (throwE err) pure mbX
@@ -411,16 +411,15 @@ internaliseRewriteRule ::
     [Json.KorePattern] ->
     Json.KorePattern ->
     AxiomAttributes ->
-    [Json.Id] ->
     Except DefinitionError RewriteRule
-internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes sortVars = do
+internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes = do
     alias <-
         withExcept (DefinitionAliasError $ Text.decodeLatin1 aliasName) $
             Map.lookup aliasName partialDefinition.aliases
                 `orFailWith` UnknownAlias aliasName
     args <-
         traverse
-            (withExcept DefinitionPatternError . internaliseTerm (Just sortVars) partialDefinition)
+            (withExcept DefinitionPatternError . internaliseTerm Nothing partialDefinition)
             aliasArgs
     result <- expandAlias alias args
 
@@ -434,7 +433,7 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
     rhs <-
         fmap (removeTops . Util.modifyVariables ("Rule#" <>)) $
             withExcept DefinitionPatternError $
-                internalisePattern (Just sortVars) partialDefinition right
+                internalisePattern Nothing partialDefinition right
     let preservesDefinedness =
             -- users can override the definedness computation by an explicit attribute
             fromMaybe (Util.checkTermSymbols Util.isDefinedSymbol rhs.term) axAttributes.preserving
