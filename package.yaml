@@ -227,6 +227,7 @@ tests:
     - filepath
     - hedgehog
     - hs-backend-booster
+    - kore-rpc-types
     - monad-logger
     - process
     - tasty
@@ -253,6 +254,7 @@ tests:
       - hspec
       - hspec-hedgehog
       - hs-backend-booster
+      - kore-rpc-types
       - process
       - text
       - transformers
