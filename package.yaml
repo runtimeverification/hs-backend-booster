@@ -104,7 +104,11 @@ executables:
     main: Main.hs
     dependencies:
     - base
+    - containers
+    - deepseq
     - hs-backend-booster
+    - optparse-applicative
+    - text
     ghc-options:
     - -rtsopts
     - -eventlog
