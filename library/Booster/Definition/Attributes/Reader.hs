@@ -21,8 +21,6 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Word
 import Text.Read (readEither)
-
--- import Text.Regex.Base
 import Text.Regex.PCRE
 
 import Booster.Definition.Attributes.Base
@@ -66,9 +64,7 @@ locationName = "org'Stop'kframework'Stop'attributes'Stop'Location"
 
 readLocation :: ParsedAttributes -> Except Text Location
 readLocation attributes =
-    Location
-        <$> attributes .: sourceName
-        <*> attributes .: locationName
+    Location <$> attributes .: sourceName <*> attributes .: locationName
 
 instance HasAttributes ParsedSymbol where
     type Attributes ParsedSymbol = SymbolAttributes
