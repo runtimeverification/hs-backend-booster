@@ -311,6 +311,8 @@ addModule
 data AxiomResult
     = -- | Rewrite rule
       RewriteRuleAxiom RewriteRule
+    | -- | Equation rule
+      EquationRuleAxiom EquationRule
     | -- | subsort data: a pair of sorts
       SubsortAxiom (Def.SortName, Def.SortName)
 
@@ -319,7 +321,6 @@ data AxiomResult
 data AxiomData
     = RewriteRuleAxiom' Text [Json.KorePattern] Json.KorePattern AxiomAttributes [Json.Id]
     | EquationRuleAxiom' Json.KorePattern Json.KorePattern AxiomAttributes
-    | EquationSimplificationRuleAxiom' Json.KorePattern Json.KorePattern AxiomAttributes
     | SubsortAxiom' Json.Sort Json.Sort
 
 classifyAxiom :: ParsedAxiom -> Except DefinitionError (Maybe AxiomData)
@@ -342,9 +343,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} = case axiom of
             pure $ Just $ SubsortAxiom' sub super
     -- implies: an equation
     Json.KJImplies _ (Json.KJTop _) (Json.KJEquals _ _ lhs@(Json.KJApp _ _ _) (Json.KJAnd _ rhs _)) ->
-        case getAttribute "simplification" attributes of
-            Nothing -> pure $ Just $ EquationRuleAxiom' lhs rhs (extract parsedAx)
-            Just _ -> pure $ Just $ EquationSimplificationRuleAxiom' lhs rhs (extract parsedAx)
+            pure $ Just $ EquationRuleAxiom' lhs rhs (extract parsedAx)
 
     -- anything else: not handled yet but not an error (this case
     -- becomes an error if the list becomes comprehensive)
@@ -376,6 +375,9 @@ internaliseAxiom partialDefinition parsedAxiom =
         RewriteRuleAxiom' alias args rhs attribs sortVars ->
             Just . RewriteRuleAxiom
                 <$> internaliseRewriteRule partialDefinition (textToBS alias) args rhs attribs sortVars
+        EquationRuleAxiom' lhs rhs attribs ->
+            Just . EquationRuleAxiom
+                <$> internaliseEquationRule partialDefinition lhs rhs attribs
 
 orFailWith :: Maybe a -> e -> Except e a
 mbX `orFailWith` err = maybe (throwE err) pure mbX
@@ -418,6 +420,17 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
   where
     removeTops :: Def.Pattern -> Def.Pattern
     removeTops p = p{Def.constraints = filter (/= Def.Top) p.constraints}
+
+internaliseEquationRule ::
+    KoreDefinition ->
+    Json.KorePattern ->
+    Json.KorePattern ->
+    AxiomAttributes ->
+    Except DefinitionError EquationRule
+internaliseEquationRule partialDefinition left right axAttributes = do
+    lhs <- withExcept DefinitionPatternError . internaliseTerm Nothing partialDefinition $ left
+    rhs <- withExcept DefinitionPatternError . internaliseTerm Nothing partialDefinition $ right
+    return $ EquationRule (Def.Pattern lhs []) (Def.Pattern rhs []) axAttributes
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
