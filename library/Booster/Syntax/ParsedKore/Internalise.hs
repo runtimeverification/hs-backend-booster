@@ -318,10 +318,12 @@ data AxiomResult
 -- is passed to the internalising function later)
 data AxiomData
     = RewriteRuleAxiom' Text [Json.KorePattern] Json.KorePattern AxiomAttributes [Json.Id]
+    | EquationRuleAxiom' Json.KorePattern Json.KorePattern AxiomAttributes
+    | EquationSimplificationRuleAxiom' Json.KorePattern Json.KorePattern AxiomAttributes
     | SubsortAxiom' Json.Sort Json.Sort
 
 classifyAxiom :: ParsedAxiom -> Except DefinitionError (Maybe AxiomData)
-classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars} = case axiom of
+classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} = case axiom of
     -- rewrite: an actual rewrite rule
     Json.KJRewrites _ lhs rhs
         | Json.KJAnd _ (Json.KJNot _ _) (Json.KJApp (Json.Id aliasName) _ aliasArgs) <- lhs ->
@@ -339,8 +341,10 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars} = case axiom of
         , [Json.KJEVar{name = _, sort = sub}] <- args ->
             pure $ Just $ SubsortAxiom' sub super
     -- implies: an equation
-    Json.KJImplies{} ->
-        pure Nothing -- not handled yet
+    Json.KJImplies _ (Json.KJTop _) (Json.KJEquals _ _ lhs@(Json.KJApp _ _ _) (Json.KJAnd _ rhs _)) ->
+        case getAttribute "simplification" attributes of
+            Nothing -> pure $ Just $ EquationRuleAxiom' lhs rhs (extract parsedAx)
+            Just _ -> pure $ Just $ EquationSimplificationRuleAxiom' lhs rhs (extract parsedAx)
 
     -- anything else: not handled yet but not an error (this case
     -- becomes an error if the list becomes comprehensive)
