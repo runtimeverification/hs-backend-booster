@@ -50,6 +50,7 @@ instance HasAttributes ParsedAxiom where
         AxiomAttributes
             (Location (attributes .: sourceName) (attributes .: locationName))
             (fromMaybe 50 $ attributes .:? "priority")
+            (attributes .:? "UNIQUE'Unds'ID")
             (attributes .:? "label")
             (attributes .! "simplification")
             (attributes .:? "preserves-definedness")

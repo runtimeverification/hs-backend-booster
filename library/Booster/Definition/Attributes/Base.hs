@@ -49,6 +49,7 @@ data ModuleAttributes = ModuleAttributes
 data AxiomAttributes = AxiomAttributes
     { location :: Location
     , priority :: Priority -- priorities are <= 200
+    , uniqueId :: Maybe UniqueID
     , ruleLabel :: Maybe Label
     , simplification :: Bool
     , preserving :: Maybe Bool -- this will override the computed attribute
@@ -63,6 +64,7 @@ data ComputedAxiomAttributes = ComputedAxiomAttributes
     deriving anyclass (NFData)
 
 type Label = Text
+type UniqueID = Text
 type Priority = Word8
 
 data Location = Location
