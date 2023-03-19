@@ -147,7 +147,7 @@ mergeDefs k1 k2
             <*> pure (mergeTheories (equationalSimplificationTheory k1) (equationalSimplificationTheory k2))
   where
     mergeTheories :: RewriteTheory -> RewriteTheory -> RewriteTheory
-    mergeTheories m1 m2 = Map.unionWith (Map.unionWith (<>)) m1 m2
+    mergeTheories = Map.unionWith (Map.unionWith (<>))
 
     mergeDisjoint ::
         (KoreDefinition -> Map ByteString a) ->
@@ -307,9 +307,10 @@ addModule
             go rules eqs simps sorts (RewriteRuleAxiom r : rest) = go (r : rules) eqs simps sorts rest
             go rules eqs simps sorts (SubsortAxiom pair : rest) = go rules eqs simps (pair : sorts) rest
             go rules eqs simps sorts (EquationRuleAxiom eq@(RewriteRule{attributes = attribs}) : rest) =
-                case simplification attribs of
-                    True -> go rules eqs (eq : simps) sorts rest
-                    False -> go rules (eq : eqs) simps sorts rest
+                if simplification attribs then
+                    go rules eqs (eq : simps) sorts rest
+                else
+                    go rules (eq : eqs) simps sorts rest
 
 -- Result type from internalisation of different axioms
 data AxiomResult
@@ -346,7 +347,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars} = case axiom of
         , [Json.KJEVar{name = _, sort = sub}] <- args ->
             pure $ Just $ SubsortAxiom' sub super
     -- implies: an equation
-    Json.KJImplies _ (Json.KJTop _) (Json.KJEquals _ _ lhs@(Json.KJApp _ _ _) (Json.KJAnd _ rhs (Json.KJTop _))) ->
+    Json.KJImplies _ (Json.KJTop _) (Json.KJEquals _ _ lhs@(Json.KJApp{}) (Json.KJAnd _ rhs (Json.KJTop _))) ->
         pure $ Just $ EquationRuleAxiom' lhs rhs (extract parsedAx)
     -- anything else: not handled yet but not an error (this case
     -- becomes an error if the list becomes comprehensive)
