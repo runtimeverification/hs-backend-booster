@@ -45,6 +45,8 @@ testDefinition =
                 ]
         , aliases = Map.empty
         , rewriteTheory = Map.empty
+        , equationalTheory = Map.empty
+        , equationalSimplificationTheory = Map.empty
         }
   where
     super `withSubsorts` subs =
