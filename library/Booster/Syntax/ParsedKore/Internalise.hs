@@ -307,10 +307,9 @@ addModule
             go rules eqs simps sorts (RewriteRuleAxiom r : rest) = go (r : rules) eqs simps sorts rest
             go rules eqs simps sorts (SubsortAxiom pair : rest) = go rules eqs simps (pair : sorts) rest
             go rules eqs simps sorts (EquationRuleAxiom eq@(RewriteRule{attributes = attribs}) : rest) =
-                if simplification attribs then
-                    go rules eqs (eq : simps) sorts rest
-                else
-                    go rules (eq : eqs) simps sorts rest
+                if simplification attribs
+                    then go rules eqs (eq : simps) sorts rest
+                    else go rules (eq : eqs) simps sorts rest
 
 -- Result type from internalisation of different axioms
 data AxiomResult
