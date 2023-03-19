@@ -347,8 +347,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars} = case axiom of
             pure $ Just $ SubsortAxiom' sub super
     -- implies: an equation
     Json.KJImplies _ (Json.KJTop _) (Json.KJEquals _ _ lhs@(Json.KJApp _ _ _) (Json.KJAnd _ rhs (Json.KJTop _))) ->
-            pure $ Just $ EquationRuleAxiom' lhs rhs (extract parsedAx)
-
+        pure $ Just $ EquationRuleAxiom' lhs rhs (extract parsedAx)
     -- anything else: not handled yet but not an error (this case
     -- becomes an error if the list becomes comprehensive)
     _ -> pure Nothing
