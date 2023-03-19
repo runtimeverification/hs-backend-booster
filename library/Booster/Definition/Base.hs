@@ -75,14 +75,6 @@ data RewriteRule = RewriteRule
     deriving stock (Eq, Ord, Show, GHC.Generic)
     deriving anyclass (NFData)
 
-data EquationRule = EquationRule
-    { lhs :: Pattern
-    , rhs :: Pattern
-    , attributes :: AxiomAttributes
-    }
-    deriving stock (Eq, Ord, Show, GHC.Generic)
-    deriving anyclass (NFData)
-
 type AliasName = ByteString
 
 data Alias = Alias

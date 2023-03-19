@@ -256,13 +256,13 @@ addModule
 
             let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory, equationalTheory = currentEquationalTheory, equationalSimplificationTheory = currentEquationalSimplificationTheory}
 
-            (newRewriteRules, eqRules, eqSimplificationRules, subsortPairs) <-
+            (newRewriteRules, newEqRules, newEqSimplificationRules, subsortPairs) <-
                 partitionAxioms
                     <$> mapMaybeM (internaliseAxiom partialDefinition) parsedAxioms
 
             let rewriteTheory = addToTheory newRewriteRules currentRewriteTheory
-            let equationalTheory = equationalTheory
-            let equationalSimplificationTheory = equationalSimplificationTheory
+            let equationalTheory = addToTheory newEqRules currentEquationalTheory
+            let equationalSimplificationTheory = addToTheory newEqSimplificationRules currentEquationalSimplificationTheory
 
             -- add subsorts to the subsort map
             let newSubsorts =
@@ -300,13 +300,13 @@ addModule
                 , [(getKey $ head d, d) | d <- dups]
                 )
 
-        partitionAxioms :: [AxiomResult] -> ([RewriteRule], [EquationRule], [EquationRule], [(Def.SortName, Def.SortName)])
+        partitionAxioms :: [AxiomResult] -> ([RewriteRule], [RewriteRule], [RewriteRule], [(Def.SortName, Def.SortName)])
         partitionAxioms = go [] [] [] []
           where
             go rules eqs simps sorts [] = (rules, eqs, simps, sorts)
             go rules eqs simps sorts (RewriteRuleAxiom r : rest) = go (r : rules) eqs simps sorts rest
             go rules eqs simps sorts (SubsortAxiom pair : rest) = go rules eqs simps (pair : sorts) rest
-            go rules eqs simps sorts (EquationRuleAxiom eq@(EquationRule{attributes = attribs}) : rest) =
+            go rules eqs simps sorts (EquationRuleAxiom eq@(RewriteRule{attributes = attribs}) : rest) =
                 case simplification attribs of
                     True -> go rules eqs (eq : simps) sorts rest
                     False -> go rules (eq : eqs) simps sorts rest
@@ -316,7 +316,7 @@ data AxiomResult
     = -- | Rewrite rule
       RewriteRuleAxiom RewriteRule
     | -- | Equation rule
-      EquationRuleAxiom EquationRule
+      EquationRuleAxiom RewriteRule
     | -- | subsort data: a pair of sorts
       SubsortAxiom (Def.SortName, Def.SortName)
 
@@ -328,7 +328,7 @@ data AxiomData
     | SubsortAxiom' Json.Sort Json.Sort
 
 classifyAxiom :: ParsedAxiom -> Except DefinitionError (Maybe AxiomData)
-classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} = case axiom of
+classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars} = case axiom of
     -- rewrite: an actual rewrite rule
     Json.KJRewrites _ lhs rhs
         | Json.KJAnd _ (Json.KJNot _ _) (Json.KJApp (Json.Id aliasName) _ aliasArgs) <- lhs ->
@@ -430,11 +430,18 @@ internaliseEquationRule ::
     Json.KorePattern ->
     Json.KorePattern ->
     AxiomAttributes ->
-    Except DefinitionError EquationRule
+    Except DefinitionError RewriteRule
 internaliseEquationRule partialDefinition left right axAttributes = do
     lhs <- withExcept DefinitionPatternError . internaliseTerm Nothing partialDefinition $ left
     rhs <- withExcept DefinitionPatternError . internaliseTerm Nothing partialDefinition $ right
-    return $ EquationRule (Def.Pattern lhs []) (Def.Pattern rhs []) axAttributes
+    let preservesDefinedness =
+            -- users can override the definedness computation by an explicit attribute
+            fromMaybe (Util.checkTermSymbols Util.isDefinedSymbol rhs) axAttributes.preserving
+        containsAcSymbols =
+            Util.checkTermSymbols Util.checkSymbolIsAc lhs
+        computedAttributes =
+            ComputedAxiomAttributes{preservesDefinedness, containsAcSymbols}
+    return $ RewriteRule (Def.Pattern lhs []) (Def.Pattern rhs []) axAttributes computedAttributes
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
