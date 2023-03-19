@@ -193,6 +193,8 @@ testDef =
         defSymbols
         Map.empty -- no aliases
         Map.empty -- no rules
+        Map.empty -- no equations
+        Map.empty -- no simplifications
 
 defSorts :: Map SortName (SortAttributes, Set SortName)
 defSorts =
