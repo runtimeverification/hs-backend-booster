@@ -256,7 +256,7 @@ addModule
 
             let partialDefinition = KoreDefinition{attributes, modules, sorts, symbols, aliases, rewriteTheory = currentRewriteTheory, equationalTheory = currentEquationalTheory, equationalSimplificationTheory = currentEquationalSimplificationTheory}
 
-            (newRewriteRules, subsortPairs) <-
+            (newRewriteRules, eqRules, eqSimplificationRules, subsortPairs) <-
                 partitionAxioms
                     <$> mapMaybeM (internaliseAxiom partialDefinition) parsedAxioms
 
@@ -300,12 +300,16 @@ addModule
                 , [(getKey $ head d, d) | d <- dups]
                 )
 
-        partitionAxioms :: [AxiomResult] -> ([RewriteRule], [(Def.SortName, Def.SortName)])
-        partitionAxioms = go [] []
+        partitionAxioms :: [AxiomResult] -> ([RewriteRule], [EquationRule], [EquationRule], [(Def.SortName, Def.SortName)])
+        partitionAxioms = go [] [] [] []
           where
-            go rules sorts [] = (rules, sorts)
-            go rules sorts (RewriteRuleAxiom r : rest) = go (r : rules) sorts rest
-            go rules sorts (SubsortAxiom pair : rest) = go rules (pair : sorts) rest
+            go rules eqs simps sorts [] = (rules, eqs, simps, sorts)
+            go rules eqs simps sorts (RewriteRuleAxiom r : rest) = go (r : rules) eqs simps sorts rest
+            go rules eqs simps sorts (SubsortAxiom pair : rest) = go rules eqs simps (pair : sorts) rest
+            go rules eqs simps sorts (EquationRuleAxiom eq@(EquationRule{attributes = attribs}) : rest) =
+                case simplification attribs of
+                    True -> go rules eqs (eq : simps) sorts rest
+                    False -> go rules (eq : eqs) simps sorts rest
 
 -- Result type from internalisation of different axioms
 data AxiomResult
