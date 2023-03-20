@@ -107,9 +107,9 @@ data DefinitionState = State
     }
 
 -- Helper types to signal incomplete definitions
-data ImportedDefinition = Imported {imported :: KoreDefinition}
+newtype ImportedDefinition = Imported {imported :: KoreDefinition}
 
-data PartialDefinition = Partial {partial :: KoreDefinition}
+newtype PartialDefinition = Partial {partial :: KoreDefinition}
 
 {- | Traverses the import graph bottom up, ending in the given named
    module. All entities (sorts, symbols, axioms) that are in scope in
