@@ -106,6 +106,11 @@ data DefinitionState = State
     , definitionAttributes :: DefinitionAttributes
     }
 
+-- Helper types to signal incomplete definitions
+data ImportedDefinition = Imported {imported :: KoreDefinition}
+
+data PartialDefinition = Partial {partial :: KoreDefinition}
+
 {- | Traverses the import graph bottom up, ending in the given named
    module. All entities (sorts, symbols, axioms) that are in scope in
    that module are added to the definition map.
@@ -132,7 +137,7 @@ descendFrom m = do
                         modu <- lift $ lookupModule modName defMap
                         lift (mergeDefs def modu)
                     )
-                    (emptyKoreDefinition definitionAttributes)
+                    (Imported $ emptyKoreDefinition definitionAttributes)
                     imported
 
             -- validate and add new module in context of the existing
@@ -142,28 +147,29 @@ descendFrom m = do
             modify (\s -> s{definitionMap = Map.insert m newDef s.definitionMap})
 
 -- | Merges kore definitions, but collisions are forbidden (DefinitionError on collisions)
-mergeDefs :: KoreDefinition -> KoreDefinition -> Except DefinitionError KoreDefinition
+mergeDefs :: ImportedDefinition -> KoreDefinition -> Except DefinitionError ImportedDefinition
 mergeDefs k1 k2
-    | k1.attributes /= k2.attributes =
-        throwE $ DefinitionAttributeError [k1.attributes, k2.attributes]
+    | k1.imported.attributes /= k2.attributes =
+        throwE $ DefinitionAttributeError [k1.imported.attributes, k2.attributes]
     | otherwise =
-        KoreDefinition k1.attributes
-            <$> mergeDisjoint modules k1 k2
-            <*> mergeDisjoint sorts k1 k2
-            <*> mergeDisjoint symbols k1 k2
-            <*> mergeDisjoint aliases k1 k2
-            <*> pure (mergeTheories k1 k2)
+        fmap Imported $
+            KoreDefinition k2.attributes
+                <$> mergeDisjoint modules k1 k2
+                <*> mergeDisjoint sorts k1 k2
+                <*> mergeDisjoint symbols k1 k2
+                <*> mergeDisjoint aliases k1 k2
+                <*> pure (mergeTheories k1 k2)
   where
-    mergeTheories :: KoreDefinition -> KoreDefinition -> RewriteTheory
-    mergeTheories m1 m2 =
+    mergeTheories :: ImportedDefinition -> KoreDefinition -> RewriteTheory
+    mergeTheories (Imported m1) m2 =
         Map.unionWith (Map.unionWith (<>)) (rewriteTheory m1) (rewriteTheory m2)
 
     mergeDisjoint ::
         (KoreDefinition -> Map ByteString a) ->
-        KoreDefinition ->
+        ImportedDefinition ->
         KoreDefinition ->
         Except DefinitionError (Map ByteString a)
-    mergeDisjoint selector m1 m2
+    mergeDisjoint selector (Imported m1) m2
         | not (null duplicates) =
             throwE $ DuplicateNames $ map Text.decodeLatin1 $ Set.toList duplicates
         | otherwise =
@@ -181,7 +187,7 @@ Some validations are performed, e.g., name collisions are forbidden.
 -}
 addModule ::
     ParsedModule ->
-    KoreDefinition ->
+    ImportedDefinition ->
     Except DefinitionError KoreDefinition
 addModule
     m@ParsedModule
@@ -191,14 +197,17 @@ addModule
         , aliases = parsedAliases
         , axioms = parsedAxioms
         }
-    KoreDefinition
-        { attributes
-        , modules = currentModules
-        , sorts = currentSorts
-        , symbols = currentSymbols
-        , aliases = currentAliases
-        , rewriteTheory = currentRewriteTheory
-        } =
+    ( Imported
+            ( KoreDefinition
+                    { attributes
+                    , modules = currentModules
+                    , sorts = currentSorts
+                    , symbols = currentSymbols
+                    , aliases = currentAliases
+                    , rewriteTheory = currentRewriteTheory
+                    }
+                )
+        ) =
         do
             --
             let modName = textToBS n
@@ -238,14 +247,15 @@ addModule
             let symbols = Map.fromList newSymbols' <> currentSymbols
 
             let defWithNewSortsAndSymbols =
-                    KoreDefinition
-                        { attributes
-                        , modules
-                        , sorts = sorts' -- no subsort information yet
-                        , symbols
-                        , aliases = currentAliases -- no aliases yet
-                        , rewriteTheory = currentRewriteTheory -- no rules yet
-                        }
+                    Partial
+                        KoreDefinition
+                            { attributes
+                            , modules
+                            , sorts = sorts' -- no subsort information yet
+                            , symbols
+                            , aliases = currentAliases -- no aliases yet
+                            , rewriteTheory = currentRewriteTheory -- no rules yet
+                            }
 
             let internaliseAlias ::
                     ParsedAlias ->
@@ -262,7 +272,7 @@ addModule
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
                     internalRhs <-
                         withExcept (DefinitionAliasError (Json.getId name) . InconsistentAliasPattern) $
-                            internaliseTermOrPredicate (Just sortVars) defWithNewSortsAndSymbols rhs
+                            internaliseTermOrPredicate (Just sortVars) defWithNewSortsAndSymbols.partial rhs
                     let rhsSort = Util.sortOfTermOrPredicate internalRhs
                     unless (fromMaybe internalResSort rhsSort == internalResSort) (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
                     return (internalName, Alias{name = internalName, params, args = internalArgs, rhs = internalRhs})
@@ -273,8 +283,8 @@ addModule
             newAliases <- traverse internaliseAlias $ filter notPriority parsedAliases
             let aliases = Map.fromList newAliases <> currentAliases
 
-            let defWithAliases :: KoreDefinition
-                defWithAliases = defWithNewSortsAndSymbols{aliases}
+            let defWithAliases :: PartialDefinition
+                defWithAliases = Partial defWithNewSortsAndSymbols.partial{aliases}
 
             (newRewriteRules, subsortPairs) <-
                 partitionAxioms
@@ -283,7 +293,7 @@ addModule
             let rewriteTheory = addToTheory newRewriteRules currentRewriteTheory
                 sorts = subsortClosure sorts' subsortPairs
 
-            pure $ defWithAliases{sorts, rewriteTheory}
+            pure $ defWithAliases.partial{sorts, rewriteTheory}
       where
         -- Uses 'getKey' to construct a finite mapping from the list,
         -- returning elements that yield the same key separately.
@@ -361,10 +371,10 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars} = case axiom of
     _ -> pure Nothing
 
 internaliseAxiom ::
-    KoreDefinition ->
+    PartialDefinition ->
     ParsedAxiom ->
     Except DefinitionError (Maybe AxiomResult)
-internaliseAxiom partialDefinition parsedAxiom =
+internaliseAxiom (Partial partialDefinition) parsedAxiom =
     classifyAxiom parsedAxiom >>= maybe (pure Nothing) processAxiom
   where
     processAxiom :: AxiomData -> Except DefinitionError (Maybe AxiomResult)
