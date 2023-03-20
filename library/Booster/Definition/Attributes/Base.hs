@@ -51,7 +51,7 @@ data AxiomAttributes = AxiomAttributes
     , priority :: Priority -- priorities are <= 200
     , uniqueId :: Maybe UniqueID
     , ruleLabel :: Maybe Label
-    , simplification :: Bool
+    , simplification :: Maybe Priority
     , preserving :: Maybe Bool -- this will override the computed attribute
     }
     deriving stock (Eq, Ord, Show, Generic)
@@ -65,7 +65,11 @@ data ComputedAxiomAttributes = ComputedAxiomAttributes
 
 type Label = Text
 type UniqueID = Text
-type Priority = Word8
+
+newtype Priority = Priority Word8
+    deriving stock (Eq, Ord, Show, Read, Generic)
+    deriving newtype Num
+    deriving anyclass (NFData)
 
 data Location = Location
     { file :: Text

@@ -52,7 +52,7 @@ instance HasAttributes ParsedAxiom where
             (fromMaybe 50 $ attributes .:? "priority")
             (attributes .:? "UNIQUE'Unds'ID")
             (attributes .:? "label")
-            (attributes .! "simplification")
+            (attributes .:? "simplification")
             (attributes .:? "preserves-definedness")
 
 sourceName
@@ -127,7 +127,13 @@ class ReadT a where
     default readT :: Read a => Maybe Text -> Either String a
     readT = maybe (Left "empty") (readEither . Text.unpack)
 
-instance ReadT Word8
+-- instance ReadT Word8
+
+instance ReadT Priority where
+   readT Nothing = Right 50 -- HACK, we accept `simplification()`
+   readT (Just "") = Right 50
+   readT (Just n) = readEither $ Text.unpack n
+
 
 -- | Bool instance: presence of the attribute implies 'True'
 instance ReadT Bool where

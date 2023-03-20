@@ -25,7 +25,7 @@ import Data.List (foldl', groupBy, partition, sortOn)
 import Data.List.Extra (groupSort)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -307,7 +307,7 @@ addModule
             go rules eqs simps sorts (RewriteRuleAxiom r : rest) = go (r : rules) eqs simps sorts rest
             go rules eqs simps sorts (SubsortAxiom pair : rest) = go rules eqs simps (pair : sorts) rest
             go rules eqs simps sorts (EquationRuleAxiom eq@(RewriteRule{attributes = attribs}) : rest) =
-                if simplification attribs
+                if isJust (simplification attribs)
                     then go rules eqs (eq : simps) sorts rest
                     else go rules (eq : eqs) simps sorts rest
 
