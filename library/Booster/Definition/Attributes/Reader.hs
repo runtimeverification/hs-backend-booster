@@ -14,10 +14,8 @@ import Data.Kind
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Word
 import Text.Read (readEither)
 
--- import Text.Regex.Base
 import Text.Regex.PCRE
 
 import Booster.Definition.Attributes.Base
@@ -127,12 +125,10 @@ class ReadT a where
     default readT :: Read a => Maybe Text -> Either String a
     readT = maybe (Left "empty") (readEither . Text.unpack)
 
--- instance ReadT Word8
-
 instance ReadT Priority where
    readT Nothing = Right 50 -- HACK, we accept `simplification()`
    readT (Just "") = Right 50
-   readT (Just n) = readEither $ Text.unpack n
+   readT (Just n) = readEither $ "Priority " <> Text.unpack n
 
 
 -- | Bool instance: presence of the attribute implies 'True'
