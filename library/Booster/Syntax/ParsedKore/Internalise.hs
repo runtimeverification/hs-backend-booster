@@ -67,8 +67,13 @@ buildDefinitions def@ParsedDefinition{modules} = do
             }
     buildAllModules = mapM descendFrom $ Map.keys moduleMap
 
-{- | Adds a module to an existing mapping of modules to definitions.
-Used
+{- | API function that adds the KoreDefinition for a given new module to
+   the map of KoreDefinitions per main module.
+
+It takes a map of already-known modules and the 'KoreDefinition's that
+they have in scope, and a new module (that is not one of the existing
+ones), computes the 'KoreDefinition' of that module as the main
+module, and adds it to the map.
 -}
 addToDefinitions ::
     ParsedModule ->
@@ -167,9 +172,12 @@ mergeDefs k1 k2
         duplicates =
             Map.keysSet (selector m1) `Set.intersection` Map.keysSet (selector m2)
 
-{- | Adds a module to the given definition, returning the resulting new
- definition. Some validations are performed, e.g., name collisions are
- forbidden.
+{- | Internal helper which adds the contents of a local module to the
+   imported 'KoreDefinition'. Given a 'ParsedModule' and a 'KoreDefinition'
+   of entities that are in scope via imports, it adds the sorts,
+   aliases, and rules of the module to the 'KoreDefinition'.
+
+Some validations are performed, e.g., name collisions are forbidden.
 -}
 addModule ::
     ParsedModule ->
