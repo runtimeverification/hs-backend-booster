@@ -68,7 +68,7 @@ type UniqueID = Text
 
 newtype Priority = Priority Word8
     deriving stock (Eq, Ord, Show, Read, Generic)
-    deriving newtype Num
+    deriving newtype (Num)
     deriving anyclass (NFData)
 
 data Location = Location

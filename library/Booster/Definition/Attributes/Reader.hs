@@ -126,10 +126,9 @@ class ReadT a where
     readT = maybe (Left "empty") (readEither . Text.unpack)
 
 instance ReadT Priority where
-   readT Nothing = Right 50 -- HACK, we accept `simplification()`
-   readT (Just "") = Right 50
-   readT (Just n) = readEither $ "Priority " <> Text.unpack n
-
+    readT Nothing = Right 50 -- HACK, we accept `simplification()`
+    readT (Just "") = Right 50
+    readT (Just n) = readEither $ "Priority " <> Text.unpack n
 
 -- | Bool instance: presence of the attribute implies 'True'
 instance ReadT Bool where
