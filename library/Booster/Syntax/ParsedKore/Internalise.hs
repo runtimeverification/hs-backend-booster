@@ -327,8 +327,39 @@ data AxiomData
     | EquationRuleAxiom' Json.KorePattern Json.KorePattern AxiomAttributes
     | SubsortAxiom' Json.Sort Json.Sort
 
+{- | Recognises axioms generated from a K definition and classifies them
+   according to their purpose.
+
+* Rewrite rule:
+  with anti-left:    \rewrites(\and{}(\not(_), <aliasName>(..)), _)
+  without anti-left: \rewrites(<aliasName>(..)), _)
+* Subsort axiom:
+  \exists(V:<super>, \equals(V, inj{<sub>,<super>}(V':<sub>)))
+* equation (simplification or function equation)
+  \implies(<requires>, \equals(<lhs-symbol>(_), \and(<rhs>, <ensures>)))
+* functional/total rule
+  \exists(V:_ , \equals(V, <total-symbol>(..args..))) [functional()]
+* no confusion, same constructor (con)
+  \implies(\and(<con>(X), <con>(Y)), <con>(\and(X, Y))) [constructor()]
+* no confusion, different constructors (con1, con2)
+  \not(\and(<con1>(X), <con2>(Y))) [constructor()]
+* no junk: chain of \or (possibly with chain of \exists in arguments) ending in \bottom
+  \or(\exists(X, \exists(Y, ..., <con>(X, Y, ...)), \or(..., \bottom))
+* associativity
+  \equals(<sym>(<sym>(K1, K2), K3), <sym>(K1, <sym>(K2, K3))) [assoc()]
+* commutativity
+  \equals(<sym>(K1, K2), <sym>(K2, K1)) [comm()]
+* idempotency
+  \equals(<sym>(K, K), K) [idem()]
+* left unit
+  \equals(<sym1>(<unit>, K), K) [unit()]
+* right unit
+  \equals(<sym1>(K, <unit>), K) [unit()]
+
+-}
+
 classifyAxiom :: ParsedAxiom -> Except DefinitionError (Maybe AxiomData)
-classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars} = case axiom of
+classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} = case axiom of
     -- rewrite: an actual rewrite rule
     Json.KJRewrites _ lhs rhs
         | Json.KJAnd _ (Json.KJNot _ _) (Json.KJApp (Json.Id aliasName) _ aliasArgs) <- lhs ->
@@ -351,6 +382,9 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars} = case axiom of
     -- anything else: not handled yet but not an error (this case
     -- becomes an error if the list becomes comprehensive)
     _ -> pure Nothing
+
+  where
+    hasAttribute name = isJust $ lookup (Json.Id name) attributes
 
 internaliseAxiom ::
     KoreDefinition ->
