@@ -27,7 +27,7 @@ import Data.List (foldl', groupBy, partition, sortOn)
 import Data.List.Extra (groupSort)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -353,18 +353,59 @@ data AxiomResult
 data AxiomData
     = RewriteRuleAxiom' Text [Syntax.KorePattern] Syntax.KorePattern AxiomAttributes
     | SubsortAxiom' Syntax.Sort Syntax.Sort
+    | EquationRuleAxiom' Syntax.KorePattern Syntax.KorePattern AxiomAttributes [Syntax.Id]
 
+{- | Recognises axioms generated from a K definition and classifies them
+   according to their purpose.
+
+* Rewrite rule:
+  with anti-left:    \rewrites(\and{}(\not(_), <aliasName>(..)), _)
+  without anti-left: \rewrites(<aliasName>(..)), _)
+* Subsort axiom:
+  \exists(V:<super>, \equals(V, inj{<sub>,<super>}(V':<sub>)))
+* equation (simplification or function equation)
+  \implies(<requires>, \equals(<lhs-symbol>(_), \and(<rhs>, <ensures>)))
+* matching logic simplification equation
+  \implies(<requires>, \equals(lhs, \and(<rhs>, <ensures>)))
+  (with lhs something different from a symbol application). Used in
+  domains.md for SortBool simplification
+* functional/total rule
+  \exists(V:_ , \equals(V, <total-symbol>(..args..))) [functional()]
+* no confusion, same constructor (con)
+  \implies(\and(<con>(X), <con>(Y)), <con>(\and(X, Y))) [constructor()]
+* no confusion, different constructors (con1, con2)
+  \not(\and(<con1>(X), <con2>(Y))) [constructor()]
+* no junk: chain of \or (possibly with chain of \exists in arguments) ending in \bottom
+  \or(\exists(X, \exists(Y, ..., <con>(X, Y, ...)), \or(..., \bottom)) [constructor()]
+* associativity
+  \equals(<sym>(<sym>(K1, K2), K3), <sym>(K1, <sym>(K2, K3))) [assoc()]
+* commutativity
+  \equals(<sym>(K1, K2), <sym>(K2, K1)) [comm()]
+* idempotency
+  \equals(<sym>(K, K), K) [idem()]
+* left unit
+  \equals(<sym1>(<unit>, K), K) [unit()]
+* right unit
+  \equals(<sym1>(K, <unit>), K) [unit()]
+
+* one bespoke simplification rule for injections:
+  '\equals{...}(inj{S2, S3}(inj{S1, S2}(T:S1), inj{S1, S3}(T:S1))'
+  without conditions (no \implies)
+* some no-junk axioms are just "\bottom{...}" (SortList, SortK, SortMap, SortSet)
+-}
 classifyAxiom :: ParsedAxiom -> Except DefinitionError (Maybe AxiomData)
-classifyAxiom parsedAx@ParsedAxiom{axiom} = do
+classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
     case axiom of
         -- rewrite: an actual rewrite rule
         Syntax.KJRewrites _ lhs rhs
-            | Syntax.KJAnd _ (Syntax.KJNot _ _) (Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs) <- lhs -> do
-                attributes <- withExcept DefinitionAttributeError $ mkAttributes parsedAx
-                pure $ Just $ RewriteRuleAxiom' aliasName aliasArgs rhs attributes
-            | Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs <- lhs -> do
-                attributes <- withExcept DefinitionAttributeError $ mkAttributes parsedAx
-                pure $ Just $ RewriteRuleAxiom' aliasName aliasArgs rhs attributes
+            | Syntax.KJAnd _ (Syntax.KJNot _ _) (Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs) <- lhs ->
+                do
+                    attrib <- withExcept DefinitionAttributeError $ mkAttributes parsedAx
+                    pure $ Just $ RewriteRuleAxiom' aliasName aliasArgs rhs attrib
+            | Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs <- lhs ->
+                do
+                    attrib <- withExcept DefinitionAttributeError $ mkAttributes parsedAx
+                    pure $ Just $ RewriteRuleAxiom' aliasName aliasArgs rhs attrib
             | otherwise ->
                 throwE $ DefinitionRewriteRuleError $ MalformedRewriteRule parsedAx
         -- subsort axiom formulated as an existential rule
@@ -375,13 +416,54 @@ classifyAxiom parsedAx@ParsedAxiom{axiom} = do
             , Syntax.Id "inj" <- name
             , [Syntax.KJEVar{name = _, sort = sub}] <- args ->
                 pure $ Just $ SubsortAxiom' sub super
-        -- implies: an equation
-        Syntax.KJImplies{} ->
-            pure Nothing -- not handled yet
-
+        -- implies with a symbol application: an equation
+        Syntax.KJImplies _ req (Syntax.KJEquals sort _ lhs@Syntax.KJApp{} rhs@Syntax.KJAnd{}) ->
+            pure Nothing
+        -- pure $ Just $ EquationRuleAxiom' (Syntax.KJAnd sort lhs req) rhs (extract parsedAx) sortVars
+        -- implies with the LHS not a symbol application, tagged as simplification
+        Syntax.KJImplies _ _req (Syntax.KJEquals _sort _ _lhs _rhs@Syntax.KJAnd{})
+            | hasAttribute "simplification" ->
+                pure Nothing
+        Syntax.KJExists{var, varSort, arg = Syntax.KJEquals{first = aVar, second = Syntax.KJApp{}}}
+            | hasAttribute "functional" || hasAttribute "total"
+            , aVar == Syntax.KJEVar{name = var, sort = varSort} -> do
+                do
+                    -- TODO assert that symbol `name` is indeed a total function (or a constructor)
+                    pure Nothing
+        Syntax.KJImplies _ Syntax.KJAnd{first = con1@Syntax.KJApp{}, second = con2@Syntax.KJApp{}} Syntax.KJApp{name}
+            | hasAttribute "constructor"
+            , con1.name == con2.name
+            , con1.name == name ->
+                -- no confusion same constructor. Could assert `name` is a constructor
+                pure Nothing
+        Syntax.KJNot _ (Syntax.KJAnd{first = con1@Syntax.KJApp{}, second = con2@Syntax.KJApp{}})
+            | hasAttribute "constructor"
+            , con1.name /= con2.name ->
+                -- no confusion different constructors. Could check whether con*.name are constructors
+                pure Nothing
+        Syntax.KJOr{}
+            | hasAttribute "constructor" ->
+                -- no junk
+                pure Nothing
+        Syntax.KJEquals{}
+            | hasAttribute "assoc" -> pure Nothing -- could check symbol axiom.first.name
+            | hasAttribute "comm" -> pure Nothing -- could check symbol axiom.first.name
+            | hasAttribute "idem" -> pure Nothing -- could check axiom.first.name
+            | hasAttribute "unit" -> pure Nothing -- could check axiom.first.name and the unit symbol in axiom.first.args
+            | hasAttribute "simplification"
+            , Syntax.KJApp{name = sym1} <- axiom.first
+            , sym1 == Syntax.Id "inj"
+            , Syntax.KJApp{name = sym2} <- axiom.second
+            , sym2 == Syntax.Id "inj" ->
+                pure Nothing
+        Syntax.KJBottom{sort = Syntax.SortApp _ []}
+            | hasAttribute "constructor" ->
+                pure Nothing
         -- anything else: not handled yet but not an error (this case
         -- becomes an error if the list becomes comprehensive)
-        _ -> pure Nothing
+        _ -> throwE $ DefinitionRewriteRuleError $ MalformedRewriteRule parsedAx
+  where
+    hasAttribute name = isJust $ lookup (Syntax.Id name) attributes
 
 internaliseAxiom ::
     PartialDefinition ->
