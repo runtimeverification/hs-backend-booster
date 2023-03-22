@@ -399,15 +399,13 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
         -- rewrite: an actual rewrite rule
         Syntax.KJRewrites _ lhs rhs
             | Syntax.KJAnd _ (Syntax.KJNot _ _) (Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs) <- lhs ->
-                do
-                    attrib <- withExcept DefinitionAttributeError $ mkAttributes parsedAx
-                    pure $ Just $ RewriteRuleAxiom' aliasName aliasArgs rhs attrib
+                Just . RewriteRuleAxiom' aliasName aliasArgs rhs
+                    <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
             | Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs <- lhs ->
-                do
-                    attrib <- withExcept DefinitionAttributeError $ mkAttributes parsedAx
-                    pure $ Just $ RewriteRuleAxiom' aliasName aliasArgs rhs attrib
+                Just . RewriteRuleAxiom' aliasName aliasArgs rhs
+                    <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
             | otherwise ->
-                throwE $ DefinitionRewriteRuleError $ MalformedRewriteRule parsedAx
+                throwE $ DefinitionAxiomError $ MalformedRewriteRule parsedAx
         -- subsort axiom formulated as an existential rule
         Syntax.KJExists{var, varSort = super, arg}
             | Syntax.KJEquals{first = aVar, second = anApp} <- arg
@@ -461,7 +459,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
                 pure Nothing
         -- anything else: not handled yet but not an error (this case
         -- becomes an error if the list becomes comprehensive)
-        _ -> throwE $ DefinitionRewriteRuleError $ MalformedRewriteRule parsedAx
+        _ -> throwE $ DefinitionAxiomError $ UnexpectedAxiom parsedAx
   where
     hasAttribute name = isJust $ lookup (Syntax.Id name) attributes
 
@@ -641,7 +639,7 @@ data DefinitionError
     | DefinitionSortError SortError
     | DefinitionPatternError PatternError
     | DefinitionAliasError Text AliasError
-    | DefinitionRewriteRuleError RewriteRuleError
+    | DefinitionAxiomError AxiomError
     | DefinitionTermOrPredicateError TermOrPredicateError
     | AddModuleError Text
     deriving stock (Eq, Show)
@@ -670,7 +668,7 @@ instance Pretty DefinitionError where
             pretty $ "Pattern error: " <> show patErr -- TODO define a pretty instance?
         DefinitionAliasError name err ->
             pretty $ "Alias error in " <> Text.unpack name <> ": " <> show err
-        DefinitionRewriteRuleError err ->
+        DefinitionAxiomError err ->
             "Bad rewrite rule " <> pretty err
         DefinitionTermOrPredicateError (PatternExpected p) ->
             pretty $ "Expected a pattern but found a predicate: " <> show p
@@ -690,8 +688,12 @@ instance ToJSON DefinitionError where
             "DuplicateAliases" `withContext` map toJSON aliases
         DefinitionPatternError patErr ->
             "Pattern error in definition" `withContext` [toJSON patErr]
-        DefinitionRewriteRuleError (MalformedRewriteRule rule) ->
-            "Bad rewrite rule" `withContext` [toJSON rule]
+        DefinitionAxiomError (MalformedRewriteRule rule) ->
+            "Malformed rewrite rule" `withContext` [toJSON rule]
+        DefinitionAxiomError (MalformedEquation rule) ->
+            "Malformed equation" `withContext` [toJSON rule]
+        DefinitionAxiomError (UnexpectedAxiom rule) ->
+            "Unknown kind of axiom" `withContext` [toJSON rule]
         other ->
             object ["error" .= renderOneLineText (pretty other), "context" .= Null]
       where
@@ -706,16 +708,25 @@ data AliasError
     | InconsistentAliasPattern [PatternError]
     deriving stock (Eq, Show)
 
-newtype RewriteRuleError
+data AxiomError
     = MalformedRewriteRule ParsedAxiom
+    | MalformedEquation ParsedAxiom
+    | UnexpectedAxiom ParsedAxiom
     deriving stock (Eq, Show)
 
-instance Pretty RewriteRuleError where
+instance Pretty AxiomError where
     pretty = \case
         MalformedRewriteRule rule ->
-            "Malformed rule at " <> either (const "unknown location") pretty location
-          where
-            location = runExcept $ Attributes.readLocation rule.attributes
+            "Malformed rewrite rule at " <> location rule
+        MalformedEquation rule ->
+            "Malformed equation at " <> location rule
+        UnexpectedAxiom rule ->
+            "Unknown kind of axiom at " <> location rule
+      where
+        location :: ParsedAxiom -> Doc a
+        location rule =
+            either (const "unknown location") pretty $
+                runExcept (Attributes.readLocation rule.attributes)
 
 newtype TermOrPredicateError
     = PatternExpected Def.TermOrPredicate
