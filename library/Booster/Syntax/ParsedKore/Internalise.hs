@@ -353,7 +353,12 @@ data AxiomResult
 data AxiomData
     = RewriteRuleAxiom' Text [Syntax.KorePattern] Syntax.KorePattern AxiomAttributes
     | SubsortAxiom' Syntax.Sort Syntax.Sort
-    | EquationRuleAxiom' Syntax.KorePattern Syntax.KorePattern AxiomAttributes [Syntax.Id]
+    | EquationAxiom'
+        Syntax.KorePattern -- requires
+        Syntax.KorePattern -- LHS
+        Syntax.KorePattern -- And(RHS, ensures)
+        [Syntax.Id] -- sort variables
+        AxiomAttributes
 
 {- | Recognises axioms generated from a K definition and classifies them
    according to their purpose.
@@ -415,9 +420,9 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
             , [Syntax.KJEVar{name = _, sort = sub}] <- args ->
                 pure $ Just $ SubsortAxiom' sub super
         -- implies with a symbol application: an equation
-        Syntax.KJImplies _ req (Syntax.KJEquals sort _ lhs@Syntax.KJApp{} rhs@Syntax.KJAnd{}) ->
-            pure Nothing
-        -- pure $ Just $ EquationRuleAxiom' (Syntax.KJAnd sort lhs req) rhs (extract parsedAx) sortVars
+        Syntax.KJImplies _ req (Syntax.KJEquals _ _ lhs@Syntax.KJApp{} rhs@Syntax.KJAnd{}) ->
+            Just . EquationAxiom' req lhs rhs sortVars
+                <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
         -- implies with the LHS not a symbol application, tagged as simplification
         Syntax.KJImplies _ _req (Syntax.KJEquals _sort _ _lhs _rhs@Syntax.KJAnd{})
             | hasAttribute "simplification" ->
@@ -448,7 +453,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
             | hasAttribute "comm" -> pure Nothing -- could check symbol axiom.first.name
             | hasAttribute "idem" -> pure Nothing -- could check axiom.first.name
             | hasAttribute "unit" -> pure Nothing -- could check axiom.first.name and the unit symbol in axiom.first.args
-            | hasAttribute "simplification"
+            | hasAttribute "simplification" -- special case of injection simplification
             , Syntax.KJApp{name = sym1} <- axiom.first
             , sym1 == Syntax.Id "inj"
             , Syntax.KJApp{name = sym2} <- axiom.second
@@ -489,6 +494,8 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
         RewriteRuleAxiom' alias args rhs attribs ->
             Just . RewriteRuleAxiom
                 <$> internaliseRewriteRule partialDefinition (textToBS alias) args rhs attribs
+        EquationAxiom'{} ->
+            pure Nothing
 
 orFailWith :: Maybe a -> e -> Except e a
 mbX `orFailWith` err = maybe (throwE err) pure mbX

@@ -14,6 +14,7 @@ import Control.DeepSeq (NFData (..))
 import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
 import Data.Map qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import GHC.Generics (Generic)
 
@@ -52,8 +53,13 @@ mkSummary file KoreDefinition{modules, sorts, symbols, rewriteTheory} =
                     concat $
                         concatMap Map.elems (Map.elems rewriteTheory)
         , termIndexes =
-            Map.map (fmap (.attributes.location) . concat . Map.elems) rewriteTheory
+            Map.map (map locate . concat . Map.elems) rewriteTheory
         }
+  where
+    locate :: RewriteRule -> Location
+    locate rule = fromMaybe noLocation rule.attributes.location
+
+    noLocation = Location "no file" $ Position 0 0
 
 prettySummary :: Summary -> String
 prettySummary

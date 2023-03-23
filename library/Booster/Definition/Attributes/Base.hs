@@ -48,10 +48,10 @@ data ModuleAttributes = ModuleAttributes
   * label (to implement cut-point support)
 -}
 data AxiomAttributes = AxiomAttributes
-    { location :: Location
+    { location :: Maybe Location
     , priority :: Priority -- priorities are <= 200
     , ruleLabel :: Maybe Label
-    , simplification :: Bool
+    , simplification :: Maybe Priority
     , preserving :: Maybe Bool -- this will override the computed attribute
     }
     deriving stock (Eq, Ord, Show, Generic)
@@ -64,7 +64,10 @@ data ComputedAxiomAttributes = ComputedAxiomAttributes
     deriving anyclass (NFData)
 
 type Label = Text
-type Priority = Word8
+
+newtype Priority = Priority Word8
+    deriving stock (Eq, Ord, Read, Show)
+    deriving newtype (Num, NFData)
 
 data Location = Location
     { file :: Text
