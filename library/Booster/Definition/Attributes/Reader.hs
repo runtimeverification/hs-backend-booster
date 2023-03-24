@@ -96,6 +96,7 @@ instance HasAttributes ParsedSymbol where
             <$> symbolType
             <*> isIdem
             <*> isAssoc
+            <*> (attributes .! "macro" <||> attributes .! "alias'Kywd'")
 
 instance HasAttributes ParsedSort where
     type Attributes ParsedSort = SortAttributes

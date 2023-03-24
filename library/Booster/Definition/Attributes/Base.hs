@@ -94,7 +94,7 @@ data SymbolType
 
 data SymbolAttributes = SymbolAttributes
     { symbolType :: SymbolType
-    , isIdem, isAssoc :: Bool
+    , isIdem, isAssoc, isMacroOrAlias :: Bool
     }
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData, Hashable)

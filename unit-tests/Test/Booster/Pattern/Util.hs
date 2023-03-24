@@ -47,7 +47,7 @@ app :: Symbol -> [Term] -> Term
 app s = SymbolApplication s []
 
 asConstructor :: SymbolAttributes
-asConstructor = SymbolAttributes Constructor False False
+asConstructor = SymbolAttributes Constructor False False False
 
 con1 :: Symbol
 con1 =

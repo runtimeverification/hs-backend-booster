@@ -221,6 +221,7 @@ injectionSymbol =
                 { symbolType = SortInjection
                 , isIdem = False
                 , isAssoc = False
+                , isMacroOrAlias = False
                 }
         }
 
