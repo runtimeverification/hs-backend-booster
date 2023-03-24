@@ -11,13 +11,17 @@ module Booster.Definition.Util (
 ) where
 
 import Control.DeepSeq (NFData (..))
+import Data.Bifunctor (first)
 import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
+import Data.List.Extra (sortOn)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import GHC.Generics (Generic)
-import Prettyprinter hiding (list)
+import Prettyprinter (Doc, Pretty, pretty)
+import Prettyprinter qualified as Pretty
+import Prettyprinter.Render.String qualified as Pretty (renderString)
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
@@ -64,48 +68,38 @@ mkSummary file KoreDefinition{modules, sorts, symbols, rewriteTheory} =
     noLocation = Location "no file" $ Position 0 0
 
 prettySummary :: Summary -> String
-prettySummary
-    Summary
-        { modNames
-        , sortNames
-        , symbolNames
-        , subSorts
-        , axiomCount
-        , preserveDefinednessCount
-        , containAcSymbolsCount
-        , termIndexes
-        } =
-        BS.unpack $
-            BS.unlines $
-                [ list decodeLabel' "Modules" modNames
-                , list decodeLabel' "Sorts" sortNames
-                , list decodeLabel' "Symbols" symbolNames
-                , "Axioms: " <> BS.pack (show axiomCount)
-                , "Axioms preserving definedness: " <> BS.pack (show preserveDefinednessCount)
-                , "Axioms containing AC symbols: " <> BS.pack (show containAcSymbolsCount)
-                ]
-                    <> ("Subsorts:" : tableView decodeLabel' subSorts)
-                    <> ("Axioms grouped by term index:" : tableView prettyLoc termIndexes')
-      where
-        tableView elemShower table =
-            map (("- " <>) . uncurry (list elemShower)) (Map.assocs table)
+prettySummary = Pretty.renderString . layoutPrettyUnbounded . pretty
 
+instance Pretty Summary where
+    pretty summary =
+        Pretty.vsep $
+            [ list prettyLabel "Modules" summary.modNames
+            , list prettyLabel "Sorts" summary.sortNames
+            , list prettyLabel "Symbols" summary.symbolNames
+            , "Axioms: " <> pretty summary.axiomCount
+            , "Axioms preserving definedness: " <> pretty summary.preserveDefinednessCount
+            , "Axioms containing AC symbols: " <> pretty summary.containAcSymbolsCount
+            ]
+                <> ("Subsorts:" : tableView prettyLabel prettyLabel summary.subSorts)
+                <> ("Axioms grouped by term index:" : tableView prettyTermIndex pretty summary.termIndexes)
+                <> [mempty]
+      where
+        tableView :: (k -> Doc a) -> (elem -> Doc a) -> Map.Map k [elem] -> [Doc a]
+        tableView keyShower elemShower =
+            map (uncurry (list elemShower))
+                . sortOn (show . fst)
+                . map (first (("- " <>) . keyShower))
+                . Map.assocs
+
+        list :: (elem -> Doc a) -> Doc a -> [elem] -> Doc a
         list _ header [] = header <> ": -"
         list f header [x] = header <> ": " <> f x
         list f header xs =
-            header
-                <> ": "
-                <> BS.pack (show $ length xs)
-                <> BS.concat (map (("\n  - " <>) . f) xs)
+            Pretty.hang 2 . Pretty.vsep $
+                (header <> ": " <> pretty (length xs)) : map (("- " <>) . f) xs
 
-        decodeLabel' = either error id . decodeLabel
-
-        termIndexes' =
-            Map.mapKeys prettyTermIndex termIndexes
+        prettyLabel = either error (pretty . BS.unpack) . decodeLabel
 
         prettyTermIndex Anything = "Anything"
-        prettyTermIndex (TopSymbol sym) = decodeLabel' sym
+        prettyTermIndex (TopSymbol sym) = prettyLabel sym
         prettyTermIndex None = "None"
-
-        prettyLoc :: Location -> ByteString
-        prettyLoc = BS.pack . renderDefault . pretty

@@ -2938,17 +2938,12 @@ Axioms grouped by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (775, 10)
 - Lbl#newFreshAccount__EVM_InternalOp_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (786, 10)
 - Lbl#next[_]_EVM_InternalOp_OpCode: 12
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  ( 156
-, 6 )
+  - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  (156, 6)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  (23, 6)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  ( 220
-, 6 )
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  ( 252
-, 6 )
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  ( 188
-, 6 )
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  ( 124
-, 6 )
+  - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  (220, 6)
+  - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  (252, 6)
+  - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  (188, 6)
+  - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  (124, 6)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  (91, 6)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  (58, 6)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (322, 10)
