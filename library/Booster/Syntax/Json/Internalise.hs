@@ -127,7 +127,8 @@ internaliseTerm allowAlias sortVars definition@KoreDefinition{sorts, symbols} pa
                         GeneralError
                             "wrong sort argument count for symbol"
             when (not allowAlias && symbol.attributes.isMacroOrAlias) $
-                throwE $ MacroOrAliasSymbolNotAllowed name symPatt
+                throwE $
+                    MacroOrAliasSymbolNotAllowed name symPatt
             Internal.SymbolApplication symbol
                 <$> mapM lookupInternalSort' appSorts
                 <*> mapM recursion args
