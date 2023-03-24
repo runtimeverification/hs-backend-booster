@@ -173,13 +173,11 @@ instance ReadT Position where
       where
         readLocationType :: Text -> Either String Position
         readLocationType input =
-            case Text.unpack input =~ locRegex :: (String, String, String, [String]) of
+            case input %%~ locRegex of
                 ("", _match, "", [lineStr, columnStr, _, _]) ->
                     Right $ Position (read lineStr) (read columnStr)
-                (unmatched, "", "", []) ->
-                    Left $ unmatched <> ": garbled location data"
-                other ->
-                    error $ "bad regex match result: " <> show other
+                _other ->
+                    Left $ show input <> ": garbled location data"
 
         natRegex, locRegex :: String
         natRegex = "(0|[1-9][0-9]*)"
@@ -200,4 +198,21 @@ instance ReadT Position where
                 , "\\)$"
                 ]
 
-instance ReadT FilePath
+-- strips away the Source(...) constructor that gets printed, if there is one
+-- if there is none,
+instance ReadT FileSource where
+    readT = maybe (Left "empty file source") readSource
+      where
+        readSource :: Text -> Either String FileSource
+        readSource input =
+            case input %%~ "^Source\\((..*)\\)$" of
+                ("", _all, "", [file]) ->
+                    Right $ FileSource file
+                (unmatched, "", "", []) ->
+                    Right $ FileSource unmatched
+                _other ->
+                    Left $ "bad source: " <> show input
+
+-- helper to pin regex match type
+(%%~) :: Text -> String -> (String, String, String, [String])
+txt %%~ regex = Text.unpack txt =~ regex

@@ -17,11 +17,13 @@ import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import GHC.Generics (Generic)
+import Prettyprinter hiding (list)
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.Pattern.Base (decodeLabel)
 import Booster.Pattern.Index (TermIndex (..))
+import Booster.Prettyprinter
 
 data Summary = Summary
     { file :: FilePath
@@ -83,7 +85,7 @@ prettySummary
                 , "Axioms containing AC symbols: " <> BS.pack (show containAcSymbolsCount)
                 ]
                     <> ("Subsorts:" : tableView decodeLabel' subSorts)
-                    <> ("Axioms grouped by term index:" : tableView justShow termIndexes')
+                    <> ("Axioms grouped by term index:" : tableView prettyLoc termIndexes')
       where
         tableView elemShower table =
             map (("- " <>) . uncurry (list elemShower)) (Map.assocs table)
@@ -105,4 +107,5 @@ prettySummary
         prettyTermIndex (TopSymbol sym) = decodeLabel' sym
         prettyTermIndex None = "None"
 
-        justShow = BS.pack . show
+        prettyLoc :: Location -> ByteString
+        prettyLoc = BS.pack . renderDefault . pretty
