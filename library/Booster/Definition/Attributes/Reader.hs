@@ -198,8 +198,8 @@ instance ReadT Position where
                 , "\\)$"
                 ]
 
--- strips away the Source(...) constructor that gets printed, if there is one
--- if there is none,
+-- Strips away the Source(...) constructor that gets printed, if there
+-- is one. If there is none, it uses the attribute string as-is.
 instance ReadT FileSource where
     readT = maybe (Left "empty file source") readSource
       where

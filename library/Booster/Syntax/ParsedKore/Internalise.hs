@@ -462,8 +462,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
         Syntax.KJBottom{sort = Syntax.SortApp _ []}
             | hasAttribute "constructor" ->
                 pure Nothing
-        -- anything else: not handled yet but not an error (this case
-        -- becomes an error if the list becomes comprehensive)
+        -- anything else:  error, as the list should be comprehensive
         _ -> throwE $ DefinitionAxiomError $ UnexpectedAxiom parsedAx
   where
     hasAttribute name = isJust $ lookup (Syntax.Id name) attributes
