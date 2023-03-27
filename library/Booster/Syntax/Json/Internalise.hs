@@ -231,10 +231,10 @@ internalisePredicate sortVars definition@KoreDefinition{sorts} pat = case pat of
                     <*> recursion arg2
             _other ->
                 throwE $ InconsistentPattern pat
-    Syntax.KJIn{sort, first = arg1, second = arg2} -> do
+    Syntax.KJIn{argSort, first = arg1, second = arg2} -> do
         a <- internaliseTerm sortVars definition arg1
         b <- internaliseTerm sortVars definition arg2
-        s <- lookupInternalSort' sort
+        s <- lookupInternalSort' argSort
         -- check that `sort` and sorts of a and b agree
         ensureEqualSorts (sortOfTerm a) s
         ensureEqualSorts (sortOfTerm b) s
