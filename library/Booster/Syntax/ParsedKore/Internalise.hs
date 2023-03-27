@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -Wno-ambiguous-fields #-}
 
 {- |
@@ -34,13 +35,14 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Tuple (swap)
+import GHC.Records (HasField (..))
 import Prettyprinter
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Attributes.Reader as Attributes
 import Booster.Definition.Base as Def
 import Booster.Pattern.Base qualified as Def
-import Booster.Pattern.Index (TermIndex, computeTermIndex)
+import Booster.Pattern.Index (TermIndex (Anything), computeTermIndex)
 import Booster.Pattern.Util qualified as Util
 import Booster.Prettyprinter hiding (attributes)
 import Booster.Syntax.Json.Internalise
@@ -211,6 +213,8 @@ addModule
                     , symbols = currentSymbols
                     , aliases = currentAliases
                     , rewriteTheory = currentRewriteTheory
+                    , functionEquations = currentFctEqs
+                    , simplifications = currentSimpls
                     }
                 )
         ) =
@@ -304,14 +308,25 @@ addModule
             let defWithAliases :: PartialDefinition
                 defWithAliases = Partial defWithNewSortsAndSymbols.partial{aliases}
 
-            (newRewriteRules, subsortPairs) <-
+            ( newRewriteRules
+                , subsortPairs
+                , newFunctionEquations
+                , newSimplifications
+                ) <-
                 partitionAxioms
                     <$> mapMaybeM (internaliseAxiom defWithAliases) parsedAxioms
 
-            let rewriteTheory = addToTheory newRewriteRules currentRewriteTheory
+            let rewriteTheory =
+                    addToTheoryWith (computeTermIndex . (.lhs.term)) newRewriteRules currentRewriteTheory
+                functionEquations =
+                    -- FIXME add index function
+                    addToTheoryWith (const Anything) newFunctionEquations currentFctEqs
+                simplifications =
+                    -- FIXME add index function
+                    addToTheoryWith (const Anything) newSimplifications currentSimpls
                 sorts = subsortClosure sorts' subsortPairs
 
-            pure $ defWithAliases.partial{sorts, rewriteTheory}
+            pure $ defWithAliases.partial{sorts, rewriteTheory, functionEquations, simplifications}
       where
         -- Uses 'getKey' to construct a finite mapping from the list,
         -- returning elements that yield the same key separately.
@@ -329,12 +344,20 @@ addModule
                 , [(getKey $ head d, d) | d <- dups]
                 )
 
-        partitionAxioms :: [AxiomResult] -> ([RewriteRule], [(Def.SortName, Def.SortName)])
-        partitionAxioms = go [] []
+        partitionAxioms ::
+            [AxiomResult] ->
+            ( [RewriteRule]
+            , [(Def.SortName, Def.SortName)]
+            , [Equation FunctionType]
+            , [Equation SimplificationType]
+            )
+        partitionAxioms = go [] [] [] []
           where
-            go rules sorts [] = (rules, sorts)
-            go rules sorts (RewriteRuleAxiom r : rest) = go (r : rules) sorts rest
-            go rules sorts (SubsortAxiom pair : rest) = go rules (pair : sorts) rest
+            go rules sorts funs simpls [] = (rules, sorts, funs, simpls)
+            go rules sorts funs simpls (RewriteRuleAxiom r : rest) = go (r : rules) sorts funs simpls rest
+            go rules sorts funs simpls (SubsortAxiom pair : rest) = go rules (pair : sorts) funs simpls rest
+            go rules sorts funs simpls (FunctionAxiom f : rest) = go rules sorts (f : funs) simpls rest
+            go rules sorts funs simpls (SimplificationAxiom s : rest) = go rules sorts funs (s : simpls) rest
 
         subsortClosure ::
             Map Def.SortName (SortAttributes, Set Def.SortName) ->
@@ -355,6 +378,10 @@ data AxiomResult
       RewriteRuleAxiom RewriteRule
     | -- | subsort data: a pair of sorts
       SubsortAxiom (Def.SortName, Def.SortName)
+    | -- | Function equation
+      FunctionAxiom (Equation FunctionType)
+    | -- | Simplification
+      SimplificationAxiom (Equation SimplificationType)
 
 -- helper type to carry relevant extracted data from a pattern (what
 -- is passed to the internalising function later)
@@ -501,8 +528,8 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
         RewriteRuleAxiom' alias args rhs attribs ->
             Just . RewriteRuleAxiom
                 <$> internaliseRewriteRule partialDefinition (textToBS alias) args rhs attribs
-        EquationAxiom'{} ->
-            pure Nothing
+        EquationAxiom' requires lhs rhs sortVars attribs ->
+            Just <$> internaliseEquation partialDefinition requires lhs rhs sortVars attribs
 
 orFailWith :: Maybe a -> e -> Except e a
 mbX `orFailWith` err = maybe (throwE err) pure mbX
@@ -544,9 +571,6 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
         computedAttributes =
             ComputedAxiomAttributes{preservesDefinedness, containsAcSymbols}
     return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes}
-  where
-    removeTops :: Def.Pattern -> Def.Pattern
-    removeTops p = p{Def.constraints = filter (/= Def.Top) p.constraints}
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
@@ -570,23 +594,60 @@ expandAlias alias currentArgs
                             Util.substituteInPredicate substitution <$> constraints
                         }
 
-addToTheory :: [RewriteRule] -> Theory RewriteRule -> Theory RewriteRule
-addToTheory axioms theory =
+removeTops :: Def.Pattern -> Def.Pattern
+removeTops p = p{Def.constraints = filter (/= Def.Top) p.constraints}
+
+internaliseEquation ::
+    KoreDefinition -> -- context
+    Syntax.KorePattern -> -- requires
+    Syntax.KorePattern -> -- LHS
+    Syntax.KorePattern -> -- And(RHS, ensures)
+    [Syntax.Id] -> -- sort variables
+    AxiomAttributes ->
+    Except DefinitionError AxiomResult
+internaliseEquation partialDefinition requires leftTerm right sortVars axAttributes = do
+    lhs <-
+        withExcept DefinitionPatternError $
+            fmap (removeTops . Util.modifyVariables ("Eq#" <>)) $
+                internalisePattern (Just sortVars) partialDefinition $
+                    Syntax.KJAnd leftTerm.sort leftTerm requires
+    rhs <-
+        withExcept DefinitionPatternError $
+            fmap (removeTops . Util.modifyVariables ("Eq#" <>)) $
+                internalisePattern (Just sortVars) partialDefinition right
+
+    let result :: Equation tag
+        result = Equation{lhs, rhs, attributes = axAttributes}
+    pure $
+        case axAttributes.simplification of
+            Nothing -> FunctionAxiom result
+            Just _ -> SimplificationAxiom result
+
+addToTheoryWith ::
+    HasField "attributes" axiom AxiomAttributes =>
+    (axiom -> TermIndex) ->
+    [axiom] ->
+    Theory axiom ->
+    Theory axiom
+addToTheoryWith termIndex axioms theory =
     let newTheory =
             Map.map groupByPriority
-                . groupByTermIndex
+                . groupByTermIndex termIndex
                 $ axioms
      in Map.unionWith (Map.unionWith (<>)) theory newTheory
 
-groupByTermIndex :: [RewriteRule] -> Map TermIndex [RewriteRule]
-groupByTermIndex axioms =
+groupByTermIndex :: (axiom -> TermIndex) -> [axiom] -> Map TermIndex [axiom]
+groupByTermIndex termIndex axioms =
     let withTermIndexes = do
             axiom <- axioms
-            let termIndex = computeTermIndex axiom.lhs.term
-            return (termIndex, axiom)
+            let index = termIndex axiom
+            return (index, axiom)
      in Map.fromAscList . groupSort $ withTermIndexes
 
-groupByPriority :: [RewriteRule] -> Map Priority [RewriteRule]
+groupByPriority ::
+    HasField "attributes" axiom AxiomAttributes =>
+    [axiom] ->
+    Map Priority [axiom]
 groupByPriority axioms =
     Map.fromAscList . groupSort $ [(ax.attributes.priority, ax) | ax <- axioms]
 
