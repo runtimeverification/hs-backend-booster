@@ -6,6 +6,7 @@ Parsing attributes from @ParsedAttributes@ to different internal
 types. The required attribute names and parsers for the expected
 values are hard-wired.
 -}
+{-# LANGUAGE FlexibleContexts #-}
 module Booster.Definition.Attributes.Reader (
     HasAttributes (..),
     readLocation,
@@ -26,6 +27,7 @@ import Text.Regex.PCRE
 import Booster.Definition.Attributes.Base
 import Booster.Syntax.ParsedKore.Base
 import Kore.Syntax.Json.Types (Id (..))
+import Data.Coerce (Coercible, coerce)
 
 {- | A class describing all attributes we want to extract from parsed
  entities
@@ -96,7 +98,7 @@ instance HasAttributes ParsedSymbol where
             <$> symbolType
             <*> isIdem
             <*> isAssoc
-            <*> (attributes .! "macro" <||> attributes .! "alias'Kywd'")
+            <*> (coerce <$> (attributes .! "macro" <||> attributes .! "alias'Kywd'"))
 
 instance HasAttributes ParsedSort where
     type Attributes ParsedSort = SortAttributes
@@ -124,10 +126,10 @@ extractAttributeOrDefault def name attribs =
 attribs .:? name =
     except . first Text.pack . mapM readT $ getAttribute name attribs
 
-extractFlag :: Text -> ParsedAttributes -> Except Text Bool
-extractFlag = extractAttributeOrDefault False
+extractFlag :: Coercible Bool b => Text -> ParsedAttributes -> Except Text b
+extractFlag = coerce . extractAttributeOrDefault False
 
-(.!) :: ParsedAttributes -> Text -> Except Text Bool
+(.!) :: Coercible Bool b => ParsedAttributes -> Text -> Except Text b
 (.!) = flip extractFlag
 
 infix 5 .!

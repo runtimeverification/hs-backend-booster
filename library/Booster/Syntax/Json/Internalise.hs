@@ -39,6 +39,7 @@ import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
 import Booster.Syntax.Json.Externalise (externaliseSort)
 import Kore.Syntax.Json.Types qualified as Syntax
+import Data.Coerce (coerce)
 
 internalisePattern ::
     Bool ->
@@ -126,7 +127,7 @@ internaliseTerm allowAlias sortVars definition@KoreDefinition{sorts, symbols} pa
                     PatternSortError pat $
                         GeneralError
                             "wrong sort argument count for symbol"
-            when (not allowAlias && symbol.attributes.isMacroOrAlias) $
+            when (not allowAlias && coerce symbol.attributes.isMacroOrAlias) $
                 throwE $
                     MacroOrAliasSymbolNotAllowed name symPatt
             Internal.SymbolApplication symbol

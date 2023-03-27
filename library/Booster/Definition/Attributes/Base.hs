@@ -5,6 +5,8 @@ License     : BSD-3-Clause
 Attributes stored together with different entities in a
 @KoreDefinition@.
 -}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE PolyKinds #-}
 module Booster.Definition.Attributes.Base (
     DefinitionAttributes (..),
     ModuleAttributes (..),
@@ -17,6 +19,13 @@ module Booster.Definition.Attributes.Base (
     Location (..),
     Position (..),
     Priority,
+    Flag(..),
+    pattern IsIdem,
+    pattern IsNotIdem,
+    pattern IsAssoc,
+    pattern IsNotAssoc,
+    pattern IsMacroOrAlias,
+    pattern IsNotMacroOrAlias,
 ) where
 
 import Control.DeepSeq (NFData (..))
@@ -25,6 +34,7 @@ import Data.Text (Text)
 import Data.Word (Word8)
 import GHC.Generics (Generic)
 import Prettyprinter as Pretty
+
 
 data DefinitionAttributes = DefinitionAttributes
     {
@@ -92,9 +102,30 @@ data SymbolType
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData, Hashable)
 
+newtype Flag (name :: k) = Flag Bool
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData, Hashable)
+    
+pattern IsIdem, IsNotIdem :: Flag "isIdem"
+pattern IsIdem = Flag True
+pattern IsNotIdem = Flag False
+{-# COMPLETE IsIdem, IsNotIdem #-}
+
+pattern IsAssoc, IsNotAssoc :: Flag "isAssoc"
+pattern IsAssoc = Flag True
+pattern IsNotAssoc = Flag False
+{-# COMPLETE IsAssoc, IsNotAssoc #-}
+
+pattern IsMacroOrAlias, IsNotMacroOrAlias :: Flag "isMacroOrAlias"
+pattern IsMacroOrAlias = Flag True
+pattern IsNotMacroOrAlias = Flag False
+{-# COMPLETE IsMacroOrAlias, IsNotMacroOrAlias #-}
+
 data SymbolAttributes = SymbolAttributes
     { symbolType :: SymbolType
-    , isIdem, isAssoc, isMacroOrAlias :: Bool
+    , isIdem:: Flag "isIdem"
+    , isAssoc :: Flag "isAssoc"
+    , isMacroOrAlias :: Flag "isMacroOrAlias"
     }
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData, Hashable)

@@ -13,7 +13,10 @@ module Booster.Pattern.Base (
 
 import Booster.Definition.Attributes.Base (
     SymbolAttributes (..),
-    SymbolType (..),
+    SymbolType (..), 
+    pattern IsNotIdem, 
+    pattern IsNotAssoc, 
+    pattern IsNotMacroOrAlias,
  )
 import Booster.Prettyprinter qualified as KPretty
 import Control.DeepSeq (NFData (..))
@@ -219,9 +222,9 @@ injectionSymbol =
         , attributes =
             SymbolAttributes
                 { symbolType = SortInjection
-                , isIdem = False
-                , isAssoc = False
-                , isMacroOrAlias = False
+                , isIdem = IsNotIdem
+                , isAssoc = IsNotAssoc
+                , isMacroOrAlias = IsNotMacroOrAlias
                 }
         }
 
