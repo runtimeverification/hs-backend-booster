@@ -17,11 +17,11 @@ import Control.Applicative (liftA2)
 import Control.Monad.Extra (whenM)
 import Control.Monad.Trans.Except
 import Data.Bifunctor
+import Data.Char (isDigit)
 import Data.Kind
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Word
 import Text.Read (readEither)
 import Text.Regex.PCRE
 
@@ -56,7 +56,7 @@ instance HasAttributes ParsedAxiom where
             <$> readLocation attributes
             <*> (fromMaybe 50 <$> attributes .:? "priority")
             <*> (attributes .:? "label")
-            <*> (attributes .! "simplification")
+            <*> (attributes .:? "simplification")
             <*> (attributes .:? "preserves-definedness")
 
 sourceName
@@ -65,9 +65,12 @@ sourceName
 sourceName = "org'Stop'kframework'Stop'attributes'Stop'Source"
 locationName = "org'Stop'kframework'Stop'attributes'Stop'Location"
 
-readLocation :: ParsedAttributes -> Except Text Location
-readLocation attributes =
-    Location <$> attributes .: sourceName <*> attributes .: locationName
+readLocation :: ParsedAttributes -> Except Text (Maybe Location)
+readLocation attributes = do
+    file <- attributes .:? sourceName
+    case file of
+        Nothing -> pure Nothing
+        Just f -> Just . Location f <$> attributes .: locationName
 
 instance HasAttributes ParsedSymbol where
     type Attributes ParsedSymbol = SymbolAttributes
@@ -109,23 +112,26 @@ instance HasAttributes ParsedSort where
 
 ----------------------------------------
 
+readError :: Text -> String -> Text
+readError name msg = name <> " could not be read: " <> Text.pack msg
+
 extractAttribute :: ReadT a => Text -> ParsedAttributes -> Except Text a
 extractAttribute name attribs =
     (maybe (throwE notFound) pure $ getAttribute name attribs)
-        >>= except . first Text.pack . readT
+        >>= except . first (readError name) . readT
   where
-    notFound = Text.pack $ show name <> " not found in attributes."
+    notFound = name <> " not found in attributes."
 
 (.:) :: ReadT a => ParsedAttributes -> Text -> Except Text a
 (.:) = flip extractAttribute
 
 extractAttributeOrDefault :: ReadT a => a -> Text -> ParsedAttributes -> Except Text a
 extractAttributeOrDefault def name attribs =
-    maybe (pure def) (either (throwE . Text.pack) pure . readT) $ getAttribute name attribs
+    maybe (pure def) (either (throwE . readError name) pure . readT) $ getAttribute name attribs
 
 (.:?) :: forall a. ReadT a => ParsedAttributes -> Text -> Except Text (Maybe a)
 attribs .:? name =
-    except . first Text.pack . mapM readT $ getAttribute name attribs
+    except . first (readError name) . mapM readT $ getAttribute name attribs
 
 extractFlag :: Coercible Bool b => Text -> ParsedAttributes -> Except Text b
 extractFlag = coerce . extractAttributeOrDefault False
@@ -152,7 +158,12 @@ class ReadT a where
     default readT :: Read a => Maybe Text -> Either String a
     readT = maybe (Left "empty") (readEither . Text.unpack)
 
-instance ReadT Word8
+instance ReadT Priority where
+    readT Nothing = Left "empty priority"
+    readT (Just "") = Right 50
+    readT (Just n)
+        | all isDigit (Text.unpack n) = readEither $ "Priority " <> Text.unpack n
+        | otherwise = Left $ "invalid priority value " <> show n
 
 -- | Bool instance: presence of the attribute implies 'True'
 instance ReadT Bool where
@@ -166,13 +177,11 @@ instance ReadT Position where
       where
         readLocationType :: Text -> Either String Position
         readLocationType input =
-            case Text.unpack input =~ locRegex :: (String, String, String, [String]) of
+            case input %%~ locRegex of
                 ("", _match, "", [lineStr, columnStr, _, _]) ->
                     Right $ Position (read lineStr) (read columnStr)
-                (unmatched, "", "", []) ->
-                    Left $ unmatched <> ": garbled location data"
-                other ->
-                    error $ "bad regex match result: " <> show other
+                _other ->
+                    Left $ show input <> ": garbled location data"
 
         natRegex, locRegex :: String
         natRegex = "(0|[1-9][0-9]*)"
@@ -193,4 +202,21 @@ instance ReadT Position where
                 , "\\)$"
                 ]
 
-instance ReadT FilePath
+-- Strips away the Source(...) constructor that gets printed, if there
+-- is one. If there is none, it uses the attribute string as-is.
+instance ReadT FileSource where
+    readT = maybe (Left "empty file source") readSource
+      where
+        readSource :: Text -> Either String FileSource
+        readSource input =
+            case input %%~ "^Source\\((..*)\\)$" of
+                ("", _all, "", [file]) ->
+                    Right $ FileSource file
+                (unmatched, "", "", []) ->
+                    Right $ FileSource unmatched
+                _other ->
+                    Left $ "bad source: " <> show input
+
+-- helper to pin regex match type
+(%%~) :: Text -> String -> (String, String, String, [String])
+txt %%~ regex = Text.unpack txt =~ regex
