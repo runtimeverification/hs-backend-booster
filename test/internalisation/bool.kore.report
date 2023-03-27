@@ -1,12 +1,14 @@
 Modules: BOOL
 Sorts: SortBool
-Symbols: 7
+Symbols: 9
   - Lbl_andBool_
   - Lbl_andThenBool_
   - Lbl_impliesBool_
   - Lbl_orBool_
   - Lbl_orElseBool_
   - Lbl_xorBool_
+  - Lbl_==Bool_
+  - Lbl_=/=Bool_
   - LblnotBool_
 Axioms: 0
 Axioms preserving definedness: 0
