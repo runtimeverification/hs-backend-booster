@@ -158,11 +158,17 @@ mergeDefs k1 k2
                 <*> mergeDisjoint sorts k1 k2
                 <*> mergeDisjoint symbols k1 k2
                 <*> mergeDisjoint aliases k1 k2
-                <*> pure (mergeTheories k1 k2)
+                <*> pure (mergeTheories rewriteTheory k1 k2)
+                <*> pure (mergeTheories functionEquations k1 k2)
+                <*> pure (mergeTheories simplifications k1 k2)
   where
-    mergeTheories :: ImportedDefinition -> KoreDefinition -> RewriteTheory
-    mergeTheories (Imported m1) m2 =
-        Map.unionWith (Map.unionWith (<>)) (rewriteTheory m1) (rewriteTheory m2)
+    mergeTheories ::
+        (KoreDefinition -> Theory r) ->
+        ImportedDefinition ->
+        KoreDefinition ->
+        Theory r
+    mergeTheories selector (Imported m1) m2 =
+        Map.unionWith (Map.unionWith (<>)) (selector m1) (selector m2)
 
     mergeDisjoint ::
         (KoreDefinition -> Map ByteString a) ->
@@ -260,6 +266,8 @@ addModule
                             , symbols
                             , aliases = currentAliases -- no aliases yet
                             , rewriteTheory = currentRewriteTheory -- no rules yet
+                            , functionEquations = Map.empty
+                            , simplifications = Map.empty
                             }
 
             let internaliseAlias ::
@@ -562,7 +570,7 @@ expandAlias alias currentArgs
                             Util.substituteInPredicate substitution <$> constraints
                         }
 
-addToTheory :: [RewriteRule] -> RewriteTheory -> RewriteTheory
+addToTheory :: [RewriteRule] -> Theory RewriteRule -> Theory RewriteRule
 addToTheory axioms theory =
     let newTheory =
             Map.map groupByPriority

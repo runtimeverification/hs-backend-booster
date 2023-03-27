@@ -150,7 +150,7 @@ rule ruleLabel lhs rhs priority =
         , computedAttributes = ComputedAxiomAttributes False True
         }
 
-mkTheory :: [(TermIndex, [RewriteRule])] -> RewriteTheory
+mkTheory :: [(TermIndex, [RewriteRule])] -> Theory RewriteRule
 mkTheory = Map.map mkPriorityGroups . Map.fromList
   where
     mkPriorityGroups :: [RewriteRule] -> Map Priority [RewriteRule]
