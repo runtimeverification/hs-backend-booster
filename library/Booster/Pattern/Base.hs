@@ -13,9 +13,9 @@ module Booster.Pattern.Base (
 
 import Booster.Definition.Attributes.Base (
     SymbolAttributes (..),
-    SymbolType (..), 
-    pattern IsNotIdem, 
-    pattern IsNotAssoc, 
+    SymbolType (..),
+    pattern IsNotAssoc,
+    pattern IsNotIdem,
     pattern IsNotMacroOrAlias,
  )
 import Booster.Prettyprinter qualified as KPretty

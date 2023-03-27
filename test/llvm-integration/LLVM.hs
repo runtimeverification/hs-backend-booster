@@ -37,6 +37,7 @@ import Booster.Syntax.Json.Externalise (externaliseTerm)
 import Booster.Syntax.Json.Internalise qualified as Syntax
 import Kore.Syntax.Json.Types qualified as Syntax
 import System.Info (os)
+
 -- A prerequisite for all tests in this suite is that a fixed K
 -- definition was compiled in LLVM 'c' mode to produce a dynamic
 -- library, and is available under 'test/llvm-kompiled/interpreter.{dylib,so}'

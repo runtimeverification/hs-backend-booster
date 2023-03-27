@@ -38,8 +38,8 @@ import Booster.Definition.Base (KoreDefinition (..))
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
 import Booster.Syntax.Json.Externalise (externaliseSort)
-import Kore.Syntax.Json.Types qualified as Syntax
 import Data.Coerce (coerce)
+import Kore.Syntax.Json.Types qualified as Syntax
 
 internalisePattern ::
     Bool ->

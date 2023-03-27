@@ -1,3 +1,6 @@
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE PolyKinds #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -5,8 +8,6 @@ License     : BSD-3-Clause
 Attributes stored together with different entities in a
 @KoreDefinition@.
 -}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE PolyKinds #-}
 module Booster.Definition.Attributes.Base (
     DefinitionAttributes (..),
     ModuleAttributes (..),
@@ -19,7 +20,7 @@ module Booster.Definition.Attributes.Base (
     Location (..),
     Position (..),
     Priority,
-    Flag(..),
+    Flag (..),
     pattern IsIdem,
     pattern IsNotIdem,
     pattern IsAssoc,
@@ -34,7 +35,6 @@ import Data.Text (Text)
 import Data.Word (Word8)
 import GHC.Generics (Generic)
 import Prettyprinter as Pretty
-
 
 data DefinitionAttributes = DefinitionAttributes
     {
@@ -105,7 +105,7 @@ data SymbolType
 newtype Flag (name :: k) = Flag Bool
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData, Hashable)
-    
+
 pattern IsIdem, IsNotIdem :: Flag "isIdem"
 pattern IsIdem = Flag True
 pattern IsNotIdem = Flag False
@@ -123,7 +123,7 @@ pattern IsNotMacroOrAlias = Flag False
 
 data SymbolAttributes = SymbolAttributes
     { symbolType :: SymbolType
-    , isIdem:: Flag "isIdem"
+    , isIdem :: Flag "isIdem"
     , isAssoc :: Flag "isAssoc"
     , isMacroOrAlias :: Flag "isMacroOrAlias"
     }

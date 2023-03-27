@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -6,7 +8,6 @@ Parsing attributes from @ParsedAttributes@ to different internal
 types. The required attribute names and parsers for the expected
 values are hard-wired.
 -}
-{-# LANGUAGE FlexibleContexts #-}
 module Booster.Definition.Attributes.Reader (
     HasAttributes (..),
     readLocation,
@@ -26,8 +27,8 @@ import Text.Regex.PCRE
 
 import Booster.Definition.Attributes.Base
 import Booster.Syntax.ParsedKore.Base
-import Kore.Syntax.Json.Types (Id (..))
 import Data.Coerce (Coercible, coerce)
+import Kore.Syntax.Json.Types (Id (..))
 
 {- | A class describing all attributes we want to extract from parsed
  entities
