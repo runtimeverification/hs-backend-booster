@@ -597,6 +597,10 @@ expandAlias alias currentArgs
 removeTops :: Def.Pattern -> Def.Pattern
 removeTops p = p{Def.constraints = filter (/= Def.Top) p.constraints}
 
+{- | Internalises both simplifications (straightforward) and function
+   rules (requires breaking the 'requires' clause into components to
+   discard the 'antiLeft' part and to inline the argument predicates.
+-}
 internaliseEquation ::
     KoreDefinition -> -- context
     Syntax.KorePattern -> -- requires
@@ -605,23 +609,31 @@ internaliseEquation ::
     [Syntax.Id] -> -- sort variables
     AxiomAttributes ->
     Except DefinitionError AxiomResult
-internaliseEquation partialDefinition requires leftTerm right sortVars axAttributes = do
-    lhs <-
-        withExcept DefinitionPatternError $
-            fmap (removeTops . Util.modifyVariables ("Eq#" <>)) $
-                internalisePattern (Just sortVars) partialDefinition $
-                    Syntax.KJAnd leftTerm.sort leftTerm requires
-    rhs <-
-        withExcept DefinitionPatternError $
-            fmap (removeTops . Util.modifyVariables ("Eq#" <>)) $
-                internalisePattern (Just sortVars) partialDefinition right
+internaliseEquation partialDefinition precond leftTerm right sortVars axAttributes
+    | isJust $ axAttributes.simplification = do
+          lhs <- internaliseSide $ Syntax.KJAnd leftTerm.sort leftTerm precond
+          rhs <- internaliseSide right
+          pure $ SimplificationAxiom Equation {lhs, rhs, attributes = axAttributes}
+    | otherwise = do
+          (requires, args) <-
+              case precond of
+                   -- argument predicates only, no antiLeft
+                   Syntax.KJAnd _ requires' args'@(Syntax.KJAnd _ Syntax.KJIn{} _) ->
+                       pure (requires', args')
+                   -- argument predicats and antiLeft
+                   Syntax.KJAnd _ _antiLeft (Syntax.KJAnd _ requires' args') ->
+                       pure (requires', args')
+                   _other -> throwE undefined -- MalformedEquationError
+          -- FIXME incomplete. Inline arguments, analyse for
+          -- partiality, mark rule as partial (or "tainted"?) if
+          -- undefined arguemnts are possible (computed attribute).
+          undefined
+  where
+    internaliseSide =
+        withExcept DefinitionPatternError
+            . fmap (removeTops . Util.modifyVariables ("Eq#" <>))
+            . internalisePattern (Just sortVars) partialDefinition
 
-    let result :: Equation tag
-        result = Equation{lhs, rhs, attributes = axAttributes}
-    pure $
-        case axAttributes.simplification of
-            Nothing -> FunctionAxiom result
-            Just _ -> SimplificationAxiom result
 
 addToTheoryWith ::
     HasField "attributes" axiom AxiomAttributes =>
