@@ -49,10 +49,9 @@ internalisePatternNoExistentials ::
     KoreDefinition ->
     Syntax.KorePattern ->
     Except PatternError Internal.Pattern
-internalisePatternNoExistentials allowAlias sortVars definition pat = 
+internalisePatternNoExistentials allowAlias sortVars definition pat =
     internalisePattern allowAlias sortVars definition pat >>= \(exs, pat') ->
         unless (Set.null exs) (throwE $ ContainsExistentials pat) >> pure pat'
-
 
 internalisePattern ::
     Bool ->
@@ -66,7 +65,7 @@ internalisePattern allowAlias sortVars definition pat = do
     when (null terms) $ throwE $ NoTermFound pat
 
     -- construct an AndTerm from all terms (checking sort consistency)
-    (exs, terms') <- foldrM (\t (e, ts) -> internaliseTerm e allowAlias sortVars definition t >>= \(e', t') -> pure (e', t':ts)) mempty terms
+    (exs, terms') <- foldrM (\t (e, ts) -> internaliseTerm e allowAlias sortVars definition t >>= \(e', t') -> pure (e', t' : ts)) mempty terms
     term <- andTerm terms'
     -- internalise all predicates
     constraints <- mapM (internalisePredicate allowAlias sortVars definition) predicates
@@ -106,9 +105,8 @@ lookupInternalSort sortVars sorts pat =
     let knownVarSet = maybe Set.empty (Set.fromList . map Syntax.getId) sortVars
      in mapExcept (first $ PatternSortError pat) . internaliseSort knownVarSet sorts
 
-
 -- Throws errors when an existential is found
-internaliseTermNoExistentials :: 
+internaliseTermNoExistentials ::
     Bool ->
     Maybe [Syntax.Id] ->
     KoreDefinition ->
@@ -129,9 +127,7 @@ internaliseTerm ::
     Syntax.KorePattern ->
     Except PatternError (Set Internal.Variable, Internal.Term)
 internaliseTerm es allowAlias sortVars KoreDefinition{sorts, symbols} pat = recursion es pat
-
   where
-
     predicate = throwE $ TermExpected pat
 
     lookupInternalSort' = lookupInternalSort sortVars sorts pat
@@ -166,7 +162,7 @@ internaliseTerm es allowAlias sortVars KoreDefinition{sorts, symbols} pat = recu
                 throwE $
                     MacroOrAliasSymbolNotAllowed name symPatt
             sorts' <- mapM lookupInternalSort' appSorts
-            (exs', args') <- foldrM (\a (e, as) -> recursion e a >>= \(e', a') -> pure (e', a':as)) (exs, []) args
+            (exs', args') <- foldrM (\a (e, as) -> recursion e a >>= \(e', a') -> pure (e', a' : as)) (exs, []) args
             pure (exs', Internal.SymbolApplication symbol sorts' args')
         Syntax.KJString{value} ->
             pure (exs, Internal.DomainValue (Internal.SortApp "SortString" []) $ textToBS value)
@@ -199,15 +195,16 @@ internaliseTerm es allowAlias sortVars KoreDefinition{sorts, symbols} pat = recu
         Syntax.KJNext{} -> predicate
         Syntax.KJRewrites{} -> predicate
         Syntax.KJDV{sort, value} ->
-            (exs,) <$> (Internal.DomainValue
-                <$> lookupInternalSort' sort
-                <*> pure (textToBS value))
+            (exs,)
+                <$> ( Internal.DomainValue
+                        <$> lookupInternalSort' sort
+                        <*> pure (textToBS value)
+                    )
         Syntax.KJMultiOr{} -> predicate
         Syntax.KJLeftAssoc{symbol, sorts = argSorts, argss} ->
             recursion exs $ foldl1 (mkF symbol argSorts) argss
         Syntax.KJRightAssoc{symbol, sorts = argSorts, argss} ->
             recursion exs $ foldr1 (mkF symbol argSorts) argss
-
 
 -- Throws errors when a term is encountered. The 'And' case
 -- is analysed before, this function produces an 'AndPredicate'.
@@ -451,7 +448,7 @@ instance ToJSON PatternError where
             wrap ("Unknown symbol '" <> Syntax.getId sym <> "'") p
         MacroOrAliasSymbolNotAllowed sym p ->
             wrap ("Symbol '" <> Syntax.getId sym <> "' is a macro/alias") p
-        VariableCapture i p->
+        VariableCapture i p ->
             wrap ("Variable '" <> Syntax.getId i <> "' is getting captured") p
         ContainsExistentials p ->
             wrap "Term contains existentials" p

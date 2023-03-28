@@ -20,7 +20,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Aeson (ToJSON (..), Value (..), object, (.=))
-import Data.Bifunctor (first, second, bimap)
+import Data.Bifunctor (bimap, first, second)
 import Data.ByteString.Char8 (ByteString)
 import Data.Function (on)
 import Data.List (foldl', groupBy, partition, sortOn)
