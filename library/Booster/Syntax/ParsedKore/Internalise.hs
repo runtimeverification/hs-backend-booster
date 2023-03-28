@@ -20,7 +20,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Aeson (ToJSON (..), Value (..), object, (.=))
-import Data.Bifunctor (first, second)
+import Data.Bifunctor (first, second, bimap)
 import Data.ByteString.Char8 (ByteString)
 import Data.Function (on)
 import Data.List (foldl', groupBy, partition, sortOn)
@@ -513,7 +513,7 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
                 `orFailWith` UnknownAlias aliasName
     args <-
         traverse
-            (withExcept DefinitionPatternError . internaliseTerm True Nothing partialDefinition)
+            (withExcept DefinitionPatternError . internaliseTermNoExistentials True Nothing partialDefinition)
             aliasArgs
     result <- expandAlias alias args
 
@@ -524,8 +524,8 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
         fmap (removeTops . Util.modifyVariables ("Rule#" <>)) $
             Util.retractPattern result
                 `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
-    rhs <-
-        fmap (removeTops . Util.modifyVariables ("Rule#" <>)) $
+    (existentials, rhs) <-
+        fmap (bimap (Set.map $ \v@Def.Variable{variableName = vn} -> v{Def.variableName = "Rule#" <> vn}) (removeTops . Util.modifyVariables ("Rule#" <>))) $
             withExcept DefinitionPatternError $
                 internalisePattern True Nothing partialDefinition right
     let preservesDefinedness =
@@ -535,7 +535,7 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
             Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
         computedAttributes =
             ComputedAxiomAttributes{preservesDefinedness, containsAcSymbols}
-    return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes}
+    return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes, existentials}
   where
     removeTops :: Def.Pattern -> Def.Pattern
     removeTops p = p{Def.constraints = filter (/= Def.Top) p.constraints}

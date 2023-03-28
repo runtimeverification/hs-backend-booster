@@ -34,7 +34,7 @@ import Booster.Pattern.Base (Pattern)
 import Booster.Pattern.Rewrite (RewriteResult (..), performRewrite)
 import Booster.Syntax.Json (KoreJson (..), addHeader)
 import Booster.Syntax.Json.Externalise (externalisePattern)
-import Booster.Syntax.Json.Internalise (internalisePattern)
+import Booster.Syntax.Json.Internalise (internalisePatternNoExistentials    )
 import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base
 import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinitions)
@@ -55,7 +55,7 @@ respond stateVar =
             | isJust req.movingAverageStepTimeout -> pure $ Left $ unsupportedOption ("moving-average-step-timeout" :: String)
         Execute req -> withContext req._module $ \(def, mLlvmLibrary) -> do
             -- internalise given constrained term
-            let internalised = runExcept $ internalisePattern False Nothing def req.state.term
+            let internalised = runExcept $ internalisePatternNoExistentials False Nothing def req.state.term
 
             case internalised of
                 Left patternError -> do

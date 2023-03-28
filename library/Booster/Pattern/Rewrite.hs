@@ -36,6 +36,7 @@ import Booster.Pattern.Simplify
 import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
+import qualified Data.Set as Set
 
 newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe LLVM.API) (Except err) a}
     deriving newtype (Functor, Applicative, Monad)
@@ -167,12 +168,21 @@ applyRule pat rule = runMaybeT $ do
 
     let rewritten =
             Pattern
-                (substituteInTerm subst rule.rhs.term)
+                (substituteInTerm (refreshExistentials subst) rule.rhs.term)
                 -- NB no new constraints, as they have been checked to be `Top`
                 (map (substituteInPredicate subst) $ pat.constraints)
     return (rule, rewritten)
   where
     failRewrite = lift . throw
+
+    refreshExistentials subst
+        | Set.null (rule.existentials `Set.intersection` Set.fromList (Map.keys subst)) = subst
+        | otherwise = subst `Map.union` Map.fromList [(v, Var $ freshen v $ Set.fromList $ Map.keys subst) | v <- Set.toList rule.existentials]
+    
+    freshen v@Variable{variableName = vn} vs 
+        | v `Set.member` vs = freshen v{variableName = vn <> "'"} vs
+        | otherwise = v
+
 
     checkConstraint :: Predicate -> MaybeT (RewriteM RewriteFailed) (Maybe RewriteFailed)
     checkConstraint p = do
