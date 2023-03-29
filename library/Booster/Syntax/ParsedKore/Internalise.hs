@@ -389,7 +389,14 @@ data AxiomResult
 data AxiomData
     = RewriteRuleAxiom' Text [Syntax.KorePattern] Syntax.KorePattern AxiomAttributes
     | SubsortAxiom' Syntax.Sort Syntax.Sort
-    | EquationAxiom'
+    | FunctionAxiom'
+        Syntax.KorePattern -- requires
+        [(Syntax.Id, Syntax.Sort, Syntax.KorePattern)] -- arguments (as variable substitution)
+        Syntax.KorePattern -- LHS
+        Syntax.KorePattern -- And(RHS, ensures)
+        [Syntax.Id] -- sort variables
+        AxiomAttributes
+    | SimplificationAxiom'
         Syntax.KorePattern -- requires
         Syntax.KorePattern -- LHS
         Syntax.KorePattern -- And(RHS, ensures)
@@ -456,13 +463,34 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
             , [Syntax.KJEVar{name = _, sort = sub}] <- args ->
                 pure $ Just $ SubsortAxiom' sub super
         -- implies with a symbol application: an equation
-        Syntax.KJImplies _ req (Syntax.KJEquals _ _ lhs@Syntax.KJApp{} rhs@Syntax.KJAnd{}) ->
-            Just . EquationAxiom' req lhs rhs sortVars
-                <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
-        -- implies with the LHS not a symbol application, tagged as simplification
-        Syntax.KJImplies _ _req (Syntax.KJEquals _sort _ _lhs _rhs@Syntax.KJAnd{})
+        Syntax.KJImplies _ req (Syntax.KJEquals _ _ lhs@Syntax.KJApp{args} rhs@Syntax.KJAnd{})
             | hasAttribute "simplification" ->
-                pure Nothing
+                Just . SimplificationAxiom' req lhs rhs sortVars
+                    <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
+            -- requires and argument predicate, no antiLeft
+            | Syntax.KJAnd _ requires argPred@Syntax.KJAnd{first = Syntax.KJIn{}} <- req
+            , all isVar args -> do
+                argTuples <- extractBinders argPred
+                Just . FunctionAxiom' requires argTuples lhs rhs sortVars
+                    <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
+            -- antiLeft (discarded), requires and argument predicate
+            | Syntax.KJAnd _ _antiLeft Syntax.KJAnd{first = reqs, second = argPred} <- req
+            , all isVar args -> do
+                argTuples <- extractBinders argPred
+                Just . FunctionAxiom' reqs argTuples lhs rhs sortVars
+                    <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
+            -- no arguments, no antiLeft
+            | Syntax.KJAnd _ requires Syntax.KJTop{} <- req
+            , all isVar args -> do
+                Just . FunctionAxiom' requires [] lhs rhs sortVars
+                    <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
+            | otherwise ->
+                throwE $ DefinitionAxiomError $ MalformedEquation parsedAx
+        -- implies with the LHS not a symbol application, tagged as simplification
+        Syntax.KJImplies _ req (Syntax.KJEquals _sort _ lhs rhs@Syntax.KJAnd{})
+            | hasAttribute "simplification" ->
+              Just . SimplificationAxiom' req lhs rhs sortVars
+                  <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
         -- implies with equals but RHS not an and: malformed equation
         Syntax.KJImplies _ _req (Syntax.KJEquals _sort _ _lhs _rhs) ->
             throwE $ DefinitionAxiomError $ MalformedEquation parsedAx
@@ -506,6 +534,23 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
   where
     hasAttribute name = isJust $ lookup (Syntax.Id name) attributes
 
+    isVar Syntax.KJEVar{} = True
+    isVar _other = False
+
+    -- deconstructs function argument predicates (\and-chain of \in ended by \top)
+    extractBinders ::
+        Syntax.KorePattern ->
+        Except DefinitionError [(Syntax.Id, Syntax.Sort, Syntax.KorePattern)]
+    extractBinders = \case
+        Syntax.KJTop{} ->
+            pure []
+        Syntax.KJIn {first = Syntax.KJEVar{name, sort}, second = term} ->
+            pure [(name, sort, term)]
+        Syntax.KJAnd {first = Syntax.KJIn _ _ Syntax.KJEVar{name, sort} term, second = rest} ->
+            ((name, sort, term) : ) <$> extractBinders rest
+        other -> throwE $ DefinitionAxiomError $ MalformedArgumentBinder parsedAx other
+
+
 internaliseAxiom ::
     PartialDefinition ->
     ParsedAxiom ->
@@ -532,8 +577,10 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
         RewriteRuleAxiom' alias args rhs attribs ->
             Just . RewriteRuleAxiom
                 <$> internaliseRewriteRule partialDefinition (textToBS alias) args rhs attribs
-        EquationAxiom' requires lhs rhs sortVars attribs ->
-            Just <$> internaliseEquation partialDefinition requires lhs rhs sortVars attribs
+        SimplificationAxiom' requires lhs rhs sortVars attribs ->
+            Just <$> internaliseSimpleEquation partialDefinition requires lhs rhs sortVars attribs
+        FunctionAxiom' requires args lhs rhs sortVars attribs ->
+            Just <$> internaliseFunctionEquation partialDefinition requires args lhs rhs sortVars attribs
 
 orFailWith :: Maybe a -> e -> Except e a
 mbX `orFailWith` err = maybe (throwE err) pure mbX
@@ -610,7 +657,7 @@ removeTops p = p{Def.constraints = filter (/= Def.Top) p.constraints}
    Any function rule that does not ensure this is marked, and
    processing should abort when this rule could match.
 -}
-internaliseEquation ::
+internaliseSimpleEquation ::
     KoreDefinition -> -- context
     Syntax.KorePattern -> -- requires
     Syntax.KorePattern -> -- LHS
@@ -618,7 +665,7 @@ internaliseEquation ::
     [Syntax.Id] -> -- sort variables
     AxiomAttributes ->
     Except DefinitionError AxiomResult
-internaliseEquation partialDefinition precond leftTerm right sortVars axAttributes
+internaliseSimpleEquation partialDef precond leftTerm right sortVars axAttributes
     | isJust $ axAttributes.simplification = do
         -- FIXME must deal with predicate simplifications (no term!)
         lhs <- internaliseSide $ Syntax.KJAnd leftTerm.sort leftTerm precond
@@ -631,38 +678,31 @@ internaliseEquation partialDefinition precond leftTerm right sortVars axAttribut
                     , attributes = axAttributes
                     , computedAttributes = ComputedAxiomAttributes False True -- FIXME
                     }
-    | otherwise = do
-        (requires, argPredicates) <-
-            case precond of
-                -- argument predicates only, no antiLeft
-                Syntax.KJAnd _ requires' args'@(Syntax.KJAnd _ Syntax.KJIn{} _) ->
-                    pure (requires', args')
-                -- argument predicates and antiLeft (will be discarded)
-                Syntax.KJAnd _ _antiLeft (Syntax.KJAnd _ requires' args') ->
-                    pure (requires', args')
-                -- no arguments, no antiLeft
-                Syntax.KJAnd _ requires' noargs@Syntax.KJTop{} ->
-                    pure (requires', noargs)
-                _other ->
-                    throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
-        -- Inline arguments, analyse for partiality, mark rule as
-        -- partial (or "tainted"?) if undefined arguemnts are
-        -- possible (computed attribute).
+    | otherwise = error "internaliseSimpleEquation should only be called for simplifications"
+  where
+    internaliseSide =
+        withExcept DefinitionPatternError
+            . fmap (removeTops . Util.modifyVariables ("Eq#" <>))
+            . internalisePattern (Just sortVars) partialDef
 
+
+internaliseFunctionEquation ::
+    KoreDefinition -> -- context
+    Syntax.KorePattern -> -- requires
+    [(Syntax.Id, Syntax.Sort, Syntax.KorePattern)] -> -- argument binders
+    Syntax.KorePattern -> -- LHS
+    Syntax.KorePattern -> -- And(RHS, ensures)
+    [Syntax.Id] -> -- sort variables
+    AxiomAttributes ->
+    Except DefinitionError AxiomResult
+internaliseFunctionEquation partialDef requires args leftTerm right sortVars axAttributes = do
         -- internalise the LHS (LHS term and requires)
-        let isVar Syntax.KJEVar{} = True
-            isVar _other = False
-        left <-
-            case leftTerm of
-                Syntax.KJApp{args} -- expected to be a simple term, f(X_1, X_2,..)
-                    | all isVar args ->
-                        withExcept DefinitionPatternError $
-                            internalisePattern (Just sortVars) partialDefinition $
-                                Syntax.KJAnd dummySort leftTerm requires
-                _other ->
-                    throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
+        left <- -- expected to be a simple term, f(X_1, X_2,..)
+            withExcept DefinitionPatternError $
+                internalisePattern (Just sortVars) partialDef $
+                    Syntax.KJAnd leftTerm.sort leftTerm requires
         -- extract argument binders from predicates and inline in to LHS term
-        argPairs <- extractBinders argPredicates
+        argPairs <- mapM internaliseArg args
         let lhs =
                 removeTops . Util.modifyVariables ("Eq#" <>) $
                     left{Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
@@ -684,42 +724,19 @@ internaliseEquation partialDefinition precond leftTerm right sortVars axAttribut
     internaliseSide =
         withExcept DefinitionPatternError
             . fmap (removeTops . Util.modifyVariables ("Eq#" <>))
-            . internalisePattern (Just sortVars) partialDefinition
+            . internalisePattern (Just sortVars) partialDef
 
     internaliseTerm' =
         withExcept DefinitionPatternError
-            . internaliseTerm (Just sortVars) partialDefinition
+            . internaliseTerm (Just sortVars) partialDef
 
-    extractBinder :: Syntax.KorePattern -> Except DefinitionError (Def.Variable, Def.Term)
-    extractBinder = \case
-        Syntax.KJIn _argSort _resultSort var@Syntax.KJEVar{} term -> do
-            var' <- internaliseTerm' var
-            case var' of
-                Def.Var v -> (v,) <$> internaliseTerm' term
-                _other -> throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
-        _other ->
-            throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
-
-    extractBinders :: Syntax.KorePattern -> Except DefinitionError [(Def.Variable, Def.Term)]
-    extractBinders = \case
-        Syntax.KJTop{} ->
-            pure []
-        single@Syntax.KJIn{} ->
-            (: []) <$> extractBinder single
-        Syntax.KJAnd{first = one@Syntax.KJIn{}, second = rest} ->
-            (:) <$> extractBinder one <*> extractBinders rest
-        _other ->
-            throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
-
-    -- gross hack. TODO what can be checked in classifyAxiom?
-    dummySort = Syntax.SortVar $ Syntax.Id "dummy"
-    reconstructed =
-        ParsedAxiom
-            { axiom =
-                Syntax.KJImplies dummySort precond (Syntax.KJEquals dummySort dummySort leftTerm right)
-            , sortVars
-            , attributes = [(Syntax.Id "axiomAttributes", Just . Text.pack $ show axAttributes)]
-            }
+    internaliseArg ::
+        (Syntax.Id, Syntax.Sort, Syntax.KorePattern) ->
+        Except DefinitionError (Def.Variable, Def.Term)
+    internaliseArg (Syntax.Id name, sort, term) = do
+        variableSort <-
+            withExcept DefinitionSortError $ internaliseSort (Set.fromList $ map (.getId) sortVars) partialDef.sorts sort
+        (Def.Variable{variableSort, variableName = textToBS name},) <$> internaliseTerm' term
 
 addToTheoryWith ::
     (RewriteRule tag -> TermIndex) ->
@@ -884,6 +901,7 @@ data AxiomError
     = MalformedRewriteRule ParsedAxiom
     | MalformedEquation ParsedAxiom
     | UnexpectedAxiom ParsedAxiom
+    | MalformedArgumentBinder ParsedAxiom Syntax.KorePattern
     deriving stock (Eq, Show)
 
 instance Pretty AxiomError where
@@ -894,6 +912,9 @@ instance Pretty AxiomError where
             "Malformed equation at " <> location rule
         UnexpectedAxiom rule ->
             "Unknown kind of axiom at " <> location rule
+        MalformedArgumentBinder rule pat ->
+            pretty ("Malformed argument binder " <> show pat) <>
+                " in function equation at " <> location rule
       where
         location :: ParsedAxiom -> Doc a
         location rule =
