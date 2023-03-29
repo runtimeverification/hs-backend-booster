@@ -69,7 +69,7 @@ varX, varY :: Term
 varX = var "X" someSort
 varY = var "Y" someSort
 
-rule1, rule1', rule2, rule3, rule4 :: RewriteRule
+rule1, rule1', rule2, rule3, rule4 :: RewriteRule "Rewrite"
 rule1 =
     rule
         (Just "con1-f1")
@@ -134,7 +134,7 @@ kseq =
 injKItem :: Term -> Term
 injKItem t = Injection (sortOfTerm t) kItemSort t
 
-rule :: Maybe Text -> Pattern -> Pattern -> Priority -> RewriteRule
+rule :: Maybe Text -> Pattern -> Pattern -> Priority -> RewriteRule "Rewrite"
 rule ruleLabel lhs rhs priority =
     RewriteRule
         { lhs
@@ -150,10 +150,10 @@ rule ruleLabel lhs rhs priority =
         , computedAttributes = ComputedAxiomAttributes False True
         }
 
-mkTheory :: [(TermIndex, [RewriteRule])] -> Theory RewriteRule
+mkTheory :: [(TermIndex, [RewriteRule "Rewrite"])] -> Theory "Rewrite"
 mkTheory = Map.map mkPriorityGroups . Map.fromList
   where
-    mkPriorityGroups :: [RewriteRule] -> Map Priority [RewriteRule]
+    mkPriorityGroups :: [RewriteRule "Rewrite"] -> Map Priority [RewriteRule "Rewrite"]
     mkPriorityGroups rules =
         Map.unionsWith
             (<>)
@@ -218,7 +218,7 @@ branchesTo :: Pattern -> [Pattern] -> IO ()
 p `branchesTo` ps =
     runRewriteM def Nothing (rewriteStep [] [] p) @?= Right (RewriteBranch p $ NE.fromList ps)
 
-failsWith :: Pattern -> RewriteFailed -> IO ()
+failsWith :: Pattern -> RewriteFailed "Rewrite" -> IO ()
 failsWith p err =
     runRewriteM def Nothing (rewriteStep [] [] p) @?= Left err
 

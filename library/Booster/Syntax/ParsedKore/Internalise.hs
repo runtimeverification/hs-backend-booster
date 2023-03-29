@@ -165,6 +165,7 @@ mergeDefs k1 k2
                 <*> pure (mergeTheories simplifications k1 k2)
   where
     mergeTheories ::
+        forall r.
         (KoreDefinition -> Theory r) ->
         ImportedDefinition ->
         KoreDefinition ->
@@ -346,10 +347,10 @@ addModule
 
         partitionAxioms ::
             [AxiomResult] ->
-            ( [RewriteRule]
+            ( [RewriteRule "Rewrite"]
             , [(Def.SortName, Def.SortName)]
-            , [Equation FunctionType]
-            , [Equation SimplificationType]
+            , [RewriteRule "Function"]
+            , [RewriteRule "Simplification"]
             )
         partitionAxioms = go [] [] [] []
           where
@@ -375,13 +376,13 @@ addModule
 -- Result type from internalisation of different axioms
 data AxiomResult
     = -- | Rewrite rule
-      RewriteRuleAxiom RewriteRule
+      RewriteRuleAxiom (RewriteRule "Rewrite")
     | -- | subsort data: a pair of sorts
       SubsortAxiom (Def.SortName, Def.SortName)
     | -- | Function equation
-      FunctionAxiom (Equation FunctionType)
+      FunctionAxiom (RewriteRule "Function")
     | -- | Simplification
-      SimplificationAxiom (Equation SimplificationType)
+      SimplificationAxiom (RewriteRule "Simplification")
 
 -- helper type to carry relevant extracted data from a pattern (what
 -- is passed to the internalising function later)
@@ -543,7 +544,7 @@ internaliseRewriteRule ::
     [Syntax.KorePattern] ->
     Syntax.KorePattern ->
     AxiomAttributes ->
-    Except DefinitionError RewriteRule
+    Except DefinitionError (RewriteRule k)
 internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes = do
     alias <-
         withExcept (DefinitionAliasError $ Text.decodeLatin1 aliasName) $
@@ -622,7 +623,14 @@ internaliseEquation partialDefinition precond leftTerm right sortVars axAttribut
         -- FIXME must deal with predicate simplifications (no term!)
         lhs <- internaliseSide $ Syntax.KJAnd leftTerm.sort leftTerm precond
         rhs <- internaliseSide right
-        pure $ SimplificationAxiom Equation{lhs, rhs, attributes = axAttributes}
+        pure $
+            SimplificationAxiom
+            RewriteRule
+                { lhs
+                , rhs
+                , attributes = axAttributes
+                , computedAttributes = ComputedAxiomAttributes False True -- FIXME
+                }
     | otherwise = do
         (requires, argPredicates) <-
             case precond of
@@ -653,15 +661,24 @@ internaliseEquation partialDefinition precond leftTerm right sortVars axAttribut
                                 Syntax.KJAnd dummySort leftTerm requires
                 _other ->
                     throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
-        -- extract argument binders from predicates
+        -- extract argument binders from predicates and inline in to LHS term
         argPairs <- extractBinders argPredicates
-        let partialArgs = filter (not . Util.checkTermSymbols Util.isDefinedSymbol . snd) argPairs
-
         let lhs =
                 removeTops . Util.modifyVariables ("Eq#" <>) $
                     left{Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
         rhs <- internaliseSide right
-        pure $ FunctionAxiom Equation{lhs, rhs, attributes = axAttributes}
+        let argsDefined =
+                all (Util.checkTermSymbols Util.isDefinedSymbol . snd) argPairs
+            rhsPreserves = -- users can override the definedness computation by an explicit attribute
+                fromMaybe (Util.checkTermSymbols Util.isDefinedSymbol rhs.term) axAttributes.preserving
+            containsAcSymbols =
+                any (Util.checkTermSymbols Util.checkSymbolIsAc . snd) argPairs
+            computedAttributes =
+                ComputedAxiomAttributes
+                    { preservesDefinedness = argsDefined && rhsPreserves
+                    , containsAcSymbols
+                    }
+        pure $ FunctionAxiom RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes}
   where
     internaliseSide =
         withExcept DefinitionPatternError
@@ -704,11 +721,10 @@ internaliseEquation partialDefinition precond leftTerm right sortVars axAttribut
             }
 
 addToTheoryWith ::
-    HasField "attributes" axiom AxiomAttributes =>
-    (axiom -> TermIndex) ->
-    [axiom] ->
-    Theory axiom ->
-    Theory axiom
+    (RewriteRule tag -> TermIndex) ->
+    [RewriteRule tag] ->
+    Theory tag ->
+    Theory tag
 addToTheoryWith termIndex axioms theory =
     let newTheory =
             Map.map groupByPriority

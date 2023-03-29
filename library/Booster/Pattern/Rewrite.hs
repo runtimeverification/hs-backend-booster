@@ -59,7 +59,7 @@ getLLVM = RewriteM $ snd <$> ask
   failed), or a rewritten pattern with a new term and possibly new
   additional constraints.
 -}
-rewriteStep :: [Text] -> [Text] -> Pattern -> RewriteM RewriteFailed (RewriteResult Pattern)
+rewriteStep :: [Text] -> [Text] -> Pattern -> RewriteM (RewriteFailed "Rewrite") (RewriteResult Pattern)
 rewriteStep cutLabels terminalLabels pat = do
     let termIdx = computeTermIndex pat.term
     when (termIdx == None) $ throw (TermIndexIsNone pat.term)
@@ -78,7 +78,7 @@ rewriteStep cutLabels terminalLabels pat = do
     -- until a result is obtained or the entire rewrite fails.
     processGroups rules
   where
-    processGroups :: [[RewriteRule]] -> RewriteM RewriteFailed (RewriteResult Pattern)
+    processGroups :: [[RewriteRule k]] -> RewriteM (RewriteFailed k) (RewriteResult Pattern)
     processGroups [] =
         throw (NoApplicableRules pat)
     processGroups (rules : rest) = do
@@ -125,9 +125,10 @@ exception is thrown which indicates the exact reason why (this will
 abort the entire rewrite).
 -}
 applyRule ::
+    forall k.
     Pattern ->
-    RewriteRule ->
-    RewriteM RewriteFailed (Maybe (RewriteRule, Pattern))
+    RewriteRule k ->
+    RewriteM (RewriteFailed k) (Maybe (RewriteRule k, Pattern))
 applyRule pat rule = runMaybeT $ do
     def <- lift getDefinition
     -- unify terms
@@ -174,7 +175,7 @@ applyRule pat rule = runMaybeT $ do
   where
     failRewrite = lift . throw
 
-    checkConstraint :: Predicate -> MaybeT (RewriteM RewriteFailed) (Maybe RewriteFailed)
+    checkConstraint :: Predicate -> MaybeT (RewriteM (RewriteFailed k)) (Maybe (RewriteFailed k))
     checkConstraint p = do
         mApi <- lift getLLVM
         case simplifyPredicate mApi p of
@@ -185,26 +186,26 @@ applyRule pat rule = runMaybeT $ do
 {- | Reason why a rewrite did not produce a result. Contains additional
    information for logging what happened during the rewrite.
 -}
-data RewriteFailed
+data RewriteFailed k
     = -- | No rules have been found
       NoRulesForTerm Term
     | -- | All rules have been tried unsuccessfully (rewrite is stuck)
       NoApplicableRules Pattern
     | -- | It is uncertain whether or not a rule LHS unifies with the term
-      RuleApplicationUnclear RewriteRule Term (NonEmpty (Term, Term))
+      RuleApplicationUnclear (RewriteRule k) Term (NonEmpty (Term, Term))
     | -- | A rule condition is indeterminate
-      RuleConditionUnclear RewriteRule Predicate
+      RuleConditionUnclear (RewriteRule k) Predicate
     | -- | A rewrite rule does not preserve definedness
-      DefinednessUnclear RewriteRule Pattern
+      DefinednessUnclear (RewriteRule k) Pattern
     | -- | A unification produced a non-match substitution
-      UnificationIsNotMatch RewriteRule Term Substitution
+      UnificationIsNotMatch (RewriteRule k) Term Substitution
     | -- | A sort error was detected during unification
-      RewriteSortError RewriteRule Term SortError
+      RewriteSortError (RewriteRule k) Term SortError
     | -- | Term has index 'None', no rule should apply
       TermIndexIsNone Term
     deriving stock (Eq, Show)
 
-instance Pretty RewriteFailed where
+instance Pretty (RewriteFailed k) where
     pretty (NoRulesForTerm term) =
         "No rules for term " <> pretty term
     pretty (NoApplicableRules pat) =
@@ -253,7 +254,7 @@ instance Pretty RewriteFailed where
     pretty (TermIndexIsNone term) =
         "Term index is None for term " <> pretty term
 
-ruleId :: RewriteRule -> Doc a
+ruleId :: RewriteRule k -> Doc a
 ruleId rule =
     fromMaybe "unknown rule" $
         fmap pretty rule.attributes.ruleLabel <|> fmap pretty rule.attributes.location
