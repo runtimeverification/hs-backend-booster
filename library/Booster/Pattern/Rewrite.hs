@@ -176,8 +176,10 @@ applyRule pat rule = runMaybeT $ do
     failRewrite = lift . throw
 
     refreshExistentials subst
-        | Set.null (rule.existentials `Set.intersection` Set.fromList (Map.keys subst)) = subst
-        | otherwise = subst `Map.union` Map.fromList [(v, Var $ freshen v $ Set.fromList $ Map.keys subst) | v <- Set.toList rule.existentials]
+        | Set.null (rule.existentials `Set.intersection` Map.keysSet subst) = subst
+        | otherwise =
+            let substVars = Map.keysSet subst
+             in subst `Map.union` Map.fromSet (\v -> Var $ freshen v substVars) rule.existentials
 
     freshen v@Variable{variableName = vn} vs
         | v `Set.member` vs = freshen v{variableName = vn <> "'"} vs

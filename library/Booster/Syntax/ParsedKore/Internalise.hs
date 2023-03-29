@@ -20,7 +20,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Aeson (ToJSON (..), Value (..), object, (.=))
-import Data.Bifunctor (bimap, first, second)
+import Data.Bifunctor (first, second)
 import Data.ByteString.Char8 (ByteString)
 import Data.Function (on)
 import Data.List (foldl', groupBy, partition, sortOn)
@@ -513,21 +513,26 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
                 `orFailWith` UnknownAlias aliasName
     args <-
         traverse
-            (withExcept DefinitionPatternError . internaliseTermNoExistentials True Nothing partialDefinition)
+            (withExcept DefinitionPatternError . internaliseTerm True Nothing partialDefinition)
             aliasArgs
     result <- expandAlias alias args
 
-    -- prefix all variables in lhs and rhs with "Rule#" to avoid
-    -- name clashes with patterns from the user
+    -- prefix all variables in lhs and rhs with "Rule#" to avoid name clashes with patterns from the user
+    -- prefix all existentials on the rhs with "?"
     -- filter out literal `Top` constraints
     lhs <-
-        fmap (removeTops . Util.modifyVariables ("Rule#" <>)) $
+        fmap (removeTops . Util.modifyVariables (modifyVarName ("Rule#" <>))) $
             Util.retractPattern result
                 `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
     (existentials, rhs) <-
-        fmap (bimap (Set.map $ \v@Def.Variable{variableName = vn} -> v{Def.variableName = "Rule#" <> vn}) (removeTops . Util.modifyVariables ("Rule#" <>))) $
-            withExcept DefinitionPatternError $
-                internalisePattern True Nothing partialDefinition right
+        fmap
+            ( \(existentials', rhs') ->
+                ( Set.map (modifyVarName ("?" <>)) existentials'
+                , removeTops $ Util.modifyVariables (\v -> modifyVarName (if v `Set.member` existentials' then ("?" <>) else ("Rule#" <>)) v) rhs'
+                )
+            )
+            $ withExcept DefinitionPatternError
+            $ internalisePatternWithExistentials True Nothing partialDefinition right
     let preservesDefinedness =
             -- users can override the definedness computation by an explicit attribute
             fromMaybe (Util.checkTermSymbols Util.isDefinedSymbol rhs.term) axAttributes.preserving
@@ -539,6 +544,8 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
   where
     removeTops :: Def.Pattern -> Def.Pattern
     removeTops p = p{Def.constraints = filter (/= Def.Top) p.constraints}
+
+    modifyVarName f v = v{Def.variableName = f v.variableName}
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
@@ -671,7 +678,7 @@ instance Pretty DefinitionError where
         DefinitionSortError sortErr ->
             pretty $ "Sort error: " <> renderSortError sortErr
         DefinitionPatternError patErr ->
-            pretty $ "Pattern error: " <> show patErr -- TODO define a pretty instance?
+            hsep ["Pattern error: ", nest 4 (pretty patErr)]
         DefinitionAliasError name err ->
             pretty $ "Alias error in " <> Text.unpack name <> ": " <> show err
         DefinitionAxiomError err ->

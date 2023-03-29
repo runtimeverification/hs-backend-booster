@@ -3,10 +3,10 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Booster.Syntax.Json.Internalise (
-    internalisePatternNoExistentials,
+    internalisePatternWithExistentials,
     internalisePattern,
     internaliseTermOrPredicate,
-    internaliseTermNoExistentials,
+    internaliseTermWithExistentials,
     internaliseTerm,
     internalisePredicate,
     PatternError (..),
@@ -25,7 +25,6 @@ import Data.Aeson (ToJSON (..), Value, object, (.=))
 import Data.Bifunctor
 import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
-import Data.Foldable (foldrM)
 import Data.List (foldl1', nub)
 import Data.List.NonEmpty as NE (NonEmpty)
 import Data.Map (Map)
@@ -42,31 +41,32 @@ import Booster.Pattern.Util (sortOfTerm)
 import Booster.Syntax.Json.Externalise (externaliseSort)
 import Data.Coerce (coerce)
 import Kore.Syntax.Json.Types qualified as Syntax
-
-internalisePatternNoExistentials ::
-    Bool ->
-    Maybe [Syntax.Id] ->
-    KoreDefinition ->
-    Syntax.KorePattern ->
-    Except PatternError Internal.Pattern
-internalisePatternNoExistentials allowAlias sortVars definition pat =
-    internalisePattern allowAlias sortVars definition pat >>= \(exs, pat') ->
-        unless (Set.null exs) (throwE $ ContainsExistentials pat) >> pure pat'
+import Prettyprinter (Doc, Pretty (..), hsep)
 
 internalisePattern ::
     Bool ->
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     Syntax.KorePattern ->
+    Except PatternError Internal.Pattern
+internalisePattern allowAlias sortVars definition pat =
+    internalisePatternWithExistentials allowAlias sortVars definition pat >>= \(exs, pat') ->
+        unless (Set.null exs) (throwE $ ContainsExistentials pat) >> pure pat'
+
+internalisePatternWithExistentials ::
+    Bool ->
+    Maybe [Syntax.Id] ->
+    KoreDefinition ->
+    Syntax.KorePattern ->
     Except PatternError (Set Internal.Variable, Internal.Pattern)
-internalisePattern allowAlias sortVars definition pat = do
+internalisePatternWithExistentials allowAlias sortVars definition pat = do
     (terms, predicates) <- partitionM isTermM $ explodeAnd pat
 
     when (null terms) $ throwE $ NoTermFound pat
 
     -- construct an AndTerm from all terms (checking sort consistency)
-    (exs, terms') <- foldrM (\t (e, ts) -> internaliseTerm e allowAlias sortVars definition t >>= \(e', t') -> pure (e', t' : ts)) mempty terms
-    term <- andTerm terms'
+    (exs, terms') <- foldM (\(e, ts) t -> internaliseTermWithExistentials e allowAlias sortVars definition t >>= \(e', t') -> pure (e', t' : ts)) mempty terms
+    term <- andTerm $ reverse terms'
     -- internalise all predicates
     constraints <- mapM (internalisePredicate allowAlias sortVars definition) predicates
     pure (exs, Internal.Pattern{term, constraints})
@@ -93,7 +93,7 @@ internaliseTermOrPredicate ::
 internaliseTermOrPredicate allowAlias sortVars definition syntaxPatt =
     Internal.APredicate <$> (withExcept (: []) $ internalisePredicate allowAlias sortVars definition syntaxPatt)
         <|> Internal.TermAndPredicate
-            <$> (withExcept (: []) $ snd <$> internalisePattern allowAlias sortVars definition syntaxPatt)
+            <$> (withExcept (: []) $ internalisePattern allowAlias sortVars definition syntaxPatt)
 
 lookupInternalSort ::
     Maybe [Syntax.Id] ->
@@ -106,27 +106,27 @@ lookupInternalSort sortVars sorts pat =
      in mapExcept (first $ PatternSortError pat) . internaliseSort knownVarSet sorts
 
 -- Throws errors when an existential is found
-internaliseTermNoExistentials ::
+internaliseTerm ::
     Bool ->
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     Syntax.KorePattern ->
     Except PatternError Internal.Term
-internaliseTermNoExistentials allowAlias sortVars def pat = do
-    (exs, trm) <- internaliseTerm mempty allowAlias sortVars def pat
+internaliseTerm allowAlias sortVars def pat = do
+    (exs, trm) <- internaliseTermWithExistentials mempty allowAlias sortVars def pat
     unless (Set.null exs) $ throwE $ ContainsExistentials pat
     pure trm
 
 -- Throws errors when a predicate is encountered. The 'And' case
 -- should be analysed before, this function produces an 'AndTerm'.
-internaliseTerm ::
+internaliseTermWithExistentials ::
     Set Internal.Variable ->
     Bool ->
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     Syntax.KorePattern ->
     Except PatternError (Set Internal.Variable, Internal.Term)
-internaliseTerm es allowAlias sortVars KoreDefinition{sorts, symbols} pat = recursion es pat
+internaliseTermWithExistentials es allowAlias sortVars KoreDefinition{sorts, symbols} pat = recursion es pat
   where
     predicate = throwE $ TermExpected pat
 
@@ -162,8 +162,8 @@ internaliseTerm es allowAlias sortVars KoreDefinition{sorts, symbols} pat = recu
                 throwE $
                     MacroOrAliasSymbolNotAllowed name symPatt
             sorts' <- mapM lookupInternalSort' appSorts
-            (exs', args') <- foldrM (\a (e, as) -> recursion e a >>= \(e', a') -> pure (e', a' : as)) (exs, []) args
-            pure (exs', Internal.SymbolApplication symbol sorts' args')
+            (exs', args') <- foldM (\(e, as) a -> recursion e a >>= \(e', a') -> pure (e', a' : as)) (exs, []) args
+            pure (exs', Internal.SymbolApplication symbol sorts' $ reverse args')
         Syntax.KJString{value} ->
             pure (exs, Internal.DomainValue (Internal.SortApp "SortString" []) $ textToBS value)
         Syntax.KJTop{} -> predicate
@@ -185,7 +185,7 @@ internaliseTerm es allowAlias sortVars KoreDefinition{sorts, symbols} pat = recu
             let variableName = textToBS var.getId
                 internalVar = Internal.Variable{variableSort, variableName}
             when (internalVar `Set.member` exs) $ throwE $ VariableCapture var pat
-            recursion exs arg
+            recursion (Set.insert internalVar exs) arg
         Syntax.KJMu{} -> predicate
         Syntax.KJNu{} -> predicate
         Syntax.KJCeil{} -> predicate
@@ -250,7 +250,7 @@ internalisePredicate allowAlias sortVars definition@KoreDefinition{sorts} pat = 
     Syntax.KJMu{} -> notSupported
     Syntax.KJNu{} -> notSupported
     Syntax.KJCeil{arg} ->
-        Internal.Ceil <$> internaliseTermNoExistentials allowAlias sortVars definition arg
+        Internal.Ceil <$> internaliseTerm allowAlias sortVars definition arg
     Syntax.KJFloor{} -> notSupported
     Syntax.KJEquals{argSort, first = arg1, second = arg2} -> do
         -- distinguish term and predicate equality
@@ -258,8 +258,8 @@ internalisePredicate allowAlias sortVars definition@KoreDefinition{sorts} pat = 
         is2Term <- isTermM arg2
         case (is1Term, is2Term) of
             (True, True) -> do
-                a <- internaliseTermNoExistentials allowAlias sortVars definition arg1
-                b <- internaliseTermNoExistentials allowAlias sortVars definition arg2
+                a <- internaliseTerm allowAlias sortVars definition arg1
+                b <- internaliseTerm allowAlias sortVars definition arg2
                 argS <- lookupInternalSort' argSort
                 -- check that argS and sorts of a and b "agree"
                 ensureEqualSorts (sortOfTerm a) argS
@@ -272,8 +272,8 @@ internalisePredicate allowAlias sortVars definition@KoreDefinition{sorts} pat = 
             _other ->
                 throwE $ InconsistentPattern pat
     Syntax.KJIn{sort, first = arg1, second = arg2} -> do
-        a <- internaliseTermNoExistentials allowAlias sortVars definition arg1
-        b <- internaliseTermNoExistentials allowAlias sortVars definition arg2
+        a <- internaliseTerm allowAlias sortVars definition arg1
+        b <- internaliseTerm allowAlias sortVars definition arg2
         s <- lookupInternalSort' sort
         -- check that `sort` and sorts of a and b agree
         ensureEqualSorts (sortOfTerm a) s
@@ -430,31 +430,40 @@ a 'data' object.
 If the error is a sort error, the message will contain its information
 while the context provides the pattern where the error occurred.
 -}
+renderPatternError :: (Text -> Syntax.KorePattern -> t) -> PatternError -> t
+renderPatternError wrap = \case
+    NotSupported p ->
+        wrap "Pattern not supported" p
+    NoTermFound p ->
+        wrap "Pattern must contain at least one term" p
+    PatternSortError p sortErr ->
+        wrap (renderSortError sortErr) p
+    InconsistentPattern p ->
+        wrap "Inconsistent pattern" p
+    TermExpected p ->
+        wrap "Expected a term but found a predicate" p
+    PredicateExpected p ->
+        wrap "Expected a predicate but found a term" p
+    UnknownSymbol sym p ->
+        wrap ("Unknown symbol '" <> Syntax.getId sym <> "'") p
+    MacroOrAliasSymbolNotAllowed sym p ->
+        wrap ("Symbol '" <> Syntax.getId sym <> "' is a macro/alias") p
+    VariableCapture i p ->
+        wrap ("Variable '" <> Syntax.getId i <> "' is getting captured") p
+    ContainsExistentials p ->
+        wrap "Term contains existentials" p
+
 instance ToJSON PatternError where
-    toJSON = \case
-        NotSupported p ->
-            wrap "Pattern not supported" p
-        NoTermFound p ->
-            wrap "Pattern must contain at least one term" p
-        PatternSortError p sortErr ->
-            wrap (renderSortError sortErr) p
-        InconsistentPattern p ->
-            wrap "Inconsistent pattern" p
-        TermExpected p ->
-            wrap "Expected a term but found a predicate" p
-        PredicateExpected p ->
-            wrap "Expected a predicate but found a term" p
-        UnknownSymbol sym p ->
-            wrap ("Unknown symbol '" <> Syntax.getId sym <> "'") p
-        MacroOrAliasSymbolNotAllowed sym p ->
-            wrap ("Symbol '" <> Syntax.getId sym <> "' is a macro/alias") p
-        VariableCapture i p ->
-            wrap ("Variable '" <> Syntax.getId i <> "' is getting captured") p
-        ContainsExistentials p ->
-            wrap "Term contains existentials" p
+    toJSON = renderPatternError wrap
       where
         wrap :: Text -> Syntax.KorePattern -> Value
         wrap msg p = object ["error" .= msg, "context" .= toJSON [p]]
+
+instance Pretty PatternError where
+    pretty = renderPatternError wrap
+      where
+        wrap :: Text -> Syntax.KorePattern -> Doc ann
+        wrap msg p = hsep [pretty msg, pretty $ show p]
 
 data SortError
     = UnknownSort Syntax.Sort
