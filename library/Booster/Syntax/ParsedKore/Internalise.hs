@@ -464,7 +464,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
                 pure Nothing
         -- implies with equals but RHS not an and: malformed equation
         Syntax.KJImplies _ _req (Syntax.KJEquals _sort _ _lhs _rhs) ->
-              throwE $ DefinitionAxiomError $ MalformedEquation parsedAx
+            throwE $ DefinitionAxiomError $ MalformedEquation parsedAx
         Syntax.KJExists{var, varSort, arg = Syntax.KJEquals{first = aVar, second = Syntax.KJApp{}}}
             | hasAttribute "functional" || hasAttribute "total"
             , aVar == Syntax.KJEVar{name = var, sort = varSort} -> do
@@ -619,46 +619,49 @@ internaliseEquation ::
     Except DefinitionError AxiomResult
 internaliseEquation partialDefinition precond leftTerm right sortVars axAttributes
     | isJust $ axAttributes.simplification = do
-          -- FIXME must deal with predicate simplifications (no term!)
-          lhs <- internaliseSide $ Syntax.KJAnd leftTerm.sort leftTerm precond
-          rhs <- internaliseSide right
-          pure $ SimplificationAxiom Equation {lhs, rhs, attributes = axAttributes}
+        -- FIXME must deal with predicate simplifications (no term!)
+        lhs <- internaliseSide $ Syntax.KJAnd leftTerm.sort leftTerm precond
+        rhs <- internaliseSide right
+        pure $ SimplificationAxiom Equation{lhs, rhs, attributes = axAttributes}
     | otherwise = do
-          (requires, args) <-
-              case precond of
-                   -- argument predicates only, no antiLeft
-                   Syntax.KJAnd _ requires' args'@(Syntax.KJAnd _ Syntax.KJIn{} _) ->
-                       pure (requires', args')
-                   -- argument predicates and antiLeft (will be discarded)
-                   Syntax.KJAnd _ _antiLeft (Syntax.KJAnd _ requires' args') ->
-                       pure (requires', args')
-                   -- no arguments, no antiLeft
-                   Syntax.KJAnd _ requires' noargs@Syntax.KJTop{} ->
-                       pure (requires', noargs)
-                   _other ->
-                       throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
-          -- Inline arguments, analyse for partiality, mark rule as
-          -- partial (or "tainted"?) if undefined arguemnts are
-          -- possible (computed attribute).
+        (requires, argPredicates) <-
+            case precond of
+                -- argument predicates only, no antiLeft
+                Syntax.KJAnd _ requires' args'@(Syntax.KJAnd _ Syntax.KJIn{} _) ->
+                    pure (requires', args')
+                -- argument predicates and antiLeft (will be discarded)
+                Syntax.KJAnd _ _antiLeft (Syntax.KJAnd _ requires' args') ->
+                    pure (requires', args')
+                -- no arguments, no antiLeft
+                Syntax.KJAnd _ requires' noargs@Syntax.KJTop{} ->
+                    pure (requires', noargs)
+                _other ->
+                    throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
+        -- Inline arguments, analyse for partiality, mark rule as
+        -- partial (or "tainted"?) if undefined arguemnts are
+        -- possible (computed attribute).
 
-          -- internalise the LHS, which is expected to be a simple term, f(X_1, X_2,..)
-          let isVar Syntax.KJEVar{} = True
-              isVar _other = False
-          left <-
-              case leftTerm of
-                  Syntax.KJApp{args}
-                      | all isVar args ->
+        -- internalise the LHS (LHS term and requires)
+        let isVar Syntax.KJEVar{} = True
+            isVar _other = False
+        left <-
+            case leftTerm of
+                Syntax.KJApp{args} -- expected to be a simple term, f(X_1, X_2,..)
+                    | all isVar args ->
                         withExcept DefinitionPatternError $
                             internalisePattern (Just sortVars) partialDefinition $
                                 Syntax.KJAnd dummySort leftTerm requires
-                  _other ->
-                      throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
-          -- extract argument binders from predicates
-          argPairs <- extractBinders args
-          let canBePartial = any (Util.checkTermSymbols Util.isDefinedSymbol . snd) argPairs
-              lhs = left { Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
-          rhs <- internaliseSide right
-          pure $ FunctionAxiom Equation {lhs, rhs, attributes = axAttributes}
+                _other ->
+                    throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
+        -- extract argument binders from predicates
+        argPairs <- extractBinders argPredicates
+        let partialArgs = filter (not . Util.checkTermSymbols Util.isDefinedSymbol . snd) argPairs
+
+        let lhs =
+                removeTops . Util.modifyVariables ("Eq#" <>) $
+                    left{Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
+        rhs <- internaliseSide right
+        pure $ FunctionAxiom Equation{lhs, rhs, attributes = axAttributes}
   where
     internaliseSide =
         withExcept DefinitionPatternError
@@ -676,7 +679,7 @@ internaliseEquation partialDefinition precond leftTerm right sortVars axAttribut
             case var' of
                 Def.Var v -> (v,) <$> internaliseTerm' term
                 _other -> throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
-        _other -> -- not possible right now
+        _other ->
             throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
 
     extractBinders :: Syntax.KorePattern -> Except DefinitionError [(Def.Variable, Def.Term)]
@@ -684,7 +687,7 @@ internaliseEquation partialDefinition precond leftTerm right sortVars axAttribut
         Syntax.KJTop{} ->
             pure []
         single@Syntax.KJIn{} ->
-            (:[]) <$> extractBinder single
+            (: []) <$> extractBinder single
         Syntax.KJAnd{first = one@Syntax.KJIn{}, second = rest} ->
             (:) <$> extractBinder one <*> extractBinders rest
         _other ->
@@ -694,11 +697,11 @@ internaliseEquation partialDefinition precond leftTerm right sortVars axAttribut
     dummySort = Syntax.SortVar $ Syntax.Id "dummy"
     reconstructed =
         ParsedAxiom
-        { axiom =
-          Syntax.KJImplies dummySort precond (Syntax.KJEquals dummySort dummySort leftTerm right)
-        , sortVars
-        , attributes = [(Syntax.Id "axiomAttributes", Just . Text.pack $ show axAttributes)]
-        }
+            { axiom =
+                Syntax.KJImplies dummySort precond (Syntax.KJEquals dummySort dummySort leftTerm right)
+            , sortVars
+            , attributes = [(Syntax.Id "axiomAttributes", Just . Text.pack $ show axAttributes)]
+            }
 
 addToTheoryWith ::
     HasField "attributes" axiom AxiomAttributes =>
