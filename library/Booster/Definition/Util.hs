@@ -80,7 +80,7 @@ mkSummary file def =
     locate :: HasField "attributes" a AxiomAttributes => [a] -> ([Location], Int)
     locate =
         bimap (map fromJust) length
-            . partition (isJust)
+            . partition isJust
             . map (.attributes.location)
 
 prettySummary :: Summary -> String

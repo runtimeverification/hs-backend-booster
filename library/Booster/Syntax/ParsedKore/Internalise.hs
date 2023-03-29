@@ -489,8 +489,8 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
         -- implies with the LHS not a symbol application, tagged as simplification
         Syntax.KJImplies _ req (Syntax.KJEquals _sort _ lhs rhs@Syntax.KJAnd{})
             | hasAttribute "simplification" ->
-              Just . SimplificationAxiom' req lhs rhs sortVars
-                  <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
+                Just . SimplificationAxiom' req lhs rhs sortVars
+                    <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
         -- implies with equals but RHS not an and: malformed equation
         Syntax.KJImplies _ _req (Syntax.KJEquals _sort _ _lhs _rhs) ->
             throwE $ DefinitionAxiomError $ MalformedEquation parsedAx
@@ -544,12 +544,11 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
     extractBinders = \case
         Syntax.KJTop{} ->
             pure []
-        Syntax.KJIn {first = Syntax.KJEVar{name, sort}, second = term} ->
+        Syntax.KJIn{first = Syntax.KJEVar{name, sort}, second = term} ->
             pure [(name, sort, term)]
-        Syntax.KJAnd {first = Syntax.KJIn _ _ Syntax.KJEVar{name, sort} term, second = rest} ->
-            ((name, sort, term) : ) <$> extractBinders rest
+        Syntax.KJAnd{first = Syntax.KJIn _ _ Syntax.KJEVar{name, sort} term, second = rest} ->
+            ((name, sort, term) :) <$> extractBinders rest
         other -> throwE $ DefinitionAxiomError $ MalformedArgumentBinder parsedAx other
-
 
 internaliseAxiom ::
     PartialDefinition ->
@@ -685,7 +684,6 @@ internaliseSimpleEquation partialDef precond leftTerm right sortVars axAttribute
             . fmap (removeTops . Util.modifyVariables ("Eq#" <>))
             . internalisePattern True (Just sortVars) partialDef
 
-
 internaliseFunctionEquation ::
     KoreDefinition -> -- context
     Syntax.KorePattern -> -- requires
@@ -696,30 +694,30 @@ internaliseFunctionEquation ::
     AxiomAttributes ->
     Except DefinitionError AxiomResult
 internaliseFunctionEquation partialDef requires args leftTerm right sortVars axAttributes = do
-        -- internalise the LHS (LHS term and requires)
-        left <- -- expected to be a simple term, f(X_1, X_2,..)
-            withExcept DefinitionPatternError $
-                internalisePattern True (Just sortVars) partialDef $
-                    Syntax.KJAnd leftTerm.sort leftTerm requires
-        -- extract argument binders from predicates and inline in to LHS term
-        argPairs <- mapM internaliseArg args
-        let lhs =
-                removeTops . Util.modifyVariables ("Eq#" <>) $
-                    left{Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
-        rhs <- internaliseSide right
-        let argsDefined =
-                all (Util.checkTermSymbols Util.isDefinedSymbol . snd) argPairs
-            rhsPreserves =
-                -- users can override the definedness computation by an explicit attribute
-                fromMaybe (Util.checkTermSymbols Util.isDefinedSymbol rhs.term) axAttributes.preserving
-            containsAcSymbols =
-                any (Util.checkTermSymbols Util.checkSymbolIsAc . snd) argPairs
-            computedAttributes =
-                ComputedAxiomAttributes
-                    { preservesDefinedness = argsDefined && rhsPreserves
-                    , containsAcSymbols
-                    }
-        pure $ FunctionAxiom RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes}
+    -- internalise the LHS (LHS term and requires)
+    left <- -- expected to be a simple term, f(X_1, X_2,..)
+        withExcept DefinitionPatternError $
+            internalisePattern True (Just sortVars) partialDef $
+                Syntax.KJAnd leftTerm.sort leftTerm requires
+    -- extract argument binders from predicates and inline in to LHS term
+    argPairs <- mapM internaliseArg args
+    let lhs =
+            removeTops . Util.modifyVariables ("Eq#" <>) $
+                left{Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
+    rhs <- internaliseSide right
+    let argsDefined =
+            all (Util.checkTermSymbols Util.isDefinedSymbol . snd) argPairs
+        rhsPreserves =
+            -- users can override the definedness computation by an explicit attribute
+            fromMaybe (Util.checkTermSymbols Util.isDefinedSymbol rhs.term) axAttributes.preserving
+        containsAcSymbols =
+            any (Util.checkTermSymbols Util.checkSymbolIsAc . snd) argPairs
+        computedAttributes =
+            ComputedAxiomAttributes
+                { preservesDefinedness = argsDefined && rhsPreserves
+                , containsAcSymbols
+                }
+    pure $ FunctionAxiom RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes}
   where
     internaliseSide =
         withExcept DefinitionPatternError
@@ -913,8 +911,9 @@ instance Pretty AxiomError where
         UnexpectedAxiom rule ->
             "Unknown kind of axiom at " <> location rule
         MalformedArgumentBinder rule pat ->
-            pretty ("Malformed argument binder " <> show pat) <>
-                " in function equation at " <> location rule
+            pretty ("Malformed argument binder " <> show pat)
+                <> " in function equation at "
+                <> location rule
       where
         location :: ParsedAxiom -> Doc a
         location rule =
