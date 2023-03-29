@@ -462,6 +462,9 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
         Syntax.KJImplies _ _req (Syntax.KJEquals _sort _ _lhs _rhs@Syntax.KJAnd{})
             | hasAttribute "simplification" ->
                 pure Nothing
+        -- implies with equals but RHS not an and: malformed equation
+        Syntax.KJImplies _ _req (Syntax.KJEquals _sort _ _lhs _rhs) ->
+              throwE $ DefinitionAxiomError $ MalformedEquation parsedAx
         Syntax.KJExists{var, varSort, arg = Syntax.KJEquals{first = aVar, second = Syntax.KJApp{}}}
             | hasAttribute "functional" || hasAttribute "total"
             , aVar == Syntax.KJEVar{name = var, sort = varSort} -> do
@@ -600,6 +603,11 @@ removeTops p = p{Def.constraints = filter (/= Def.Top) p.constraints}
 {- | Internalises both simplifications (straightforward) and function
    rules (requires breaking the 'requires' clause into components to
    discard the 'antiLeft' part and to inline the argument predicates.
+
+   Argument patterns are checked to ensure they are defined
+   (conservative: only allowing constructors and total functions).
+   Any function rule that does not ensure this is marked, and
+   processing should abort when this rule could match.
 -}
 internaliseEquation ::
     KoreDefinition -> -- context
@@ -611,6 +619,7 @@ internaliseEquation ::
     Except DefinitionError AxiomResult
 internaliseEquation partialDefinition precond leftTerm right sortVars axAttributes
     | isJust $ axAttributes.simplification = do
+          -- FIXME must deal with predicate simplifications (no term!)
           lhs <- internaliseSide $ Syntax.KJAnd leftTerm.sort leftTerm precond
           rhs <- internaliseSide right
           pure $ SimplificationAxiom Equation {lhs, rhs, attributes = axAttributes}
@@ -620,20 +629,76 @@ internaliseEquation partialDefinition precond leftTerm right sortVars axAttribut
                    -- argument predicates only, no antiLeft
                    Syntax.KJAnd _ requires' args'@(Syntax.KJAnd _ Syntax.KJIn{} _) ->
                        pure (requires', args')
-                   -- argument predicats and antiLeft
+                   -- argument predicates and antiLeft (will be discarded)
                    Syntax.KJAnd _ _antiLeft (Syntax.KJAnd _ requires' args') ->
                        pure (requires', args')
-                   _other -> throwE undefined -- MalformedEquationError
-          -- FIXME incomplete. Inline arguments, analyse for
-          -- partiality, mark rule as partial (or "tainted"?) if
-          -- undefined arguemnts are possible (computed attribute).
-          undefined
+                   -- no arguments, no antiLeft
+                   Syntax.KJAnd _ requires' noargs@Syntax.KJTop{} ->
+                       pure (requires', noargs)
+                   _other ->
+                       throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
+          -- Inline arguments, analyse for partiality, mark rule as
+          -- partial (or "tainted"?) if undefined arguemnts are
+          -- possible (computed attribute).
+
+          -- internalise the LHS, which is expected to be a simple term, f(X_1, X_2,..)
+          let isVar Syntax.KJEVar{} = True
+              isVar _other = False
+          left <-
+              case leftTerm of
+                  Syntax.KJApp{args}
+                      | all isVar args ->
+                        withExcept DefinitionPatternError $
+                            internalisePattern (Just sortVars) partialDefinition $
+                                Syntax.KJAnd dummySort leftTerm requires
+                  _other ->
+                      throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
+          -- extract argument binders from predicates
+          argPairs <- extractBinders args
+          let canBePartial = any (Util.checkTermSymbols Util.isDefinedSymbol . snd) argPairs
+              lhs = left { Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
+          rhs <- internaliseSide right
+          pure $ FunctionAxiom Equation {lhs, rhs, attributes = axAttributes}
   where
     internaliseSide =
         withExcept DefinitionPatternError
             . fmap (removeTops . Util.modifyVariables ("Eq#" <>))
             . internalisePattern (Just sortVars) partialDefinition
 
+    internaliseTerm' =
+        withExcept DefinitionPatternError
+            . internaliseTerm (Just sortVars) partialDefinition
+
+    extractBinder :: Syntax.KorePattern -> Except DefinitionError (Def.Variable, Def.Term)
+    extractBinder = \case
+        Syntax.KJIn _argSort _resultSort var@Syntax.KJEVar{} term -> do
+            var' <- internaliseTerm' var
+            case var' of
+                Def.Var v -> (v,) <$> internaliseTerm' term
+                _other -> throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
+        _other -> -- not possible right now
+            throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
+
+    extractBinders :: Syntax.KorePattern -> Except DefinitionError [(Def.Variable, Def.Term)]
+    extractBinders = \case
+        Syntax.KJTop{} ->
+            pure []
+        single@Syntax.KJIn{} ->
+            (:[]) <$> extractBinder single
+        Syntax.KJAnd{first = one@Syntax.KJIn{}, second = rest} ->
+            (:) <$> extractBinder one <*> extractBinders rest
+        _other ->
+            throwE $ DefinitionAxiomError $ MalformedEquation reconstructed
+
+    -- gross hack. TODO what can be checked in classifyAxiom?
+    dummySort = Syntax.SortVar $ Syntax.Id "dummy"
+    reconstructed =
+        ParsedAxiom
+        { axiom =
+          Syntax.KJImplies dummySort precond (Syntax.KJEquals dummySort dummySort leftTerm right)
+        , sortVars
+        , attributes = [(Syntax.Id "axiomAttributes", Just . Text.pack $ show axAttributes)]
+        }
 
 addToTheoryWith ::
     HasField "attributes" axiom AxiomAttributes =>
