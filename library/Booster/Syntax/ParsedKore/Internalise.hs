@@ -295,7 +295,7 @@ addModule
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
                     internalRhs <-
                         withExcept (DefinitionAliasError name.getId . InconsistentAliasPattern) $
-                            internaliseTermOrPredicate (Just sortVars) defWithNewSortsAndSymbols.partial rhs
+                            internaliseTermOrPredicate True (Just sortVars) defWithNewSortsAndSymbols.partial rhs
                     let rhsSort = Util.sortOfTermOrPredicate internalRhs
                     unless (fromMaybe internalResSort rhsSort == internalResSort) (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
                     return (internalName, Alias{name = internalName, params, args = internalArgs, rhs = internalRhs})
@@ -599,7 +599,7 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
                 `orFailWith` UnknownAlias aliasName
     args <-
         traverse
-            (withExcept DefinitionPatternError . internaliseTerm Nothing partialDefinition)
+            (withExcept DefinitionPatternError . internaliseTerm True Nothing partialDefinition)
             aliasArgs
     result <- expandAlias alias args
 
@@ -613,7 +613,7 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
     rhs <-
         fmap (removeTops . Util.modifyVariables ("Rule#" <>)) $
             withExcept DefinitionPatternError $
-                internalisePattern Nothing partialDefinition right
+                internalisePattern True Nothing partialDefinition right
     let preservesDefinedness =
             -- users can override the definedness computation by an explicit attribute
             fromMaybe (Util.checkTermSymbols Util.isDefinedSymbol rhs.term) axAttributes.preserving
@@ -683,7 +683,7 @@ internaliseSimpleEquation partialDef precond leftTerm right sortVars axAttribute
     internaliseSide =
         withExcept DefinitionPatternError
             . fmap (removeTops . Util.modifyVariables ("Eq#" <>))
-            . internalisePattern (Just sortVars) partialDef
+            . internalisePattern True (Just sortVars) partialDef
 
 
 internaliseFunctionEquation ::
@@ -699,7 +699,7 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars axA
         -- internalise the LHS (LHS term and requires)
         left <- -- expected to be a simple term, f(X_1, X_2,..)
             withExcept DefinitionPatternError $
-                internalisePattern (Just sortVars) partialDef $
+                internalisePattern True (Just sortVars) partialDef $
                     Syntax.KJAnd leftTerm.sort leftTerm requires
         -- extract argument binders from predicates and inline in to LHS term
         argPairs <- mapM internaliseArg args
@@ -724,11 +724,11 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars axA
     internaliseSide =
         withExcept DefinitionPatternError
             . fmap (removeTops . Util.modifyVariables ("Eq#" <>))
-            . internalisePattern (Just sortVars) partialDef
+            . internalisePattern True (Just sortVars) partialDef
 
     internaliseTerm' =
         withExcept DefinitionPatternError
-            . internaliseTerm (Just sortVars) partialDef
+            . internaliseTerm True (Just sortVars) partialDef
 
     internaliseArg ::
         (Syntax.Id, Syntax.Sort, Syntax.KorePattern) ->
