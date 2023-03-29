@@ -625,12 +625,12 @@ internaliseEquation partialDefinition precond leftTerm right sortVars axAttribut
         rhs <- internaliseSide right
         pure $
             SimplificationAxiom
-            RewriteRule
-                { lhs
-                , rhs
-                , attributes = axAttributes
-                , computedAttributes = ComputedAxiomAttributes False True -- FIXME
-                }
+                RewriteRule
+                    { lhs
+                    , rhs
+                    , attributes = axAttributes
+                    , computedAttributes = ComputedAxiomAttributes False True -- FIXME
+                    }
     | otherwise = do
         (requires, argPredicates) <-
             case precond of
@@ -669,7 +669,8 @@ internaliseEquation partialDefinition precond leftTerm right sortVars axAttribut
         rhs <- internaliseSide right
         let argsDefined =
                 all (Util.checkTermSymbols Util.isDefinedSymbol . snd) argPairs
-            rhsPreserves = -- users can override the definedness computation by an explicit attribute
+            rhsPreserves =
+                -- users can override the definedness computation by an explicit attribute
                 fromMaybe (Util.checkTermSymbols Util.isDefinedSymbol rhs.term) axAttributes.preserving
             containsAcSymbols =
                 any (Util.checkTermSymbols Util.checkSymbolIsAc . snd) argPairs
