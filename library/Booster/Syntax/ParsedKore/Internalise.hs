@@ -668,14 +668,15 @@ expandAlias alias currentArgs
 removeTops :: Def.Pattern -> Def.Pattern
 removeTops p = p{Def.constraints = filter (/= Def.Top) p.constraints}
 
-{- | Internalises both simplifications (straightforward) and function
-   rules (requires breaking the 'requires' clause into components to
-   discard the 'antiLeft' part and to inline the argument predicates.
+{- | Internalises simplification rules, for both term simplification
+   (represented as a 'RewriteRule') and predicate simplification
+   (represented as a 'PredicateEquation').
 
-   Argument patterns are checked to ensure they are defined
-   (conservative: only allowing constructors and total functions).
-   Any function rule that does not ensure this is marked, and
-   processing should abort when this rule could match.
+   Term simplifications may introduce undefined terms, or remove them
+   erroneously, so the 'preservesDefinedness' check refers to both the
+   LHS and the RHS term.
+   Predicates have no problem with definedness, as a rule with a
+   \bottom predicate will simply never apply
 -}
 internaliseSimpleEquation ::
     KoreDefinition -> -- context
@@ -724,6 +725,19 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
         withExcept DefinitionPatternError
             . internalisePredicate True (Just sortVars) partialDef
 
+{- | Internalises a function rule from its components that were matched
+  before.
+
+   Argument patterns are inlined, but checked to ensure they are
+   always defined (conservative: only allowing constructors and total
+   functions).  However, since function rules are anyway not allowed
+   to contain nested function calls, this check will only detect AC
+   symbols.
+
+   Any function rule that contains any AC symbols in arguments is
+   marked as not preserving definedness. Processing should abort when
+   such a rule could match.
+-}
 internaliseFunctionEquation ::
     KoreDefinition -> -- context
     Syntax.KorePattern -> -- requires
