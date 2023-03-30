@@ -39,14 +39,19 @@ import GHC.Records (HasField (..))
 import Prettyprinter
 
 import Booster.Definition.Attributes.Base
-import Booster.Definition.Attributes.Reader as Attributes
+import Booster.Definition.Attributes.Reader as Attributes (
+    HasAttributes (mkAttributes),
+    readLocation,
+ )
 import Booster.Definition.Base as Def
+import Booster.Pattern.Base (Variable (..))
 import Booster.Pattern.Base qualified as Def
 import Booster.Pattern.Index (TermIndex (Anything), computeTermIndex)
 import Booster.Pattern.Util qualified as Util
 import Booster.Prettyprinter hiding (attributes)
 import Booster.Syntax.Json.Internalise
 import Booster.Syntax.ParsedKore.Base
+import Kore.Syntax.Json.Types (Id, Sort)
 import Kore.Syntax.Json.Types qualified as Syntax
 
 {- | Traverses all modules of a parsed definition, to build internal
@@ -578,6 +583,12 @@ internaliseAxiom ::
 internaliseAxiom (Partial partialDefinition) parsedAxiom =
     classifyAxiom parsedAxiom >>= maybe (pure Nothing) processAxiom
   where
+    extractExistentials = \case
+        Syntax.KJExists{var, varSort, arg} -> do
+            ((var, varSort) :)
+                <$> extractExistentials arg
+        other -> (other, [])
+
     processAxiom :: AxiomData -> Except DefinitionError (Maybe AxiomResult)
     processAxiom = \case
         SubsortAxiom' Syntax.SortApp{name = Syntax.Id sub} Syntax.SortApp{name = Syntax.Id super} -> do
@@ -594,25 +605,48 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
             throwE $
                 DefinitionSortError $
                     GeneralError ("Sort variable " <> super <> " in subsort axiom")
-        RewriteRuleAxiom' alias args rhs attribs ->
-            Just . RewriteRuleAxiom
-                <$> internaliseRewriteRule partialDefinition (textToBS alias) args rhs attribs
+        RewriteRuleAxiom' alias args rhs' attribs ->
+            let (rhs, existentials) = extractExistentials rhs'
+             in Just . RewriteRuleAxiom
+                    <$> internaliseRewriteRule
+                            partialDefinition
+                            existentials
+                            (textToBS alias)
+                            args
+                            rhs
+                            attribs
         SimplificationAxiom' requires lhs rhs sortVars attribs ->
-            Just <$> internaliseSimpleEquation partialDefinition requires lhs rhs sortVars attribs
+            Just <$>
+                internaliseSimpleEquation
+                    partialDefinition
+                    requires
+                    lhs
+                    rhs
+                    sortVars
+                    attribs
         FunctionAxiom' requires args lhs rhs sortVars attribs ->
-            Just <$> internaliseFunctionEquation partialDefinition requires args lhs rhs sortVars attribs
+            Just <$>
+                internaliseFunctionEquation
+                    partialDefinition
+                    requires
+                    args
+                    lhs
+                    rhs
+                    sortVars
+                    attribs
 
 orFailWith :: Maybe a -> e -> Except e a
 mbX `orFailWith` err = maybe (throwE err) pure mbX
 
 internaliseRewriteRule ::
     KoreDefinition ->
+    [(Id, Sort)] ->
     AliasName ->
     [Syntax.KorePattern] ->
     Syntax.KorePattern ->
     AxiomAttributes ->
     Except DefinitionError (RewriteRule k)
-internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes = do
+internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttributes = do
     alias <-
         withExcept (DefinitionAliasError $ Text.decodeLatin1 aliasName) $
             Map.lookup aliasName partialDefinition.aliases
@@ -627,11 +661,12 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
     -- name clashes with patterns from the user
     -- filter out literal `Top` constraints
     lhs <-
-        fmap (removeTops . Util.modifyVariables ("Rule#" <>)) $
+        fmap (removeTops . Util.modifyVariables (modifyVarName ("Rule#" <>))) $
             Util.retractPattern result
                 `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
+    existentials' <- fmap Set.fromList $ withExcept DefinitionPatternError $ mapM mkVar exs
     rhs <-
-        fmap (removeTops . Util.modifyVariables ("Rule#" <>)) $
+        fmap (removeTops . Util.modifyVariables (\v -> modifyVarName (if v `Set.member` existentials' then ("Ex#" <>) else ("Rule#" <>)) v)) $
             withExcept DefinitionPatternError $
                 internalisePattern True Nothing partialDefinition right
     let preservesDefinedness =
@@ -641,7 +676,15 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
             Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
         computedAttributes =
             ComputedAxiomAttributes{preservesDefinedness, containsAcSymbols}
-    return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes}
+        existentials = Set.map (modifyVarName ("Ex#" <>)) existentials'
+    return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes, existentials}
+  where
+    modifyVarName f v = v{Def.variableName = f v.variableName}
+
+    mkVar (name, sort) = do
+        variableSort <- lookupInternalSort Nothing partialDefinition.sorts right sort
+        let variableName = textToBS name.getId
+        pure $ Variable{variableSort, variableName}
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs

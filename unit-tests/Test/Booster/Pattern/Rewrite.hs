@@ -146,6 +146,7 @@ rule ruleLabel lhs rhs priority =
                 , preserving = Nothing
                 }
         , computedAttributes = ComputedAxiomAttributes False True
+        , existentials = mempty
         }
 
 withComputedAttributes :: RewriteRule r -> ComputedAxiomAttributes -> RewriteRule r
