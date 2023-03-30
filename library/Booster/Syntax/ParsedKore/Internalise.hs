@@ -37,18 +37,20 @@ import Data.Tuple (swap)
 import Prettyprinter
 
 import Booster.Definition.Attributes.Base
-import Booster.Definition.Attributes.Reader as Attributes
-    ( HasAttributes(mkAttributes), readLocation )
+import Booster.Definition.Attributes.Reader as Attributes (
+    HasAttributes (mkAttributes),
+    readLocation,
+ )
 import Booster.Definition.Base as Def
+import Booster.Pattern.Base (Variable (..))
 import Booster.Pattern.Base qualified as Def
 import Booster.Pattern.Index (TermIndex, computeTermIndex)
 import Booster.Pattern.Util qualified as Util
 import Booster.Prettyprinter hiding (attributes)
 import Booster.Syntax.Json.Internalise
 import Booster.Syntax.ParsedKore.Base
-import Kore.Syntax.Json.Types qualified as Syntax
 import Kore.Syntax.Json.Types (Id, Sort)
-import Booster.Pattern.Base (Variable(..))
+import Kore.Syntax.Json.Types qualified as Syntax
 
 {- | Traverses all modules of a parsed definition, to build internal
 @KoreDefinition@s for each of the modules (when used as the main
@@ -479,8 +481,8 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
   where
     extractExistentials = \case
         Syntax.KJExists{var, varSort, arg} -> do
-            ((var, varSort):) <$>
-                extractExistentials arg
+            ((var, varSort) :)
+                <$> extractExistentials arg
         other -> (other, [])
 
     processAxiom :: AxiomData -> Except DefinitionError (Maybe AxiomResult)
@@ -499,11 +501,9 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
             throwE $
                 DefinitionSortError $
                     GeneralError ("Sort variable " <> super <> " in subsort axiom")
-        RewriteRuleAxiom' alias args rhs' attribs -> 
-            let 
-                (rhs, existentials) = extractExistentials rhs' 
-            in
-                Just . RewriteRuleAxiom
+        RewriteRuleAxiom' alias args rhs' attribs ->
+            let (rhs, existentials) = extractExistentials rhs'
+             in Just . RewriteRuleAxiom
                     <$> internaliseRewriteRule partialDefinition existentials (textToBS alias) args rhs attribs
         EquationAxiom'{} ->
             pure Nothing
@@ -529,8 +529,6 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
             (withExcept DefinitionPatternError . internaliseTerm True Nothing partialDefinition)
             aliasArgs
     result <- expandAlias alias args
-
-
 
     -- prefix all variables in lhs and rhs with "Rule#" to avoid
     -- name clashes with patterns from the user
@@ -562,7 +560,6 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
         variableSort <- lookupInternalSort Nothing partialDefinition.sorts right sort
         let variableName = textToBS name.getId
         pure $ Variable{variableSort, variableName}
-
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
