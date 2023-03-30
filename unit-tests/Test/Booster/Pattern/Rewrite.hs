@@ -95,12 +95,11 @@ rule3 =
         (termInKCell "RuleVar" (app con1 [dv someSort "somethingElse"]))
         42
 rule4 =
-    ( rule
+    rule
         (Just "con4-f2-partial")
         (termInKCell "RuleVar" (app con4 [varX, varY]))
         (termInKCell "RuleVar" (app f2 [varY]))
         42
-    )
         `withComputedAttributes` ComputedAxiomAttributes False False
 
 termInKCell :: ByteString -> Term -> Pattern
@@ -151,7 +150,7 @@ rule ruleLabel lhs rhs priority =
 
 withComputedAttributes :: RewriteRule r -> ComputedAxiomAttributes -> RewriteRule r
 r@RewriteRule{lhs} `withComputedAttributes` computedAttributes =
-                   r {lhs, computedAttributes }
+    r{lhs, computedAttributes}
 
 mkTheory :: [(TermIndex, [RewriteRule "Rewrite"])] -> Theory (RewriteRule "Rewrite")
 mkTheory = Map.map mkPriorityGroups . Map.fromList

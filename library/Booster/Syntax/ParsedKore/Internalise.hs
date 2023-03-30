@@ -275,6 +275,7 @@ addModule
                             , rewriteTheory = currentRewriteTheory -- no rules yet
                             , functionEquations = Map.empty
                             , simplifications = Map.empty
+                            , predicateSimplifications = Map.empty
                             }
 
             let internaliseAlias ::
@@ -332,13 +333,14 @@ addModule
                         newPredicateSimplifications
                         currentPredicateSimplifications
 
-            pure $ defWithAliases.partial
-                { sorts
-                , rewriteTheory
-                , functionEquations
-                , simplifications
-                , predicateSimplifications
-                }
+            pure $
+                defWithAliases.partial
+                    { sorts
+                    , rewriteTheory
+                    , functionEquations
+                    , simplifications
+                    , predicateSimplifications
+                    }
       where
         -- Uses 'getKey' to construct a finite mapping from the list,
         -- returning elements that yield the same key separately.
