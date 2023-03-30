@@ -50,9 +50,6 @@ data KoreDefinition = KoreDefinition
 -- | Axiom store, optimized for lookup by term-index and priority
 type Theory (axiomType :: k) = Map TermIndex (Map Priority [RewriteRule axiomType])
 
--- rewrite theory type tags
-data RewriteTag
-
 {- | The starting point for building up the definition. Could be
  'Monoid' instance if the attributes had a Default.
 -}
