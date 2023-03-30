@@ -688,9 +688,8 @@ internaliseSimpleEquation ::
 internaliseSimpleEquation partialDef precond left right sortVars attributes
     | isJust $ attributes.simplification = do
         lhsIsTerm <- withExcept DefinitionPatternError $ isTermM left
-        rhsIsTerm <- withExcept DefinitionPatternError $ isTermM right
-        case (lhsIsTerm, rhsIsTerm) of
-            (True, True) -> do
+        if lhsIsTerm
+            then do
                 lhs <- internalisePattern' $ Syntax.KJAnd left.sort left precond
                 rhs <- internalisePattern' right
                 let computedAttributes =
@@ -698,7 +697,7 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
                 pure $
                     SimplificationAxiom
                         RewriteRule{lhs, rhs, attributes, computedAttributes}
-            (False, False) -> do
+            else do
                 target <- internalisePredicate' left
                 conditions <- mapM internalisePredicate' $ explodeAnd precond
                 rhs <- mapM internalisePredicate' $ explodeAnd right
@@ -706,11 +705,6 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
                 pure $
                     PredicateSimplificationAxiom
                         PredicateEquation{target, conditions, rhs, attributes, computedAttributes}
-            -- error reporting: left decides whether term or predicate are expected on right
-            (True, False) ->
-                throwE $ DefinitionPatternError $ TermExpected right
-            (False, True) ->
-                throwE $ DefinitionPatternError $ PredicateExpected right
     | otherwise = error "internaliseSimpleEquation should only be called for simplifications"
   where
     internalisePattern' =
