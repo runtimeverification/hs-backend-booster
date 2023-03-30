@@ -537,9 +537,9 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
         fmap (removeTops . Util.modifyVariables (modifyVarName ("Rule#" <>))) $
             Util.retractPattern result
                 `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
-    existentials <- fmap Set.fromList $ withExcept DefinitionPatternError $ mapM mkVar exs
+    existentials' <- fmap Set.fromList $ withExcept DefinitionPatternError $ mapM mkVar exs
     rhs <-
-        fmap (removeTops . Util.modifyVariables (\v -> modifyVarName (if v `Set.member` existentials then ("Ex#" <>) else ("Rule#" <>)) v)) $
+        fmap (removeTops . Util.modifyVariables (\v -> modifyVarName (if v `Set.member` existentials' then ("Ex#" <>) else ("Rule#" <>)) v)) $
             withExcept DefinitionPatternError $
                 internalisePattern True Nothing partialDefinition right
     let preservesDefinedness =
@@ -549,6 +549,7 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
             Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
         computedAttributes =
             ComputedAxiomAttributes{preservesDefinedness, containsAcSymbols}
+        existentials = Set.map (modifyVarName ("Ex#" <>)) existentials'
     return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes, existentials}
   where
     removeTops :: Def.Pattern -> Def.Pattern
