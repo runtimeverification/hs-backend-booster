@@ -692,8 +692,16 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
             then do
                 lhs <- internalisePattern' $ Syntax.KJAnd left.sort left precond
                 rhs <- internalisePattern' right
-                let computedAttributes =
-                        ComputedAxiomAttributes False True -- FIXME
+                let -- checking the lhs term, too, as a safe approximation
+                    -- (rhs may _introduce_ undefined, lhs may _hide_ it)
+                    alwaysDefined = all (Util.checkTermSymbols Util.isDefinedSymbol) [lhs.term, rhs.term]
+                    computedAttributes =
+                        ComputedAxiomAttributes
+                            { containsAcSymbols =
+                                any (Util.checkTermSymbols Util.checkSymbolIsAc) [lhs.term, rhs.term]
+                            , preservesDefinedness =
+                                fromMaybe alwaysDefined attributes.preserving
+                            }
                 pure $
                     SimplificationAxiom
                         RewriteRule{lhs, rhs, attributes, computedAttributes}
@@ -701,7 +709,8 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
                 target <- internalisePredicate' left
                 conditions <- mapM internalisePredicate' $ explodeAnd precond
                 rhs <- mapM internalisePredicate' $ explodeAnd right
-                let computedAttributes = ComputedAxiomAttributes False True -- FIXME
+                -- undefined predicates will invalidate the rule, no flags required
+                let computedAttributes = ComputedAxiomAttributes False True
                 pure $
                     PredicateSimplificationAxiom
                         PredicateEquation{target, conditions, rhs, attributes, computedAttributes}
