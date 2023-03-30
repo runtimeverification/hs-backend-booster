@@ -101,11 +101,21 @@ instance Pretty Summary where
             , "Axioms preserving definedness: " <> pretty summary.preserveDefinednessCount
             , "Axioms containing AC symbols: " <> pretty summary.containAcSymbolsCount
             ]
-                <> ("Subsorts:" : tableView prettyLabel prettyLabel summary.subSorts)
-                <> ("Rewrite rules by term index:" : tableView prettyTermIndex pretty summary.rewriteRules)
-                <> ("Function equations by term index:" : tableView prettyTermIndex pretty summary.functionRules)
-                <> ("Simplifications by term index:" : tableView prettyTermIndex pretty summary.simplifications)
-                <> ("Predicate simplifications by term index:" : tableView prettyTermIndex pretty summary.predicateSimplifications)
+                <> ( "Subsorts:"
+                        : tableView prettyLabel prettyLabel summary.subSorts
+                   )
+                <> ( "Rewrite rules by term index:"
+                        : tableView prettyTermIndex pretty summary.rewriteRules
+                   )
+                <> ( "Function equations by term index:"
+                        : tableView prettyTermIndex pretty summary.functionRules
+                   )
+                <> ( "Simplifications by term index:"
+                        : tableView prettyTermIndex pretty summary.simplifications
+                   )
+                <> ( "Predicate simplifications by term index:"
+                        : tableView prettyTermIndex pretty summary.predicateSimplifications
+                   )
                 <> [mempty]
       where
         tableView :: (k -> Doc a) -> (elem -> Doc a) -> Map.Map k [elem] -> [Doc a]
