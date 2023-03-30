@@ -383,6 +383,8 @@ data AxiomResult
       FunctionAxiom (RewriteRule "Function")
     | -- | Simplification
       SimplificationAxiom (RewriteRule "Simplification")
+    | -- | Predicate simplification
+      PredicateSimplificationAxiom PredicateEquation
 
 -- helper type to carry relevant extracted data from a pattern (what
 -- is passed to the internalising function later)
@@ -664,25 +666,41 @@ internaliseSimpleEquation ::
     [Syntax.Id] -> -- sort variables
     AxiomAttributes ->
     Except DefinitionError AxiomResult
-internaliseSimpleEquation partialDef precond leftTerm right sortVars axAttributes
-    | isJust $ axAttributes.simplification = do
-        -- FIXME must deal with predicate simplifications (no term!)
-        lhs <- internaliseSide $ Syntax.KJAnd leftTerm.sort leftTerm precond
-        rhs <- internaliseSide right
-        pure $
-            SimplificationAxiom
-                RewriteRule
-                    { lhs
-                    , rhs
-                    , attributes = axAttributes
-                    , computedAttributes = ComputedAxiomAttributes False True -- FIXME
-                    }
+internaliseSimpleEquation partialDef precond left right sortVars attributes
+    | isJust $ attributes.simplification = do
+        lhsIsTerm <- withExcept DefinitionPatternError $ isTermM left
+        rhsIsTerm <- withExcept DefinitionPatternError $ isTermM right
+        case (lhsIsTerm, rhsIsTerm) of
+            (True, True) -> do
+                lhs <- internalisePattern' $ Syntax.KJAnd left.sort left precond
+                rhs <- internalisePattern' right
+                let computedAttributes =
+                        ComputedAxiomAttributes False True -- FIXME
+                pure $
+                    SimplificationAxiom
+                        RewriteRule{lhs, rhs, attributes, computedAttributes}
+            (False, False) -> do
+                target <- internalisePredicate' left
+                conditions <- mapM internalisePredicate' $ explodeAnd precond
+                rhs <- mapM internalisePredicate' $ explodeAnd right
+                let computedAttributes = ComputedAxiomAttributes False True -- FIXME
+                pure $
+                    PredicateSimplificationAxiom
+                        PredicateEquation{target, conditions, rhs, attributes, computedAttributes}
+            -- error reporting: left decides whether term or predicate are expected on right
+            (True, False) ->
+                throwE $ DefinitionPatternError $ TermExpected right
+            (False, True) ->
+                throwE $ DefinitionPatternError $ PredicateExpected right
     | otherwise = error "internaliseSimpleEquation should only be called for simplifications"
   where
-    internaliseSide =
+    internalisePattern' =
         withExcept DefinitionPatternError
             . fmap (removeTops . Util.modifyVariables ("Eq#" <>))
             . internalisePattern True (Just sortVars) partialDef
+    internalisePredicate' =
+        withExcept DefinitionPatternError
+            . internalisePredicate True (Just sortVars) partialDef
 
 internaliseFunctionEquation ::
     KoreDefinition -> -- context

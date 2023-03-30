@@ -85,3 +85,11 @@ data Alias = Alias
     }
     deriving stock (Eq, Ord, Show, GHC.Generic)
     deriving anyclass (NFData)
+
+data PredicateEquation = PredicateEquation
+    { target :: Predicate
+    , conditions :: [Predicate]
+    , rhs :: [Predicate]
+    , attributes :: AxiomAttributes
+    , computedAttributes :: ComputedAxiomAttributes
+    }

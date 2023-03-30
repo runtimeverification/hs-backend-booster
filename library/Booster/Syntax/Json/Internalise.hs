@@ -12,6 +12,8 @@ module Booster.Syntax.Json.Internalise (
     SortError (..),
     renderSortError,
     ----------------
+    explodeAnd,
+    isTermM,
     textToBS,
 ) where
 
