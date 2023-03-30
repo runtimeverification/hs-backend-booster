@@ -38,10 +38,11 @@ data Summary = Summary
     , modNames, sortNames, symbolNames :: [ByteString]
     , subSorts :: Map.Map ByteString [ByteString]
     , axiomCount, preserveDefinednessCount, containAcSymbolsCount :: Int
-    , functionRuleCount, simplificationCount :: Int
+    , functionRuleCount, simplificationCount, predicateSimplificationCount :: Int
     , rewriteRules :: Map.Map TermIndex [Location]
     , functionRules :: Map.Map TermIndex [Location]
     , simplifications :: Map.Map TermIndex [Location]
+    , predicateSimplifications :: Map.Map TermIndex [Location]
     }
     deriving stock (Eq, Show, Generic)
     deriving anyclass (NFData)
@@ -69,12 +70,16 @@ mkSummary file def =
             length $ concat $ concatMap Map.elems (Map.elems def.functionEquations)
         , simplificationCount =
             length $ concat $ concatMap Map.elems (Map.elems def.functionEquations)
+        , predicateSimplificationCount =
+            length $ concat $ concatMap Map.elems (Map.elems def.functionEquations)
         , rewriteRules =
             Map.map (fst . locate . concat . Map.elems) def.rewriteTheory
         , functionRules =
             Map.map (fst . locate . concat . Map.elems) def.functionEquations
         , simplifications =
             Map.map (fst . locate . concat . Map.elems) def.simplifications
+        , predicateSimplifications =
+            Map.map (fst . locate . concat . Map.elems) def.predicateSimplifications
         }
   where
     locate :: HasField "attributes" a AxiomAttributes => [a] -> ([Location], Int)
@@ -100,6 +105,7 @@ instance Pretty Summary where
                 <> ("Rewrite rules by term index:" : tableView prettyTermIndex pretty summary.rewriteRules)
                 <> ("Function equations by term index:" : tableView prettyTermIndex pretty summary.functionRules)
                 <> ("Simplifications by term index:" : tableView prettyTermIndex pretty summary.simplifications)
+                <> ("Predicate simplifications by term index:" : tableView prettyTermIndex pretty summary.predicateSimplifications)
                 <> [mempty]
       where
         tableView :: (k -> Doc a) -> (elem -> Doc a) -> Map.Map k [elem] -> [Doc a]
