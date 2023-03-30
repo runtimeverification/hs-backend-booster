@@ -40,15 +40,16 @@ data KoreDefinition = KoreDefinition
     , sorts :: Map SortName (SortAttributes, Set SortName)
     , symbols :: Map SymbolName Symbol -- constructors and functions
     , aliases :: Map AliasName Alias
-    , rewriteTheory :: Theory "Rewrite"
-    , functionEquations :: Theory "Function"
-    , simplifications :: Theory "Simplification"
+    , rewriteTheory :: Theory (RewriteRule "Rewrite")
+    , functionEquations :: Theory (RewriteRule "Function")
+    , simplifications :: Theory (RewriteRule "Simplification")
+    , predicateSimplifications :: Theory PredicateEquation
     }
     deriving stock (Eq, Show, GHC.Generic)
     deriving anyclass (NFData)
 
 -- | Axiom store, optimized for lookup by term-index and priority
-type Theory (axiomType :: k) = Map TermIndex (Map Priority [RewriteRule axiomType])
+type Theory axiomType = Map TermIndex (Map Priority [axiomType])
 
 {- | The starting point for building up the definition. Could be
  'Monoid' instance if the attributes had a Default.
@@ -64,6 +65,7 @@ emptyKoreDefinition attributes =
         , rewriteTheory = Map.empty
         , functionEquations = Map.empty
         , simplifications = Map.empty
+        , predicateSimplifications = Map.empty
         }
 
 data RewriteRule (tag :: k) = RewriteRule
@@ -93,3 +95,5 @@ data PredicateEquation = PredicateEquation
     , attributes :: AxiomAttributes
     , computedAttributes :: ComputedAxiomAttributes
     }
+    deriving stock (Eq, Ord, Show, GHC.Generic)
+    deriving anyclass (NFData)

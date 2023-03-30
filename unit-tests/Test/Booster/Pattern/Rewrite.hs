@@ -101,8 +101,7 @@ rule4 =
         (termInKCell "RuleVar" (app f2 [varY]))
         42
     )
-        { computedAttributes = ComputedAxiomAttributes False False
-        }
+        `withComputedAttributes` ComputedAxiomAttributes False False
 
 termInKCell :: ByteString -> Term -> Pattern
 termInKCell varName = flip Pattern [] . withinKCell varName
@@ -150,7 +149,11 @@ rule ruleLabel lhs rhs priority =
         , computedAttributes = ComputedAxiomAttributes False True
         }
 
-mkTheory :: [(TermIndex, [RewriteRule "Rewrite"])] -> Theory "Rewrite"
+withComputedAttributes :: RewriteRule r -> ComputedAxiomAttributes -> RewriteRule r
+r@RewriteRule{lhs} `withComputedAttributes` computedAttributes =
+                   r {lhs, computedAttributes }
+
+mkTheory :: [(TermIndex, [RewriteRule "Rewrite"])] -> Theory (RewriteRule "Rewrite")
 mkTheory = Map.map mkPriorityGroups . Map.fromList
   where
     mkPriorityGroups :: [RewriteRule "Rewrite"] -> Map Priority [RewriteRule "Rewrite"]

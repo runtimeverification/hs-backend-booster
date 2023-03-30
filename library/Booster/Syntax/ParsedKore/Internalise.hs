@@ -28,7 +28,7 @@ import Data.List (foldl', groupBy, partition, sortOn)
 import Data.List.Extra (groupSort)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -163,6 +163,7 @@ mergeDefs k1 k2
                 <*> pure (mergeTheories rewriteTheory k1 k2)
                 <*> pure (mergeTheories functionEquations k1 k2)
                 <*> pure (mergeTheories simplifications k1 k2)
+                <*> pure (mergeTheories predicateSimplifications k1 k2)
   where
     mergeTheories ::
         forall r.
@@ -216,6 +217,7 @@ addModule
                     , rewriteTheory = currentRewriteTheory
                     , functionEquations = currentFctEqs
                     , simplifications = currentSimpls
+                    , predicateSimplifications = currentPredicateSimplifications
                     }
                 )
         ) =
@@ -308,15 +310,13 @@ addModule
 
             let defWithAliases :: PartialDefinition
                 defWithAliases = Partial defWithNewSortsAndSymbols.partial{aliases}
+            newAxioms <- mapMaybeM (internaliseAxiom defWithAliases) parsedAxioms
 
-            ( newRewriteRules
-                , subsortPairs
-                , newFunctionEquations
-                , newSimplifications
-                ) <-
-                partitionAxioms
-                    <$> mapMaybeM (internaliseAxiom defWithAliases) parsedAxioms
-
+            let newRewriteRules = mapMaybe retractRewriteRule newAxioms
+                subsortPairs = mapMaybe retractSubsortRule newAxioms
+                newFunctionEquations = mapMaybe retractFunctionRule newAxioms
+                newSimplifications = mapMaybe retractSimplificationRule newAxioms
+                newPredicateSimplifications = mapMaybe retractPredicateSimplificationRule newAxioms
             let rewriteTheory =
                     addToTheoryWith (computeTermIndex . (.lhs.term)) newRewriteRules currentRewriteTheory
                 functionEquations =
@@ -326,8 +326,19 @@ addModule
                     -- FIXME add index function
                     addToTheoryWith (const Anything) newSimplifications currentSimpls
                 sorts = subsortClosure sorts' subsortPairs
+                predicateSimplifications =
+                    addToTheoryWith
+                        (const Anything) -- FIXME add index function
+                        newPredicateSimplifications
+                        currentPredicateSimplifications
 
-            pure $ defWithAliases.partial{sorts, rewriteTheory, functionEquations, simplifications}
+            pure $ defWithAliases.partial
+                { sorts
+                , rewriteTheory
+                , functionEquations
+                , simplifications
+                , predicateSimplifications
+                }
       where
         -- Uses 'getKey' to construct a finite mapping from the list,
         -- returning elements that yield the same key separately.
@@ -344,21 +355,6 @@ addModule
              in ( Map.fromAscList [(getKey a, a) | [a] <- good]
                 , [(getKey $ head d, d) | d <- dups]
                 )
-
-        partitionAxioms ::
-            [AxiomResult] ->
-            ( [RewriteRule "Rewrite"]
-            , [(Def.SortName, Def.SortName)]
-            , [RewriteRule "Function"]
-            , [RewriteRule "Simplification"]
-            )
-        partitionAxioms = go [] [] [] []
-          where
-            go rules sorts funs simpls [] = (rules, sorts, funs, simpls)
-            go rules sorts funs simpls (RewriteRuleAxiom r : rest) = go (r : rules) sorts funs simpls rest
-            go rules sorts funs simpls (SubsortAxiom pair : rest) = go rules (pair : sorts) funs simpls rest
-            go rules sorts funs simpls (FunctionAxiom f : rest) = go rules sorts (f : funs) simpls rest
-            go rules sorts funs simpls (SimplificationAxiom s : rest) = go rules sorts funs (s : simpls) rest
 
         subsortClosure ::
             Map Def.SortName (SortAttributes, Set Def.SortName) ->
@@ -385,6 +381,27 @@ data AxiomResult
       SimplificationAxiom (RewriteRule "Simplification")
     | -- | Predicate simplification
       PredicateSimplificationAxiom PredicateEquation
+
+-- retract helpers
+retractRewriteRule :: AxiomResult -> Maybe (RewriteRule "Rewrite")
+retractRewriteRule (RewriteRuleAxiom r) = Just r
+retractRewriteRule _ = Nothing
+
+retractSubsortRule :: AxiomResult -> Maybe (Def.SortName, Def.SortName)
+retractSubsortRule (SubsortAxiom r) = Just r
+retractSubsortRule _ = Nothing
+
+retractFunctionRule :: AxiomResult -> Maybe (RewriteRule "Function")
+retractFunctionRule (FunctionAxiom r) = Just r
+retractFunctionRule _ = Nothing
+
+retractSimplificationRule :: AxiomResult -> Maybe (RewriteRule "Simplification")
+retractSimplificationRule (SimplificationAxiom r) = Just r
+retractSimplificationRule _ = Nothing
+
+retractPredicateSimplificationRule :: AxiomResult -> Maybe PredicateEquation
+retractPredicateSimplificationRule (PredicateSimplificationAxiom r) = Just r
+retractPredicateSimplificationRule _ = Nothing
 
 -- helper type to carry relevant extracted data from a pattern (what
 -- is passed to the internalising function later)
@@ -755,10 +772,11 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars axA
         (Def.Variable{variableSort, variableName = textToBS name},) <$> internaliseTerm' term
 
 addToTheoryWith ::
-    (RewriteRule tag -> TermIndex) ->
-    [RewriteRule tag] ->
-    Theory tag ->
-    Theory tag
+    HasField "attributes" axiom AxiomAttributes =>
+    (axiom -> TermIndex) ->
+    [axiom] ->
+    Theory axiom ->
+    Theory axiom
 addToTheoryWith termIndex axioms theory =
     let newTheory =
             Map.map groupByPriority
