@@ -526,7 +526,7 @@ internaliseRewriteRule partialDefinition aliasName aliasArgs right axAttributes 
                 `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
     (existentials, rhs) <-
         fmap
-            ( \(existentials', rhs') ->
+            ( \(rhs', existentials') ->
                 ( Set.map (modifyVarName ("?" <>)) existentials'
                 , removeTops $ Util.modifyVariables (\v -> modifyVarName (if v `Set.member` existentials' then ("?" <>) else ("Rule#" <>)) v) rhs'
                 )
