@@ -148,7 +148,12 @@ Subsorts:
 - SortList: SortList
 - SortMap: SortMap
 - SortSet: SortSet
-Axioms grouped by term index:
+Rewrite rules by term index:
 - LblBaz(_)_EXISTENTIALS_Baz_Foo: 2
-  - /Users/sam/git/hs-backend-booster/test/internalisation/existentials.k :  (7, 8)
   - /Users/sam/git/hs-backend-booster/test/internalisation/existentials.k :  (8, 8)
+  - /Users/sam/git/hs-backend-booster/test/internalisation/existentials.k :  (7, 8)
+Function equations by term index:
+- Anything: /nix/store/00dms44b8rxwvgbikd4jj0v0pc4k001r-k-5.6.14-4055eb48281e9813c71e083299004a568e9fb55d-maven/include/kframework/builtin/domains.md :  (559, 8)
+Simplifications by term index:
+Predicate simplifications by term index:
+- Anything: -

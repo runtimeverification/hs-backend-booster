@@ -609,15 +609,15 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
             let (rhs, existentials) = extractExistentials rhs'
              in Just . RewriteRuleAxiom
                     <$> internaliseRewriteRule
-                            partialDefinition
-                            existentials
-                            (textToBS alias)
-                            args
-                            rhs
-                            attribs
+                        partialDefinition
+                        existentials
+                        (textToBS alias)
+                        args
+                        rhs
+                        attribs
         SimplificationAxiom' requires lhs rhs sortVars attribs ->
-            Just <$>
-                internaliseSimpleEquation
+            Just
+                <$> internaliseSimpleEquation
                     partialDefinition
                     requires
                     lhs
@@ -625,8 +625,8 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
                     sortVars
                     attribs
         FunctionAxiom' requires args lhs rhs sortVars attribs ->
-            Just <$>
-                internaliseFunctionEquation
+            Just
+                <$> internaliseFunctionEquation
                     partialDefinition
                     requires
                     args
@@ -661,12 +661,15 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
     -- name clashes with patterns from the user
     -- filter out literal `Top` constraints
     lhs <-
-        fmap (removeTops . Util.modifyVariables (modifyVarName ("Rule#" <>))) $
+        fmap (removeTops . Util.modifyVariables (Util.modifyVarName ("Rule#" <>))) $
             Util.retractPattern result
                 `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
     existentials' <- fmap Set.fromList $ withExcept DefinitionPatternError $ mapM mkVar exs
+    let renameVariable v
+            | v `Set.member` existentials' = Util.modifyVarName ("Ex#" <>) v
+            | otherwise = Util.modifyVarName ("Rule#" <>) v
     rhs <-
-        fmap (removeTops . Util.modifyVariables (\v -> modifyVarName (if v `Set.member` existentials' then ("Ex#" <>) else ("Rule#" <>)) v)) $
+        fmap (removeTops . Util.modifyVariables renameVariable) $
             withExcept DefinitionPatternError $
                 internalisePattern True Nothing partialDefinition right
     let preservesDefinedness =
@@ -676,11 +679,9 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
             Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
         computedAttributes =
             ComputedAxiomAttributes{preservesDefinedness, containsAcSymbols}
-        existentials = Set.map (modifyVarName ("Ex#" <>)) existentials'
+        existentials = Set.map (Util.modifyVarName ("Ex#" <>)) existentials'
     return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes, existentials}
   where
-    modifyVarName f v = v{Def.variableName = f v.variableName}
-
     mkVar (name, sort) = do
         variableSort <- lookupInternalSort Nothing partialDefinition.sorts right sort
         let variableName = textToBS name.getId
@@ -748,7 +749,7 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
                             }
                 pure $
                     SimplificationAxiom
-                        RewriteRule{lhs, rhs, attributes, computedAttributes}
+                        RewriteRule{lhs, rhs, attributes, computedAttributes, existentials = Set.empty}
             else do
                 target <- internalisePredicate' left
                 conditions <- mapM internalisePredicate' $ explodeAnd precond
@@ -762,7 +763,7 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
   where
     internalisePattern' =
         withExcept DefinitionPatternError
-            . fmap (removeTops . Util.modifyVariables ("Eq#" <>))
+            . fmap (removeTops . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))
             . internalisePattern True (Just sortVars) partialDef
     internalisePredicate' =
         withExcept DefinitionPatternError
@@ -790,7 +791,7 @@ internaliseFunctionEquation ::
     [Syntax.Id] -> -- sort variables
     AxiomAttributes ->
     Except DefinitionError AxiomResult
-internaliseFunctionEquation partialDef requires args leftTerm right sortVars axAttributes = do
+internaliseFunctionEquation partialDef requires args leftTerm right sortVars attributes = do
     -- internalise the LHS (LHS term and requires)
     left <- -- expected to be a simple term, f(X_1, X_2,..)
         withExcept DefinitionPatternError $
@@ -799,14 +800,14 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars axA
     -- extract argument binders from predicates and inline in to LHS term
     argPairs <- mapM internaliseArg args
     let lhs =
-            removeTops . Util.modifyVariables ("Eq#" <>) $
+            removeTops . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)) $
                 left{Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
     rhs <- internaliseSide right
     let argsDefined =
             all (Util.checkTermSymbols Util.isDefinedSymbol . snd) argPairs
         rhsPreserves =
             -- users can override the definedness computation by an explicit attribute
-            fromMaybe (Util.checkTermSymbols Util.isDefinedSymbol rhs.term) axAttributes.preserving
+            fromMaybe (Util.checkTermSymbols Util.isDefinedSymbol rhs.term) attributes.preserving
         containsAcSymbols =
             any (Util.checkTermSymbols Util.checkSymbolIsAc . snd) argPairs
         computedAttributes =
@@ -814,11 +815,13 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars axA
                 { preservesDefinedness = argsDefined && rhsPreserves
                 , containsAcSymbols
                 }
-    pure $ FunctionAxiom RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes}
+    pure $
+        FunctionAxiom
+            RewriteRule{lhs, rhs, attributes, computedAttributes, existentials = Set.empty}
   where
     internaliseSide =
         withExcept DefinitionPatternError
-            . fmap (removeTops . Util.modifyVariables ("Eq#" <>))
+            . fmap (removeTops . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))
             . internalisePattern True (Just sortVars) partialDef
 
     internaliseTerm' =

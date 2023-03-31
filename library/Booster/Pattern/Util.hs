@@ -12,6 +12,7 @@ module Booster.Pattern.Util (
     substituteInTerm,
     substituteInPredicate,
     modifyVariables,
+    modifyVarName,
     freeVariables,
     isConstructorSymbol,
     isSortInjectionSymbol,
@@ -102,6 +103,9 @@ modifyVariables f p =
         ForallF v pr ->
             Forall (f v) (modifyP pr)
         other -> embed other
+
+modifyVarName :: (VarName -> VarName) -> Variable -> Variable
+modifyVarName f v = v{variableName = f v.variableName}
 
 freeVariables :: Term -> Set Variable
 freeVariables (Term attributes _) = attributes.variables

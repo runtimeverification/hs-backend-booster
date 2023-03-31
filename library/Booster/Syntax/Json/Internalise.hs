@@ -214,10 +214,14 @@ internalisePredicate allowAlias sortVars definition@KoreDefinition{sorts} pat = 
         Internal.Iff
             <$> recursion arg1
             <*> recursion arg2
-    Syntax.KJForall{var, arg} ->
-        Internal.Forall (textToBS var.getId) <$> recursion arg
-    Syntax.KJExists{var, arg} ->
-        Internal.Exists (textToBS var.getId) <$> recursion arg
+    Syntax.KJForall{var, varSort, arg} -> do
+        variableSort <- lookupInternalSort' varSort
+        Internal.Forall Internal.Variable{variableSort, variableName = textToBS var.getId}
+            <$> recursion arg
+    Syntax.KJExists{var, varSort, arg} -> do
+        variableSort <- lookupInternalSort' varSort
+        Internal.Forall Internal.Variable{variableSort, variableName = textToBS var.getId}
+            <$> recursion arg
     Syntax.KJMu{} -> notSupported
     Syntax.KJNu{} -> notSupported
     Syntax.KJCeil{arg} ->
