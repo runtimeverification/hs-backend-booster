@@ -9,8 +9,6 @@ module Booster.Pattern.Index (
     kCellTermIndex,
     termTopIndex,
     predicateTopIndex,
-    --
-    combine,
 ) where
 
 import Control.Applicative (Alternative (..), asum)
@@ -56,15 +54,14 @@ data TermIndex
   matches an 'AndTerm t1 t2' must match both 't1' and 't2', so 't1'
   and 't2' must have "compatible" indexes for this to be possible.
 -}
-combine :: TermIndex -> TermIndex -> TermIndex
-combine None _ = None
-combine _ None = None
-combine x Anything = x
-combine Anything x = x
-combine s@(TopSymbol s1) (TopSymbol s2)
-    | s1 == s2 = s
---     | otherwise = None -- redundant
-combine _ _ = None -- incompatible indexes
+instance Semigroup TermIndex where
+    None <> _ = None
+    _ <> None = None
+    x <> Anything = x
+    Anything <> x = x
+    s@(TopSymbol s1) <> TopSymbol s2
+        | s1 == s2 = s
+        | otherwise = None -- incompatible indexes
 
 {- | Indexes a term by the constructor inside the head of its <k>-cell.
 
@@ -85,7 +82,7 @@ kCellTermIndex config =
                     Constructor -> TopSymbol symbol.name
                     _ -> Anything
             AndTerm term1 term2 ->
-                combine (getTermIndex term1) (getTermIndex term2)
+                getTermIndex term1 <> getTermIndex term2
             _ -> Anything
 
     -- it is assumed there is only one K cell
@@ -129,7 +126,7 @@ termTopIndex = \case
     SymbolApplication symbol _ _ ->
         TopSymbol symbol.name
     AndTerm t1 t2 ->
-        combine (termTopIndex t1) (termTopIndex t2)
+        termTopIndex t1 <> termTopIndex t2
     _other ->
         Anything
 
