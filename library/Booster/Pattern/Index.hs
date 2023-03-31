@@ -114,23 +114,3 @@ computeTermIndex config =
 
     getFirstKCellElem [] = error "computeTermIndex: empty K cell"
     getFirstKCellElem (x : _) = x
-
-{-
-pattern language for cells (symbol application nests):
-- NAME => exactly match a cell name (which will be encoded before searching)
-- number => pick argument <number> of an application
-- PAT1 . PAT2 => pick cell for PAT1, then pick cell for PAT2
-- * => match exactly one level of application, any name (not usable without suffix)
-- ** => match any level of application nesting (not usable without suffix)
-
-The above head-of-kseq-in-kcell indexing would be
-**.Lbl<k>.kseq.1
--}
-
--- implements pattern "**.cellName"
-findCell :: SymbolName -> Term -> Maybe Term
-findCell cellName = para $ \case
-    app@(SymbolApplicationF symbol _ children)
-        | symbol.name == cellName -> Just $ embed $ fmap fst app
-        | otherwise -> asum $ map snd children
-    other -> foldr ((<|>) . snd) Nothing other
