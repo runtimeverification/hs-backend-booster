@@ -46,7 +46,7 @@ import Booster.Definition.Attributes.Reader as Attributes (
 import Booster.Definition.Base as Def
 import Booster.Pattern.Base (Variable (..))
 import Booster.Pattern.Base qualified as Def
-import Booster.Pattern.Index (TermIndex (Anything), computeTermIndex)
+import Booster.Pattern.Index as Idx
 import Booster.Pattern.Util qualified as Util
 import Booster.Prettyprinter hiding (attributes)
 import Booster.Syntax.Json.Internalise
@@ -324,17 +324,15 @@ addModule
                 newSimplifications = mapMaybe retractSimplificationRule newAxioms
                 newPredicateSimplifications = mapMaybe retractPredicateSimplificationRule newAxioms
             let rewriteTheory =
-                    addToTheoryWith (computeTermIndex . (.lhs.term)) newRewriteRules currentRewriteTheory
+                    addToTheoryWith (Idx.kCellTermIndex . (.lhs.term)) newRewriteRules currentRewriteTheory
                 functionEquations =
-                    -- FIXME add index function
-                    addToTheoryWith (const Anything) newFunctionEquations currentFctEqs
+                    addToTheoryWith (Idx.termTopIndex . (.lhs.term)) newFunctionEquations currentFctEqs
                 simplifications =
-                    -- FIXME add index function
-                    addToTheoryWith (const Anything) newSimplifications currentSimpls
+                    addToTheoryWith (Idx.termTopIndex . (.lhs.term)) newSimplifications currentSimpls
                 sorts = subsortClosure sorts' subsortPairs
                 predicateSimplifications =
                     addToTheoryWith
-                        (const Anything) -- FIXME add index function
+                        (predicateTopIndex . (.target))
                         newPredicateSimplifications
                         currentPredicateSimplifications
 

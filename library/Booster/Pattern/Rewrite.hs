@@ -31,7 +31,7 @@ import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.Base
-import Booster.Pattern.Index (TermIndex (..), computeTermIndex)
+import Booster.Pattern.Index (TermIndex (..), kCellTermIndex)
 import Booster.Pattern.Simplify
 import Booster.Pattern.Unify
 import Booster.Pattern.Util
@@ -62,7 +62,7 @@ getLLVM = RewriteM $ snd <$> ask
 -}
 rewriteStep :: [Text] -> [Text] -> Pattern -> RewriteM (RewriteFailed "Rewrite") (RewriteResult Pattern)
 rewriteStep cutLabels terminalLabels pat = do
-    let termIdx = computeTermIndex pat.term
+    let termIdx = kCellTermIndex pat.term
     when (termIdx == None) $ throw (TermIndexIsNone pat.term)
     def <- getDefinition
     let idxRules = fromMaybe Map.empty $ Map.lookup termIdx def.rewriteTheory

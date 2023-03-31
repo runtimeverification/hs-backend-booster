@@ -3110,46 +3110,56 @@ Rewrite rules by term index:
 - Lblfoundry_assert: evm-semantics/.build/usr/lib/kevm/include/kframework/foundry.md :  (154, 10)
 - Lblfoundry_assume: evm-semantics/.build/usr/lib/kevm/include/kframework/foundry.md :  (152, 10)
 Function equations by term index:
-- Anything: 1094
+- Lbl#HPEncode(_,_)_SERIALIZATION_ByteArray_ByteArray_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (599, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (602, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (82, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (430, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (515, 10)
+- Lbl#abiCallData(_,_)_EVM-ABI_ByteArray_String_TypedArgs: evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (82, 10)
+- Lbl#abiEventLog(_,_,_)_EVM-ABI_SubstateLogEntry_Int_String_EventArgs: evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (430, 10)
+- Lbl#addr(_)_EVM-TYPES_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (515, 10)
+- Lbl#addrBytes(_)_SERIALIZATION_ByteArray_Account: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (248, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (249, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (58, 10)
+- Lbl#addrFromPrivateKey(_)_SERIALIZATION_Int_String: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (58, 10)
+- Lbl#adjustedExpLength(_)_EVM_Int_Int: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2380, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2382, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2381, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2378, 10)
+- Lbl#adjustedExpLength(_,_,_)_EVM_Int_Int_Int_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2378, 10)
+- Lbl#alignHexString(_)_SERIALIZATION_String_String: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (143, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (144, 10)
+- Lbl#allBut64th(_)_EVM_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2333, 28)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2334, 28)
+- Lbl#asAccount(_)_EVM-TYPES_Account_ByteArray: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (413, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (414, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (418, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (409, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (405, 10)
+- Lbl#asByteStack(_)_EVM-TYPES_ByteArray_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (418, 10)
+- Lbl#asInteger(_)_EVM-TYPES_Int_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (409, 10)
+- Lbl#asWord(_)_EVM-TYPES_Int_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (405, 10)
+- Lbl#asmTxPrefix(_)_EVM-TYPES_TxType_Int: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (569, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (570, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (571, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (82, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (69, 10)
+- Lbl#blockHashHeaderBaseFeeStr: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (82, 10)
+- Lbl#blockHashHeaderStr: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (69, 10)
+- Lbl#blockhash(_,_,_,_)_EVM_Int_List_Int_Int_Int: 5
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1024, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1025, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1028, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1027, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1026, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (699, 10)
+- Lbl#bloomFilter(_)_EVM_ByteArray_List: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (699, 10)
+- Lbl#bloomFilter(_,_)_EVM_ByteArray_List_Int: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (701, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (709, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (702, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/buf.md :  (45, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/buf.md :  (42, 10)
+- Lbl#buf(_,_)_BUF-SYNTAX_ByteArray_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/buf.md :  (45, 10)
+- Lbl#bufStrict(_,_)_BUF-SYNTAX_ByteArray_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/buf.md :  (42, 10)
+- Lbl#byteify(_)_SERIALIZATION_ByteArray_ByteArray: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (594, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (590, 10)
+- Lbl#changesState(_,_)_EVM_Bool_OpCode_WordStack: 7
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (424, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (418, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (422, 10)
@@ -3157,15 +3167,19 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (419, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (423, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (420, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (613, 10)
+- Lbl#cleanBranchMap(_)_SERIALIZATION_Map_Map: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (613, 10)
+- Lbl#cleanBranchMapAux(_,_,_)_SERIALIZATION_Map_Map_List_Set: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (616, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (615, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (617, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1395, 10)
+- Lbl#computeValidJumpDests(_)_EVM_Set_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1395, 10)
+- Lbl#computeValidJumpDests(_,_,_)_EVM_Set_ByteArray_Int_List: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1408, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1407, 10)
+- Lbl#computeValidJumpDestsWithinBound(_,_,_)_EVM_Set_ByteArray_Int_List: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1411, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1410, 10)
+- Lbl#dasmOpCode(_,_)_EVM_OpCode_Int_Schedule: 144
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2876, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2733, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2734, 10)
@@ -3310,30 +3324,37 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2798, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2799, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2800, 10)
+- Lbl#dasmTxPrefix(_)_EVM-TYPES_Int_TxType: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (564, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (565, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (563, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (447, 10)
+- Lbl#decodeLengthPrefix(_,_)_SERIALIZATION_LengthPrefix_String_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (447, 10)
+- Lbl#decodeLengthPrefix(_,_,_)_SERIALIZATION_LengthPrefix_String_Int_Int: 5
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (453, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (451, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (452, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (450, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (449, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (457, 10)
+- Lbl#decodeLengthPrefixLength(_,_,_,_)_SERIALIZATION_LengthPrefix_LengthPrefixType_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (457, 10)
+- Lbl#decodeLengthPrefixLength(_,_,_,_)_SERIALIZATION_LengthPrefix_LengthPrefixType_String_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (456, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (455, 10)
+- Lbl#drop(_,_)_EVM-TYPES_Bytes_Int_Bytes: 4
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (267, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (268, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (269, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (270, 10)
+- Lbl#drop(_,_)_EVM-TYPES_WordStack_Int_WordStack: 4
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (252, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (253, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (251, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (254, 10)
+- Lbl#ecrec(_)_EVM_ByteArray_Account: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1731, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1732, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1729, 19)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (724, 10)
+- Lbl#ecrec(_,_,_,_)_EVM_ByteArray_ByteArray_ByteArray_ByteArray_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1729, 19)
+- Lbl#emptyContractRLP_SERIALIZATION_String: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (724, 10)
+- Lbl#enc(_)_EVM-ABI_ByteArray_TypedArg: 40
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (288, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (328, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (326, 10)
@@ -3374,31 +3395,39 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (332, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (331, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (333, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (337, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (151, 10)
+- Lbl#encBytes(_,_)_EVM-ABI_ByteArray_Int_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (337, 10)
+- Lbl#encodeArgs(_)_EVM-ABI_ByteArray_TypedArgs: evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (151, 10)
+- Lbl#encodeArgsAux(_,_,_,_)_EVM-ABI_ByteArray_TypedArgs_Int_ByteArray_ByteArray: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (153, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (155, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (159, 10)
+- Lbl#entriesGE(_,_)_JSON-EXT_JSONs_String_JSONs: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (54, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (55, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (53, 10)
+- Lbl#entriesLT(_,_)_JSON-EXT_JSONs_String_JSONs: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (50, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (51, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (49, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (91, 10)
+- Lbl#generateSignature(_,_)_EVM-ABI_String_String_TypedArgs: evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (91, 10)
+- Lbl#generateSignatureArgs(_)_EVM-ABI_String_TypedArgs: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (93, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (95, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (94, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (435, 10)
+- Lbl#getEventTopics(_,_)_EVM-ABI_List_String_EventArgs: evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (435, 10)
+- Lbl#getIndexedArgs(_)_EVM-ABI_List_EventArgs: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (449, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (447, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (448, 10)
+- Lbl#getNonIndexedArgs(_)_EVM-ABI_TypedArgs_EventArgs: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (455, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (453, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (454, 10)
+- Lbl#getTypedArgs(_)_EVM-ABI_TypedArgs_EventArgs: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (443, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (441, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (442, 10)
+- Lbl#getValue(_)_EVM-ABI_Int_TypedArg: 37
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (345, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (343, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (383, 10)
@@ -3436,28 +3465,37 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (356, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (357, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (358, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (103, 10)
+- Lbl#hashSignedTx(_,_,_,_,_,_,_,_,_)_SERIALIZATION_String_Int_Int_Int_Account_Int_ByteArray_Int_ByteArray_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (103, 10)
+- Lbl#hashTxData(_)_SERIALIZATION_String_TxData: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (106, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (107, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (108, 10)
+- Lbl#hashedLocation(_,_,_)_HASHED-LOCATIONS_Int_String_Int_IntList: 4
   - evm-semantics/.build/usr/lib/kevm/include/kframework/hashed-locations.md :  (60, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/hashed-locations.md :  (59, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/hashed-locations.md :  (64, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/hashed-locations.md :  (62, 10)
+- Lbl#if_#then_#else_#fi_K-EQUAL-SYNTAX_Sort_Bool_Sort_Sort: 2
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2128, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2129, 8)
+- Lbl#inStorage(_,_,_)_EVM_Bool_Map_Account_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1889, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1890, 10)
+- Lbl#inStorageAux1(_,_)_EVM_Bool_KItem_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1893, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1892, 10)
+- Lbl#inStorageAux2(_,_)_EVM_Bool_Set_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1895, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1896, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (694, 10)
+- Lbl#intMap2StorageMap(_)_SERIALIZATION_Map_Map: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (694, 10)
+- Lbl#intMap2StorageMapAux(_,_,_)_SERIALIZATION_Map_Map_Map_List: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (701, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (697, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (696, 10)
+- Lbl#isPrecompiledAccount(_,_)_EVM_Bool_Int_Schedule: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1345, 40)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1344, 40)
+- Lbl#isStaticType(_)_EVM-ABI_Bool_TypedArg: 40
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (220, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (266, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (260, 10)
@@ -3498,13 +3536,15 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (244, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (243, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (242, 10)
+- Lbl#isValidCode(_,_)_EVM_Bool_ByteArray_Schedule: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1558, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1559, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/foundry.md :  (223, 14)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/foundry.md :  (224, 14)
-  - evm-semantics/tests/specs/lemmas.k :  (82, 10)
-  - evm-semantics/tests/specs/lemmas.k :  (86, 12)
-  - evm-semantics/tests/specs/lemmas.k :  (87, 12)
+- Lbl#lambda__: evm-semantics/.build/usr/lib/kevm/include/kframework/foundry.md :  (223, 14)
+- Lbl#lambda__2: evm-semantics/.build/usr/lib/kevm/include/kframework/foundry.md :  (224, 14)
+- Lbl#lambda__3: evm-semantics/tests/specs/lemmas.k :  (82, 10)
+- Lbl#lambda__4: evm-semantics/tests/specs/lemmas.k :  (86, 12)
+- Lbl#lambda__5: evm-semantics/tests/specs/lemmas.k :  (87, 12)
+- Lbl#lenOfHead(_)_EVM-ABI_Int_TypedArg: 40
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (170, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (216, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (210, 10)
@@ -3545,14 +3585,18 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (194, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (193, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (192, 10)
+- Lbl#lenOfHeads(_)_EVM-ABI_Int_TypedArgs: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (165, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (166, 10)
+- Lbl#lookup(_,_)_EVM-TYPES_Int_Map_Int: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (528, 34)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (530, 34)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (527, 34)
+- Lbl#lookupMemory(_,_)_EVM-TYPES_Int_Map_Int: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (533, 34)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (535, 34)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (532, 34)
+- Lbl#memory(_,_)_EVM_Int_OpCode_Int: 16
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1931, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1911, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1913, 10)
@@ -3569,60 +3613,78 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1919, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1929, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1928, 10)
+- Lbl#memoryUsageUpdate(_,_,_)_EVM_Int_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1954, 37)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1953, 37)
+- Lbl#merkleExtensionBrancher(_,_,_)_SERIALIZATION_MerkleTree_MerkleTree_ByteArray_MerkleTree: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (656, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (652, 10)
+- Lbl#merkleExtensionBuilder(_,_,_,_,_)_SERIALIZATION_MerkleTree_ByteArray_ByteArray_String_ByteArray_String: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (630, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (635, 10)
+- Lbl#merkleExtensionBuilderAux(_,_,_,_,_)_SERIALIZATION_MerkleTree_ByteArray_ByteArray_String_ByteArray_String: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (639, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (646, 10)
+- Lbl#merkleExtensionSplitter(_,_,_,_,_)_SERIALIZATION_MerkleTree_ByteArray_ByteArray_MerkleTree_ByteArray_String: 4
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (680, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (670, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (676, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (662, 10)
+- Lbl#merkleUpdateBranch(_,_,_,_,_)_SERIALIZATION_MerkleTree_Map_String_Int_ByteArray_String: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (624, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (621, 10)
+- Lbl#modexp1(_,_,_,_)_EVM_ByteArray_Int_Int_Int_ByteArray: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1763, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1764, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1765, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1766, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1767, 10)
+- Lbl#modexp2(_,_,_,_)_EVM_ByteArray_Int_Int_Int_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1765, 10)
+- Lbl#modexp3(_,_,_,_)_EVM_ByteArray_Int_Int_Int_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1766, 10)
+- Lbl#modexp4(_,_,_)_EVM_ByteArray_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1767, 10)
+- Lbl#multComplexity(_)_EVM_Int_Int: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2369, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2371, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2370, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (202, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (203, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (37, 29)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (38, 29)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2373, 10)
+- Lbl#nBits(_)_EVM-TYPES_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (202, 10)
+- Lbl#nBytes(_)_EVM-TYPES_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (203, 10)
+- Lbl#newAddr(_,_)_SERIALIZATION_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (37, 29)
+- Lbl#newAddr(_,_,_)_SERIALIZATION_Int_Int_Int_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (38, 29)
+- Lbl#newMultComplexity(_)_EVM_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2373, 10)
+- Lbl#nibbleize(_)_SERIALIZATION_ByteArray_ByteArray: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (587, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (582, 10)
+- Lbl#padByte(_)_SERIALIZATION_String_String: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (226, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (227, 10)
+- Lbl#padRightToWidth(_,_)_EVM-TYPES_ByteArray_Int_ByteArray: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (440, 33)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (441, 33)
+- Lbl#padToWidth(_,_)_EVM-TYPES_ByteArray_Int_ByteArray: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (438, 33)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (439, 33)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (194, 10)
+- Lbl#parseAccessListStorageKeys(_)_SERIALIZATION_List_JSONs: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (194, 10)
+- Lbl#parseAccessListStorageKeys(_,_)_SERIALIZATION_List_JSONs_List: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (196, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (195, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (189, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (153, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (160, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (155, 10)
+- Lbl#parseAddr(_)_SERIALIZATION_Int_String: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (189, 10)
+- Lbl#parseByteStack(_)_SERIALIZATION_ByteArray_String: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (153, 10)
+- Lbl#parseByteStackRaw(_)_SERIALIZATION_ByteArray_String: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (160, 10)
+- Lbl#parseHexBytes(_)_SERIALIZATION_ByteArray_String: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (155, 10)
+- Lbl#parseHexBytesAux(_)_SERIALIZATION_ByteArray_String: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (157, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (156, 10)
+- Lbl#parseHexWord(_)_SERIALIZATION_Int_String: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (135, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (133, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (134, 10)
+- Lbl#parseMap(_)_SERIALIZATION_Map_JSON: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (183, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (184, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (185, 10)
+- Lbl#parseWord(_)_SERIALIZATION_Int_String: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (138, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (139, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (137, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1795, 10)
+- Lbl#point(_)_EVM_ByteArray_G1Point: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1795, 10)
+- Lbl#precompiled(_)_EVM_PrecompiledOp_Int: 9
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1689, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1690, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1691, 10)
@@ -3632,6 +3694,7 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1695, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1696, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1697, 10)
+- Lbl#precompiledAccounts(_)_EVM_Set_Schedule: 11
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1710, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1706, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1707, 10)
@@ -3643,70 +3706,89 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1708, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1705, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1704, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (717, 10)
+- Lbl#precompiledAccountsMap(_)_SERIALIZATION_Map_Set: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (717, 10)
+- Lbl#precompiledAccountsMapAux(_,_)_SERIALIZATION_Map_List_Map: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (719, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (720, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (348, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (317, 10)
+- Lbl#range(_,_,_)_EVM-TYPES_ByteArray_Memory_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (348, 10)
+- Lbl#replicate(_,_)_EVM-TYPES_WordStack_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (317, 10)
+- Lbl#replicateAux(_,_,_)_EVM-TYPES_WordStack_Int_Int_WordStack: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (318, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (319, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (429, 10)
+- Lbl#rlpDecode(_)_SERIALIZATION_JSON_String: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (429, 10)
+- Lbl#rlpDecode(_,_)_SERIALIZATION_JSON_String_LengthPrefix: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (431, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (430, 10)
+- Lbl#rlpDecodeList(_,_)_SERIALIZATION_JSONs_String_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (436, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (437, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (438, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (461, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (308, 10)
+- Lbl#rlpDecodeList(_,_,_)_SERIALIZATION_JSONs_String_Int_LengthPrefix: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (438, 10)
+- Lbl#rlpDecodeTransaction(_)_SERIALIZATION_JSONs_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (461, 10)
+- Lbl#rlpEncode(_)_SERIALIZATION_String_JSON: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (308, 10)
+- Lbl#rlpEncode(_,_)_SERIALIZATION_String_JSONs_StringBuffer: 5
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (310, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (314, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (313, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (311, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (312, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (299, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (301, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (325, 21)
+- Lbl#rlpEncodeAddress(_)_SERIALIZATION_String_Account: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (299, 10)
+- Lbl#rlpEncodeBytes(_)_SERIALIZATION_String_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (301, 10)
+- Lbl#rlpEncodeFullAccount(_,_,_,_)_SERIALIZATION_String_Int_Int_Map_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (325, 21)
+- Lbl#rlpEncodeInt(_)_SERIALIZATION_String_Int: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (295, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (294, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (293, 10)
+- Lbl#rlpEncodeLength(_,_)_SERIALIZATION_String_String_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (320, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (319, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (321, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (346, 10)
+- Lbl#rlpEncodeLength(_,_,_)_SERIALIZATION_String_String_Int_String: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (321, 10)
+- Lbl#rlpEncodeLogs(_)_SERIALIZATION_String_List: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (346, 10)
+- Lbl#rlpEncodeLogsAux(_,_)_SERIALIZATION_String_List_StringBuffer: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (348, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (349, 10)
+- Lbl#rlpEncodeMerkleTree(_)_SERIALIZATION_String_MerkleTree: 4
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (379, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (393, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (387, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (381, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (338, 24)
+- Lbl#rlpEncodeReceipt(_,_,_,_)_SERIALIZATION_String_Int_Int_ByteArray_List: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (338, 24)
+- Lbl#rlpEncodeString(_)_SERIALIZATION_String_String: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (304, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (305, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (303, 10)
+- Lbl#rlpEncodeTopics(_,_)_SERIALIZATION_String_List_StringBuffer: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (358, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (359, 10)
+- Lbl#rlpEncodeTxData(_)_SERIALIZATION_String_TxData: 4
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (371, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (374, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (368, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (365, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (297, 10)
+- Lbl#rlpEncodeWord(_)_SERIALIZATION_String_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (297, 10)
+- Lbl#rlpMerkleH(_)_SERIALIZATION_String_String: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (415, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (412, 10)
+- Lbl#sender(_)_SERIALIZATION_Account_String: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (54, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (53, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (51, 10)
+- Lbl#sender(_,_,_,_)_SERIALIZATION_Account_String_Int_String_String: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (51, 10)
+- Lbl#sender(_,_,_,_)_SERIALIZATION_Account_TxData_Int_ByteArray_ByteArray: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (47, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (44, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (86, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (433, 10)
+- Lbl#signatureCallData(_,_)_EVM-ABI_ByteArray_String_TypedArgs: evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (86, 10)
+- Lbl#sizeByteArray(_)_EVM-TYPES_Int_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (433, 10)
+- Lbl#sizeOfDynamicType(_)_EVM-ABI_Int_TypedArg: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (275, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (272, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (270, 10)
+- Lbl#sizeOfDynamicTypeAux(_)_EVM-ABI_Int_TypedArgs: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (283, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (280, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (300, 10)
+- Lbl#sizeWordStack(_)_EVM-TYPES_Int_WordStack: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (300, 10)
+- Lbl#sizeWordStack(_,_)_EVM-TYPES_Int_WordStack_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (301, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (302, 10)
+- Lbl#stackAdded(_)_EVM_Int_OpCode: 21
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (392, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (391, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (372, 10)
@@ -3728,7 +3810,8 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (379, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (383, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (389, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (396, 10)
+- Lbl#stackDelta(_)_EVM_Int_OpCode: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (396, 10)
+- Lbl#stackNeeded(_)_EVM_Int_OpCode: 12
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (361, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (368, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (367, 10)
@@ -3741,19 +3824,23 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (366, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (357, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (365, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (353, 10)
+- Lbl#stackOverflow(_,_)_EVM_Bool_WordStack_OpCode: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (353, 10)
+- Lbl#stackUnderflow(_,_)_EVM_Bool_WordStack_Int: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (349, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (351, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (350, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (348, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (708, 10)
+- Lbl#stackUnderflow(_,_)_EVM_Bool_WordStack_OpCode: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (348, 10)
+- Lbl#storageRoot(_)_SERIALIZATION_MerkleTree_Map: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (708, 10)
+- Lbl#take(_,_)_EVM-TYPES_Bytes_Int_Bytes: 4
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (261, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (262, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (263, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (260, 10)
+- Lbl#take(_,_)_EVM-TYPES_WordStack_Int_WordStack: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (246, 29)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (245, 29)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (247, 29)
+- Lbl#typeName(_)_EVM-ABI_String_TypedArg: 41
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (99, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (146, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (140, 10)
@@ -3795,62 +3882,82 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (123, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (122, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/abi.md :  (121, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (236, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (238, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (231, 10)
+- Lbl#unparseData(_,_)_SERIALIZATION_String_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (236, 10)
+- Lbl#unparseDataByteArray(_)_SERIALIZATION_String_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (238, 10)
+- Lbl#unparseQuantity(_)_SERIALIZATION_String_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (231, 10)
+- Lbl#usesAccessList(_)_EVM_Bool_OpCode: 5
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1969, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1970, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1973, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1971, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1972, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1935, 10)
+- Lbl#usesMemory(_)_EVM_Bool_OpCode: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1935, 10)
+- Lbl#widthOp(_)_EVM_Int_OpCode: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (534, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (533, 10)
+- Lbl#widthOpCode(_)_EVM_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1417, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (1418, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (250, 10)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1672, 8)
+- Lbl#wordBytes(_)_SERIALIZATION_ByteArray_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (250, 10)
+- Lbl.StringBuffer_STRING-BUFFER-IN-K_StringBuffer: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1672, 8)
+- LblAccountCellMapKey: -
+- LblBool2String(_)_STRING-COMMON_String_Bool: 2
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1491, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1490, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2286, 28)
+- LblCaddraccess(_,_)_EVM_Int_Schedule_Bool: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2286, 28)
+- LblCbalance(_)_EVM_Int_Schedule: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2299, 26)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2298, 26)
+- LblCextcodecopy(_,_)_EVM_Int_Schedule_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2301, 30)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2302, 30)
+- LblCextcodehash(_)_EVM_Int_Schedule: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2296, 30)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2295, 30)
+- LblCextcodesize(_)_EVM_Int_Schedule: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2293, 30)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2292, 30)
+- LblCextra(_,_,_,_)_EVM_Int_Schedule_Bool_Int_Bool: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2274, 24)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2275, 24)
+- LblCgascap(_,_,_,_)_EVM_Int_Schedule_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2236, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2240, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2284, 18)
+- LblCmem(_,_)_EVM_Int_Schedule_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2284, 18)
+- LblCmodexp(_,_,_,_,_)_EVM_Int_Schedule_ByteArray_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2304, 25)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2306, 25)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2278, 10)
+- LblCnew(_,_,_)_EVM_Int_Schedule_Bool_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2278, 10)
+- LblCsload(_,_)_EVM_Int_Schedule_Bool: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2289, 24)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2290, 24)
+- LblCsstore(_,_,_,_)_EVM_Int_Schedule_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2243, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2247, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2287, 28)
+- LblCstorageaccess(_,_)_EVM_Int_Schedule_Bool: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2287, 28)
+- LblCxfer(_,_)_EVM_Int_Schedule_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2282, 24)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2281, 24)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2364, 10)
+- LblG*(_,_,_,_)_EVM_Int_Int_Int_Int_Schedule: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2364, 10)
+- LblG0(_,_)_EVM_Int_Schedule_Bool: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2355, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2354, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2352, 10)
+- LblG0(_,_,_)_EVM_Int_Schedule_ByteArray_Bool: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2352, 10)
+- LblG0(_,_,_,_,_)_EVM_Int_Schedule_ByteArray_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2358, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2357, 10)
+- LblHPEncodeAux(_)_SERIALIZATION_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (607, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (608, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (263, 10)
+- LblHex2Raw(_)_SERIALIZATION_String_String: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (263, 10)
+- LblInt2Bytes(_,_,_)_BYTES-HOOKED_Bytes_Int_Endianness_Signedness: 5
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2012, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2008, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2010, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2005, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2007, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (717, 10)
+- LblM3:2048(_)_EVM_Int_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (717, 10)
+- LblMerkleCheck(_)_SERIALIZATION_MerkleTree_MerkleTree: 8
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (549, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (555, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (553, 10)
@@ -3859,6 +3966,7 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (558, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (557, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (551, 10)
+- LblMerkleDelete(_,_)_SERIALIZATION_MerkleTree_MerkleTree_ByteArray: 8
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (531, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (542, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (536, 10)
@@ -3867,7 +3975,8 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (541, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (537, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (533, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (408, 10)
+- LblMerkleMapRLP(_,_)_SERIALIZATION_String_Map_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (408, 10)
+- LblMerklePut(_,_,_)_SERIALIZATION_MerkleTree_MerkleTree_ByteArray_String: 9
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (489, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (527, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (523, 10)
@@ -3877,15 +3986,20 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (501, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (495, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (491, 10)
+- LblMerkleUpdate(_,_,_)_SERIALIZATION_MerkleTree_MerkleTree_ByteArray_String: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (486, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (487, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (484, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (568, 10)
+- LblMerkleUpdate(_,_,_)_SERIALIZATION_MerkleTree_MerkleTree_String_String: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (484, 10)
+- LblMerkleUpdateMap(_,_)_SERIALIZATION_MerkleTree_MerkleTree_Map: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (568, 10)
+- LblMerkleUpdateMapAux(_,_,_)_SERIALIZATION_MerkleTree_MerkleTree_Map_List: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (571, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (570, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (264, 10)
+- LblMessageCellMapKey: -
+- LblRaw2Hex(_)_SERIALIZATION_String_String: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (264, 10)
+- LblRsstore(_,_,_,_)_EVM_Int_Schedule_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2252, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2270, 10)
+- LblStatusCode2String(_)_NETWORK_String_StatusCode: 19
   - evm-semantics/.build/usr/lib/kevm/include/kframework/network.md :  (96, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/network.md :  (95, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/network.md :  (94, 10)
@@ -3905,31 +4019,40 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/network.md :  (59, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/network.md :  (76, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/network.md :  (52, 10)
+- LblString2Bool(_)_STRING-COMMON_Bool_String: 2
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1497, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1496, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1673, 8)
+- LblStringBuffer2String(_)_STRING-BUFFER-IN-K_String_StringBuffer: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1673, 8)
+- LblWordStack2List(_)_EVM-TYPES_List_WordStack: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (327, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (328, 10)
+- Lbl_%Word__EVM-TYPES_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (100, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (99, 11)
+- Lbl_%sWord__EVM-TYPES_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (125, 27)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (126, 27)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (173, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (96, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (422, 10)
+- Lbl_&Word__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (173, 10)
+- Lbl_*Word__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (96, 10)
+- Lbl_++__EVM-TYPES_ByteArray_ByteArray_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (422, 10)
+- Lbl_+JSONs__JSON-EXT_JSONs_JSONs_JSONs: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (26, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (27, 10)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1671, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (94, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (95, 10)
+- Lbl_+String__STRING-BUFFER-IN-K_StringBuffer_StringBuffer_String: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1671, 8)
+- Lbl_+Word__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (94, 10)
+- Lbl_-Word__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (95, 10)
+- Lbl_/Word__EVM-TYPES_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (98, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (97, 11)
+- Lbl_/sWord__EVM-TYPES_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (124, 27)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (123, 27)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (236, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/word.md :  (333, 10)
+- Lbl_:__EVM-TYPES_Bytes_Int_Bytes: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (236, 10)
+- Lbl_<<Byte__WORD_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/word.md :  (333, 10)
+- Lbl_<<Word__EVM-TYPES_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (175, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (176, 11)
+- Lbl_<<_>>_EVM_Bool_ScheduleFlag_Schedule: 46
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2574, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2558, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2683, 10)
@@ -3976,9 +4099,10 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2557, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2502, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2573, 10)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1590, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (142, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (140, 10)
+- Lbl_<=String__STRING-COMMON_Bool_String_String: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1590, 8)
+- Lbl_<=Word__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (142, 10)
+- Lbl_<Word__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (140, 10)
+- Lbl_<_>_EVM_Int_ScheduleConst_Schedule: 90
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2671, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2584, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2600, 10)
@@ -4069,180 +4193,850 @@ Function equations by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2449, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2487, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2568, 10)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (866, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1156, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2126, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1570, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (144, 10)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1592, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (143, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/word.md :  (334, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (177, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (178, 10)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1591, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (141, 10)
+- Lbl_=/=Bool_: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (866, 8)
+- Lbl_=/=Int_: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1156, 8)
+- Lbl_=/=K_: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2126, 8)
+- Lbl_=/=String__STRING-COMMON_Bool_String_String: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1570, 8)
+- Lbl_==Word__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (144, 10)
+- Lbl_>=String__STRING-COMMON_Bool_String_String: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1592, 8)
+- Lbl_>=Word__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (143, 10)
+- Lbl_>>Byte__WORD_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/word.md :  (334, 10)
+- Lbl_>>Word__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (177, 10)
+- Lbl_>>sWord__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (178, 10)
+- Lbl_>String__STRING-COMMON_Bool_String_String: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1591, 8)
+- Lbl_>Word__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (141, 10)
+- Lbl_[_.._]_EVM-TYPES_ByteArray_ByteArray_Int_Int: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (427, 25)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (426, 26)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (429, 26)
+- Lbl_[_:=_]_EVM-TYPES_Memory_Memory_Int_ByteArray: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (343, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (344, 11)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (356, 10)
+- Lbl_[_:=_]_EVM-TYPES_Memory_Memory_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (356, 10)
+- Lbl_[_:=_]_EVM-TYPES_WordStack_WordStack_Int_Int: 4
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (290, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (289, 17)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (288, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (287, 10)
+- Lbl_[_]_EVM-TYPES_Int_WordStack_Int: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (282, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (283, 11)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (281, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (111, 10)
+- Lbl_^Word__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (111, 10)
+- Lbl_andBool_: 4
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (839, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (838, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (840, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (837, 8)
+- Lbl_andThenBool_: 4
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (844, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (843, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (845, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (842, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1145, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1157, 8)
+- Lbl_divInt_: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1145, 8)
+- Lbl_dividesInt__INT-COMMON_Bool_Int_Int: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1157, 8)
+- Lbl_impliesBool_: 4
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (864, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (863, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (862, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (861, 8)
+- Lbl_in__EVM-TYPES_Bool_Int_WordStack: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (307, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (306, 10)
+- Lbl_orBool_: 4
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (854, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (852, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (853, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (851, 8)
+- Lbl_orElseBool_: 4
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (859, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (857, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (858, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (856, 8)
+- Lbl_s<Word__EVM-TYPES_Int_Int_Int: 4
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (152, 23)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (155, 23)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (153, 23)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (154, 23)
+- Lbl_up/Int__EVM-TYPES_Int_Int_Int: 4
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (73, 24)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (72, 24)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (70, 23)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (71, 23)
+- Lbl_xorBool_: 3
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (849, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (848, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (847, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (174, 10)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (553, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (172, 10)
+- Lbl_xorWord__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (174, 10)
+- Lbl_|Set__SET_Set_Set_Set: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (553, 8)
+- Lbl_|Word__EVM-TYPES_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (172, 10)
+- Lblabs(_)_EVM-TYPES_Int_Int: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (53, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (52, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (54, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2329, 10)
+- LblaccountEmpty: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (2329, 10)
+- Lblbit(_,_)_EVM-TYPES_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (191, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (188, 10)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1141, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (72, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (85, 10)
+- LblbitRangeInt(_,_,_)_INT-COMMON_Int_Int_Int_Int: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1141, 8)
+- LblblockHeaderHash: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (72, 10)
+- LblblockHeaderHashBaseFee: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (85, 10)
+- Lblbool2Word(_)_EVM-TYPES_Int_Bool: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (33, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (32, 10)
+- Lblbyte(_,_)_EVM-TYPES_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (192, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (189, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/word.md :  (324, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/hashed-locations.md :  (95, 10)
+- Lblchop(_)_WORD_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/word.md :  (324, 10)
+- Lblcontract_access_hash: evm-semantics/.build/usr/lib/kevm/include/kframework/hashed-locations.md :  (95, 10)
+- Lblcontract_access_loc: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/foundry.md :  (105, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/hashed-locations.md :  (91, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/hashed-locations.md :  (90, 10)
+- LblcountAllOccurrences(_,_)_STRING-COMMON_Int_String_String: 2
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1601, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1599, 8)
+- LblfindChar(_,_,_)_STRING-COMMON_Int_String_String_Int: 2
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1594, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1595, 8)
+- Lblfoundry_success: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/foundry.md :  (130, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/foundry.md :  (129, 10)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1160, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (725, 10)
+- LblfreshInt(_)_INT_Int_Int: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1160, 8)
+- LblgetBloomFilterBit(_,_)_EVM_Int_ByteArray_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (725, 10)
+- LblgetExitCode: -
+- LblgetGeneratedCounterCell: -
+- LblinitAccessedAccountsCell: -
+- LblinitAccessedStorageCell: -
+- LblinitAccountCell: -
+- LblinitAccountsCell: -
+- LblinitAcctIDCell: -
+- LblinitActiveAccountsCell: -
+- LblinitBalanceCell: -
+- LblinitBaseFeeCell: -
+- LblinitBlockCell: -
+- LblinitBlockNonceCell: -
+- LblinitBlockhashesCell: -
+- LblinitCallDataCell: -
+- LblinitCallDepthCell: -
+- LblinitCallGasCell: -
+- LblinitCallStackCell: -
+- LblinitCallStateCell: -
+- LblinitCallValueCell: -
+- LblinitCallerCell: -
+- LblinitChainIDCell: -
+- LblinitCodeCell: -
+- LblinitCoinbaseCell: -
+- LblinitDataCell: -
+- LblinitDifficultyCell: -
+- LblinitEndPCCell: -
+- LblinitEthereumCell: -
+- LblinitEvmCell: -
+- LblinitExitCodeCell: -
+- LblinitExtraDataCell: -
+- LblinitGasCell: -
+- LblinitGasLimitCell: -
+- LblinitGasPriceCell: -
+- LblinitGasUsedCell: -
+- LblinitGeneratedCounterCell: -
+- LblinitGeneratedTopCell: -
+- LblinitIdCell: -
+- LblinitInterimStatesCell: -
+- LblinitJumpDestsCell: -
+- LblinitKCell: -
+- LblinitKevmCell: -
+- LblinitLocalMemCell: -
+- LblinitLogCell: -
+- LblinitLogsBloomCell: -
+- LblinitMemoryUsedCell: -
+- LblinitMessageCell: -
+- LblinitMessagesCell: -
+- LblinitMixHashCell: -
+- LblinitModeCell: -
+- LblinitMsgIDCell: -
+- LblinitNetworkCell: -
+- LblinitNonceCell: -
+- LblinitNumberCell: -
+- LblinitOmmerBlockHeadersCell: -
+- LblinitOmmersHashCell: -
+- LblinitOrigStorageCell: -
+- LblinitOriginCell: -
+- LblinitOutputCell: -
+- LblinitPcCell: -
+- LblinitPreviousHashCell: -
+- LblinitProgramCell: -
+- LblinitReceiptsRootCell: -
+- LblinitRefundCell: -
+- LblinitScheduleCell: -
+- LblinitSelfDestructCell: -
+- LblinitSigRCell: -
+- LblinitSigSCell: -
+- LblinitSigVCell: -
+- LblinitStateRootCell: -
+- LblinitStaticCell: -
+- LblinitStatusCodeCell: -
+- LblinitStorageCell: -
+- LblinitSubstateCell: -
+- LblinitTimestampCell: -
+- LblinitToCell: -
+- LblinitTouchedAccountsCell: -
+- LblinitTransactionsRootCell: -
+- LblinitTxAccessCell: -
+- LblinitTxChainIDCell: -
+- LblinitTxGasLimitCell: -
+- LblinitTxGasPriceCell: -
+- LblinitTxMaxFeeCell: -
+- LblinitTxNonceCell: -
+- LblinitTxOrderCell: -
+- LblinitTxPendingCell: -
+- LblinitTxPriorityFeeCell: -
+- LblinitTxTypeCell: -
+- LblinitValueCell: -
+- LblinitWordStackCell: -
+- LblisAccessListTx: -
+- LblisAccessedAccountsCell: -
+- LblisAccessedAccountsCellOpt: -
+- LblisAccessedStorageCell: -
+- LblisAccessedStorageCellOpt: -
+- LblisAccount: -
+- LblisAccountCell: -
+- LblisAccountCellFragment: -
+- LblisAccountCellMap: -
+- LblisAccountCode: -
+- LblisAccounts: -
+- LblisAccountsCell: -
+- LblisAccountsCellFragment: -
+- LblisAccountsCellOpt: -
+- LblisAcctIDCell: -
+- LblisAcctIDCellOpt: -
+- LblisActiveAccountsCell: -
+- LblisActiveAccountsCellOpt: -
+- LblisAddr1Op(_)_EVM_Bool_OpCode: 6
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (511, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (506, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (510, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (508, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (509, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (507, 10)
+- LblisAddr2Op(_)_EVM_Bool_OpCode: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (515, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (513, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (514, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (26, 20)
+- LblisBExp: -
+- LblisBalanceCell: -
+- LblisBalanceCellOpt: -
+- LblisBaseFeeCell: -
+- LblisBaseFeeCellOpt: -
+- LblisBinStackOp: -
+- LblisBlockCell: -
+- LblisBlockCellFragment: -
+- LblisBlockCellOpt: -
+- LblisBlockNonceCell: -
+- LblisBlockNonceCellOpt: -
+- LblisBlockhashesCell: -
+- LblisBlockhashesCellOpt: -
+- LblisBool: -
+- LblisBytes: -
+- LblisCallDataCell: -
+- LblisCallDataCellOpt: -
+- LblisCallDepthCell: -
+- LblisCallDepthCellOpt: -
+- LblisCallGasCell: -
+- LblisCallGasCellOpt: -
+- LblisCallOp: -
+- LblisCallSixOp: -
+- LblisCallStackCell: -
+- LblisCallStackCellOpt: -
+- LblisCallStateCell: -
+- LblisCallStateCellFragment: -
+- LblisCallStateCellOpt: -
+- LblisCallValueCell: -
+- LblisCallValueCellOpt: -
+- LblisCallerCell: -
+- LblisCallerCellOpt: -
+- LblisChainIDCell: -
+- LblisChainIDCellOpt: -
+- LblisCodeCell: -
+- LblisCodeCellOpt: -
+- LblisCoinbaseCell: -
+- LblisCoinbaseCellOpt: -
+- LblisContract: -
+- LblisContractAccess: -
+- LblisDataCell: -
+- LblisDataCellOpt: -
+- LblisDifficultyCell: -
+- LblisDifficultyCellOpt: -
+- LblisDynamicFeeTx: -
+- LblisEndPCCell: -
+- LblisEndPCCellOpt: -
+- LblisEndStatusCode: -
+- LblisEndianness: -
+- LblisEthereumCell: -
+- LblisEthereumCellFragment: -
+- LblisEthereumCellOpt: -
+- LblisEthereumCommand: -
+- LblisEthereumSimulation: -
+- LblisEventArg: -
+- LblisEventArgs: -
+- LblisEvmCell: -
+- LblisEvmCellFragment: -
+- LblisEvmCellOpt: -
+- LblisExceptionalStatusCode: -
+- LblisExitCodeCell: -
+- LblisExitCodeCellOpt: -
+- LblisExp: -
+- LblisExtraDataCell: -
+- LblisExtraDataCellOpt: -
+- LblisField: -
+- LblisFloat: -
+- LblisFoundryContract: -
+- LblisFoundryField: -
+- LblisG1Point: -
+- LblisG2Point: -
+- LblisGasCell: -
+- LblisGasCellOpt: -
+- LblisGasLimitCell: -
+- LblisGasLimitCellOpt: -
+- LblisGasPriceCell: -
+- LblisGasPriceCellOpt: -
+- LblisGasUsedCell: -
+- LblisGasUsedCellOpt: -
+- LblisGeneratedCounterCell: -
+- LblisGeneratedCounterCellOpt: -
+- LblisGeneratedTopCell: -
+- LblisGeneratedTopCellFragment: -
+- LblisIdCell: -
+- LblisIdCellOpt: -
+- LblisInt: -
+- LblisIntList: -
+- LblisInterimStatesCell: -
+- LblisInterimStatesCellOpt: -
+- LblisInternalOp: -
+- LblisInvalidOp: -
+- LblisJSON: -
+- LblisJSONKey: -
+- LblisJSONs: -
+- LblisJumpDestsCell: -
+- LblisJumpDestsCellOpt: -
+- LblisK: -
+- LblisKCell: -
+- LblisKCellOpt: -
+- LblisKConfigVar: -
+- LblisKItem: -
+- LblisKResult: -
+- LblisKevmCell: -
+- LblisKevmCellFragment: -
+- LblisKevmCellOpt: -
+- LblisLegacyTx: -
+- LblisLengthPrefix: -
+- LblisLengthPrefixType: -
+- LblisList: -
+- LblisLocalMemCell: -
+- LblisLocalMemCellOpt: -
+- LblisLogCell: -
+- LblisLogCellOpt: -
+- LblisLogOp: -
+- LblisLogsBloomCell: -
+- LblisLogsBloomCellOpt: -
+- LblisMap: -
+- LblisMemoryUsedCell: -
+- LblisMemoryUsedCellOpt: -
+- LblisMerkleTree: -
+- LblisMessageCell: -
+- LblisMessageCellFragment: -
+- LblisMessageCellMap: -
+- LblisMessagesCell: -
+- LblisMessagesCellFragment: -
+- LblisMessagesCellOpt: -
+- LblisMixHashCell: -
+- LblisMixHashCellOpt: -
+- LblisMode: -
+- LblisModeCell: -
+- LblisModeCellOpt: -
+- LblisMsgIDCell: -
+- LblisMsgIDCellOpt: -
+- LblisNetworkCell: -
+- LblisNetworkCellFragment: -
+- LblisNetworkCellOpt: -
+- LblisNonceCell: -
+- LblisNonceCellOpt: -
+- LblisNullStackOp: -
+- LblisNumberCell: -
+- LblisNumberCellOpt: -
+- LblisOmmerBlockHeadersCell: -
+- LblisOmmerBlockHeadersCellOpt: -
+- LblisOmmersHashCell: -
+- LblisOmmersHashCellOpt: -
+- LblisOpCode: -
+- LblisOrigStorageCell: -
+- LblisOrigStorageCellOpt: -
+- LblisOriginCell: -
+- LblisOriginCellOpt: -
+- LblisOutputCell: -
+- LblisOutputCellOpt: -
+- LblisPcCell: -
+- LblisPcCellOpt: -
+- LblisPrecompiledOp: -
+- LblisPreviousHashCell: -
+- LblisPreviousHashCellOpt: -
+- LblisProgramCell: -
+- LblisProgramCellOpt: -
+- LblisPushOp: -
+- LblisQuadStackOp: -
+- LblisReceiptsRootCell: -
+- LblisReceiptsRootCellOpt: -
+- LblisRefundCell: -
+- LblisRefundCellOpt: -
+- LblisSchedule: -
+- LblisScheduleCell: -
+- LblisScheduleCellOpt: -
+- LblisScheduleConst: -
+- LblisScheduleFlag: -
+- LblisSelfDestructCell: -
+- LblisSelfDestructCellOpt: -
+- LblisSet: -
+- LblisSigRCell: -
+- LblisSigRCellOpt: -
+- LblisSigSCell: -
+- LblisSigSCellOpt: -
+- LblisSigVCell: -
+- LblisSigVCellOpt: -
+- LblisSignedness: -
+- LblisStackOp: -
+- LblisStateRootCell: -
+- LblisStateRootCellOpt: -
+- LblisStaticCell: -
+- LblisStaticCellOpt: -
+- LblisStatusCode: -
+- LblisStatusCodeCell: -
+- LblisStatusCodeCellOpt: -
+- LblisStorageCell: -
+- LblisStorageCellOpt: -
+- LblisString: -
+- LblisStringBuffer: -
+- LblisSubstateCell: -
+- LblisSubstateCellFragment: -
+- LblisSubstateCellOpt: -
+- LblisSubstateLogEntry: -
+- LblisTernStackOp: -
+- LblisTimestampCell: -
+- LblisTimestampCellOpt: -
+- LblisToCell: -
+- LblisToCellOpt: -
+- LblisTouchedAccountsCell: -
+- LblisTouchedAccountsCellOpt: -
+- LblisTransactionsRootCell: -
+- LblisTransactionsRootCellOpt: -
+- LblisTxAccessCell: -
+- LblisTxAccessCellOpt: -
+- LblisTxChainIDCell: -
+- LblisTxChainIDCellOpt: -
+- LblisTxData: -
+- LblisTxGasLimitCell: -
+- LblisTxGasLimitCellOpt: -
+- LblisTxGasPriceCell: -
+- LblisTxGasPriceCellOpt: -
+- LblisTxMaxFeeCell: -
+- LblisTxMaxFeeCellOpt: -
+- LblisTxNonceCell: -
+- LblisTxNonceCellOpt: -
+- LblisTxOrderCell: -
+- LblisTxOrderCellOpt: -
+- LblisTxPendingCell: -
+- LblisTxPendingCellOpt: -
+- LblisTxPriorityFeeCell: -
+- LblisTxPriorityFeeCellOpt: -
+- LblisTxType: -
+- LblisTxTypeCell: -
+- LblisTxTypeCellOpt: -
+- LblisTypedArg: -
+- LblisTypedArgs: -
+- LblisUnStackOp: -
+- LblisValueCell: -
+- LblisValueCellOpt: -
+- LblisWordStack: -
+- LblisWordStackCell: -
+- LblisWordStackCellOpt: -
+- Lblkeccak(_)_SERIALIZATION_Int_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (26, 20)
+- LbllistAsByteArrays(_)_EVM_List_List: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (706, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (707, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (81, 10)
+- Lbllog256Int(_)_EVM-TYPES_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (81, 10)
+- LblminInt(_,_)_INT-COMMON_Int_Int_Int: 2
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1153, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1154, 8)
+- LblnotBool_: 2
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (835, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (834, 8)
+- Lblpowmod(_,_,_)_EVM-TYPES_Int_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (113, 28)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (114, 28)
+- Lblproject:AccessListTx: -
+- Lblproject:AccessListTxData(_,_,_,_,_,_,_,_)_EVM-TYPES_AccessListTx_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:accessLists: -
+- Lblproject:AccessListTxData(_,_,_,_,_,_,_,_)_EVM-TYPES_AccessListTx_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:chainId: -
+- Lblproject:AccessListTxData(_,_,_,_,_,_,_,_)_EVM-TYPES_AccessListTx_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:data: -
+- Lblproject:AccessListTxData(_,_,_,_,_,_,_,_)_EVM-TYPES_AccessListTx_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:gasLimit: -
+- Lblproject:AccessListTxData(_,_,_,_,_,_,_,_)_EVM-TYPES_AccessListTx_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:gasPrice: -
+- Lblproject:AccessListTxData(_,_,_,_,_,_,_,_)_EVM-TYPES_AccessListTx_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:nonce: -
+- Lblproject:AccessListTxData(_,_,_,_,_,_,_,_)_EVM-TYPES_AccessListTx_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:to: -
+- Lblproject:AccessListTxData(_,_,_,_,_,_,_,_)_EVM-TYPES_AccessListTx_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:value: -
+- Lblproject:AccessedAccountsCell: -
+- Lblproject:AccessedAccountsCellOpt: -
+- Lblproject:AccessedStorageCell: -
+- Lblproject:AccessedStorageCellOpt: -
+- Lblproject:Account: -
+- Lblproject:AccountCell: -
+- Lblproject:AccountCellFragment: -
+- Lblproject:AccountCellMap: -
+- Lblproject:AccountCode: -
+- Lblproject:Accounts: -
+- Lblproject:AccountsCell: -
+- Lblproject:AccountsCellFragment: -
+- Lblproject:AccountsCellOpt: -
+- Lblproject:AcctIDCell: -
+- Lblproject:AcctIDCellOpt: -
+- Lblproject:ActiveAccountsCell: -
+- Lblproject:ActiveAccountsCellOpt: -
+- Lblproject:BExp: -
+- Lblproject:BalanceCell: -
+- Lblproject:BalanceCellOpt: -
+- Lblproject:BaseFeeCell: -
+- Lblproject:BaseFeeCellOpt: -
+- Lblproject:BinStackOp: -
+- Lblproject:BlockCell: -
+- Lblproject:BlockCellFragment: -
+- Lblproject:BlockCellOpt: -
+- Lblproject:BlockNonceCell: -
+- Lblproject:BlockNonceCellOpt: -
+- Lblproject:BlockhashesCell: -
+- Lblproject:BlockhashesCellOpt: -
+- Lblproject:Bool: -
+- Lblproject:Bytes: -
+- Lblproject:CallDataCell: -
+- Lblproject:CallDataCellOpt: -
+- Lblproject:CallDepthCell: -
+- Lblproject:CallDepthCellOpt: -
+- Lblproject:CallGasCell: -
+- Lblproject:CallGasCellOpt: -
+- Lblproject:CallOp: -
+- Lblproject:CallSixOp: -
+- Lblproject:CallStackCell: -
+- Lblproject:CallStackCellOpt: -
+- Lblproject:CallStateCell: -
+- Lblproject:CallStateCellFragment: -
+- Lblproject:CallStateCellOpt: -
+- Lblproject:CallValueCell: -
+- Lblproject:CallValueCellOpt: -
+- Lblproject:CallerCell: -
+- Lblproject:CallerCellOpt: -
+- Lblproject:ChainIDCell: -
+- Lblproject:ChainIDCellOpt: -
+- Lblproject:CodeCell: -
+- Lblproject:CodeCellOpt: -
+- Lblproject:CoinbaseCell: -
+- Lblproject:CoinbaseCellOpt: -
+- Lblproject:Contract: -
+- Lblproject:ContractAccess: -
+- Lblproject:DataCell: -
+- Lblproject:DataCellOpt: -
+- Lblproject:DifficultyCell: -
+- Lblproject:DifficultyCellOpt: -
+- Lblproject:DynamicFeeTx: -
+- Lblproject:DynamicFeeTxData(_,_,_,_,_,_,_,_,_)_EVM-TYPES_DynamicFeeTx_Int_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:accessLists: -
+- Lblproject:DynamicFeeTxData(_,_,_,_,_,_,_,_,_)_EVM-TYPES_DynamicFeeTx_Int_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:chainId: -
+- Lblproject:DynamicFeeTxData(_,_,_,_,_,_,_,_,_)_EVM-TYPES_DynamicFeeTx_Int_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:data: -
+- Lblproject:DynamicFeeTxData(_,_,_,_,_,_,_,_,_)_EVM-TYPES_DynamicFeeTx_Int_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:gasLimit: -
+- Lblproject:DynamicFeeTxData(_,_,_,_,_,_,_,_,_)_EVM-TYPES_DynamicFeeTx_Int_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:maxGasFee: -
+- Lblproject:DynamicFeeTxData(_,_,_,_,_,_,_,_,_)_EVM-TYPES_DynamicFeeTx_Int_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:nonce: -
+- Lblproject:DynamicFeeTxData(_,_,_,_,_,_,_,_,_)_EVM-TYPES_DynamicFeeTx_Int_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:priorityGasFee: -
+- Lblproject:DynamicFeeTxData(_,_,_,_,_,_,_,_,_)_EVM-TYPES_DynamicFeeTx_Int_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:to: -
+- Lblproject:DynamicFeeTxData(_,_,_,_,_,_,_,_,_)_EVM-TYPES_DynamicFeeTx_Int_Int_Int_Int_Account_Int_ByteArray_Int_JSONs:value: -
+- Lblproject:EndPCCell: -
+- Lblproject:EndPCCellOpt: -
+- Lblproject:EndStatusCode: -
+- Lblproject:Endianness: -
+- Lblproject:EthereumCell: -
+- Lblproject:EthereumCellFragment: -
+- Lblproject:EthereumCellOpt: -
+- Lblproject:EthereumCommand: -
+- Lblproject:EthereumSimulation: -
+- Lblproject:EventArg: -
+- Lblproject:EventArgs: -
+- Lblproject:EvmCell: -
+- Lblproject:EvmCellFragment: -
+- Lblproject:EvmCellOpt: -
+- Lblproject:ExceptionalStatusCode: -
+- Lblproject:ExitCodeCell: -
+- Lblproject:ExitCodeCellOpt: -
+- Lblproject:Exp: -
+- Lblproject:ExtraDataCell: -
+- Lblproject:ExtraDataCellOpt: -
+- Lblproject:Field: -
+- Lblproject:Float: -
+- Lblproject:FoundryContract: -
+- Lblproject:FoundryField: -
+- Lblproject:G1Point: -
+- Lblproject:G2Point: -
+- Lblproject:GasCell: -
+- Lblproject:GasCellOpt: -
+- Lblproject:GasLimitCell: -
+- Lblproject:GasLimitCellOpt: -
+- Lblproject:GasPriceCell: -
+- Lblproject:GasPriceCellOpt: -
+- Lblproject:GasUsedCell: -
+- Lblproject:GasUsedCellOpt: -
+- Lblproject:GeneratedCounterCell: -
+- Lblproject:GeneratedCounterCellOpt: -
+- Lblproject:GeneratedTopCell: -
+- Lblproject:GeneratedTopCellFragment: -
+- Lblproject:IdCell: -
+- Lblproject:IdCellOpt: -
+- Lblproject:Int: -
+- Lblproject:IntList: -
+- Lblproject:InterimStatesCell: -
+- Lblproject:InterimStatesCellOpt: -
+- Lblproject:InternalOp: -
+- Lblproject:InvalidOp: -
+- Lblproject:JSON: -
+- Lblproject:JSONKey: -
+- Lblproject:JSONs: -
+- Lblproject:JumpDestsCell: -
+- Lblproject:JumpDestsCellOpt: -
+- Lblproject:K: -
+- Lblproject:KCell: -
+- Lblproject:KCellOpt: -
+- Lblproject:KItem: -
+- Lblproject:KResult: -
+- Lblproject:KevmCell: -
+- Lblproject:KevmCellFragment: -
+- Lblproject:KevmCellOpt: -
+- Lblproject:LegacyProtectedTxData(_,_,_,_,_,_,_)_EVM-TYPES_LegacyTx_Int_Int_Int_Account_Int_ByteArray_Int:chainId: -
+- Lblproject:LegacyProtectedTxData(_,_,_,_,_,_,_)_EVM-TYPES_LegacyTx_Int_Int_Int_Account_Int_ByteArray_Int:data: -
+- Lblproject:LegacyProtectedTxData(_,_,_,_,_,_,_)_EVM-TYPES_LegacyTx_Int_Int_Int_Account_Int_ByteArray_Int:gasLimit: -
+- Lblproject:LegacyProtectedTxData(_,_,_,_,_,_,_)_EVM-TYPES_LegacyTx_Int_Int_Int_Account_Int_ByteArray_Int:gasPrice: -
+- Lblproject:LegacyProtectedTxData(_,_,_,_,_,_,_)_EVM-TYPES_LegacyTx_Int_Int_Int_Account_Int_ByteArray_Int:nonce: -
+- Lblproject:LegacyProtectedTxData(_,_,_,_,_,_,_)_EVM-TYPES_LegacyTx_Int_Int_Int_Account_Int_ByteArray_Int:to: -
+- Lblproject:LegacyProtectedTxData(_,_,_,_,_,_,_)_EVM-TYPES_LegacyTx_Int_Int_Int_Account_Int_ByteArray_Int:value: -
+- Lblproject:LegacyTx: -
+- Lblproject:LegacyTxData(_,_,_,_,_,_)_EVM-TYPES_LegacyTx_Int_Int_Int_Account_Int_ByteArray:data: -
+- Lblproject:LegacyTxData(_,_,_,_,_,_)_EVM-TYPES_LegacyTx_Int_Int_Int_Account_Int_ByteArray:gasLimit: -
+- Lblproject:LegacyTxData(_,_,_,_,_,_)_EVM-TYPES_LegacyTx_Int_Int_Int_Account_Int_ByteArray:gasPrice: -
+- Lblproject:LegacyTxData(_,_,_,_,_,_)_EVM-TYPES_LegacyTx_Int_Int_Int_Account_Int_ByteArray:nonce: -
+- Lblproject:LegacyTxData(_,_,_,_,_,_)_EVM-TYPES_LegacyTx_Int_Int_Int_Account_Int_ByteArray:to: -
+- Lblproject:LegacyTxData(_,_,_,_,_,_)_EVM-TYPES_LegacyTx_Int_Int_Int_Account_Int_ByteArray:value: -
+- Lblproject:LengthPrefix: -
+- Lblproject:LengthPrefixType: -
+- Lblproject:List: -
+- Lblproject:LocalMemCell: -
+- Lblproject:LocalMemCellOpt: -
+- Lblproject:LogCell: -
+- Lblproject:LogCellOpt: -
+- Lblproject:LogOp: -
+- Lblproject:LogsBloomCell: -
+- Lblproject:LogsBloomCellOpt: -
+- Lblproject:Map: -
+- Lblproject:MemoryUsedCell: -
+- Lblproject:MemoryUsedCellOpt: -
+- Lblproject:MerkleTree: -
+- Lblproject:MessageCell: -
+- Lblproject:MessageCellFragment: -
+- Lblproject:MessageCellMap: -
+- Lblproject:MessagesCell: -
+- Lblproject:MessagesCellFragment: -
+- Lblproject:MessagesCellOpt: -
+- Lblproject:MixHashCell: -
+- Lblproject:MixHashCellOpt: -
+- Lblproject:Mode: -
+- Lblproject:ModeCell: -
+- Lblproject:ModeCellOpt: -
+- Lblproject:MsgIDCell: -
+- Lblproject:MsgIDCellOpt: -
+- Lblproject:NetworkCell: -
+- Lblproject:NetworkCellFragment: -
+- Lblproject:NetworkCellOpt: -
+- Lblproject:NonceCell: -
+- Lblproject:NonceCellOpt: -
+- Lblproject:NullStackOp: -
+- Lblproject:NumberCell: -
+- Lblproject:NumberCellOpt: -
+- Lblproject:OmmerBlockHeadersCell: -
+- Lblproject:OmmerBlockHeadersCellOpt: -
+- Lblproject:OmmersHashCell: -
+- Lblproject:OmmersHashCellOpt: -
+- Lblproject:OpCode: -
+- Lblproject:OrigStorageCell: -
+- Lblproject:OrigStorageCellOpt: -
+- Lblproject:OriginCell: -
+- Lblproject:OriginCellOpt: -
+- Lblproject:OutputCell: -
+- Lblproject:OutputCellOpt: -
+- Lblproject:PcCell: -
+- Lblproject:PcCellOpt: -
+- Lblproject:PrecompiledOp: -
+- Lblproject:PreviousHashCell: -
+- Lblproject:PreviousHashCellOpt: -
+- Lblproject:ProgramCell: -
+- Lblproject:ProgramCellOpt: -
+- Lblproject:PushOp: -
+- Lblproject:QuadStackOp: -
+- Lblproject:ReceiptsRootCell: -
+- Lblproject:ReceiptsRootCellOpt: -
+- Lblproject:RefundCell: -
+- Lblproject:RefundCellOpt: -
+- Lblproject:Schedule: -
+- Lblproject:ScheduleCell: -
+- Lblproject:ScheduleCellOpt: -
+- Lblproject:ScheduleConst: -
+- Lblproject:ScheduleFlag: -
+- Lblproject:SelfDestructCell: -
+- Lblproject:SelfDestructCellOpt: -
+- Lblproject:Set: -
+- Lblproject:SigRCell: -
+- Lblproject:SigRCellOpt: -
+- Lblproject:SigSCell: -
+- Lblproject:SigSCellOpt: -
+- Lblproject:SigVCell: -
+- Lblproject:SigVCellOpt: -
+- Lblproject:Signedness: -
+- Lblproject:StackOp: -
+- Lblproject:StateRootCell: -
+- Lblproject:StateRootCellOpt: -
+- Lblproject:StaticCell: -
+- Lblproject:StaticCellOpt: -
+- Lblproject:StatusCode: -
+- Lblproject:StatusCodeCell: -
+- Lblproject:StatusCodeCellOpt: -
+- Lblproject:StorageCell: -
+- Lblproject:StorageCellOpt: -
+- Lblproject:String: -
+- Lblproject:StringBuffer: -
+- Lblproject:SubstateCell: -
+- Lblproject:SubstateCellFragment: -
+- Lblproject:SubstateCellOpt: -
+- Lblproject:SubstateLogEntry: -
+- Lblproject:TernStackOp: -
+- Lblproject:TimestampCell: -
+- Lblproject:TimestampCellOpt: -
+- Lblproject:ToCell: -
+- Lblproject:ToCellOpt: -
+- Lblproject:TouchedAccountsCell: -
+- Lblproject:TouchedAccountsCellOpt: -
+- Lblproject:TransactionsRootCell: -
+- Lblproject:TransactionsRootCellOpt: -
+- Lblproject:TxAccessCell: -
+- Lblproject:TxAccessCellOpt: -
+- Lblproject:TxChainIDCell: -
+- Lblproject:TxChainIDCellOpt: -
+- Lblproject:TxData: -
+- Lblproject:TxGasLimitCell: -
+- Lblproject:TxGasLimitCellOpt: -
+- Lblproject:TxGasPriceCell: -
+- Lblproject:TxGasPriceCellOpt: -
+- Lblproject:TxMaxFeeCell: -
+- Lblproject:TxMaxFeeCellOpt: -
+- Lblproject:TxNonceCell: -
+- Lblproject:TxNonceCellOpt: -
+- Lblproject:TxOrderCell: -
+- Lblproject:TxOrderCellOpt: -
+- Lblproject:TxPendingCell: -
+- Lblproject:TxPendingCellOpt: -
+- Lblproject:TxPriorityFeeCell: -
+- Lblproject:TxPriorityFeeCellOpt: -
+- Lblproject:TxType: -
+- Lblproject:TxTypeCell: -
+- Lblproject:TxTypeCellOpt: -
+- Lblproject:TypedArg: -
+- Lblproject:TypedArgs: -
+- Lblproject:UnStackOp: -
+- Lblproject:ValueCell: -
+- Lblproject:ValueCellOpt: -
+- Lblproject:WordStack: -
+- Lblproject:WordStackCell: -
+- Lblproject:WordStackCellOpt: -
+- LblqsortJSONs(_)_JSON-EXT_JSONs_JSONs: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (46, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (47, 10)
+- Lblreplace(_,_,_,_)_STRING-COMMON_String_String_String_String_Int: 2
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1611, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1615, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1616, 8)
+- LblreplaceAll(_,_,_)_STRING-COMMON_String_String_String_String: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1616, 8)
+- LblreplaceFirst(_,_,_)_STRING-COMMON_String_String_String_String: 2
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1604, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1607, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (32, 10)
+- LblreverseJSONs(_)_JSON-EXT_JSONs_JSONs: evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (32, 10)
+- LblreverseJSONsAux(_,_)_JSON-EXT_JSONs_JSONs_JSONs: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (34, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (35, 10)
+- LblrfindChar(_,_,_)_STRING-COMMON_Int_String_String_Int: 2
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1596, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1597, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (721, 10)
+- LblsetBloomFilterBits(_)_EVM_Int_ByteArray: evm-semantics/.build/usr/lib/kevm/include/kframework/evm.md :  (721, 10)
+- Lblsgn(_)_EVM-TYPES_Int_Int: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (48, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (50, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (49, 10)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1143, 8)
+- LblsignExtendBitRangeInt(_,_,_)_INT-COMMON_Int_Int_Int_Int: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1143, 8)
+- Lblsignextend(_,_)_EVM-TYPES_Int_Int_Int: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (211, 33)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (213, 33)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (212, 33)
+- LblsortedJSONs(_)_JSON-EXT_Bool_JSONs: 3
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (59, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (60, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/json-rpc.md :  (61, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (210, 10)
+- LblunparseByteStack: evm-semantics/.build/usr/lib/kevm/include/kframework/serialization.md :  (210, 10)
+- Lblword2Bool(_)_EVM-TYPES_Bool_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (37, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (38, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (171, 10)
+- Lbl~Word__EVM-TYPES_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/evm-types.md :  (171, 10)
+- append: -
 Simplifications by term index:
-- Anything: 301
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (94, 10)
-  - evm-semantics/tests/specs/lemmas.k :  (286, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/hashed-locations.md :  (63, 10)
+- Lbl#allBut64th(_)_EVM_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (94, 10)
+- Lbl#asWord(_)_EVM-TYPES_Int_ByteArray: evm-semantics/tests/specs/lemmas.k :  (286, 10)
+- Lbl#hashedLocation(_,_,_)_HASHED-LOCATIONS_Int_String_Int_IntList: evm-semantics/.build/usr/lib/kevm/include/kframework/hashed-locations.md :  (63, 10)
+- Lbl#if_#then_#else_#fi_K-EQUAL-SYNTAX_Sort_Bool_Sort_Sort: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (71, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (92, 10)
-  - evm-semantics/tests/specs/lemmas.k :  (55, 10)
+- Lbl#isPrecompiledAccount(_,_)_EVM_Bool_Int_Schedule: evm-semantics/tests/specs/lemmas.k :  (55, 10)
+- Lbl#lookup(_,_)_EVM-TYPES_Int_Map_Int: 2
   - evm-semantics/tests/specs/lemmas.k :  (103, 10)
   - evm-semantics/tests/specs/lemmas.k :  (102, 10)
+- Lbl#memoryUsageUpdate(_,_,_)_EVM_Int_Int_Int_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (112, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (117, 10)
-  - evm-semantics/tests/specs/lemmas.k :  (137, 10)
+- Lbl#padToWidth(_,_)_EVM-TYPES_ByteArray_Int_ByteArray: evm-semantics/tests/specs/lemmas.k :  (137, 10)
+- Lbl#range(_,_,_)_EVM-TYPES_ByteArray_Memory_Int_Int: 6
   - evm-semantics/tests/specs/lemmas.k :  (400, 10)
   - evm-semantics/tests/specs/lemmas.k :  (77, 10)
   - evm-semantics/tests/specs/lemmas.k :  (81, 10)
   - evm-semantics/tests/specs/lemmas.k :  (85, 10)
   - evm-semantics/tests/specs/lemmas.k :  (91, 10)
   - evm-semantics/tests/specs/lemmas.k :  (94, 10)
+- Lbl#sizeByteArray(_)_EVM-TYPES_Int_ByteArray: 4
   - evm-semantics/tests/specs/lemmas.k :  (129, 10)
   - evm-semantics/tests/specs/lemmas.k :  (131, 10)
   - evm-semantics/tests/specs/lemmas.k :  (128, 10)
   - evm-semantics/tests/specs/lemmas.k :  (130, 10)
+- Lbl#sizeWordStack(_,_)_EVM-TYPES_Int_WordStack_Int: 2
   - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  (12, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  (13, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  (15, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (96, 10)
+- Lbl#stackUnderflow(_,_)_EVM_Bool_WordStack_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/optimizations.md :  (15, 10)
+- LblCgascap(_,_,_,_)_EVM_Int_Schedule_Int_Int_Int: evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (96, 10)
+- LblMap:lookup: 4
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (435, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (434, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (432, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (433, 8)
+- LblMap:update: 4
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (418, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (419, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (417, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (422, 8)
+- LblSet:in: 2
   - evm-semantics/tests/specs/lemmas.k :  (35, 10)
   - evm-semantics/tests/specs/lemmas.k :  (34, 10)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1069, 8)
+- Lbl_%Int_: /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1069, 8)
+- Lbl_&Int_: 68
   - evm-semantics/tests/specs/int-simplification.k :  (146, 10)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1104, 8)
   - evm-semantics/tests/specs/lemmas.k :  (312, 10)
@@ -4311,6 +5105,7 @@ Simplifications by term index:
   - evm-semantics/tests/specs/lemmas.k :  (343, 10)
   - evm-semantics/tests/specs/lemmas.k :  (333, 10)
   - evm-semantics/tests/specs/lemmas.k :  (323, 10)
+- Lbl_*Int_: 7
   - evm-semantics/tests/specs/int-simplification.k :  (109, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (84, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (111, 10)
@@ -4318,8 +5113,10 @@ Simplifications by term index:
   - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (83, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (110, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (108, 10)
+- Lbl_++__EVM-TYPES_ByteArray_ByteArray_ByteArray: 2
   - evm-semantics/tests/specs/lemmas.k :  (72, 10)
   - evm-semantics/tests/specs/lemmas.k :  (73, 10)
+- Lbl_+Int_: 28
   - evm-semantics/tests/specs/int-simplification.k :  (87, 12)
   - evm-semantics/tests/specs/int-simplification.k :  (82, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (40, 10)
@@ -4348,6 +5145,7 @@ Simplifications by term index:
   - evm-semantics/tests/specs/int-simplification.k :  (102, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (77, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (81, 10)
+- Lbl_-Int_: 22
   - evm-semantics/tests/specs/int-simplification.k :  (79, 10)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1092, 8)
   - evm-semantics/tests/specs/int-simplification.k :  (86, 12)
@@ -4370,14 +5168,17 @@ Simplifications by term index:
   - evm-semantics/tests/specs/int-simplification.k :  (58, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (80, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (81, 10)
+- Lbl_/Int_: 6
   - evm-semantics/tests/specs/int-simplification.k :  (121, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (87, 10)
   - evm-semantics/tests/specs/lemmas.k :  (282, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (124, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (126, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (86, 10)
+- Lbl_<<Int_: 2
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1072, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1073, 8)
+- Lbl_<=Int_: 40
   - evm-semantics/tests/specs/int-simplification.k :  (185, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (182, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (66, 10)
@@ -4418,6 +5219,7 @@ Simplifications by term index:
   - evm-semantics/tests/specs/lemmas.k :  (20, 10)
   - evm-semantics/tests/specs/lemmas.k :  (65, 10)
   - evm-semantics/tests/specs/lemmas.k :  (395, 10)
+- Lbl_<Int_: 40
   - evm-semantics/tests/specs/int-simplification.k :  (166, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (181, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (65, 10)
@@ -4458,9 +5260,11 @@ Simplifications by term index:
   - evm-semantics/tests/specs/int-simplification.k :  (180, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/buf.md :  (39, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (168, 10)
-  - evm-semantics/tests/specs/lemmas.k :  (416, 10)
+- Lbl_==Bool_: evm-semantics/tests/specs/lemmas.k :  (416, 10)
+- Lbl_==Int_: 2
   - evm-semantics/tests/specs/lemmas.k :  (295, 10)
   - evm-semantics/tests/specs/lemmas.k :  (296, 10)
+- Lbl_==K_: 7
   - evm-semantics/tests/specs/lemmas.k :  (397, 10)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1121, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2100, 8)
@@ -4468,48 +5272,59 @@ Simplifications by term index:
   - evm-semantics/tests/specs/lemmas.k :  (398, 10)
   - evm-semantics/tests/specs/lemmas.k :  (122, 10)
   - evm-semantics/tests/specs/lemmas.k :  (135, 10)
+- Lbl_>=Int_: 2
   - evm-semantics/tests/specs/int-simplification.k :  (172, 19)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (125, 10)
+- Lbl_>>Int_: 3
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1074, 8)
   - evm-semantics/tests/specs/lemmas.k :  (139, 10)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1075, 8)
-  - evm-semantics/tests/specs/int-simplification.k :  (171, 19)
+- Lbl_>Int_: evm-semantics/tests/specs/int-simplification.k :  (171, 19)
+- Lbl_[_.._]_EVM-TYPES_ByteArray_ByteArray_Int_Int: 5
   - evm-semantics/tests/specs/lemmas.k :  (115, 11)
   - evm-semantics/tests/specs/lemmas.k :  (114, 10)
   - evm-semantics/tests/specs/lemmas.k :  (120, 10)
   - evm-semantics/tests/specs/lemmas.k :  (118, 10)
   - evm-semantics/tests/specs/lemmas.k :  (119, 10)
+- Lbl_[_:=_]_EVM-TYPES_Memory_Memory_Int_ByteArray: 2
   - evm-semantics/tests/specs/lemmas.k :  (111, 10)
   - evm-semantics/tests/specs/lemmas.k :  (109, 10)
+- Lbl_[_<-undef]: 3
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (426, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (425, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (429, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/buf.md :  (37, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (70, 10)
+- Lbl_^Int_: evm-semantics/.build/usr/lib/kevm/include/kframework/buf.md :  (37, 10)
+- Lbl_andBool_: evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (70, 10)
+- Lbl_in_keys(_)_MAP_Bool_KItem_Map: 4
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (439, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (438, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (441, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (440, 8)
+- Lbl_modInt_: 4
   - evm-semantics/tests/specs/int-simplification.k :  (152, 10)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1148, 5)
   - evm-semantics/tests/specs/lemmas.k :  (367, 10)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1068, 8)
+- Lbl_|Int_: 3
   - evm-semantics/tests/specs/int-simplification.k :  (138, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (137, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (136, 10)
-  - evm-semantics/tests/specs/lemmas.k :  (292, 10)
+- Lblbool2Word(_)_EVM-TYPES_Int_Bool: evm-semantics/tests/specs/lemmas.k :  (292, 10)
+- Lblchop(_)_WORD_Int_Int: 2
   - evm-semantics/tests/specs/lemmas.k :  (19, 10)
   - evm-semantics/tests/specs/lemmas.k :  (23, 10)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (89, 10)
+- LblinfGas: evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (89, 10)
+- LblminInt(_,_)_INT-COMMON_Int_Int_Int: 2
   - evm-semantics/tests/specs/int-simplification.k :  (158, 10)
   - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (91, 10)
+- LblnotBool_: 5
   - evm-semantics/tests/specs/int-simplification.k :  (174, 10)
   - evm-semantics/tests/specs/int-simplification.k :  (173, 10)
   - evm-semantics/tests/specs/lemmas.k :  (290, 10)
   - evm-semantics/tests/specs/lemmas.k :  (291, 10)
   - evm-semantics/tests/specs/lemmas.k :  (48, 10)
 Predicate simplifications by term index:
-- Anything: 38
+- \ceil: 8
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (411, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1085, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1084, 8)
@@ -4518,6 +5333,7 @@ Predicate simplifications by term index:
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1086, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1996, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1995, 8)
+- \equalsTerm: 30
   - evm-semantics/tests/specs/lemmas.k :  (408, 10)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1128, 8)
   - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1126, 8)
