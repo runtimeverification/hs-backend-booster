@@ -11,6 +11,8 @@ import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
+import Control.Monad.Trans.Writer
+import Data.Bifunctor (second)
 import Data.Either.Extra
 import Data.List.NonEmpty as NE (fromList)
 import Data.Map (Map)
@@ -26,8 +28,9 @@ import Booster.Definition.Base
 import Booster.Pattern.Base
 import Booster.Pattern.Unify (FailReason (..), checkSubsort)
 import Booster.Pattern.Util (
+    checkSymbolIsAc,
     freeVariables,
-    isFunctionSymbol,
+    modifyVariablesInP,
     sortOfTerm,
     substituteInTerm,
  )
@@ -49,7 +52,6 @@ data MatchResult
   Symbols (functions and constructors) are matched syntactically,
   i.e., when present in the pattern (term1) they also need to be
   present in the subject (term2).
-
 -}
 matchTerm :: KoreDefinition -> Term -> Term -> MatchResult
 matchTerm KoreDefinition{sorts} term1 term2 =
@@ -74,7 +76,6 @@ matchTerm KoreDefinition{sorts} term1 term2 =
                         , mQueue = Seq.singleton (term1, term2)
                         , mSubsorts = Map.map snd sorts
                         }
-
 
 data MatchState = State
     { mSubstitution :: Map Variable Term
@@ -108,11 +109,12 @@ match1
                 lift . withExcept (MatchError . Text.pack . show) $
                     checkSubsort subsorts termSort variableSort
             unless isSubsort $
-                failWith $ DifferentSorts term1 term2
+                failWith $
+                    DifferentSorts term1 term2
             -- TODO are subsorts allowed?
             bindVariable
                 var
-                (if termSort == variableSort
+                ( if termSort == variableSort
                     then term2
                     else Injection termSort variableSort term2
                 )
@@ -178,8 +180,8 @@ match1
             lift . throwE . MatchError . Text.pack $
                 "Argument counts differ for same symbol" <> show (t1, t2)
         | sorts1 /= sorts2 = failWith (DifferentSorts t1 t2)
-        | isFunctionSymbol symbol1 =
-            -- If the symbol is non-free (AC symbol, return indeterminate)
+        | checkSymbolIsAc symbol1 =
+            -- If the symbol is non-free (AC symbol), return indeterminate
             lift $ throwE $ MatchIndeterminate t1 t2
         | otherwise =
             enqueueProblems $ Seq.fromList $ zip args1 args2
@@ -222,3 +224,94 @@ bindVariable var term = do
         currentSubst' = Map.map (substituteInTerm $ Map.singleton var term') currentSubst
     let newSubst = Map.insert var term' currentSubst'
     modify $ \s -> s{mSubstitution = newSubst}
+
+----------------------------------------
+
+{- | Match a predicate pattern (containing terms) to a predicate
+   subject.
+
+  Since the result is a variable substitution and variables are terms,
+  this will ultimately fall back to matching terms. The predicate is
+  traversed, collecting a queue of term matching problems to run once
+  the predicate shapes are matched completely.
+
+  An additional error type is added for the case where the predicate
+  pattern does not match the subject syntactically.
+
+  This is kept simple because we don't expect to use is much; only
+  few simplifications on ML constructs are allowed and used.
+-}
+matchPredicate ::
+    KoreDefinition ->
+    Predicate ->
+    Predicate ->
+    Either PredicatesDoNotMatch MatchResult
+matchPredicate def pat subj =
+    second runTermMatching $ matchPredicates (pat, subj)
+  where
+    runTermMatching :: Seq (Term, Term) -> MatchResult
+    runTermMatching =
+        fromEither
+            . runExcept
+            . fmap (MatchSuccess . mSubstitution)
+            . execStateT matching
+            . mkMatchState
+
+    -- produce initial state with given work queue
+    mkMatchState mQueue =
+        State{mSubstitution = Map.empty, mQueue, mSubsorts = Map.map snd def.sorts}
+
+    matchPredicates :: (Predicate, Predicate) -> Either PredicatesDoNotMatch (Seq (Term, Term))
+    matchPredicates = runExcept . execWriterT . collect
+
+    collect :: (Predicate, Predicate) -> WriterT (Seq (Term, Term)) (Except PredicatesDoNotMatch) ()
+    collect (pPattern, pSubject) = case (pPattern, pSubject) of
+        (AndPredicate p1 p2, AndPredicate s1 s2) ->
+            collect (p1, s1) >> collect (p2, s2)
+        (Bottom, Bottom) ->
+            pure ()
+        (Ceil p, Ceil s) ->
+            enqueue (p, s)
+        (EqualsTerm p1 p2, EqualsTerm s1 s2) ->
+            enqueue (p1, s1) >> enqueue (p2, s2)
+        (EqualsPredicate p1 p2, EqualsPredicate s1 s2) ->
+            collect (p1, s1) >> collect (p2, s2)
+        (Exists pv p, Exists sv s) -> do
+            -- forbid pv in the resulting substitution by injecting it here
+            enqueue (Var pv, Var sv)
+            let renamedS = modifyVariablesInP (renameVariable sv pv) s
+            collect (p, renamedS)
+        (Forall pv p, Forall sv s) -> do
+            -- forbid pv in the resulting substitution by injecting it here
+            enqueue (Var pv, Var sv)
+            let renamedS = modifyVariablesInP (renameVariable sv pv) s
+            collect (p, renamedS)
+        (Iff p1 p2, Iff s1 s2) ->
+            collect (p1, s1) >> collect (p2, s2)
+        (Implies p1 p2, Implies s1 s2) ->
+            collect (p1, s1) >> collect (p2, s2)
+        (In p1 p2, In s1 s2) ->
+            enqueue (p1, s1) >> enqueue (p2, s2)
+        (Not p, Not s) ->
+            collect (p, s)
+        (Or p1 p2, Or s1 s2) ->
+            collect (p1, s1) >> collect (p2, s2)
+        (Top, Top) ->
+            pure ()
+        _other -> noMatch
+      where
+        enqueue = tell . Seq.singleton
+        noMatch = lift $ throwE PredicatesDoNotMatch{pPattern, pSubject}
+
+        renameVariable :: Variable -> Variable -> Variable -> Variable
+        renameVariable before after target
+            | target == before = after
+            | target == after = error "variable name capture"
+            -- should never happen, equation variables will all be renamed
+            | otherwise = target
+
+data PredicatesDoNotMatch = PredicatesDoNotMatch
+    { pPattern :: Predicate
+    , pSubject :: Predicate
+    }
+    deriving (Eq, Show)
