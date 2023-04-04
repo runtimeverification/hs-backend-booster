@@ -181,7 +181,10 @@ unify1
             enqueueProblem trm1 trm2
         | Var v <- trm1 = do
             -- variable in pattern, check source sorts and bind
-            isSubsort <- checkSubsort source2 source1
+            subsorts <- gets uSubsorts
+            isSubsort <-
+                lift . withExcept UnificationSortError $
+                    checkSubsort subsorts source2 source1
             if isSubsort
                 then bindVariable v (Injection source2 source1 trm2)
                 else failWith (DifferentSorts trm1 trm2)
@@ -220,7 +223,10 @@ unify1
     term2 =
         do
             let termSort = sortOfTerm term2
-            isSubsort <- checkSubsort termSort variableSort
+            subsorts <- gets uSubsorts
+            isSubsort <-
+                lift . withExcept UnificationSortError $
+                    checkSubsort subsorts termSort variableSort
             if isSubsort
                 then bindVariable var term2
                 else failWith $ DifferentSorts term1 term2
@@ -308,27 +314,25 @@ addIndeterminate pat subj =
 {- | Matches a subject sort to a pattern sort, ensuring that the subject
    sort can be used in place of the pattern sort, i.e., is a subsort.
 
-Sort variables generally do not occur in the patterns matched/unified
-here, and should not be sent by clients either. Therefore, unification
-is immediately aborted if a sort variable is met.
+Sort variables are only accepted if they are syntactically identical.
+They should not occur in the patterns matched/unified here, and should
+not be sent by clients either.
 -}
-checkSubsort :: Sort -> Sort -> StateT UnificationState (Except UnificationResult) Bool
-checkSubsort sub sup
-    | SortVar s <- sub = sortError $ FoundSortVariable s
-    | SortVar s <- sup = sortError $ FoundSortVariable s
+checkSubsort :: SortTable -> Sort -> Sort -> Except SortError Bool
+checkSubsort subsorts sub sup
+    | sub == sup = pure True
+    | SortVar s <- sub = throwE $ FoundSortVariable s
+    | SortVar s <- sup = throwE $ FoundSortVariable s
     | SortApp subName subArgs <- sub
-    , SortApp supName supArgs <- sup = do
-        mbSubsorts <- gets $ Map.lookup supName . uSubsorts
-        case mbSubsorts of
+    , SortApp supName supArgs <- sup =
+        case Map.lookup supName subsorts of
             Nothing ->
-                sortError $ FoundUnknownSort sup
-            Just subsorts
-                | not (subName `Set.member` subsorts) -> pure False
+                throwE $ FoundUnknownSort sup
+            Just result
+                | not (subName `Set.member` result) -> pure False
                 | otherwise -> do
-                    argsCheck <- zipWithM checkSubsort subArgs supArgs
+                    argsCheck <- zipWithM (checkSubsort subsorts) subArgs supArgs
                     pure $ and argsCheck
-  where
-    sortError = lift . throwE . UnificationSortError
 
 data SortError
     = FoundSortVariable VarName
