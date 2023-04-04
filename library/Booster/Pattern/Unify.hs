@@ -3,7 +3,12 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Booster.Pattern.Unify (
-    module Booster.Pattern.Unify,
+    UnificationResult (..),
+    FailReason (..),
+    Substitution,
+    unifyTerms,
+    checkSubsort,
+    SortError (..),
 ) where
 
 import Control.Monad
@@ -12,8 +17,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Either.Extra
-import Data.Foldable (toList)
-import Data.List.NonEmpty as NE (NonEmpty ((:|)), fromList)
+import Data.List.NonEmpty as NE (NonEmpty, fromList)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Sequence (Seq (..), (><))
@@ -301,11 +305,6 @@ bindVariable var term = do
                 currentSubst' = Map.map (substituteInTerm $ Map.singleton var term') currentSubst
             let newSubst = Map.insert var term' currentSubst'
             modify $ \s -> s{uSubstitution = newSubst}
-
-returnAsRemainder :: Term -> Term -> StateT UnificationState (Except UnificationResult) ()
-returnAsRemainder t1 t2 = do
-    remainder <- gets uQueue
-    lift $ throwE $ UnificationRemainder $ (t1, t2) :| toList remainder
 
 addIndeterminate :: Term -> Term -> StateT UnificationState (Except UnificationResult) ()
 addIndeterminate pat subj =

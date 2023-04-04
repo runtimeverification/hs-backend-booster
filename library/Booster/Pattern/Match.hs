@@ -3,7 +3,10 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Booster.Pattern.Match (
-    module Booster.Pattern.Match,
+    MatchResult (..),
+    PredicatesDoNotMatch (..),
+    matchTerm,
+    matchPredicate,
 ) where
 
 import Control.Monad
