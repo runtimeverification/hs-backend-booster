@@ -13,6 +13,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Functor.Foldable
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
@@ -52,11 +53,19 @@ getState :: EquationM tag err (EquationState tag)
 getState = EquationM get
 
 ----------------------------------------
+
+{- | Apply the set of equations in the equation state at all levels of a
+   term AST, in the given direction (bottom-up or top-down).
+
+  No iteration happens at the same AST level inside these traversals,
+  one equation will be applied per level (if any).
+-}
 applyTermBottomUp
     , applyTermTopDown ::
-        forall rule.
+        forall tag.
+        ApplyEquationOps tag =>
         Term ->
-        EquationM rule (EquationFailure Term) Term
+        EquationM (RewriteRule tag) (EquationFailure Term) Term
 applyTermBottomUp =
     cataA $ \case
         DomainValueF s val ->
@@ -69,7 +78,6 @@ applyTermBottomUp =
             AndTerm <$> arg1 <*> arg2 -- no \and simplification
         SymbolApplicationF sym sorts args -> do
             t <- SymbolApplication sym sorts <$> sequence args
-            -- try to apply equations here
             applyAtTop t
 applyTermTopDown = \case
     dv@DomainValue{} ->
@@ -93,20 +101,23 @@ applyTermTopDown = \case
                         applyTermTopDown t -- won't loop
             else SymbolApplication sym sorts <$> mapM applyTermTopDown args
 
--- TODO localise?
+{- | Try to apply all equations from the state to the given term, in
+   priority order and per group.
+-}
 applyAtTop ::
-    forall rule.
+    forall tag.
+    ApplyEquationOps tag =>
     Term ->
-    EquationM rule (EquationFailure Term) Term
+    EquationM (RewriteRule tag) (EquationFailure Term) Term
 applyAtTop term = do
     EquationState{definition, theory} <- getState
     let index = termTopIndex term
     when (index == None) $
         throw (IndexIsNone term)
-    let idxEquations, anyEquations :: Map Priority [rule]
+    let idxEquations, anyEquations :: Map Priority [RewriteRule tag]
         idxEquations = fromMaybe Map.empty $ Map.lookup index theory
         anyEquations = fromMaybe Map.empty $ Map.lookup Anything theory
-        equationGroups :: [[rule]]
+        equationGroups :: [[RewriteRule tag]]
         equationGroups =
             map snd . Map.toAscList $
                 if index == Anything
@@ -117,7 +128,9 @@ applyAtTop term = do
     processGroup equationGroups
   where
     -- process one group of equations at a time, until something has happened
-    processGroup :: [[rule]] -> EquationM rule (EquationFailure Term) Term
+    processGroup ::
+        [[(RewriteRule tag)]] ->
+        EquationM (RewriteRule tag) (EquationFailure Term) Term
     processGroup [] =
         pure term -- nothing to do, term stays the same
     processGroups (eqs : rest) = do
@@ -128,10 +141,8 @@ applyAtTop term = do
                 processGroups rest -- no success at all in this group
             [newTerm] ->
                 pure newTerm -- single result
-            (new1 : _more) ->
-                -- choose first result if more than one FIXME should
-                -- be error for function equations (non-determinism)
-                pure new1
+            (first : second : more) ->
+                onMultipleResults first (second :| more)
 
 applyEquation ::
     Term ->
@@ -139,3 +150,24 @@ applyEquation ::
     EquationM (RewriteRule tag) (EquationFailure Term) (Maybe Term)
 applyEquation _term _rule =
     pure Nothing
+
+{- | Type class to encapsulate the differences between applying
+   simplifications and applying function rules.
+
+The behaviour when several equations in a priority group match depends
+on the 'rule' tag:
+
+* for '"Simplification"' equations, choose the first matching equation
+* for '"Function"' equations, having several equations at the same
+  priority match is an error, and the equations are reported.
+-}
+class ApplyEquationOps (tag :: k) where
+    -- | what to do when more than one equation produces a result
+    -- (assuming the same priority)
+    onMultipleResults ::
+        Term -> NonEmpty Term -> EquationM (RewriteRule tag) (EquationFailure Term) Term
+
+instance ApplyEquationOps "Simplification" where
+    onMultipleResults one _ = pure one -- choose first result if more than one
+
+-- error for function equations (non-determinism)
