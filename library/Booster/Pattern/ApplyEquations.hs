@@ -11,6 +11,7 @@ module Booster.Pattern.ApplyEquations (
 import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
+import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.State
 import Data.Functor.Foldable
 import Data.List.NonEmpty (NonEmpty ((:|)))
@@ -19,13 +20,15 @@ import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Proxy
 import Data.Text (Text)
-import Data.Text qualified as Text
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
+import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.Base
 import Booster.Pattern.Index
 import Booster.Pattern.Match
+import Booster.Pattern.Simplify
+import Booster.Pattern.Util
 
 newtype EquationM tag err a = EquationM (StateT (EquationState tag) (Except err) a)
     deriving newtype (Functor, Applicative, Monad)
@@ -36,19 +39,21 @@ throw = EquationM . lift . throwE
 data EquationFailure a
     = IndexIsNone a
     | InconsistentFunctionRules [a]
-    | IndeterminateResult a a
+    | IndeterminateMatch a a
+    | IndeterminateCondition Predicate
     | InternalError Text
 
 data EquationState tag = EquationState
     { definition :: KoreDefinition
     , theory :: Theory tag
+    , llvmApi :: Maybe LLVM.API
     , hasChanged :: Bool
     , counter :: Int
     }
 
-startState :: KoreDefinition -> Theory tag -> EquationState tag
-startState definition theory =
-    EquationState{definition, theory, hasChanged = False, counter = 0}
+startState :: KoreDefinition -> Theory tag -> Maybe LLVM.API -> EquationState tag
+startState definition theory llvmApi =
+    EquationState{definition, theory, llvmApi, hasChanged = False, counter = 0}
 
 increment, markChanged, clearChanged :: EquationM tag err ()
 increment = EquationM . modify $ \s -> s{counter = 1 + s.counter}
@@ -116,7 +121,7 @@ applyAtTop ::
     Term ->
     EquationM (RewriteRule tag) (EquationFailure Term) Term
 applyAtTop term = do
-    EquationState{definition, theory} <- getState
+    EquationState{theory} <- getState
     let index = termTopIndex term
     when (index == None) $
         throw (IndexIsNone term)
@@ -131,13 +136,13 @@ applyAtTop term = do
                     else Map.unionWith (<>) idxEquations anyEquations
 
     -- no need for an error when (null equationGroups), it will just stop.
-    processGroup equationGroups
+    processGroups equationGroups
   where
     -- process one group of equations at a time, until something has happened
-    processGroup ::
+    processGroups ::
         [[(RewriteRule tag)]] ->
         EquationM (RewriteRule tag) (EquationFailure Term) Term
-    processGroup [] =
+    processGroups [] =
         pure term -- nothing to do, term stays the same
     processGroups (eqs : rest) = do
         -- try all equations in this group, and inspect the results
@@ -156,21 +161,43 @@ applyEquation ::
     Term ->
     RewriteRule tag ->
     EquationM (RewriteRule tag) (EquationFailure Term) (Maybe Term)
-applyEquation term rule = do
-    koreDef <- (.definition) <$> getState
+applyEquation term rule = runMaybeT $ do
+    koreDef <- (.definition) <$> lift getState
     case matchTerm koreDef rule.lhs.term term of
-        MatchFailed failReason -> do
+        MatchFailed _failReason -> do
             -- some logging, then
-            pure Nothing
+            fail "match failed"
         MatchIndeterminate pat subj -> do
             -- some logging, then
             onIndeterminateMatch (Proxy @tag) pat subj
         MatchError msg ->
-            throw $ InternalError $ "Match error: " <> msg
-        MatchSuccess substitution -> do
+            lift $ throw $ InternalError $ "Match error: " <> msg
+        MatchSuccess subst -> do
             -- check conditions, using substitution (will call back
-            -- into the simplifier!)
+            -- into the simplifier! -> import loop)
+            let newConstraints =
+                    concatMap (splitBoolPredicates . substituteInPredicate subst) $
+                        rule.lhs.constraints <> rule.rhs.constraints
+            unclearConditions <- catMaybes <$> mapM checkConstraint newConstraints
+
+            unless (null unclearConditions) $
+                onIndeterminateCondition (Proxy @tag) (head unclearConditions)
+
             error "implement me"
+  where
+    -- evaluate/simplify a predicate, cut the operation short when it
+    -- is Bottom.
+    checkConstraint ::
+        Predicate ->
+        MaybeT (EquationM (RewriteRule tag) (EquationFailure Term)) (Maybe Predicate)
+    checkConstraint p = do
+        mApi <- (.llvmApi) <$> lift getState
+        case simplifyPredicate mApi p of
+            Bottom -> fail "side condition was false"
+            Top -> pure Nothing
+            _other -> pure $ Just p
+
+--------------------------------------------------------------------
 
 {- | Type class to encapsulate the differences between applying
    simplifications and applying function rules.
@@ -197,14 +224,25 @@ class ApplyEquationOps (tag :: k) where
         Proxy tag ->
         Term ->
         Term ->
-        EquationM (RewriteRule tag) (EquationFailure Term) (Maybe Term)
+        MaybeT (EquationM (RewriteRule tag) (EquationFailure Term)) Term
+
+    -- | Behaviour when side conditions cannot be determined
+    --
+    -- * for '"Simplification"' equations, discard and proceed
+    -- * for '"Function"' equations, abort evaluation (equations at
+    --   lower priority should not be tried)
+    onIndeterminateCondition ::
+        Proxy tag ->
+        Predicate ->
+        MaybeT (EquationM (RewriteRule tag) (EquationFailure Term)) ()
 
 instance ApplyEquationOps "Simplification" where
     -- choose first result if more than one
     onMultipleResults _ one _ = pure one
 
     -- continue with more equations if application indeterminate
-    onIndeterminateMatch _ _ _ = pure Nothing
+    onIndeterminateMatch _ _ _ = fail "indeterminate match"
+    onIndeterminateCondition _ _ = fail "indeterminate condition"
 
 instance ApplyEquationOps "Function" where
     -- report that equations are non-deterministic
@@ -215,5 +253,9 @@ instance ApplyEquationOps "Function" where
     -- throw error (abort evaluation) when indeterminate match
     -- (subsequent equations at lower priority cannot be used)
     onIndeterminateMatch _ pat subj =
-        -- FIXME should probably mention the equation
-        throw $ IndeterminateResult pat subj
+        lift $ throw $ IndeterminateMatch pat subj
+
+    -- abort further evaluation when a side condition is indeterminate
+    -- (subsequent equations at lower priority cannot be used)
+    onIndeterminateCondition _ p =
+        lift $ throw $ IndeterminateCondition p
