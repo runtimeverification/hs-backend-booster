@@ -182,8 +182,11 @@ applyEquation term rule = runMaybeT $ do
 
             unless (null unclearConditions) $
                 onIndeterminateCondition (Proxy @tag) (head unclearConditions)
-
-            error "implement me"
+            let rewritten =
+                    substituteInTerm subst rule.rhs.term -- assumes no existentials. TODO check
+                    -- NB no new constraints, as they have been checked to be `Top`
+                    -- FIXME what about symbolic constraints here?
+            return $ rewritten
   where
     -- evaluate/simplify a predicate, cut the operation short when it
     -- is Bottom.
