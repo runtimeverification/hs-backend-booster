@@ -18,6 +18,8 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Proxy
+import Data.Text (Text)
+import Data.Text qualified as Text
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
@@ -34,6 +36,8 @@ throw = EquationM . lift . throwE
 data EquationFailure a
     = IndexIsNone a
     | InconsistentFunctionRules [a]
+    | IndeterminateResult a a
+    | InternalError Text
 
 data EquationState tag = EquationState
     { definition :: KoreDefinition
@@ -147,35 +151,69 @@ applyAtTop term = do
                 onMultipleResults (Proxy @tag) first (second :| more)
 
 applyEquation ::
+    forall tag.
+    ApplyEquationOps tag =>
     Term ->
     RewriteRule tag ->
     EquationM (RewriteRule tag) (EquationFailure Term) (Maybe Term)
-applyEquation _term _rule =
-    pure Nothing
+applyEquation term rule = do
+    koreDef <- (.definition) <$> getState
+    case matchTerm koreDef rule.lhs.term term of
+        MatchFailed failReason -> do
+            -- some logging, then
+            pure Nothing
+        MatchIndeterminate pat subj -> do
+            -- some logging, then
+            onIndeterminateMatch (Proxy @tag) pat subj
+        MatchError msg ->
+            throw $ InternalError $ "Match error: " <> msg
+        MatchSuccess substitution -> do
+            -- check conditions, using substitution (will call back
+            -- into the simplifier!)
+            error "implement me"
 
 {- | Type class to encapsulate the differences between applying
    simplifications and applying function rules.
-
-The behaviour when several equations in a priority group match depends
-on the 'rule' tag:
-
-* for '"Simplification"' equations, choose the first matching equation
-* for '"Function"' equations, having several equations at the same
-  priority match is an error, and the equations are reported.
 -}
 class ApplyEquationOps (tag :: k) where
-    -- | what to do when more than one equation produces a result
-    -- (assuming the same priority)
+    -- | Behaviour when several equations in a priority group match:
+    --
+    -- * for '"Simplification"' equations, choose the first matching
+    --   equation
+    -- * for '"Function"' equations, having several equations at the
+    --   same priority match is an error, and equations are reported.
     onMultipleResults ::
         Proxy tag ->
         Term ->
         NonEmpty Term ->
         EquationM (RewriteRule tag) (EquationFailure Term) Term
 
+    -- | Behaviour when a match cannot be determined
+    --
+    -- * for '"Simplification"' equations, discard and proceed
+    -- * for '"Function"' equations, abort evaluation (equations at
+    --   lower priority should not be tried)
+    onIndeterminateMatch ::
+        Proxy tag ->
+        Term ->
+        Term ->
+        EquationM (RewriteRule tag) (EquationFailure Term) (Maybe Term)
+
 instance ApplyEquationOps "Simplification" where
-    onMultipleResults _ one _ = pure one -- choose first result if more than one
+    -- choose first result if more than one
+    onMultipleResults _ one _ = pure one
+
+    -- continue with more equations if application indeterminate
+    onIndeterminateMatch _ _ _ = pure Nothing
 
 instance ApplyEquationOps "Function" where
+    -- report that equations are non-deterministic
     onMultipleResults _ one (another :| more) =
-        -- error for function equations (non-determinism)
+        -- FIXME should contain the equations not the terms
         throw $ InconsistentFunctionRules (one : another : more)
+
+    -- throw error (abort evaluation) when indeterminate match
+    -- (subsequent equations at lower priority cannot be used)
+    onIndeterminateMatch _ pat subj =
+        -- FIXME should probably mention the equation
+        throw $ IndeterminateResult pat subj
