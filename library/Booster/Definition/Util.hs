@@ -29,9 +29,10 @@ import Prettyprinter.Render.String qualified as Pretty (renderString)
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
-import Booster.Pattern.Base (decodeLabel)
+import Booster.Pattern.Base (decodeLabel, Pattern (Pattern), constraints, Predicate (..), Term, term, TermF (..))
 import Booster.Pattern.Index (TermIndex (..))
 import Booster.Prettyprinter
+import Data.Functor.Foldable
 
 data Summary = Summary
     { file :: FilePath
@@ -43,6 +44,7 @@ data Summary = Summary
     , functionRules :: Map.Map TermIndex [Location]
     , simplifications :: Map.Map TermIndex [Location]
     , predicateSimplifications :: Map.Map TermIndex [Location]
+    , containMlSymbols :: [RewriteRule "Rewrite"]
     }
     deriving stock (Eq, Show, Generic)
     deriving anyclass (NFData)
@@ -64,6 +66,10 @@ mkSummary file def =
         , containAcSymbolsCount =
             length $
                 filter (\rule -> rule.computedAttributes.containsAcSymbols) $
+                    concat $
+                        concatMap Map.elems (Map.elems def.rewriteTheory)
+        , containMlSymbols =
+                filter (\rule -> containsMlSymbols rule) $
                     concat $
                         concatMap Map.elems (Map.elems def.rewriteTheory)
         , functionRuleCount =
@@ -88,6 +94,22 @@ mkSummary file def =
             . partition isJust
             . map (.attributes.location)
 
+
+
+    containsMlSymbolsPredicate :: Predicate -> Bool
+    containsMlSymbolsPredicate = \case 
+        EqualsTerm _ _ -> False
+        _ -> True
+    
+    containsMlSymbolsPattern :: Pattern -> Bool
+    containsMlSymbolsPattern Pattern{term, constraints} = --containsMlSymbolsTerm term -- || 
+        any containsMlSymbolsPredicate constraints
+
+    containsMlSymbols :: RewriteRule rule -> Bool
+    containsMlSymbols r = containsMlSymbolsPattern r.lhs || containsMlSymbolsPattern r.rhs
+
+
+
 prettySummary :: Summary -> String
 prettySummary = Pretty.renderString . layoutPrettyUnbounded . pretty
 
@@ -100,6 +122,8 @@ instance Pretty Summary where
             , "Axioms: " <> pretty summary.axiomCount
             , "Axioms preserving definedness: " <> pretty summary.preserveDefinednessCount
             , "Axioms containing AC symbols: " <> pretty summary.containAcSymbolsCount
+            , "Axioms containing ML symbols in predicate: " <> pretty (length summary.containMlSymbols)
+            , "Sample concrete Axiom containing ML symbols in predicate: " <> pretty (if length summary.containMlSymbols > 0 then show $ head summary.containMlSymbols else "empty")
             ]
                 <> ( "Subsorts:"
                         : tableView prettyLabel prettyLabel summary.subSorts
