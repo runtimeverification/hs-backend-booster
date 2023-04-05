@@ -104,7 +104,6 @@ applyTermTopDown = \case
         t <- applyAtTop app
         if (getAttributes t).hash /= (getAttributes app).hash
             then do
-                markChanged -- or manage this inside applyAtTop?
                 case t of
                     SymbolApplication sym' sorts' args' ->
                         SymbolApplication sym' sorts' <$> mapM applyTermTopDown args'
@@ -150,9 +149,11 @@ applyAtTop term = do
         case results of
             [] ->
                 processGroups rest -- no success at all in this group
-            [newTerm] ->
+            [newTerm] -> do
+                markChanged
                 pure newTerm -- single result
-            (first : second : more) ->
+            (first : second : more) -> do
+                markChanged
                 onMultipleResults (Proxy @tag) first (second :| more)
 
 applyEquation ::
