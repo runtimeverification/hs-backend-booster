@@ -17,6 +17,7 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
+import Data.Proxy
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
@@ -32,6 +33,7 @@ throw = EquationM . lift . throwE
 
 data EquationFailure a
     = IndexIsNone a
+    | InconsistentFunctionRules [a]
 
 data EquationState tag = EquationState
     { definition :: KoreDefinition
@@ -142,7 +144,7 @@ applyAtTop term = do
             [newTerm] ->
                 pure newTerm -- single result
             (first : second : more) ->
-                onMultipleResults first (second :| more)
+                onMultipleResults (Proxy @tag) first (second :| more)
 
 applyEquation ::
     Term ->
@@ -165,9 +167,15 @@ class ApplyEquationOps (tag :: k) where
     -- | what to do when more than one equation produces a result
     -- (assuming the same priority)
     onMultipleResults ::
-        Term -> NonEmpty Term -> EquationM (RewriteRule tag) (EquationFailure Term) Term
+        Proxy tag ->
+        Term ->
+        NonEmpty Term ->
+        EquationM (RewriteRule tag) (EquationFailure Term) Term
 
 instance ApplyEquationOps "Simplification" where
-    onMultipleResults one _ = pure one -- choose first result if more than one
+    onMultipleResults _ one _ = pure one -- choose first result if more than one
 
--- error for function equations (non-determinism)
+instance ApplyEquationOps "Function" where
+    onMultipleResults _ one (another :| more) =
+        -- error for function equations (non-determinism)
+        throw $ InconsistentFunctionRules (one : another : more)
