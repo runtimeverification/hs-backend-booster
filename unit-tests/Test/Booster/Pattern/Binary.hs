@@ -50,21 +50,8 @@ genTerm =
 
 genPredicate :: Gen Predicate
 genPredicate =
-    Gen.recursive
-        Gen.choice
-        [pure Bottom, pure Top]
-        [ AndPredicate <$> genPredicate <*> genPredicate
-        , Ceil <$> genTerm
-        , EqualsTerm <$> genTerm <*> genTerm
-        , EqualsPredicate <$> genPredicate <*> genPredicate
-        , Exists <$> genVariable <*> genPredicate
-        , Forall <$> genVariable <*> genPredicate
-        , Iff <$> genPredicate <*> genPredicate
-        , Implies <$> genPredicate <*> genPredicate
-        , In <$> genTerm <*> genTerm
-        , Not <$> genPredicate
-        , Or <$> genPredicate <*> genPredicate
-        ]
+    Predicate <$>
+        Gen.choice [pure TrueBool, pure FalseBool, genTerm]
 
 genPattern :: Gen Pattern
 genPattern = Pattern <$> genTerm <*> upTo 10 genPredicate

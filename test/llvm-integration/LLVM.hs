@@ -196,7 +196,6 @@ testDef =
         Map.empty -- no rules
         Map.empty -- no function equations
         Map.empty -- no simplifications
-        Map.empty -- no predicate simplifications
 
 defSorts :: Map SortName (SortAttributes, Set SortName)
 defSorts =

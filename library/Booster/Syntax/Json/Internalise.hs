@@ -6,7 +6,7 @@ module Booster.Syntax.Json.Internalise (
     internalisePattern,
     internaliseTermOrPredicate,
     internaliseTerm,
-    internalisePredicate,
+    internaliseBoolPredicate,
     lookupInternalSort,
     PatternError (..),
     internaliseSort,
@@ -43,6 +43,7 @@ import Booster.Pattern.Util (sortOfTerm)
 import Booster.Syntax.Json.Externalise (externaliseSort)
 import Data.Coerce (coerce)
 import Kore.Syntax.Json.Types qualified as Syntax
+import Data.Maybe (catMaybes)
 
 internalisePattern ::
     Bool ->
@@ -58,7 +59,7 @@ internalisePattern allowAlias sortVars definition p = do
     -- construct an AndTerm from all terms (checking sort consistency)
     term <- andTerm p =<< mapM (internaliseTerm allowAlias sortVars definition) terms
     -- internalise all predicates
-    constraints <- mapM (internalisePredicate allowAlias sortVars definition) predicates
+    constraints <- catMaybes <$> mapM (internaliseBoolPredicate allowAlias sortVars definition) predicates
     pure Internal.Pattern{term, constraints}
   where
     andTerm :: Syntax.KorePattern -> [Internal.Term] -> Except PatternError Internal.Term
@@ -81,7 +82,7 @@ internaliseTermOrPredicate ::
     Syntax.KorePattern ->
     Except [PatternError] Internal.TermOrPredicate
 internaliseTermOrPredicate allowAlias sortVars definition syntaxPatt =
-    Internal.APredicate <$> (withExcept (: []) $ internalisePredicate allowAlias sortVars definition syntaxPatt)
+    Internal.BoolPredicate <$> (withExcept (: []) $ internaliseBoolPredicate allowAlias sortVars definition syntaxPatt)
         <|> Internal.TermAndPredicate
             <$> (withExcept (: []) $ internalisePattern allowAlias sortVars definition syntaxPatt)
 
@@ -179,53 +180,36 @@ internaliseTerm allowAlias sortVars definition@KoreDefinition{sorts, symbols} pa
 
 -- Throws errors when a term is encountered. The 'And' case
 -- is analysed before, this function produces an 'AndPredicate'.
-internalisePredicate ::
+internaliseBoolPredicate ::
     Bool ->
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     Syntax.KorePattern ->
-    Except PatternError Internal.Predicate
-internalisePredicate allowAlias sortVars definition@KoreDefinition{sorts} pat = case pat of
+    Except PatternError (Maybe Internal.Predicate)
+internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pat = case pat of
     Syntax.KJEVar{} -> term
     Syntax.KJSVar{} -> term
     Syntax.KJApp{} -> term
     Syntax.KJString{} -> term
-    Syntax.KJTop{} -> do
-        pure Internal.Top
-    Syntax.KJBottom{} -> do
-        pure Internal.Bottom
-    Syntax.KJNot{arg} -> do
-        Internal.Not <$> recursion arg
-    Syntax.KJAnd{first = arg1, second = arg2} -> do
-        -- consistency should have been checked beforehand,
-        -- building an AndPredicate
-        Internal.AndPredicate
-            <$> recursion arg1
-            <*> recursion arg2
-    Syntax.KJOr{first = arg1, second = arg2} ->
-        Internal.Or
-            <$> recursion arg1
-            <*> recursion arg2
-    Syntax.KJImplies{first = arg1, second = arg2} ->
-        Internal.Implies
-            <$> recursion arg1
-            <*> recursion arg2
-    Syntax.KJIff{first = arg1, second = arg2} ->
-        Internal.Iff
-            <$> recursion arg1
-            <*> recursion arg2
-    Syntax.KJForall{var, varSort, arg} -> do
-        variableSort <- lookupInternalSort' varSort
-        Internal.Forall Internal.Variable{variableSort, variableName = textToBS var.getId}
-            <$> recursion arg
-    Syntax.KJExists{var, varSort, arg} -> do
-        variableSort <- lookupInternalSort' varSort
-        Internal.Forall Internal.Variable{variableSort, variableName = textToBS var.getId}
-            <$> recursion arg
+    Syntax.KJTop{} -> pure Nothing --pure $ Right $ Internal.Predicate Internal.TrueBool
+    Syntax.KJBottom{} -> notSupported --pure $ Right $ Internal.Predicate Internal.FalseBool
+    Syntax.KJNot{arg} -> notSupported
+        -- internaliseCeilOrPredicate allowAlias sortVars definition arg >>= \case
+        -- Left _ -> notSupported
+        -- Right (Internal.EqualsTerm t1 t2) -> pure $ Right $ Internal.NotEqualsTerm t1 t2
+        -- Right (Internal.NotEqualsTerm t1 t2) -> pure $ Right $ Internal.EqualsTerm t1 t2
+        -- Right (Internal.Predicate (Internal.NotBool x)) -> pure $ Right $ Internal.Predicate x
+        -- Right (Internal.Predicate x) -> pure $ Right $ Internal.Predicate $ Internal.NotBool x
+    Syntax.KJAnd{} -> notSupported
+    Syntax.KJOr{} -> notSupported
+    Syntax.KJImplies{} -> notSupported
+    Syntax.KJIff{} -> notSupported
+    Syntax.KJForall{} -> notSupported
+    Syntax.KJExists{} -> notSupported
     Syntax.KJMu{} -> notSupported
     Syntax.KJNu{} -> notSupported
-    Syntax.KJCeil{arg} ->
-        Internal.Ceil <$> internaliseTerm allowAlias sortVars definition arg
+    Syntax.KJCeil{arg} -> notSupported
+        -- Left . Ceil <$> internaliseTerm allowAlias sortVars definition arg
     Syntax.KJFloor{} -> notSupported
     Syntax.KJEquals{argSort, first = arg1, second = arg2} -> do
         -- distinguish term and predicate equality
@@ -237,35 +221,30 @@ internalisePredicate allowAlias sortVars definition@KoreDefinition{sorts} pat = 
                 b <- internaliseTerm allowAlias sortVars definition arg2
                 argS <- lookupInternalSort' argSort
                 -- check that argS and sorts of a and b "agree"
+                ensureEqualSorts Internal.SortBool argS
                 ensureEqualSorts (sortOfTerm a) argS
                 ensureEqualSorts (sortOfTerm b) argS
-                pure $ Internal.EqualsTerm a b
-            (False, False) ->
-                Internal.EqualsPredicate
-                    <$> recursion arg1
-                    <*> recursion arg2
+                case (a,b) of
+                    (Internal.TrueBool, x) -> pure $ Just $ Internal.Predicate x
+                    (x, Internal.TrueBool) -> pure $ Just $ Internal.Predicate x
+                    (Internal.FalseBool, x) -> pure $ Just $ Internal.Predicate $ Internal.NotBool x
+                    (x,Internal.FalseBool) -> pure $ Just $ Internal.Predicate $ Internal.NotBool x
+                    _ -> notSupported
+                    -- (x,y) -> pure $ Right $ Internal.EqualsTerm x y
+            (False, False) -> notSupported
             _other ->
                 throwE $ InconsistentPattern pat
-    Syntax.KJIn{argSort, first = arg1, second = arg2} -> do
-        a <- internaliseTerm allowAlias sortVars definition arg1
-        b <- internaliseTerm allowAlias sortVars definition arg2
-        s <- lookupInternalSort' argSort
-        -- check that `sort` and sorts of a and b agree
-        ensureEqualSorts (sortOfTerm a) s
-        ensureEqualSorts (sortOfTerm b) s
-        pure $ Internal.In a b
+    Syntax.KJIn{} -> notSupported
     Syntax.KJNext{} -> notSupported
     Syntax.KJRewrites{} -> notSupported -- should only occur in claims!
     Syntax.KJDV{} -> term
-    Syntax.KJMultiOr{assoc, sort, argss} ->
-        recursion $ withAssoc assoc (Syntax.KJOr sort) argss
+    Syntax.KJMultiOr{} -> notSupported
     Syntax.KJLeftAssoc{} -> term
     Syntax.KJRightAssoc{} -> term
   where
     term = throwE $ PredicateExpected pat
     notSupported = throwE $ NotSupported pat
 
-    recursion = internalisePredicate allowAlias sortVars definition
 
     lookupInternalSort' = lookupInternalSort sortVars sorts pat
 

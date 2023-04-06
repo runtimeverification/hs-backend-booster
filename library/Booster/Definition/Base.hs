@@ -43,7 +43,6 @@ data KoreDefinition = KoreDefinition
     , rewriteTheory :: Theory (RewriteRule "Rewrite")
     , functionEquations :: Theory (RewriteRule "Function")
     , simplifications :: Theory (RewriteRule "Simplification")
-    , predicateSimplifications :: Theory PredicateEquation
     }
     deriving stock (Eq, Show, GHC.Generic)
     deriving anyclass (NFData)
@@ -65,7 +64,6 @@ emptyKoreDefinition attributes =
         , rewriteTheory = Map.empty
         , functionEquations = Map.empty
         , simplifications = Map.empty
-        , predicateSimplifications = Map.empty
         }
 
 data RewriteRule (tag :: k) = RewriteRule

@@ -168,7 +168,6 @@ mergeDefs k1 k2
                 <*> pure (mergeTheories rewriteTheory k1 k2)
                 <*> pure (mergeTheories functionEquations k1 k2)
                 <*> pure (mergeTheories simplifications k1 k2)
-                <*> pure (mergeTheories predicateSimplifications k1 k2)
   where
     mergeTheories ::
         forall r.
@@ -222,7 +221,6 @@ addModule
                     , rewriteTheory = currentRewriteTheory
                     , functionEquations = currentFctEqs
                     , simplifications = currentSimpls
-                    , predicateSimplifications = currentPredicateSimplifications
                     }
                 )
         ) =
@@ -280,7 +278,6 @@ addModule
                             , rewriteTheory = currentRewriteTheory -- no rules yet
                             , functionEquations = Map.empty
                             , simplifications = Map.empty
-                            , predicateSimplifications = Map.empty
                             }
 
             let internaliseAlias ::
@@ -322,7 +319,6 @@ addModule
                 subsortPairs = mapMaybe retractSubsortRule newAxioms
                 newFunctionEquations = mapMaybe retractFunctionRule newAxioms
                 newSimplifications = mapMaybe retractSimplificationRule newAxioms
-                newPredicateSimplifications = mapMaybe retractPredicateSimplificationRule newAxioms
             let rewriteTheory =
                     addToTheoryWith (Idx.kCellTermIndex . (.lhs.term)) newRewriteRules currentRewriteTheory
                 functionEquations =
@@ -330,19 +326,12 @@ addModule
                 simplifications =
                     addToTheoryWith (Idx.termTopIndex . (.lhs.term)) newSimplifications currentSimpls
                 sorts = subsortClosure sorts' subsortPairs
-                predicateSimplifications =
-                    addToTheoryWith
-                        (predicateTopIndex . (.target))
-                        newPredicateSimplifications
-                        currentPredicateSimplifications
-
             pure $
                 defWithAliases.partial
                     { sorts
                     , rewriteTheory
                     , functionEquations
                     , simplifications
-                    , predicateSimplifications
                     }
       where
         -- Uses 'getKey' to construct a finite mapping from the list,
@@ -384,8 +373,6 @@ data AxiomResult
       FunctionAxiom (RewriteRule "Function")
     | -- | Simplification
       SimplificationAxiom (RewriteRule "Simplification")
-    | -- | Predicate simplification
-      PredicateSimplificationAxiom PredicateEquation
 
 -- retract helpers
 retractRewriteRule :: AxiomResult -> Maybe (RewriteRule "Rewrite")
@@ -403,10 +390,6 @@ retractFunctionRule _ = Nothing
 retractSimplificationRule :: AxiomResult -> Maybe (RewriteRule "Simplification")
 retractSimplificationRule (SimplificationAxiom r) = Just r
 retractSimplificationRule _ = Nothing
-
-retractPredicateSimplificationRule :: AxiomResult -> Maybe PredicateEquation
-retractPredicateSimplificationRule (PredicateSimplificationAxiom r) = Just r
-retractPredicateSimplificationRule _ = Nothing
 
 -- helper type to carry relevant extracted data from a pattern (what
 -- is passed to the internalising function later)
@@ -510,11 +493,9 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
                     <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
             | otherwise ->
                 throwE $ DefinitionAxiomError $ MalformedEquation parsedAx
-        -- implies with the LHS not a symbol application, tagged as simplification
-        Syntax.KJImplies _ req (Syntax.KJEquals _sort _ lhs rhs@Syntax.KJAnd{})
-            | hasAttribute "simplification" ->
-                Just . SimplificationAxiom' req lhs rhs sortVars
-                    <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
+        -- implies with the LHS not a symbol application, tagged as simplification. Ignoring
+        Syntax.KJImplies _ _ (Syntax.KJEquals _sort _ _ Syntax.KJAnd{})
+            | hasAttribute "simplification" -> pure Nothing
         -- implies with equals but RHS not an and: malformed equation
         Syntax.KJImplies _ _req (Syntax.KJEquals _sort _ _lhs _rhs) ->
             throwE $ DefinitionAxiomError $ MalformedEquation parsedAx
@@ -614,8 +595,7 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
                         rhs
                         attribs
         SimplificationAxiom' requires lhs rhs sortVars attribs ->
-            Just
-                <$> internaliseSimpleEquation
+            internaliseSimpleEquation
                     partialDefinition
                     requires
                     lhs
@@ -697,8 +677,8 @@ expandAlias alias currentArgs
   where
     substitute substitution termOrPredicate =
         case termOrPredicate of
-            Def.APredicate predicate ->
-                Def.APredicate $ Util.substituteInPredicate substitution predicate
+            Def.BoolPredicate predicate ->
+                Def.BoolPredicate $ Util.substituteInPredicate substitution <$> predicate
             Def.TermAndPredicate Def.Pattern{term, constraints} ->
                 Def.TermAndPredicate
                     Def.Pattern
@@ -708,17 +688,14 @@ expandAlias alias currentArgs
                         }
 
 removeTops :: Def.Pattern -> Def.Pattern
-removeTops p = p{Def.constraints = filter (/= Def.Top) p.constraints}
+removeTops p = p{Def.constraints = filter (/= (Def.Predicate $ Def.DomainValue Def.SortBool "true")) p.constraints}
 
-{- | Internalises simplification rules, for both term simplification
-   (represented as a 'RewriteRule') and predicate simplification
-   (represented as a 'PredicateEquation').
+{- | Internalises simplification rules, for term simplification
+   (represented as a 'RewriteRule').
 
    Term simplifications may introduce undefined terms, or remove them
    erroneously, so the 'preservesDefinedness' check refers to both the
    LHS and the RHS term.
-   Predicates have no problem with definedness, as a rule with a
-   \bottom predicate will simply never apply
 -}
 internaliseSimpleEquation ::
     KoreDefinition -> -- context
@@ -727,7 +704,7 @@ internaliseSimpleEquation ::
     Syntax.KorePattern -> -- And(RHS, ensures)
     [Syntax.Id] -> -- sort variables
     AxiomAttributes ->
-    Except DefinitionError AxiomResult
+    Except DefinitionError (Maybe AxiomResult)
 internaliseSimpleEquation partialDef precond left right sortVars attributes
     | isJust $ attributes.simplification = do
         lhsIsTerm <- withExcept DefinitionPatternError $ isTermM left
@@ -745,27 +722,16 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
                             , preservesDefinedness =
                                 fromMaybe alwaysDefined attributes.preserving
                             }
-                pure $
+                pure $ Just $
                     SimplificationAxiom
                         RewriteRule{lhs, rhs, attributes, computedAttributes, existentials = Set.empty}
-            else do
-                target <- internalisePredicate' left
-                conditions <- mapM internalisePredicate' $ explodeAnd precond
-                rhs <- mapM internalisePredicate' $ explodeAnd right
-                -- undefined predicates will invalidate the rule, no flags required
-                let computedAttributes = ComputedAxiomAttributes False True
-                pure $
-                    PredicateSimplificationAxiom
-                        PredicateEquation{target, conditions, rhs, attributes, computedAttributes}
+            else pure Nothing -- we hit a simplification with top level ML connective, which we want to ignore
     | otherwise = error "internaliseSimpleEquation should only be called for simplifications"
   where
     internalisePattern' =
         withExcept DefinitionPatternError
             . fmap (removeTops . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))
             . internalisePattern True (Just sortVars) partialDef
-    internalisePredicate' =
-        withExcept DefinitionPatternError
-            . internalisePredicate True (Just sortVars) partialDef
 
 {- | Internalises a function rule from its components that were matched
   before.

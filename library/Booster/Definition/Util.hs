@@ -42,7 +42,6 @@ data Summary = Summary
     , rewriteRules :: Map.Map TermIndex [Location]
     , functionRules :: Map.Map TermIndex [Location]
     , simplifications :: Map.Map TermIndex [Location]
-    , predicateSimplifications :: Map.Map TermIndex [Location]
     }
     deriving stock (Eq, Show, Generic)
     deriving anyclass (NFData)
@@ -78,8 +77,6 @@ mkSummary file def =
             Map.map (fst . locate . concat . Map.elems) def.functionEquations
         , simplifications =
             Map.map (fst . locate . concat . Map.elems) def.simplifications
-        , predicateSimplifications =
-            Map.map (fst . locate . concat . Map.elems) def.predicateSimplifications
         }
   where
     locate :: HasField "attributes" a AxiomAttributes => [a] -> ([Location], Int)
@@ -112,9 +109,6 @@ instance Pretty Summary where
                    )
                 <> ( "Simplifications by term index:"
                         : tableView prettyTermIndex pretty summary.simplifications
-                   )
-                <> ( "Predicate simplifications by term index:"
-                        : tableView prettyTermIndex pretty summary.predicateSimplifications
                    )
                 <> [mempty]
       where

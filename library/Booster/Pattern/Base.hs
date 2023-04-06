@@ -24,7 +24,6 @@ import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
 import Data.Either (fromRight)
 import Data.Functor.Foldable
-import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Hashable (Hashable)
 import Data.Hashable qualified as Hashable
 import Data.Map qualified as Map
@@ -239,24 +238,21 @@ pattern DV sort <- Symbol "\\dv" _ _ sort _
 {- | A predicate describes constraints on terms. It will always evaluate
    to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.
 -}
-data Predicate
-    = AndPredicate Predicate Predicate
-    | Bottom
-    | Ceil Term
-    | EqualsTerm Term Term
-    | EqualsPredicate Predicate Predicate
-    | Exists Variable Predicate
-    | Forall Variable Predicate
-    | Iff Predicate Predicate
-    | Implies Predicate Predicate
-    | In Term Term
-    | Not Predicate
-    | Or Predicate Predicate
-    | Top
+newtype Predicate = Predicate Term
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
-makeBaseFunctor ''Predicate
+
+pattern NotBool :: Term -> Term
+pattern NotBool t =
+    SymbolApplication (Symbol "LblnotBool'Unds'" [] [SortBool] SortBool (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias)) [] [t]
+
+
+
+
+pattern TrueBool, FalseBool :: Term
+pattern TrueBool = DomainValue SortBool "true"
+pattern FalseBool = DomainValue SortBool "false"
 
 --------------------
 
@@ -269,7 +265,7 @@ data Pattern = Pattern
     deriving anyclass (NFData)
 
 data TermOrPredicate -- = Either Predicate Pattern
-    = APredicate Predicate
+    = BoolPredicate (Maybe Predicate)
     | TermAndPredicate Pattern
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
@@ -378,60 +374,10 @@ instance Pretty Variable where
             <> pretty var.variableSort
 
 instance Pretty Predicate where
-    pretty =
-        \case
-            AndPredicate p1 p2 ->
-                "\\andPredicate"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [p1, p2]
-            Bottom ->
-                "\\bottom"
-                    <> KPretty.noParameters
-                    <> KPretty.noArguments
-            Ceil t ->
-                "\\ceil"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [t]
-            EqualsTerm t1 t2 ->
-                "\\equalsTerm"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [t1, t2]
-            EqualsPredicate p1 p2 ->
-                "\\equalsPredicate"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [p1, p2]
-            Exists v p ->
-                "\\exists"
-                    <> KPretty.noParameters
-                    <> KPretty.arguments' [pretty v, pretty p]
-            Forall v p ->
-                "\\forall"
-                    <> KPretty.noParameters
-                    <> KPretty.arguments' [pretty v, pretty p]
-            Iff p1 p2 ->
-                "\\iff"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [p1, p2]
-            Implies p1 p2 ->
-                "\\implies"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [p1, p2]
-            In t1 t2 ->
-                "\\in"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [t1, t2]
-            Not p ->
-                "\\not"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [p]
-            Or p1 p2 ->
-                "\\or"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [p1, p2]
-            Top ->
-                "\\top"
-                    <> KPretty.noParameters
-                    <> KPretty.noArguments
+    pretty (Predicate t) =
+        "\\equalsTerm"
+            <> KPretty.noParameters
+            <> KPretty.argumentsP [t, DomainValue SortBool "true"]
 
 instance Pretty Pattern where
     pretty patt =

@@ -52,7 +52,7 @@ applySubst subst (SortApp n args) =
 
 sortOfTermOrPredicate :: TermOrPredicate -> Maybe Sort
 sortOfTermOrPredicate (TermAndPredicate Pattern{term}) = Just (sortOfTerm term)
-sortOfTermOrPredicate (APredicate _) = Nothing
+sortOfTermOrPredicate (BoolPredicate _) = Nothing
 
 retractPattern :: TermOrPredicate -> Maybe Pattern
 retractPattern (TermAndPredicate patt) = Just patt
@@ -74,10 +74,7 @@ substituteInTerm substitution = goSubst
             Injection ss s sub -> Injection ss s (goSubst sub)
 
 substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
-substituteInPredicate substitution = cata $ \case
-    EqualsTermF t1 t2 ->
-        EqualsTerm (substituteInTerm substitution t1) (substituteInTerm substitution t2)
-    other -> embed other
+substituteInPredicate substitution (Predicate t) = Predicate $ substituteInTerm substitution t
 
 modifyVariables :: (Variable -> Variable) -> Pattern -> Pattern
 modifyVariables f p =
@@ -91,18 +88,7 @@ modifyVariables f p =
         VarF v -> Var $ f v
         other -> embed other
     modifyP :: Predicate -> Predicate
-    modifyP = cata $ \case
-        EqualsTermF t1 t2 ->
-            EqualsTerm (modifyT t1) (modifyT t2)
-        InF t1 t2 ->
-            In (modifyT t1) (modifyT t2)
-        CeilF t ->
-            Ceil (modifyT t)
-        ExistsF v pr ->
-            Exists (f v) (modifyP pr)
-        ForallF v pr ->
-            Forall (f v) (modifyP pr)
-        other -> embed other
+    modifyP (Predicate t) = Predicate $ modifyT t
 
 modifyVarName :: (VarName -> VarName) -> Variable -> Variable
 modifyVarName f v = v{variableName = f v.variableName}
@@ -150,4 +136,4 @@ checkTermSymbols check = cata $ \case
     other -> and other
 
 isBottom :: Pattern -> Bool
-isBottom = (Bottom `elem`) . constraints
+isBottom = (Predicate FalseBool `elem`) . constraints

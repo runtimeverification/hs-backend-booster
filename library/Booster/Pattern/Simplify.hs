@@ -14,46 +14,22 @@ import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.Base
 import Booster.Pattern.Util (isConcrete, sortOfTerm)
 
-{- | We want to break apart predicates of type `X #Equals Y1 andBool ... Yn` into
-`X #Equals Y1, ..., X #Equals  Yn` in the case when some of the `Y`s are abstract
-and thus the whole original expression could not be fed to the LLVM simplifyBool function
+{- | We want to break apart predicates of type `Y1 andBool ... Yn` apart, in case some of the `Y`s are abstract
+which prevents the original expression from being fed to the LLVM simplifyBool function
 -}
 splitBoolPredicates :: Predicate -> [Predicate]
-splitBoolPredicates = \case
-    p@(EqualsTerm l r) | isConcrete l && isConcrete r -> [p]
-    EqualsTerm (AndBool ls) r -> concatMap (splitBoolPredicates . flip EqualsTerm r) ls
-    EqualsTerm l (AndBool rs) -> concatMap (splitBoolPredicates . EqualsTerm l) rs
-    other -> [other]
+splitBoolPredicates p@(Predicate t)
+    | isConcrete t = [p]
+    | otherwise = case t of
+        AndBool ts -> concatMap (splitBoolPredicates . Predicate) ts
+        other -> [Predicate other]
 
 simplifyPredicate :: Maybe LLVM.API -> Predicate -> Predicate
-simplifyPredicate mApi = \case
-    AndPredicate l r -> case (simplifyPredicate mApi l, simplifyPredicate mApi r) of
-        (Bottom, _) -> Bottom
-        (_, Bottom) -> Bottom
-        (Top, r') -> r'
-        (l', Top) -> l'
-        (l', r') -> AndPredicate l' r'
-    Bottom -> Bottom
-    p@(Ceil _) -> p
-    p@(EqualsTerm l r) ->
-        case (mApi, sortOfTerm l == SortBool && isConcrete l && isConcrete r) of
-            (Just api, True) ->
-                if simplifyBool api l == simplifyBool api r
-                    then Top
-                    else Bottom
-            _ -> p
-    EqualsPredicate l r -> EqualsPredicate (simplifyPredicate mApi l) (simplifyPredicate mApi r)
-    p@(Exists _ _) -> p
-    p@(Forall _ _) -> p
-    Iff l r -> Iff (simplifyPredicate mApi l) (simplifyPredicate mApi r)
-    Implies l r -> Implies (simplifyPredicate mApi l) (simplifyPredicate mApi r)
-    p@(In _ _) -> p
-    Not p -> case simplifyPredicate mApi p of
-        Top -> Bottom
-        Bottom -> Top
-        p' -> p'
-    Or l r -> Or (simplifyPredicate mApi l) (simplifyPredicate mApi r)
-    Top -> Top
+simplifyPredicate (Just api) (Predicate t) 
+    | isConcrete t = Predicate $ if simplifyBool api t
+            then TrueBool
+            else FalseBool
+simplifyPredicate _ p = p
 
 {- | traverses a term top-down, using a given LLVM dy.lib to simplify
  the concrete parts (leaving variables alone)

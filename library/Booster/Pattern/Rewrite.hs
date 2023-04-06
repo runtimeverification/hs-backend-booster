@@ -190,8 +190,8 @@ applyRule pat rule = runMaybeT $ do
     checkConstraint p = do
         mApi <- lift getLLVM
         case simplifyPredicate mApi p of
-            Bottom -> fail "Rule condition was False"
-            Top -> pure Nothing
+            Predicate FalseBool -> fail "Rule condition was False"
+            Predicate TrueBool -> pure Nothing
             other -> pure $ Just $ RuleConditionUnclear rule other
 
 {- | Reason why a rewrite did not produce a result. Contains additional

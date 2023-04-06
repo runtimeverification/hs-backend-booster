@@ -14,6 +14,7 @@ import Data.Text.Encoding qualified as Text
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
 import Kore.Syntax.Json.Types qualified as Syntax
+import Data.Coerce (coerce)
 
 {- | Converts an internal pattern to a pair of term and predicate in
  external format. The predicate is 'And'ed to avoid leaking
@@ -59,60 +60,14 @@ externaliseTerm = \case
             [externaliseTerm trm]
 
 externalisePredicate :: Syntax.Sort -> Internal.Predicate -> Syntax.KorePattern
-externalisePredicate sort =
-    let recursion = externalisePredicate sort
-     in \case
-            Internal.AndPredicate p1 p2 ->
-                Syntax.KJAnd{sort, first = recursion p1, second = recursion p2}
-            Internal.Bottom ->
-                Syntax.KJBottom{sort}
-            Internal.Ceil term ->
-                Syntax.KJCeil
-                    { argSort = externaliseSort $ sortOfTerm term
-                    , sort
-                    , arg = externaliseTerm term
-                    }
-            Internal.EqualsTerm t1 t2 ->
-                Syntax.KJEquals
-                    { argSort = externaliseSort $ sortOfTerm t1
-                    , sort
-                    , first = externaliseTerm t1
-                    , second = externaliseTerm t2
-                    }
-            Internal.EqualsPredicate p1 p2 ->
-                Syntax.KJEquals{argSort = sort, sort, first = recursion p1, second = recursion p2}
-            Internal.Exists var p1 ->
-                Syntax.KJExists
-                    { sort
-                    , var = varNameToId var.variableName
-                    , varSort = externaliseSort $ var.variableSort
-                    , arg = recursion p1
-                    }
-            Internal.Forall var p1 ->
-                Syntax.KJForall
-                    { sort
-                    , var = varNameToId var.variableName
-                    , varSort = externaliseSort $ var.variableSort
-                    , arg = recursion p1
-                    }
-            Internal.Iff p1 p2 ->
-                Syntax.KJIff{sort, first = recursion p1, second = recursion p2}
-            Internal.Implies p1 p2 ->
-                Syntax.KJImplies{sort, first = recursion p1, second = recursion p2}
-            Internal.In t1 t2 ->
-                Syntax.KJIn
-                    { argSort = externaliseSort $ sortOfTerm t1
-                    , sort
-                    , first = externaliseTerm t1
-                    , second = externaliseTerm t2
-                    }
-            Internal.Not p1 ->
-                Syntax.KJNot{sort, arg = recursion p1}
-            Internal.Or p1 p2 ->
-                Syntax.KJOr{sort, first = recursion p1, second = recursion p2}
-            Internal.Top ->
-                Syntax.KJTop{sort}
-
+externalisePredicate sort (Internal.Predicate t)=
+    Syntax.KJEquals
+        { argSort = externaliseSort $ sortOfTerm t
+        , sort
+        , first = externaliseTerm t
+        , second = externaliseTerm Internal.TrueBool
+        }
+            
 varNameToId :: Internal.VarName -> Syntax.Id
 varNameToId = Syntax.Id . Text.decodeLatin1
 
