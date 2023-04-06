@@ -1982,6 +1982,8 @@ Symbols: 1720
 Axioms: 352
 Axioms preserving definedness: 295
 Axioms containing AC symbols: 0
+Axioms containing ML symbols in predicate: 0
+Sample concrete Axiom containing ML symbols in predicate: empty
 Subsorts:
 - SortAccessListTx: SortAccessListTx
 - SortAccessedAccountsCell: SortAccessedAccountsCell

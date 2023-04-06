@@ -112,6 +112,8 @@ Symbols: 87
 Axioms: 2
 Axioms preserving definedness: 2
 Axioms containing AC symbols: 0
+Axioms containing ML symbols in predicate: 0
+Sample concrete Axiom containing ML symbols in predicate: empty
 Subsorts:
 - SortBaz: SortBaz
 - SortBool: SortBool
