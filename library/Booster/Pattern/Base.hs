@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
