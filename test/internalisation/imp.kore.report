@@ -220,8 +220,6 @@ Symbols: 183
 Axioms: 38
 Axioms preserving definedness: 35
 Axioms containing AC symbols: 0
-Axioms containing ML symbols in predicate: 0
-Sample concrete Axiom containing ML symbols in predicate: empty
 Subsorts:
 - SortAExp: 3
   - SortAExp

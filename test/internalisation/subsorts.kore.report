@@ -134,8 +134,6 @@ Symbols: 105
 Axioms: 0
 Axioms preserving definedness: 0
 Axioms containing AC symbols: 0
-Axioms containing ML symbols in predicate: 0
-Sample concrete Axiom containing ML symbols in predicate: empty
 Subsorts:
 - SortA1: 2
   - SortA1
