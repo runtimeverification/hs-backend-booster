@@ -28,7 +28,6 @@ import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
 import Data.Foldable ()
 import Data.List (foldl1', nub)
-import Data.List.NonEmpty as NE (NonEmpty)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Set (Set)
