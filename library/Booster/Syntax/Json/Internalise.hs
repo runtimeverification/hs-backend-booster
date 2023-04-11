@@ -191,15 +191,9 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
     Syntax.KJSVar{} -> term
     Syntax.KJApp{} -> term
     Syntax.KJString{} -> term
-    Syntax.KJTop{} -> pure Nothing -- pure $ Right $ Internal.Predicate Internal.TrueBool
-    Syntax.KJBottom{} -> notSupported -- pure $ Right $ Internal.Predicate Internal.FalseBool
-    Syntax.KJNot{arg} -> notSupported
-    -- internaliseCeilOrPredicate allowAlias sortVars definition arg >>= \case
-    -- Left _ -> notSupported
-    -- Right (Internal.EqualsTerm t1 t2) -> pure $ Right $ Internal.NotEqualsTerm t1 t2
-    -- Right (Internal.NotEqualsTerm t1 t2) -> pure $ Right $ Internal.EqualsTerm t1 t2
-    -- Right (Internal.Predicate (Internal.NotBool x)) -> pure $ Right $ Internal.Predicate x
-    -- Right (Internal.Predicate x) -> pure $ Right $ Internal.Predicate $ Internal.NotBool x
+    Syntax.KJTop{} -> pure Nothing -- a Top predicate can be discarded immediately
+    Syntax.KJBottom{} -> notSupported -- TODO should we throw here?
+    Syntax.KJNot{} -> notSupported
     Syntax.KJAnd{} -> notSupported
     Syntax.KJOr{} -> notSupported
     Syntax.KJImplies{} -> notSupported
@@ -208,8 +202,7 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
     Syntax.KJExists{} -> notSupported
     Syntax.KJMu{} -> notSupported
     Syntax.KJNu{} -> notSupported
-    Syntax.KJCeil{arg} -> notSupported
-    -- Left . Ceil <$> internaliseTerm allowAlias sortVars definition arg
+    Syntax.KJCeil{} -> notSupported
     Syntax.KJFloor{} -> notSupported
     Syntax.KJEquals{argSort, first = arg1, second = arg2} -> do
         -- distinguish term and predicate equality
@@ -230,7 +223,6 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
                     (Internal.FalseBool, x) -> pure $ Just $ Internal.Predicate $ Internal.NotBool x
                     (x, Internal.FalseBool) -> pure $ Just $ Internal.Predicate $ Internal.NotBool x
                     _ -> notSupported
-            -- (x,y) -> pure $ Right $ Internal.EqualsTerm x y
             (False, False) -> notSupported
             _other ->
                 throwE $ InconsistentPattern pat
@@ -265,11 +257,6 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
                     zipWithM_ go args1 args2
 
 ----------------------------------------
-
--- converts MultiOr to a chain at syntax level
-withAssoc :: Syntax.LeftRight -> (a -> a -> a) -> NonEmpty a -> a
-withAssoc Syntax.Left = foldl1
-withAssoc Syntax.Right = foldr1
 
 -- for use with withAssoc
 mkF ::

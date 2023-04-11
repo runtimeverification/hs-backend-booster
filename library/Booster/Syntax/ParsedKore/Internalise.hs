@@ -639,7 +639,7 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
     -- name clashes with patterns from the user
     -- filter out literal `Top` constraints
     lhs <-
-        fmap (removeTops . Util.modifyVariables (Util.modifyVarName ("Rule#" <>))) $
+        fmap (removeTrueBools . Util.modifyVariables (Util.modifyVarName ("Rule#" <>))) $
             Util.retractPattern result
                 `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
     existentials' <- fmap Set.fromList $ withExcept DefinitionPatternError $ mapM mkVar exs
@@ -647,7 +647,7 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
             | v `Set.member` existentials' = Util.modifyVarName ("Ex#" <>) v
             | otherwise = Util.modifyVarName ("Rule#" <>) v
     rhs <-
-        fmap (removeTops . Util.modifyVariables renameVariable) $
+        fmap (removeTrueBools . Util.modifyVariables renameVariable) $
             withExcept DefinitionPatternError $
                 internalisePattern True Nothing partialDefinition right
     let preservesDefinedness =
@@ -687,8 +687,8 @@ expandAlias alias currentArgs
                             Util.substituteInPredicate substitution <$> constraints
                         }
 
-removeTops :: Def.Pattern -> Def.Pattern
-removeTops p = p{Def.constraints = filter (/= (Def.Predicate $ Def.DomainValue Def.SortBool "true")) p.constraints}
+removeTrueBools :: Def.Pattern -> Def.Pattern
+removeTrueBools p = p{Def.constraints = filter (/= Def.Predicate Def.TrueBool) p.constraints}
 
 {- | Internalises simplification rules, for term simplification
    (represented as a 'RewriteRule').
@@ -731,7 +731,7 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
   where
     internalisePattern' =
         withExcept DefinitionPatternError
-            . fmap (removeTops . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))
+            . fmap (removeTrueBools . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))
             . internalisePattern True (Just sortVars) partialDef
 
 {- | Internalises a function rule from its components that were matched
@@ -765,7 +765,7 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
     -- extract argument binders from predicates and inline in to LHS term
     argPairs <- mapM internaliseArg args
     let lhs =
-            removeTops . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)) $
+            removeTrueBools . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)) $
                 left{Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
     rhs <- internaliseSide right
     let argsDefined =
@@ -786,7 +786,7 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
   where
     internaliseSide =
         withExcept DefinitionPatternError
-            . fmap (removeTops . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))
+            . fmap (removeTrueBools . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))
             . internalisePattern True (Just sortVars) partialDef
 
     internaliseTerm' =

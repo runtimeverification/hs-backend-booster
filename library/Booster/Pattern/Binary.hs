@@ -237,7 +237,6 @@ decodeBlock = do
     mkSymbolApplication "\\and" _ [BTerm t1, BTerm t2] = pure $ BTerm $ AndTerm t1 t2
     mkSymbolApplication "\\and" _ bs =
         argError "AndTerm" [BTerm undefined, BTerm undefined] bs
-    mkSymbolApplication "\\bottom" _ [] = pure $ BPredicate $ Predicate FalseBool
     mkSymbolApplication "\\bottom" _ bs = argError "Bottom" [] bs
     mkSymbolApplication "\\ceil" _ bs = argError "Ceil" [BTerm undefined] bs
     mkSymbolApplication "\\dv" [sort] [BString txt] = pure $ BTerm $ DomainValue sort txt
@@ -253,7 +252,6 @@ decodeBlock = do
     mkSymbolApplication "\\in" _ bs = argError "In" [BTerm undefined, BTerm undefined] bs
     mkSymbolApplication "\\not" _ bs = argError "Not" [BPredicate undefined] bs
     mkSymbolApplication "\\or" _ bs = argError "Or" [BPredicate undefined, BPredicate undefined] bs
-    mkSymbolApplication "\\top" _ [] = pure $ BPredicate $ Predicate TrueBool
     mkSymbolApplication "\\top" _ bs = argError "Top" [] bs
     mkSymbolApplication "inj" [source, target] [BTerm t] = pure $ BTerm $ Injection source target t
     mkSymbolApplication "inj" _ bs = argError "Injection" [BTerm undefined] bs
