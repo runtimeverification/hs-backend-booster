@@ -29,38 +29,98 @@ import Booster.Pattern.Match
 import Booster.Pattern.Simplify
 import Booster.Pattern.Util
 
-newtype EquationM tag err a = EquationM (StateT (EquationState tag) (Except err) a)
+newtype EquationM rule err a = EquationM (StateT (EquationState rule) (Except err) a)
     deriving newtype (Functor, Applicative, Monad)
 
 throw :: err -> EquationM tag err a
 throw = EquationM . lift . throwE
 
 data EquationFailure a
-    = IndexIsNone a
+    = IndexIsNone Term
     | InconsistentFunctionRules [a]
     | IndeterminateMatch a a
     | IndeterminateCondition Predicate
+    | TooManyIterations Int a a
     | InternalError Text
+    deriving stock (Eq, Show)
 
-data EquationState tag = EquationState
+data EquationState rule = EquationState
     { definition :: KoreDefinition
-    , theory :: Theory tag
+    , theory :: Theory rule
     , llvmApi :: Maybe LLVM.API
     , hasChanged :: Bool
     , counter :: Int
     }
 
-startState :: KoreDefinition -> Theory tag -> Maybe LLVM.API -> EquationState tag
+startState :: KoreDefinition -> Theory rule -> Maybe LLVM.API -> EquationState rule
 startState definition theory llvmApi =
     EquationState{definition, theory, llvmApi, hasChanged = False, counter = 0}
 
-increment, markChanged, clearChanged :: EquationM tag err ()
+increment, markChanged, clearChanged :: EquationM rule err ()
 increment = EquationM . modify $ \s -> s{counter = 1 + s.counter}
 markChanged = EquationM . modify $ \s -> s{hasChanged = True}
 clearChanged = EquationM . modify $ \s -> s{hasChanged = False}
 
-getState :: EquationM tag err (EquationState tag)
+getState :: EquationM rule err (EquationState rule)
 getState = EquationM get
+
+getCounter :: EquationM rule err Int
+getCounter = (.counter) <$> getState
+
+getChanged :: EquationM rule err Bool
+getChanged = (.hasChanged) <$> getState
+
+data Direction = TopDown | BottomUp
+    deriving stock (Eq, Show)
+
+runEquationM ::
+    KoreDefinition ->
+    Maybe LLVM.API ->
+    Theory rule ->
+    EquationM rule err a ->
+    Either err a
+runEquationM definition llvmApi theory (EquationM m) =
+    runExcept $ evalStateT m $ startState definition theory llvmApi
+
+iterateWithEquations ::
+    forall tag.
+    ApplyEquationOps tag =>
+    Int ->
+    Direction ->
+    KoreDefinition ->
+    Maybe LLVM.API ->
+    (KoreDefinition -> Theory (RewriteRule tag)) ->
+    Term ->
+    Either (EquationFailure Term) Term
+iterateWithEquations maxIterations direction def llvmApi getEquations startTerm =
+    runEquationM def llvmApi (getEquations def) (go startTerm)
+  where
+    go :: Term -> EquationM (RewriteRule tag) (EquationFailure Term) Term
+    go currentTerm =
+        do
+            currentCount <- getCounter
+            when (currentCount > maxIterations) $
+                throw $
+                    TooManyIterations currentCount startTerm currentTerm
+            newTerm <- applyTerm direction currentTerm
+            changeFlag <- getChanged
+            if changeFlag
+                then increment >> clearChanged >> go newTerm
+                else pure currentTerm
+
+----------------------------------------
+-- Interface functions
+simplify
+    , evaluateFunctions ::
+        Direction ->
+        KoreDefinition ->
+        Maybe LLVM.API ->
+        Term ->
+        Either (EquationFailure Term) Term
+simplify direction definition llvmApi =
+    iterateWithEquations 20 direction definition llvmApi (.simplifications)
+evaluateFunctions direction definition llvmApi =
+    iterateWithEquations 100 direction definition llvmApi (.functionEquations)
 
 ----------------------------------------
 
@@ -70,13 +130,13 @@ getState = EquationM get
   No iteration happens at the same AST level inside these traversals,
   one equation will be applied per level (if any).
 -}
-applyTermBottomUp
-    , applyTermTopDown ::
-        forall tag.
-        ApplyEquationOps tag =>
-        Term ->
-        EquationM (RewriteRule tag) (EquationFailure Term) Term
-applyTermBottomUp =
+applyTerm ::
+    forall tag.
+    ApplyEquationOps tag =>
+    Direction ->
+    Term ->
+    EquationM (RewriteRule tag) (EquationFailure Term) Term
+applyTerm BottomUp =
     cataA $ \case
         DomainValueF s val ->
             pure $ DomainValue s val
@@ -89,15 +149,15 @@ applyTermBottomUp =
         SymbolApplicationF sym sorts args -> do
             t <- SymbolApplication sym sorts <$> sequence args
             applyAtTop t
-applyTermTopDown = \case
+applyTerm TopDown = \case
     dv@DomainValue{} ->
         pure dv
     v@Var{} ->
         pure v
     Injection src trg t ->
-        Injection src trg <$> applyTermTopDown t -- no injection simplification
+        Injection src trg <$> applyTerm TopDown t -- no injection simplification
     AndTerm arg1 arg2 ->
-        AndTerm <$> applyTermTopDown arg1 <*> applyTermTopDown arg2 -- no \and simplification
+        AndTerm <$> applyTerm TopDown arg1 <*> applyTerm TopDown arg2 -- no \and simplification
     app@(SymbolApplication sym sorts args) -> do
         -- try to apply equations
         t <- applyAtTop app
@@ -105,10 +165,10 @@ applyTermTopDown = \case
             then do
                 case t of
                     SymbolApplication sym' sorts' args' ->
-                        SymbolApplication sym' sorts' <$> mapM applyTermTopDown args'
+                        SymbolApplication sym' sorts' <$> mapM (applyTerm TopDown) args'
                     _otherwise ->
-                        applyTermTopDown t -- won't loop
-            else SymbolApplication sym sorts <$> mapM applyTermTopDown args
+                        applyTerm TopDown t -- won't loop
+            else SymbolApplication sym sorts <$> mapM (applyTerm TopDown) args
 
 {- | Try to apply all equations from the state to the given term, in
    priority order and per group.
