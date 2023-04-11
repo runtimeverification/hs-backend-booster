@@ -48,7 +48,7 @@ data MatchResult
       MatchIndeterminate Term Term
     | -- | internal errors (invariants violated etc)
       MatchError Text
-  deriving stock (Eq, Show)
+    deriving stock (Eq, Show)
 
 {- | Attempts to find a matching substitution for the given
    term1 to term2.

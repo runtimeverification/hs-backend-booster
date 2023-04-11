@@ -1,5 +1,3 @@
-{-# OPTIONS -fno-warn-unrecognised-pragmas #-}
-
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -60,7 +58,6 @@ retractPattern :: TermOrPredicate -> Maybe Pattern
 retractPattern (TermAndPredicate patt) = Just patt
 retractPattern _ = Nothing
 
-{-# HLINT ignore substituteInTerm "Redundant bracket" #-}
 substituteInTerm :: Map Variable Term -> Term -> Term
 substituteInTerm substitution = goSubst
   where
@@ -84,7 +81,7 @@ substituteInPredicate substitution = cata $ \case
 modifyVariables :: (Variable -> Variable) -> Pattern -> Pattern
 modifyVariables f p =
     Pattern
-        { term = (modifyVariablesInT f) p.term
+        { term = modifyVariablesInT f p.term
         , constraints = map (modifyVariablesInP f) p.constraints
         }
 

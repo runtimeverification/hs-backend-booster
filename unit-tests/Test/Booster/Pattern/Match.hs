@@ -11,8 +11,8 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import Booster.Pattern.Base
-import Booster.Pattern.Unify (FailReason (..))
 import Booster.Pattern.Match
+import Booster.Pattern.Unify (FailReason (..))
 import Test.Booster.Fixture
 
 test_match :: TestTree
@@ -42,17 +42,17 @@ symbols =
         , let pat = app con1 [var "X" someSort]
               subj = app f1 [var "Y" someSort]
            in test "different constructors" pat subj $
-                  failed (DifferentSymbols pat subj)
+                failed (DifferentSymbols pat subj)
         , let x = var "X" someSort
               d = dv differentSort "something"
               pat = app con1 [x]
               subj = app con1 [d]
            in test "same constructor, different argument sorts" pat subj $
-                  failed (DifferentSorts x d)
+                failed (DifferentSorts x d)
         , let pat = app f1 [var "X" someSort]
               subj = dv someSort "something"
            in test "function and something else" pat subj $
-                  failed (DifferentSymbols pat subj)
+                failed (DifferentSymbols pat subj)
         ]
 
 varsAndValues :: TestTree
@@ -135,8 +135,8 @@ andTerms =
 
 cornerCases :: TestTree
 cornerCases =
-        let v = var "X" someSort
-         in errors "identical variables" v v
+    let v = var "X" someSort
+     in errors "identical variables" v v
 
 ----------------------------------------
 

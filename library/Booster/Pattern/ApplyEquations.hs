@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveFunctor #-}
-
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -20,6 +18,7 @@ import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Proxy
 import Data.Text (Text)
+import Data.Text qualified as Text
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
@@ -139,7 +138,7 @@ applyAtTop term = do
   where
     -- process one group of equations at a time, until something has happened
     processGroups ::
-        [[(RewriteRule tag)]] ->
+        [[RewriteRule tag]] ->
         EquationM (RewriteRule tag) (EquationFailure Term) Term
     processGroups [] =
         pure term -- nothing to do, term stays the same
@@ -163,6 +162,10 @@ applyEquation ::
     RewriteRule tag ->
     EquationM (RewriteRule tag) (EquationFailure Term) (Maybe Term)
 applyEquation term rule = runMaybeT $ do
+    -- ensured by internalisation: no existentials in equations
+    unless (null rule.existentials) $
+        lift . throw . InternalError $
+            "Equation with existentials: " <> Text.pack (show rule)
     koreDef <- (.definition) <$> lift getState
     case matchTerm koreDef rule.lhs.term term of
         MatchFailed _failReason -> do
@@ -172,7 +175,7 @@ applyEquation term rule = runMaybeT $ do
             -- some logging, then
             onIndeterminateMatch (Proxy @tag) pat subj
         MatchError msg ->
-            lift $ throw $ InternalError $ "Match error: " <> msg
+            lift . throw . InternalError $ "Match error: " <> msg
         MatchSuccess subst -> do
             -- check conditions, using substitution (will call back
             -- into the simplifier! -> import loop)
@@ -185,10 +188,9 @@ applyEquation term rule = runMaybeT $ do
                 onIndeterminateCondition (Proxy @tag) (head unclearConditions)
             let rewritten =
                     substituteInTerm subst rule.rhs.term
-            -- assumes no existentials. TODO check
             -- NB no new constraints, as they have been checked to be `Top`
             -- FIXME what about symbolic constraints here?
-            return $ rewritten
+            return rewritten
   where
     -- evaluate/simplify a predicate, cut the operation short when it
     -- is Bottom.
