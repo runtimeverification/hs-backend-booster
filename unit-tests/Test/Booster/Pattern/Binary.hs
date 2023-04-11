@@ -50,8 +50,8 @@ genTerm =
 
 genPredicate :: Gen Predicate
 genPredicate =
-    Predicate <$>
-        Gen.choice [pure TrueBool, pure FalseBool, genTerm]
+    Predicate
+        <$> Gen.choice [pure TrueBool, pure FalseBool, genTerm]
 
 genPattern :: Gen Pattern
 genPattern = Pattern <$> genTerm <*> upTo 10 genPredicate

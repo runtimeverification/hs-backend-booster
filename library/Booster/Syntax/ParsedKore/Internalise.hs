@@ -596,12 +596,12 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
                         attribs
         SimplificationAxiom' requires lhs rhs sortVars attribs ->
             internaliseSimpleEquation
-                    partialDefinition
-                    requires
-                    lhs
-                    rhs
-                    sortVars
-                    attribs
+                partialDefinition
+                requires
+                lhs
+                rhs
+                sortVars
+                attribs
         FunctionAxiom' requires args lhs rhs sortVars attribs ->
             Just
                 <$> internaliseFunctionEquation
@@ -722,9 +722,10 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
                             , preservesDefinedness =
                                 fromMaybe alwaysDefined attributes.preserving
                             }
-                pure $ Just $
-                    SimplificationAxiom
-                        RewriteRule{lhs, rhs, attributes, computedAttributes, existentials = Set.empty}
+                pure $
+                    Just $
+                        SimplificationAxiom
+                            RewriteRule{lhs, rhs, attributes, computedAttributes, existentials = Set.empty}
             else pure Nothing -- we hit a simplification with top level ML connective, which we want to ignore
     | otherwise = error "internaliseSimpleEquation should only be called for simplifications"
   where

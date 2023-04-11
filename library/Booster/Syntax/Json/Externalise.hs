@@ -13,8 +13,8 @@ import Data.Text.Encoding qualified as Text
 
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
-import Kore.Syntax.Json.Types qualified as Syntax
 import Data.Coerce (coerce)
+import Kore.Syntax.Json.Types qualified as Syntax
 
 {- | Converts an internal pattern to a pair of term and predicate in
  external format. The predicate is 'And'ed to avoid leaking
@@ -60,14 +60,14 @@ externaliseTerm = \case
             [externaliseTerm trm]
 
 externalisePredicate :: Syntax.Sort -> Internal.Predicate -> Syntax.KorePattern
-externalisePredicate sort (Internal.Predicate t)=
+externalisePredicate sort (Internal.Predicate t) =
     Syntax.KJEquals
         { argSort = externaliseSort $ sortOfTerm t
         , sort
         , first = externaliseTerm t
         , second = externaliseTerm Internal.TrueBool
         }
-            
+
 varNameToId :: Internal.VarName -> Syntax.Id
 varNameToId = Syntax.Id . Text.decodeLatin1
 

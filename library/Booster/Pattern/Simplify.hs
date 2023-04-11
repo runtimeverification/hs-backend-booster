@@ -25,10 +25,12 @@ splitBoolPredicates p@(Predicate t)
         other -> [Predicate other]
 
 simplifyPredicate :: Maybe LLVM.API -> Predicate -> Predicate
-simplifyPredicate (Just api) (Predicate t) 
-    | isConcrete t = Predicate $ if simplifyBool api t
-            then TrueBool
-            else FalseBool
+simplifyPredicate (Just api) (Predicate t)
+    | isConcrete t =
+        Predicate $
+            if simplifyBool api t
+                then TrueBool
+                else FalseBool
 simplifyPredicate _ p = p
 
 {- | traverses a term top-down, using a given LLVM dy.lib to simplify

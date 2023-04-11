@@ -42,8 +42,8 @@ import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
 import Booster.Syntax.Json.Externalise (externaliseSort)
 import Data.Coerce (coerce)
-import Kore.Syntax.Json.Types qualified as Syntax
 import Data.Maybe (catMaybes)
+import Kore.Syntax.Json.Types qualified as Syntax
 
 internalisePattern ::
     Bool ->
@@ -191,15 +191,15 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
     Syntax.KJSVar{} -> term
     Syntax.KJApp{} -> term
     Syntax.KJString{} -> term
-    Syntax.KJTop{} -> pure Nothing --pure $ Right $ Internal.Predicate Internal.TrueBool
-    Syntax.KJBottom{} -> notSupported --pure $ Right $ Internal.Predicate Internal.FalseBool
+    Syntax.KJTop{} -> pure Nothing -- pure $ Right $ Internal.Predicate Internal.TrueBool
+    Syntax.KJBottom{} -> notSupported -- pure $ Right $ Internal.Predicate Internal.FalseBool
     Syntax.KJNot{arg} -> notSupported
-        -- internaliseCeilOrPredicate allowAlias sortVars definition arg >>= \case
-        -- Left _ -> notSupported
-        -- Right (Internal.EqualsTerm t1 t2) -> pure $ Right $ Internal.NotEqualsTerm t1 t2
-        -- Right (Internal.NotEqualsTerm t1 t2) -> pure $ Right $ Internal.EqualsTerm t1 t2
-        -- Right (Internal.Predicate (Internal.NotBool x)) -> pure $ Right $ Internal.Predicate x
-        -- Right (Internal.Predicate x) -> pure $ Right $ Internal.Predicate $ Internal.NotBool x
+    -- internaliseCeilOrPredicate allowAlias sortVars definition arg >>= \case
+    -- Left _ -> notSupported
+    -- Right (Internal.EqualsTerm t1 t2) -> pure $ Right $ Internal.NotEqualsTerm t1 t2
+    -- Right (Internal.NotEqualsTerm t1 t2) -> pure $ Right $ Internal.EqualsTerm t1 t2
+    -- Right (Internal.Predicate (Internal.NotBool x)) -> pure $ Right $ Internal.Predicate x
+    -- Right (Internal.Predicate x) -> pure $ Right $ Internal.Predicate $ Internal.NotBool x
     Syntax.KJAnd{} -> notSupported
     Syntax.KJOr{} -> notSupported
     Syntax.KJImplies{} -> notSupported
@@ -209,7 +209,7 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
     Syntax.KJMu{} -> notSupported
     Syntax.KJNu{} -> notSupported
     Syntax.KJCeil{arg} -> notSupported
-        -- Left . Ceil <$> internaliseTerm allowAlias sortVars definition arg
+    -- Left . Ceil <$> internaliseTerm allowAlias sortVars definition arg
     Syntax.KJFloor{} -> notSupported
     Syntax.KJEquals{argSort, first = arg1, second = arg2} -> do
         -- distinguish term and predicate equality
@@ -224,13 +224,13 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
                 ensureEqualSorts Internal.SortBool argS
                 ensureEqualSorts (sortOfTerm a) argS
                 ensureEqualSorts (sortOfTerm b) argS
-                case (a,b) of
+                case (a, b) of
                     (Internal.TrueBool, x) -> pure $ Just $ Internal.Predicate x
                     (x, Internal.TrueBool) -> pure $ Just $ Internal.Predicate x
                     (Internal.FalseBool, x) -> pure $ Just $ Internal.Predicate $ Internal.NotBool x
-                    (x,Internal.FalseBool) -> pure $ Just $ Internal.Predicate $ Internal.NotBool x
+                    (x, Internal.FalseBool) -> pure $ Just $ Internal.Predicate $ Internal.NotBool x
                     _ -> notSupported
-                    -- (x,y) -> pure $ Right $ Internal.EqualsTerm x y
+            -- (x,y) -> pure $ Right $ Internal.EqualsTerm x y
             (False, False) -> notSupported
             _other ->
                 throwE $ InconsistentPattern pat
@@ -244,7 +244,6 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
   where
     term = throwE $ PredicateExpected pat
     notSupported = throwE $ NotSupported pat
-
 
     lookupInternalSort' = lookupInternalSort sortVars sorts pat
 

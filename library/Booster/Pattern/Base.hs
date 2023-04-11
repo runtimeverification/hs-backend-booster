@@ -241,13 +241,9 @@ newtype Predicate = Predicate Term
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
-
 pattern NotBool :: Term -> Term
 pattern NotBool t =
     SymbolApplication (Symbol "LblnotBool'Unds'" [] [SortBool] SortBool (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias)) [] [t]
-
-
-
 
 pattern TrueBool, FalseBool :: Term
 pattern TrueBool = DomainValue SortBool "true"
