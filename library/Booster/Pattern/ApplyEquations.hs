@@ -226,6 +226,9 @@ applyEquation term rule = runMaybeT $ do
     unless (null rule.existentials) $
         lift . throw . InternalError $
             "Equation with existentials: " <> Text.pack (show rule)
+    -- immediately cancel if not preserving definedness
+    guard rule.computedAttributes.preservesDefinedness
+    -- match lhs
     koreDef <- (.definition) <$> lift getState
     case matchTerm koreDef rule.lhs.term term of
         MatchFailed _failReason -> do
