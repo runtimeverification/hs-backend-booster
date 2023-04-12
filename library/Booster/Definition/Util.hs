@@ -29,7 +29,7 @@ import Prettyprinter.Render.String qualified as Pretty (renderString)
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
-import Booster.Pattern.Base (decodeLabel)
+import Booster.Pattern.Base (decodeLabel, Pattern, constraints, Predicate)
 import Booster.Pattern.Index (TermIndex (..))
 import Booster.Prettyprinter
 
@@ -43,6 +43,7 @@ data Summary = Summary
     , functionRules :: Map.Map TermIndex [Location]
     , simplifications :: Map.Map TermIndex [Location]
     , predicateSimplifications :: Map.Map TermIndex [Location]
+    , ensuresClauses :: [(Maybe Location, [Predicate])]
     }
     deriving stock (Eq, Show, Generic)
     deriving anyclass (NFData)
@@ -80,6 +81,11 @@ mkSummary file def =
             Map.map (fst . locate . concat . Map.elems) def.simplifications
         , predicateSimplifications =
             Map.map (fst . locate . concat . Map.elems) def.predicateSimplifications
+        , ensuresClauses =
+                let rewrite = concat $ concatMap Map.elems $ Map.elems def.rewriteTheory in
+                let simp = concat $ concatMap Map.elems $ Map.elems def.simplifications in                
+                    (map locAndEnsures $ keepEnsures rewrite) ++ (map locAndEnsures $ keepEnsures simp)
+
         }
   where
     locate :: HasField "attributes" a AxiomAttributes => [a] -> ([Location], Int)
@@ -87,6 +93,11 @@ mkSummary file def =
         bimap (map fromJust) length
             . partition isJust
             . map (.attributes.location)
+    
+    keepEnsures :: HasField "rhs" a Pattern => [a] -> [a]
+    keepEnsures = filter (\r -> not $ null $ r.rhs.constraints)
+
+    locAndEnsures r = (r.attributes.location, r.rhs.constraints)
 
 prettySummary :: Summary -> String
 prettySummary = Pretty.renderString . layoutPrettyUnbounded . pretty
@@ -115,6 +126,9 @@ instance Pretty Summary where
                    )
                 <> ( "Predicate simplifications by term index:"
                         : tableView prettyTermIndex pretty summary.predicateSimplifications
+                   )
+                <> ( "Rules with ensures clauses by term index:"
+                        : map pretty summary.ensuresClauses
                    )
                 <> [mempty]
       where
