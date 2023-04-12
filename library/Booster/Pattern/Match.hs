@@ -44,7 +44,7 @@ data MatchResult
       MatchSuccess (Map Variable Term)
     | -- | pattern and subject have differences (using same failure type as unification)
       MatchFailed FailReason
-    | -- | match cannot be determined (not used at the moment)
+    | -- | match cannot be determined
       MatchIndeterminate Term Term
     | -- | internal errors (invariants violated etc)
       MatchError Text
@@ -59,8 +59,8 @@ data MatchResult
 -}
 matchTerm :: KoreDefinition -> Term -> Term -> MatchResult
 matchTerm KoreDefinition{sorts} term1 term2 =
-    let runUnification :: MatchState -> MatchResult
-        runUnification =
+    let runMatching :: MatchState -> MatchResult
+        runMatching =
             fromEither
                 . runExcept
                 . fmap (MatchSuccess . mSubstitution)
@@ -74,7 +74,7 @@ matchTerm KoreDefinition{sorts} term1 term2 =
                     NE.fromList
                         [(Var v, Var v) | v <- Set.toList sharedVars]
             else
-                runUnification
+                runMatching
                     State
                         { mSubstitution = Map.empty
                         , mQueue = Seq.singleton (term1, term2)
@@ -102,7 +102,7 @@ match1 ::
     Term ->
     StateT MatchState (Except MatchResult) ()
 ----- Variables
--- term1 variable (target): check sorts, introduce a new binding
+-- pattern term is a (target) variable: check sorts, introduce a new binding
 match1
     term1@(Var var@Variable{variableSort})
     term2 =
