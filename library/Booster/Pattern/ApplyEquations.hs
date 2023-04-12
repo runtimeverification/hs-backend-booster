@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -22,6 +24,7 @@ import Data.Text qualified as Text
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
+import Booster.LLVM (simplifyBool)
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.Base
 import Booster.Pattern.Index
@@ -266,6 +269,63 @@ applyEquation term rule = runMaybeT $ do
             Bottom -> fail "side condition was false"
             Top -> pure Nothing
             _other -> pure $ Just p
+
+--------------------------------------------------------------------
+
+-- | Helper pattern for simplifyConstraint until predicates have a simpler representation
+pattern TrueBool :: Term
+pattern TrueBool = DomainValue SortBool "true"
+
+pattern FalseBool :: Term
+pattern FalseBool = DomainValue SortBool "false"
+
+{- | Simplification for boolean predicates
+
+  This is used inside function evaluation as well as simplification,
+  so it should run using the same state as the caller instead of
+  running nested but needs to both evaluate and simplify.
+
+  Outer MaybeT: failure indicates a constraint was false
+  Inner Maybe: Nothing if constraint was true, otherwise simplified constraint
+-}
+simplifyConstraint ::
+    forall tag.
+    Predicate ->
+    EquationM (RewriteRule tag) (EquationFailure Term) Predicate
+--  Awaiting a simplier representation of constraints, we are assuming
+--  all predicates are of the form 'P ==Bool true' and evaluating them
+--  using simplifyBool if they are concrete.
+simplifyConstraint = \case
+    EqualsTerm t TrueBool
+        | isConcrete t -> do
+            mbApi <- (.llvmApi) <$> getState
+            case mbApi of
+                Just api ->
+                    if simplifyBool api t
+                        then pure Top
+                        else pure Bottom
+                Nothing ->
+                    evalBool t >>= prune
+        | otherwise ->
+            evalBool t >>= prune
+    EqualsTerm TrueBool t ->
+        -- although "true" is usually 2nd
+        simplifyConstraint (EqualsTerm t TrueBool)
+    other ->
+        pure other -- should not occur, predicates should be '_ ==Bool true'
+  where
+    prune =
+        pure . \case
+            TrueBool -> Top
+            FalseBool -> Bottom
+            other -> EqualsTerm other TrueBool
+    evalBool :: Term -> EquationM (RewriteRule tag) (EquationFailure Term) Term
+    evalBool t = do
+        prior <- getState -- save state before so we can "switch"
+        -- between evaluate and simplify modes
+        result <- pure t -- FIXME simplify and evaluate here
+        EquationM $ put prior
+        pure result
 
 --------------------------------------------------------------------
 
