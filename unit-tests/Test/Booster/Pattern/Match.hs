@@ -23,6 +23,7 @@ test_match =
         , varsAndValues
         , cornerCases
         , andTerms
+        , composite
         ]
 
 symbols :: TestTree
@@ -53,6 +54,35 @@ symbols =
               subj = dv someSort "something"
            in test "function and something else" pat subj $
                 failed (DifferentSymbols pat subj)
+        ]
+
+composite :: TestTree
+composite =
+    testGroup
+        "composite (nested) symbols"
+        [ let a = var "A" someSort
+              b = var "B" someSort
+              pat = app con3 [var "X" someSort, var "Y" someSort]
+              subj = app con3 [a, b]
+           in test "Matching two variables with variables" pat subj $
+                success [("X", someSort, a), ("Y", someSort, b)]
+        , let a = var "A" someSort
+              b = var "B" someSort
+              pat = app con3 [var "X" someSort, var "Y" someSort]
+              subj = app con3 [app f1 [a], app f2 [b]]
+           in test "Matching two variables with function applications" pat subj $
+                success [("X", someSort, app f1 [a]), ("Y", someSort, app f2 [b])]
+        , let a = var "A" someSort
+              pat = app con3 [var "X" someSort, var "X" someSort] -- same!
+              subj = app con3 [app f1 [a], app f1 [a]]
+           in test "Matching two constructor argument to be the same (success)" pat subj $
+                success [("X", someSort, app f1 [a])]
+        , let a = var "A" someSort
+              b = var "B" someSort
+              pat = app con3 [var "X" someSort, var "X" someSort] -- same!
+              subj = app con3 [a, b]
+           in test "Matching two constructor argument to be the same (failing)" pat subj $
+                failed (VariableConflict (Variable someSort "X") a b)
         ]
 
 varsAndValues :: TestTree

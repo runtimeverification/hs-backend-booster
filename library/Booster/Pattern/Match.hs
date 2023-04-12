@@ -10,7 +10,6 @@ module Booster.Pattern.Match (
 ) where
 
 import Control.Monad
-import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
@@ -215,19 +214,22 @@ enqueueProblems ts =
 bindVariable :: Variable -> Term -> StateT MatchState (Except MatchResult) ()
 bindVariable var term = do
     currentSubst <- gets mSubstitution
-    let mbOldTerm = Map.lookup var currentSubst
-    whenJust mbOldTerm $ \oldTerm ->
-        -- TODO the term in the binding could be _equivalent_
-        -- (not necessarily syntactically equal) to term'
-        failWith $ VariableConflict var oldTerm term
-    let -- apply existing substitutions to term
-        term' = substituteInTerm currentSubst term
-    when (var `Set.member` freeVariables term') $
-        failWith (VariableRecursion var term)
-    let -- substitute in existing substitution terms
-        currentSubst' = Map.map (substituteInTerm $ Map.singleton var term') currentSubst
-    let newSubst = Map.insert var term' currentSubst'
-    modify $ \s -> s{mSubstitution = newSubst}
+    case Map.lookup var currentSubst of
+        Just oldTerm
+            | oldTerm == term -> pure () -- already bound
+            | otherwise ->
+                -- only consider full syntactic match, not equivalence
+                failWith $ VariableConflict var oldTerm term
+        Nothing -> do
+            let -- apply existing substitutions to term
+                term' = substituteInTerm currentSubst term
+            when (var `Set.member` freeVariables term') $
+                failWith (VariableRecursion var term)
+            let -- substitute in existing substitution terms
+                currentSubst' =
+                    Map.map (substituteInTerm $ Map.singleton var term') currentSubst
+                newSubst = Map.insert var term' currentSubst'
+            modify $ \s -> s{mSubstitution = newSubst}
 
 ----------------------------------------
 

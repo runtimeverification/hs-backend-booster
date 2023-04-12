@@ -12,7 +12,6 @@ module Booster.Pattern.Unify (
 ) where
 
 import Control.Monad
-import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
@@ -292,19 +291,23 @@ bindVariable var term = do
                 bindVariable var2 (Var var)
         -- regular case
         _other -> do
-            let mbOldTerm = Map.lookup var currentSubst
-            whenJust mbOldTerm $ \oldTerm ->
-                -- TODO the term in the binding could be _equivalent_
-                -- (not necessarily syntactically equal) to term'
-                failWith $ VariableConflict var oldTerm term
-            let -- apply existing substitutions to term
-                term' = substituteInTerm currentSubst term
-            when (var `Set.member` freeVariables term') $
-                failWith (VariableRecursion var term)
-            let -- substitute in existing substitution terms
-                currentSubst' = Map.map (substituteInTerm $ Map.singleton var term') currentSubst
-            let newSubst = Map.insert var term' currentSubst'
-            modify $ \s -> s{uSubstitution = newSubst}
+            case Map.lookup var currentSubst of
+                Just oldTerm
+                    | oldTerm == term -> pure () -- already bound
+                    | otherwise ->
+                        -- the term in the binding could be _equivalent_
+                        -- (not necessarily syntactically equal) to term'
+                        failWith $ VariableConflict var oldTerm term
+                Nothing -> do
+                    let -- apply existing substitutions to term
+                        term' = substituteInTerm currentSubst term
+                    when (var `Set.member` freeVariables term') $
+                        failWith (VariableRecursion var term)
+                    let -- substitute in existing substitution terms
+                        currentSubst' =
+                            Map.map (substituteInTerm $ Map.singleton var term') currentSubst
+                        newSubst = Map.insert var term' currentSubst'
+                    modify $ \s -> s{uSubstitution = newSubst}
 
 addIndeterminate :: Term -> Term -> StateT UnificationState (Except UnificationResult) ()
 addIndeterminate pat subj =
