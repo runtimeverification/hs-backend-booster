@@ -58,7 +58,7 @@ test_evaluateFunction =
             eval TopDown subj @?= Right a
         ]
   where
-    eval direction = evaluateFunctions direction def Nothing
+    eval direction = evaluateFunctions direction funDef Nothing
     a = var "A" someSort
     b = var "B" someSort
     apply f = app f . (: [])
@@ -72,17 +72,73 @@ test_simplify :: TestTree
 test_simplify =
     testGroup
         "Performing simplifications"
-        []
+        [ testCase "No simplification applies" $ do
+            let subj = app f1 [app f2 [a]]
+            simpl TopDown subj @?= Right subj
+            simpl BottomUp subj @?= Right subj
+        , -- con1(con2(f2(a))) => con2(f2(a))
+          testCase "Simplification of constructors" $ do
+            let subj = app con1 [app con2 [app f2 [a]]]
+            simpl TopDown subj @?= Right (app con2 [app f2 [a]])
+            simpl BottomUp subj @?= Right (app con2 [app f2 [a]])
+        , -- con3(f2(a), f2(a)) => inj{sub,some}(con4(f2(a), f2(a)))
+          testCase "Simplification with argument match" $ do
+            let f2a = app f2 [a]
+                subj = app con3 [f2a, f2a]
+                result = inj aSubsort someSort $ app con4 [f2a, f2a]
+            simpl TopDown subj @?= Right result
+            simpl BottomUp subj @?= Right result
+        ]
+  where
+    simpl direction = simplify direction simplDef Nothing
+    a = var "A" someSort
 
 ----------------------------------------
 
-def :: KoreDefinition
-def =
+funDef, simplDef :: KoreDefinition
+funDef =
     testDefinition
         { functionEquations =
             mkTheory
                 [ (TopSymbol "f1", f1Equations)
-                , (TopSymbol "f2", f2Equations)
+                , (TopSymbol "f2", f2Equations) -- should not be applied (f2 partial)
+                ]
+        }
+simplDef =
+    funDef
+        { simplifications =
+            mkTheory
+                [
+                    ( TopSymbol "con1"
+                    ,
+                        [ equation -- con1(con2(f2(X))) => con1(X) , but f2 partial => not applied
+                            Nothing
+                            (Pattern (app con1 [app con2 [app f2 [varX]]]) [])
+                            (Pattern (app con1 [varX]) [])
+                            40
+                            `withComputedAttributes` ComputedAxiomAttributes False False
+                        , equation -- con1(con2(f1(X))) => con3(X, X)
+                            Nothing
+                            (Pattern (app con1 [app con2 [app f1 [varX]]]) [])
+                            (Pattern (app con1 [varX]) [])
+                            40
+                        , equation -- con1(con2(X)) => con2(X)
+                            Nothing
+                            (Pattern (app con1 [app con2 [varX]]) [])
+                            (Pattern (app con2 [varX]) [])
+                            50
+                        ]
+                    )
+                ,
+                    ( TopSymbol "con3"
+                    ,
+                        [ equation -- con3(X, X) => inj{sub,some}(con4(X, X))
+                            Nothing
+                            (Pattern (app con3 [varX, varX]) [])
+                            (Pattern (inj aSubsort someSort $ app con4 [varX, varX]) [])
+                            50
+                        ]
+                    )
                 ]
         }
 
@@ -90,7 +146,7 @@ varX, varY :: Term
 varX = var "X" someSort
 varY = var "Y" someSort
 
-f1Equations, f2Equations :: [RewriteRule "Function"]
+f1Equations, f2Equations :: [RewriteRule t]
 f1Equations =
     [ equation -- f1(con1(X)) == con2(f1(X))
         (Just "f1-con1-is-con2")
