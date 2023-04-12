@@ -24,24 +24,39 @@ test_evaluateFunction :: TestTree
 test_evaluateFunction =
     testGroup
         "Evaluating functions using rules without side conditions"
-        [ testCase "Simple function evaluation" $ do
+        [ -- f1(a) => a
+          testCase "Simple function evaluation" $ do
             let subj = app f1 [a]
             eval TopDown subj @?= Right a
             eval BottomUp subj @?= Right a
-        , testCase "Nested function applications, all can be simplified" $ do
+        , -- f2(f1(f1(a))) => f2(a). f2 is marked as partial, so not evaluating
+          testCase "Nested function applications, one not to be evaluated" $ do
             let subj = app f2 [2 `times` f1 $ a]
-            -- f2 on LHS should not be evaluated (partial function)
             eval TopDown subj @?= Right (app f2 [a])
             eval BottomUp subj @?= Right (app f2 [a])
-        , testCase "Recursive evaluation" $ do
-            let subj = app f1 [iterate (apply con1) a !! depth]
-                depth = 200
-            eval TopDown subj @?= Right (depth `times` con2 $ a)
-            isTooManyIterations $ eval BottomUp subj
+        , -- f1(f2(f1(a))) => f2(a). Again f2 partial, so not evaluating
+          testCase "Nested function applications with partial function inside" $ do
+            let subj = app f1 [app f2 [app f1 [a]]]
+            eval TopDown subj @?= Right (app f2 [a])
+            eval BottomUp subj @?= Right (app f2 [a])
+        , -- f1(con1(con1(..con1(a)..))) => con2(con2(..con2(a)..))
+          testCase "Recursive evaluation" $ do
+            let subj depth = app f1 [iterate (apply con1) a !! depth]
+            -- top-down evaluation: a single iteration is enough
+            eval TopDown (subj 100) @?= Right (100 `times` con2 $ a)
+            -- bottom-up evaluation: `depth` many iterations
+            eval BottomUp (subj 99) @?= Right (99 `times` con2 $ a)
+            isTooManyIterations $ eval BottomUp (subj 100)
+        , -- con3(f1(a), f1(con1(b))) => con3(a, con2(b))
+          testCase "Several function calls inside a constructor" $ do
+            let subj = app con3 [app f1 [a], app f1 [app con1 [b]]]
+                result = app con3 [a, app con2 [b]]
+            eval TopDown subj @?= Right result
         ]
   where
     eval direction = evaluateFunctions direction def Nothing
     a = var "A" someSort
+    b = var "B" someSort
     apply f = app f . (: [])
     n `times` f = foldr (.) id (replicate n $ apply f)
 
