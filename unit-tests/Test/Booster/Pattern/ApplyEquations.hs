@@ -52,6 +52,10 @@ test_evaluateFunction =
             let subj = app con3 [app f1 [a], app f1 [app con1 [b]]]
                 result = app con3 [a, app con2 [b]]
             eval TopDown subj @?= Right result
+        , -- f1(inj{sub,some}(con4(a, b))) => f1(a) => a (not using f1-is-identity)
+          testCase "Matching uses priorities" $ do
+            let subj = app f1 [inj aSubsort someSort (app con4 [a, b])]
+            eval TopDown subj @?= Right a
         ]
   where
     eval direction = evaluateFunctions direction def Nothing
