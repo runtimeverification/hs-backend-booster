@@ -23,14 +23,14 @@ import Data.List (elemIndex)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust)
 import Data.Proxy
 import Data.Text (Text)
 import Data.Text qualified as Text
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
-import Booster.LLVM (simplifyBool)
+import Booster.LLVM
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.Base
 import Booster.Pattern.Index
@@ -181,28 +181,38 @@ applyTerm theory BottomUp =
         SymbolApplicationF sym sorts args -> do
             t <- SymbolApplication sym sorts <$> sequence args
             applyAtTop theory t
-applyTerm theory TopDown = \case
-    dv@DomainValue{} ->
-        pure dv
-    v@Var{} ->
-        pure v
-    Injection src trg t ->
-        Injection src trg <$> applyTerm theory TopDown t -- no injection simplification
-    AndTerm arg1 arg2 ->
-        AndTerm -- no \and simplification
-            <$> applyTerm theory TopDown arg1
-            <*> applyTerm theory TopDown arg2
-    app@(SymbolApplication sym sorts args) -> do
-        -- try to apply equations
-        t <- applyAtTop theory app
-        if t /= app
-            then do
-                case t of
-                    SymbolApplication sym' sorts' args' ->
-                        SymbolApplication sym' sorts' <$> mapM (applyTerm theory TopDown) args'
-                    _otherwise ->
-                        applyTerm theory TopDown t -- won't loop
-            else SymbolApplication sym sorts <$> mapM (applyTerm theory TopDown) args
+applyTerm theory TopDown = \t -> do
+    s <- getState
+    -- All fully concrete values go to the LLVM backend (top-down only)
+    if isConcrete t && isJust s.llvmApi
+        then pure $ simplifyTerm (fromJust s.llvmApi) s.definition t (sortOfTerm t)
+        else applyEquations t
+  where
+    applyEquations = \case
+        dv@DomainValue{} ->
+            pure dv
+        v@Var{} ->
+            pure v
+        Injection src trg t ->
+            Injection src trg <$> applyTerm theory TopDown t -- no injection simplification
+        AndTerm arg1 arg2 ->
+            AndTerm -- no \and simplification
+                <$> applyTerm theory TopDown arg1
+                <*> applyTerm theory TopDown arg2
+        app@(SymbolApplication sym sorts args) -> do
+            -- try to apply equations
+            t <- applyAtTop theory app
+            if t /= app
+                then do
+                    case t of
+                        SymbolApplication sym' sorts' args' ->
+                            SymbolApplication sym' sorts'
+                                <$> mapM (applyTerm theory TopDown) args'
+                        _otherwise ->
+                            applyTerm theory TopDown t -- won't loop
+                else
+                    SymbolApplication sym sorts
+                        <$> mapM (applyTerm theory TopDown) args
 
 {- | Try to apply all equations from the state to the given term, in
    priority order and per group.
