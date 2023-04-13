@@ -5,6 +5,7 @@ License     : BSD-3-Clause
 module Test.Booster.Pattern.ApplyEquations (
     test_evaluateFunction,
     test_simplify,
+    test_errors,
 ) where
 
 import Data.Map (Map)
@@ -93,9 +94,22 @@ test_simplify =
     simpl direction = simplify direction simplDef Nothing
     a = var "A" someSort
 
+test_errors :: TestTree
+test_errors =
+    testGroup
+        "Error cases"
+        [ testCase "Simplification enters a loop" $ do
+            let a = var "A" someSort
+                subj = app con1 [a]
+                result =
+                    EquationLoop
+                        [app con1 [a], app con2 [a], app con3 [a, a], app con1 [a]]
+            simplify TopDown loopDef Nothing subj @?= Left result
+        ]
+
 ----------------------------------------
 
-funDef, simplDef :: KoreDefinition
+funDef, simplDef, loopDef :: KoreDefinition
 funDef =
     testDefinition
         { functionEquations =
@@ -136,6 +150,43 @@ simplDef =
                             Nothing
                             (Pattern (app con3 [varX, varX]) [])
                             (Pattern (inj aSubsort someSort $ app con4 [varX, varX]) [])
+                            50
+                        ]
+                    )
+                ]
+        }
+loopDef =
+    -- con1(X) => con2(X) => con3(X, X) => con1(X)
+    testDefinition
+        { simplifications =
+            mkTheory
+                [
+                    ( TopSymbol "con1"
+                    ,
+                        [ equation
+                            Nothing
+                            (Pattern (app con1 [varX]) [])
+                            (Pattern (app con2 [varX]) [])
+                            50
+                        ]
+                    )
+                ,
+                    ( TopSymbol "con2"
+                    ,
+                        [ equation
+                            Nothing
+                            (Pattern (app con2 [varX]) [])
+                            (Pattern (app con3 [varX, varX]) [])
+                            50
+                        ]
+                    )
+                ,
+                    ( TopSymbol "con3"
+                    ,
+                        [ equation
+                            Nothing
+                            (Pattern (app con3 [varX, varY]) [])
+                            (Pattern (app con1 [varX]) [])
                             50
                         ]
                     )

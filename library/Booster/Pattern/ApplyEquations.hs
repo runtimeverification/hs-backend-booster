@@ -9,11 +9,13 @@ module Booster.Pattern.ApplyEquations (
 ) where
 
 import Control.Monad
+import Control.Monad.Extra
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.State
 import Data.Functor.Foldable
+import Data.List (elemIndex)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -44,33 +46,34 @@ data EquationFailure
     | IndeterminateMatch Term Term
     | IndeterminateCondition Predicate
     | TooManyIterations Int Term Term
+    | EquationLoop [Term]
     | InternalError Text
     deriving stock (Eq, Show)
 
 data EquationState = EquationState
     { definition :: KoreDefinition
     , llvmApi :: Maybe LLVM.API
-    , hasChanged :: Bool
-    , counter :: Int
+    , termStack :: [Term]
     }
 
 startState :: KoreDefinition -> Maybe LLVM.API -> EquationState
 startState definition llvmApi =
-    EquationState{definition, llvmApi, hasChanged = False, counter = 0}
-
-increment, markChanged, clearChanged :: EquationM ()
-increment = EquationM . modify $ \s -> s{counter = 1 + s.counter}
-markChanged = EquationM . modify $ \s -> s{hasChanged = True}
-clearChanged = EquationM . modify $ \s -> s{hasChanged = False}
+    EquationState{definition, llvmApi, termStack = []}
 
 getState :: EquationM EquationState
 getState = EquationM get
 
-getCounter :: EquationM Int
-getCounter = (.counter) <$> getState
+countSteps :: EquationM Int
+countSteps = length . (.termStack) <$> getState
 
-getChanged :: EquationM Bool
-getChanged = (.hasChanged) <$> getState
+pushTerm :: Term -> EquationM ()
+pushTerm t = EquationM . modify $ \s -> s{termStack = t : s.termStack}
+
+checkForLoop :: Term -> EquationM ()
+checkForLoop t = do
+    stack <- (.termStack) <$> getState
+    whenJust (elemIndex t stack) $ \i ->
+        throw (EquationLoop . reverse $ t : take (i + 1) stack)
 
 data Direction = TopDown | BottomUp
     deriving stock (Eq, Show)
@@ -100,10 +103,11 @@ iterateWithEquations maxIterations direction preference def llvmApi startTerm =
     go :: Term -> EquationM Term
     go currentTerm =
         do
-            currentCount <- getCounter
+            currentCount <- countSteps
             when (currentCount > maxIterations) $
                 throw $
                     TooManyIterations currentCount startTerm currentTerm
+            pushTerm currentTerm
             -- evaluate functions and simplify (order parameterised)
             (newTerm, changeFlag) <-
                 case preference of
@@ -118,7 +122,7 @@ iterateWithEquations maxIterations direction preference def llvmApi startTerm =
                             then pure result
                             else runWith (.functionEquations) currentTerm
             if changeFlag
-                then increment >> clearChanged >> go newTerm
+                then checkForLoop newTerm >> go newTerm
                 else pure currentTerm
 
     runWith ::
@@ -129,8 +133,7 @@ iterateWithEquations maxIterations direction preference def llvmApi startTerm =
     runWith getTheory t = do
         theory <- getTheory . (.definition) <$> getState
         new <- applyTerm theory direction t
-        flag <- getChanged
-        pure (new, flag)
+        pure (new, new /= t)
 
 ----------------------------------------
 -- Interface functions for testing
@@ -141,10 +144,10 @@ simplify
         Maybe LLVM.API ->
         Term ->
         Either EquationFailure Term
-simplify direction definition llvmApi =
-    iterateWithEquations 20 direction PreferSimplifications definition llvmApi
-evaluate direction definition llvmApi =
-    iterateWithEquations 100 direction PreferFunctions definition llvmApi
+simplify direction =
+    iterateWithEquations 20 direction PreferSimplifications
+evaluate direction =
+    iterateWithEquations 100 direction PreferFunctions
 
 ----------------------------------------
 
@@ -236,10 +239,8 @@ applyAtTop theory term = do
             [] ->
                 processGroups rest -- no success at all in this group
             [newTerm] -> do
-                markChanged
                 pure newTerm -- single result
             (first : second : more) -> do
-                markChanged
                 onMultipleResults (Proxy @tag) first (second :| more)
 
 applyEquation ::
@@ -286,7 +287,7 @@ applyEquation term rule = runMaybeT $ do
     -- is Bottom.
     checkConstraint ::
         Predicate ->
-        MaybeT (EquationM) (Maybe Predicate)
+        MaybeT EquationM (Maybe Predicate)
     checkConstraint p = do
         mApi <- (.llvmApi) <$> lift getState
         case simplifyPredicate mApi p of
@@ -377,7 +378,7 @@ class ApplyEquationOps (tag :: k) where
         Proxy tag ->
         Term ->
         Term ->
-        MaybeT (EquationM) Term
+        MaybeT EquationM Term
 
     -- | Behaviour when side conditions cannot be determined
     --
