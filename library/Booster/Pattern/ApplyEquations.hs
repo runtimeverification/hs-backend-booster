@@ -317,13 +317,13 @@ pattern FalseBool = DomainValue SortBool "false"
   Outer MaybeT: failure indicates a constraint was false
   Inner Maybe: Nothing if constraint was true, otherwise simplified constraint
 -}
-simplifyConstraint ::
+_simplifyConstraint ::
     Predicate ->
     EquationM Predicate
 --  Awaiting a simplier representation of constraints, we are assuming
 --  all predicates are of the form 'P ==Bool true' and evaluating them
 --  using simplifyBool if they are concrete.
-simplifyConstraint = \case
+_simplifyConstraint = \case
     EqualsTerm t TrueBool
         | isConcrete t -> do
             mbApi <- (.llvmApi) <$> getState
@@ -338,7 +338,7 @@ simplifyConstraint = \case
             evalBool t >>= prune
     EqualsTerm TrueBool t ->
         -- although "true" is usually 2nd
-        simplifyConstraint (EqualsTerm t TrueBool)
+        _simplifyConstraint (EqualsTerm t TrueBool)
     other ->
         pure other -- should not occur, predicates should be '_ ==Bool true'
   where
