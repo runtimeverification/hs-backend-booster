@@ -58,7 +58,7 @@ test_evaluateFunction =
             eval TopDown subj @?= Right a
         ]
   where
-    eval direction = evaluateFunctions direction funDef Nothing
+    eval direction = evaluate direction funDef Nothing
     a = var "A" someSort
     b = var "B" someSort
     apply f = app f . (: [])
@@ -105,7 +105,7 @@ funDef =
                 ]
         }
 simplDef =
-    funDef
+    testDefinition
         { simplifications =
             mkTheory
                 [
