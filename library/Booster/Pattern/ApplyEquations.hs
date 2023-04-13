@@ -191,7 +191,7 @@ applyTerm theory TopDown = \case
     app@(SymbolApplication sym sorts args) -> do
         -- try to apply equations
         t <- applyAtTop theory app
-        if (getAttributes t).hash /= (getAttributes app).hash
+        if t /= app
             then do
                 case t of
                     SymbolApplication sym' sorts' args' ->

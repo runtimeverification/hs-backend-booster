@@ -116,8 +116,12 @@ instance Monoid TermAttributes where
 
 -- | A term together with its attributes.
 data Term = Term TermAttributes (TermF Term)
-    deriving stock (Eq, Ord, Show, Generic)
+    deriving stock (Ord, Show, Generic)
     deriving anyclass (NFData)
+
+instance Eq Term where
+    Term TermAttributes{hash = hash1} t1f == Term TermAttributes{hash = hash2} t2f =
+        hash1 == hash2 && t1f == t2f -- compare directly to cater for collisions
 
 instance Hashable Term where
     hash (Term TermAttributes{hash} _) = hash
