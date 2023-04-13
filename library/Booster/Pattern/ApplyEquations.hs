@@ -5,7 +5,11 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Booster.Pattern.ApplyEquations (
-    module Booster.Pattern.ApplyEquations,
+    simplify,
+    evaluate,
+    Direction (..),
+    EquationPreference (..),
+    EquationFailure (..),
 ) where
 
 import Control.Monad
@@ -89,16 +93,14 @@ runEquationM ::
 runEquationM definition llvmApi (EquationM m) =
     runExcept $ evalStateT m $ startState definition llvmApi
 
-iterateWithEquations ::
+iterateEquations ::
     Int ->
     Direction ->
     EquationPreference ->
-    KoreDefinition ->
-    Maybe LLVM.API ->
     Term ->
-    Either EquationFailure Term
-iterateWithEquations maxIterations direction preference def llvmApi startTerm =
-    runEquationM def llvmApi (go startTerm)
+    EquationM Term
+iterateEquations maxIterations direction preference startTerm =
+    go startTerm
   where
     go :: Term -> EquationM Term
     go currentTerm =
@@ -136,18 +138,20 @@ iterateWithEquations maxIterations direction preference def llvmApi startTerm =
         pure (new, new /= t)
 
 ----------------------------------------
--- Interface functions for testing
-simplify
-    , evaluate ::
+-- Interface functions
+evaluate
+    , simplify ::
         Direction ->
         KoreDefinition ->
         Maybe LLVM.API ->
         Term ->
         Either EquationFailure Term
-simplify direction =
-    iterateWithEquations 20 direction PreferSimplifications
-evaluate direction =
-    iterateWithEquations 100 direction PreferFunctions
+simplify direction def llvmApi =
+    runEquationM def{functionEquations = Map.empty} llvmApi
+        . iterateEquations 20 direction PreferSimplifications
+evaluate direction def llvmApi =
+    runEquationM def llvmApi
+        . iterateEquations 100 direction PreferFunctions
 
 ----------------------------------------
 
