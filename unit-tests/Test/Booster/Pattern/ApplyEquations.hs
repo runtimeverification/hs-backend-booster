@@ -59,7 +59,7 @@ test_evaluateFunction =
             eval TopDown subj @?= Right a
         ]
   where
-    eval direction = evaluate direction funDef Nothing
+    eval direction = evaluateTerm direction funDef Nothing
     a = var "A" someSort
     b = var "B" someSort
     apply f = app f . (: [])

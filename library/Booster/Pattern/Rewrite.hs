@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveTraversable #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -30,6 +30,7 @@ import Prettyprinter
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.LLVM.Internal qualified as LLVM
+import Booster.Pattern.ApplyEquations
 import Booster.Pattern.Base
 import Booster.Pattern.Index (TermIndex (..), kCellTermIndex)
 import Booster.Pattern.Simplify
@@ -288,7 +289,7 @@ data RewriteResult pat
       -- (signalled by exceptions)
       RewriteAborted pat
     deriving stock (Eq, Show)
-    deriving (Functor)
+    deriving (Functor, Foldable, Traversable)
 
 instance Pretty (RewriteResult Pattern) where
     pretty (RewriteSingle pat) =
@@ -358,8 +359,18 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
 
     showCounter = (<> " steps.") . pack . show
 
-    simplify :: Pattern -> Pattern
-    simplify p = p{term = simplifyConcrete mLlvmLibrary def p.term}
+    simplifyP :: Pattern -> io Pattern
+    simplifyP p = do
+        let result = evaluateTerm TopDown def mLlvmLibrary p.term -- probably in MonadLogger soon?
+        case result of
+            Left (TooManyIterations n _ t) -> do
+                logWarn $ "Simplification unable to finish in " <> prettyText n <> " steps."
+                -- could output term before and after at debug or custom log level
+                pure p{term = t}
+            Left other ->
+                error $ show other -- FIXME
+            Right newTerm ->
+                pure p{term = newTerm}
 
     doSteps :: Bool -> Natural -> Pattern -> io (Natural, RewriteResult Pattern)
     doSteps wasSimplified !counter pat'
@@ -367,7 +378,8 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
             let title =
                     pretty $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
             logRewrite $ pack $ renderDefault $ showPattern title pat'
-            pure (counter, (if wasSimplified then id else fmap simplify) $ RewriteStopped pat')
+            result <- (if wasSimplified then pure else mapM simplifyP) $ RewriteStopped pat'
+            pure (counter, result)
         | otherwise = do
             let res =
                     runRewriteM def mLlvmLibrary $
@@ -379,18 +391,19 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                     logRewrite $
                         "Terminal rule after " <> showCounter (counter + 1)
                     logRewrite $ prettyText terminal
-                    pure (counter + 1, fmap simplify terminal)
+                    simplified <- mapM simplifyP terminal
+                    pure (counter + 1, simplified)
                 Right other -> do
                     logRewrite $ "Stopped after " <> showCounter counter
                     logRewrite $ prettyText other
-                    let simplifiedOther = fmap simplify other
+                    simplifiedOther <- mapM simplifyP other
                     logRewrite $ "Simplified: " <> prettyText simplifiedOther
                     pure (counter, simplifiedOther)
                 -- if unification was unclear and the pattern was
                 -- unsimplified, simplify and retry rewriting once
                 Left (RuleApplicationUnclear rule term _)
                     | not wasSimplified -> do
-                        let simplifiedPat = simplify pat'
+                        simplifiedPat <- simplifyP pat'
                         logRewrite $
                             "Unification unclear for rule "
                                 <> renderOneLineText (ruleId rule)
@@ -407,10 +420,11 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                     if wasSimplified
                         then pure (counter, RewriteStuck pat')
                         else do
-                            let simplifiedPat = simplify pat'
+                            simplifiedPat <- simplifyP pat'
                             logRewrite $ "Retrying with simplified pattern " <> prettyText simplifiedPat
                             doSteps True counter simplifiedPat
                 Left failure -> do
                     logRewrite $ "Aborted after " <> showCounter counter
                     logRewrite $ prettyText failure
-                    pure (counter, (if wasSimplified then id else fmap simplify) $ RewriteAborted pat')
+                    result <- (if wasSimplified then pure else mapM simplifyP) $ RewriteAborted pat'
+                    pure (counter, result)

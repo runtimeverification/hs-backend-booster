@@ -6,7 +6,7 @@ License     : BSD-3-Clause
 -}
 module Booster.Pattern.ApplyEquations (
     simplify,
-    evaluate,
+    evaluateTerm,
     Direction (..),
     EquationPreference (..),
     EquationFailure (..),
@@ -139,7 +139,7 @@ iterateEquations maxIterations direction preference startTerm =
 
 ----------------------------------------
 -- Interface functions
-evaluate
+evaluateTerm
     , simplify ::
         Direction ->
         KoreDefinition ->
@@ -149,7 +149,7 @@ evaluate
 simplify direction def llvmApi =
     runEquationM def{functionEquations = Map.empty} llvmApi
         . iterateEquations 20 direction PreferSimplifications
-evaluate direction def llvmApi =
+evaluateTerm direction def llvmApi =
     runEquationM def llvmApi
         . iterateEquations 100 direction PreferFunctions
 
