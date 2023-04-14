@@ -360,7 +360,10 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
     showCounter = (<> " steps.") . pack . show
 
     simplifyP :: Pattern -> io Pattern
-    simplifyP p = do
+    simplifyP p
+      | isConcrete p.term =
+          pure p{term = simplifyConcrete mLlvmLibrary def p.term}
+      | otherwise = do
         let result = evaluateTerm TopDown def mLlvmLibrary p.term
         -- probably in MonadLogger soon?
         case result of
