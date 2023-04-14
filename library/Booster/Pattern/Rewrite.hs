@@ -361,7 +361,8 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
 
     simplifyP :: Pattern -> io Pattern
     simplifyP p = do
-        let result = evaluateTerm TopDown def mLlvmLibrary p.term -- probably in MonadLogger soon?
+        let result = evaluateTerm TopDown def mLlvmLibrary p.term
+        -- probably in MonadLogger soon?
         case result of
             Left (TooManyIterations n _ t) -> do
                 logWarn $ "Simplification unable to finish in " <> prettyText n <> " steps."

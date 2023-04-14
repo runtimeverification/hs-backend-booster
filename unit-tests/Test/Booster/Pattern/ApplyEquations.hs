@@ -100,10 +100,11 @@ test_errors =
         "Error cases"
         [ testCase "Simplification enters a loop" $ do
             let a = var "A" someSort
-                subj = app con1 [a]
+                f = app f1 . (: [])
+                subj = f $ app con1 [a]
                 result =
                     EquationLoop
-                        [app con1 [a], app con2 [a], app con3 [a, a], app con1 [a]]
+                        [f $ app con1 [a], f $ app con2 [a], f $ app con3 [a, a], f $ app con1 [a]]
             simplify TopDown loopDef Nothing subj @?= Left result
         ]
 
@@ -156,37 +157,27 @@ simplDef =
                 ]
         }
 loopDef =
-    -- con1(X) => con2(X) => con3(X, X) => con1(X)
+    -- f1(con1(X)) => f1(con2(X)) => f1(con3(X, X)) => f1(con1(X))
     testDefinition
         { simplifications =
             mkTheory
                 [
-                    ( TopSymbol "con1"
+                    ( TopSymbol "f1"
                     ,
                         [ equation
                             Nothing
-                            (Pattern (app con1 [varX]) [])
-                            (Pattern (app con2 [varX]) [])
+                            (Pattern (app f1 [app con1 [varX]]) [])
+                            (Pattern (app f1 [app con2 [varX]]) [])
                             50
-                        ]
-                    )
-                ,
-                    ( TopSymbol "con2"
-                    ,
-                        [ equation
+                        , equation
                             Nothing
-                            (Pattern (app con2 [varX]) [])
-                            (Pattern (app con3 [varX, varX]) [])
+                            (Pattern (app f1 [app con2 [varX]]) [])
+                            (Pattern (app f1 [app con3 [varX, varX]]) [])
                             50
-                        ]
-                    )
-                ,
-                    ( TopSymbol "con3"
-                    ,
-                        [ equation
+                        , equation
                             Nothing
-                            (Pattern (app con3 [varX, varY]) [])
-                            (Pattern (app con1 [varX]) [])
+                            (Pattern (app f1 [app con3 [varX, varY]]) [])
+                            (Pattern (app f1 [app con1 [varX]]) [])
                             50
                         ]
                     )

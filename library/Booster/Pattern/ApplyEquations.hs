@@ -181,12 +181,15 @@ applyTerm theory BottomUp =
         SymbolApplicationF sym sorts args -> do
             t <- SymbolApplication sym sorts <$> sequence args
             applyAtTop theory t
-applyTerm theory TopDown = \t -> do
-    s <- getState
-    -- All fully concrete values go to the LLVM backend (top-down only)
-    if isConcrete t && isJust s.llvmApi
-        then pure $ simplifyTerm (fromJust s.llvmApi) s.definition t (sortOfTerm t)
-        else applyEquations t
+applyTerm theory TopDown = \t@(Term attributes _) ->
+    if attributes.isEvaluated
+        then pure t
+        else do
+            s <- getState
+            -- All fully concrete values go to the LLVM backend (top-down only)
+            if isConcrete t && isJust s.llvmApi
+                then pure $ simplifyTerm (fromJust s.llvmApi) s.definition t (sortOfTerm t)
+                else applyEquations t
   where
     applyEquations = \case
         dv@DomainValue{} ->
