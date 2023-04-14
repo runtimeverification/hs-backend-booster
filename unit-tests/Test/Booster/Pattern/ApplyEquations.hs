@@ -44,10 +44,10 @@ test_evaluateFunction =
           testCase "Recursive evaluation" $ do
             let subj depth = app f1 [iterate (apply con1) a !! depth]
             -- top-down evaluation: a single iteration is enough
-            eval TopDown (subj 100) @?= Right (100 `times` con2 $ a)
+            eval TopDown (subj 101) @?= Right (101 `times` con2 $ a)
             -- bottom-up evaluation: `depth` many iterations
-            eval BottomUp (subj 99) @?= Right (99 `times` con2 $ a)
-            isTooManyIterations $ eval BottomUp (subj 100)
+            eval BottomUp (subj 100) @?= Right (100 `times` con2 $ a)
+            isTooManyIterations $ eval BottomUp (subj 101)
         , -- con3(f1(a), f1(con1(b))) => con3(a, con2(b))
           testCase "Several function calls inside a constructor" $ do
             let subj = app con3 [app f1 [a], app f1 [app con1 [b]]]

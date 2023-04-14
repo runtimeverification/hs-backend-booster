@@ -103,8 +103,9 @@ iterateEquations maxIterations direction preference startTerm =
     go startTerm
   where
     go :: Term -> EquationM Term
-    go currentTerm =
-        do
+    go currentTerm
+        | (getAttributes currentTerm).isEvaluated = pure currentTerm
+        | otherwise = do
             currentCount <- countSteps
             when (currentCount > maxIterations) $
                 throw $
