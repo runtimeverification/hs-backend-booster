@@ -412,6 +412,7 @@ retractPredicateSimplificationRule _ = Nothing
 -- is passed to the internalising function later)
 data AxiomData
     = RewriteRuleAxiom' Text [Syntax.KorePattern] Syntax.KorePattern AxiomAttributes
+    | RewriteRuleAxiomNoAlias' Syntax.KorePattern Syntax.KorePattern AxiomAttributes
     | SubsortAxiom' Syntax.Sort Syntax.Sort
     | FunctionAxiom'
         Syntax.KorePattern -- requires
@@ -603,6 +604,15 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
             throwE $
                 DefinitionSortError $
                     GeneralError ("Sort variable " <> super <> " in subsort axiom")
+        RewriteRuleAxiomNoAlias' lhs rhs' attribs ->
+            let (rhs, existentials) = extractExistentials rhs'
+             in Just . RewriteRuleAxiom
+                    <$> internaliseRewriteRuleNoAlias
+                        partialDefinition
+                        existentials
+                        lhs
+                        rhs
+                        attribs
         RewriteRuleAxiom' alias args rhs' attribs ->
             let (rhs, existentials) = extractExistentials rhs'
              in Just . RewriteRuleAxiom
@@ -635,6 +645,44 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
 
 orFailWith :: Maybe a -> e -> Except e a
 mbX `orFailWith` err = maybe (throwE err) pure mbX
+
+internaliseRewriteRuleNoAlias ::
+    KoreDefinition ->
+    [(Id, Sort)] ->
+    Syntax.KorePattern ->
+    Syntax.KorePattern ->
+    AxiomAttributes ->
+    Except DefinitionError (RewriteRule k)
+internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
+    -- prefix all variables in lhs and rhs with "Rule#" to avoid
+    -- name clashes with patterns from the user
+    -- filter out literal `Top` constraints
+    lhs <-
+        fmap (removeTops . Util.modifyVariables (Util.modifyVarName ("Rule#" <>))) $
+            withExcept DefinitionPatternError $
+                internalisePattern True Nothing partialDefinition left
+    existentials' <- fmap Set.fromList $ withExcept DefinitionPatternError $ mapM mkVar exs
+    let renameVariable v
+            | v `Set.member` existentials' = Util.modifyVarName ("Ex#" <>) v
+            | otherwise = Util.modifyVarName ("Rule#" <>) v
+    rhs <-
+        fmap (removeTops . Util.modifyVariables renameVariable) $
+            withExcept DefinitionPatternError $
+                internalisePattern True Nothing partialDefinition right
+    let preservesDefinedness =
+            -- users can override the definedness computation by an explicit attribute
+            fromMaybe (Util.checkTermSymbols Util.isDefinedSymbol rhs.term) axAttributes.preserving
+        containsAcSymbols =
+            Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
+        computedAttributes =
+            ComputedAxiomAttributes{preservesDefinedness, containsAcSymbols}
+        existentials = Set.map (Util.modifyVarName ("Ex#" <>)) existentials'
+    return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes, existentials}
+  where
+    mkVar (name, sort) = do
+        variableSort <- lookupInternalSort Nothing partialDefinition.sorts right sort
+        let variableName = textToBS name.getId
+        pure $ Variable{variableSort, variableName}
 
 internaliseRewriteRule ::
     KoreDefinition ->
@@ -735,7 +783,8 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
             then do
                 lhs <- internalisePattern' $ Syntax.KJAnd left.sort left precond
                 rhs <- internalisePattern' right
-                let -- checking the lhs term, too, as a safe approximation
+                let
+                    -- checking the lhs term, too, as a safe approximation
                     -- (rhs may _introduce_ undefined, lhs may _hide_ it)
                     alwaysDefined = all (Util.checkTermSymbols Util.isDefinedSymbol) [lhs.term, rhs.term]
                     computedAttributes =
