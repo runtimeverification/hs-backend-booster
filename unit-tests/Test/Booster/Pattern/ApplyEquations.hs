@@ -91,7 +91,7 @@ test_simplify =
             simpl BottomUp subj @?= Right result
         ]
   where
-    simpl direction = simplify direction simplDef Nothing
+    simpl direction = evaluateTerm direction simplDef Nothing
     a = var "A" someSort
 
 test_errors :: TestTree
@@ -105,7 +105,7 @@ test_errors =
                 result =
                     EquationLoop
                         [f $ app con1 [a], f $ app con2 [a], f $ app con3 [a, a], f $ app con1 [a]]
-            simplify TopDown loopDef Nothing subj @?= Left result
+            evaluateTerm TopDown loopDef Nothing subj @?= Left result
         ]
 
 ----------------------------------------

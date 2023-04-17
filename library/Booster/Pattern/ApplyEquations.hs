@@ -5,7 +5,6 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Booster.Pattern.ApplyEquations (
-    simplify,
     evaluateTerm,
     Direction (..),
     EquationPreference (..),
@@ -58,11 +57,12 @@ data EquationState = EquationState
     { definition :: KoreDefinition
     , llvmApi :: Maybe LLVM.API
     , termStack :: [Term]
+    , changed :: Bool
     }
 
 startState :: KoreDefinition -> Maybe LLVM.API -> EquationState
 startState definition llvmApi =
-    EquationState{definition, llvmApi, termStack = []}
+    EquationState{definition, llvmApi, termStack = [], changed = False}
 
 getState :: EquationM EquationState
 getState = EquationM get
@@ -72,6 +72,13 @@ countSteps = length . (.termStack) <$> getState
 
 pushTerm :: Term -> EquationM ()
 pushTerm t = EquationM . modify $ \s -> s{termStack = t : s.termStack}
+
+setChanged, resetChanged :: EquationM ()
+setChanged = EquationM . modify $ \s -> s{changed = True}
+resetChanged = EquationM . modify $ \s -> s{changed = False}
+
+getChanged :: EquationM Bool
+getChanged = EquationM $ gets (.changed)
 
 checkForLoop :: Term -> EquationM ()
 checkForLoop t = do
@@ -111,65 +118,39 @@ iterateEquations maxIterations direction preference startTerm =
                 throw $
                     TooManyIterations currentCount startTerm currentTerm
             pushTerm currentTerm
-            -- evaluate functions and simplify (order parameterised)
-            (newTerm, changeFlag) <-
-                case preference of
-                    PreferFunctions -> do
-                        result@(_, changeFlag) <- runWith (.functionEquations) currentTerm
-                        if changeFlag
-                            then pure result
-                            else runWith (.simplifications) currentTerm
-                    PreferSimplifications -> do
-                        result@(_, changeFlag) <- runWith (.simplifications) currentTerm
-                        if changeFlag
-                            then pure result
-                            else runWith (.functionEquations) currentTerm
+            -- evaluate functions and simplify (recursively at each level)
+            newTerm <- applyTerm direction preference currentTerm
+            changeFlag <- getChanged
             if changeFlag
-                then checkForLoop newTerm >> go newTerm
+                then checkForLoop newTerm >> resetChanged >> go newTerm
                 else pure currentTerm
 
-    runWith ::
-        ApplyEquationOps tag =>
-        (KoreDefinition -> Theory (RewriteRule tag)) ->
-        Term ->
-        EquationM (Term, Bool)
-    runWith getTheory t = do
-        theory <- getTheory . (.definition) <$> getState
-        new <- applyTerm theory direction t
-        pure (new, new /= t)
-
 ----------------------------------------
--- Interface functions
-evaluateTerm
-    , simplify ::
-        Direction ->
-        KoreDefinition ->
-        Maybe LLVM.API ->
-        Term ->
-        Either EquationFailure Term
-simplify direction def llvmApi =
-    runEquationM def{functionEquations = Map.empty} llvmApi
-        . iterateEquations 20 direction PreferSimplifications
+-- Interface function
+evaluateTerm ::
+    Direction ->
+    KoreDefinition ->
+    Maybe LLVM.API ->
+    Term ->
+    Either EquationFailure Term
 evaluateTerm direction def llvmApi =
     runEquationM def llvmApi
         . iterateEquations 100 direction PreferFunctions
 
 ----------------------------------------
 
-{- | Apply the set of equations in the equation state at all levels of a
+{- | Apply function equations and simplifications at all levels of a
    term AST, in the given direction (bottom-up or top-down).
 
   No iteration happens at the same AST level inside these traversals,
   one equation will be applied per level (if any).
 -}
 applyTerm ::
-    forall tag.
-    ApplyEquationOps tag =>
-    Theory (RewriteRule tag) ->
     Direction ->
+    EquationPreference ->
     Term ->
     EquationM Term
-applyTerm theory BottomUp =
+applyTerm BottomUp pref =
     cataA $ \case
         DomainValueF s val ->
             pure $ DomainValue s val
@@ -181,53 +162,74 @@ applyTerm theory BottomUp =
             AndTerm <$> arg1 <*> arg2 -- no \and simplification
         SymbolApplicationF sym sorts args -> do
             t <- SymbolApplication sym sorts <$> sequence args
-            applyAtTop theory t
-applyTerm theory TopDown = \t@(Term attributes _) ->
+            applyAtTop pref t
+applyTerm TopDown pref = \t@(Term attributes _) ->
     if attributes.isEvaluated
         then pure t
         else do
             s <- getState
             -- All fully concrete values go to the LLVM backend (top-down only)
             if isConcrete t && isJust s.llvmApi
-                then pure $ simplifyTerm (fromJust s.llvmApi) s.definition t (sortOfTerm t)
-                else applyEquations t
+                then do
+                    let result = simplifyTerm (fromJust s.llvmApi) s.definition t (sortOfTerm t)
+                    when (result /= t) setChanged
+                    pure result
+                else apply t
   where
-    applyEquations = \case
+    apply = \case
         dv@DomainValue{} ->
             pure dv
         v@Var{} ->
             pure v
         Injection src trg t ->
-            Injection src trg <$> applyTerm theory TopDown t -- no injection simplification
+            Injection src trg <$> applyTerm TopDown pref t -- no injection simplification
         AndTerm arg1 arg2 ->
             AndTerm -- no \and simplification
-                <$> applyTerm theory TopDown arg1
-                <*> applyTerm theory TopDown arg2
+                <$> applyTerm TopDown pref arg1
+                <*> applyTerm TopDown pref arg2
         app@(SymbolApplication sym sorts args) -> do
             -- try to apply equations
-            t <- applyAtTop theory app
+            t <- applyAtTop pref app
             if t /= app
                 then do
                     case t of
                         SymbolApplication sym' sorts' args' ->
                             SymbolApplication sym' sorts'
-                                <$> mapM (applyTerm theory TopDown) args'
+                                <$> mapM (applyTerm TopDown pref) args'
                         _otherwise ->
-                            applyTerm theory TopDown t -- won't loop
+                            applyTerm TopDown pref t -- won't loop
                 else
                     SymbolApplication sym sorts
-                        <$> mapM (applyTerm theory TopDown) args
+                        <$> mapM (applyTerm TopDown pref) args
 
-{- | Try to apply all equations from the state to the given term, in
-   priority order and per group.
+{- | Try to apply function equations and simplifications to the given
+   top-level term, in priority order and per group.
 -}
 applyAtTop ::
+    EquationPreference ->
+    Term ->
+    EquationM Term
+applyAtTop pref term = do
+    def <- (.definition) <$> getState
+    case pref of
+        PreferFunctions -> do
+            fromFunctions <- applyEquations def.functionEquations term
+            if fromFunctions == term
+                then applyEquations def.simplifications term
+                else pure fromFunctions
+        PreferSimplifications -> do
+            simplified <- applyEquations def.simplifications term
+            if simplified == term
+                then applyEquations def.functionEquations term
+                else pure simplified
+
+applyEquations ::
     forall tag.
     ApplyEquationOps tag =>
     Theory (RewriteRule tag) ->
     Term ->
     EquationM Term
-applyAtTop theory term = do
+applyEquations theory term = do
     let index = termTopIndex term
     when (index == None) $
         throw (IndexIsNone term)
@@ -257,9 +259,12 @@ applyAtTop theory term = do
             [] ->
                 processGroups rest -- no success at all in this group
             [newTerm] -> do
-                pure newTerm -- single result
+                setChanged >> pure newTerm -- single result
             (first : second : more) -> do
-                onMultipleResults (Proxy @tag) first (second :| more)
+                -- either error out or select one result
+                result <- onMultipleResults (Proxy @tag) first (second :| more)
+                -- if a result has been chosen:
+                setChanged >> pure result
 
 applyEquation ::
     forall tag.
@@ -365,7 +370,7 @@ _simplifyConstraint = \case
     evalBool t = do
         prior <- getState -- save state before so we can "switch"
         -- between evaluate and simplify modes
-        result <- pure t -- FIXME simplify and evaluate here
+        let result = t -- FIXME simplify and evaluate here
         EquationM $ put prior
         pure result
 
