@@ -29,6 +29,7 @@ module Booster.Definition.Attributes.Base (
     pattern IsNotAssoc,
     pattern IsMacroOrAlias,
     pattern IsNotMacroOrAlias,
+    NotPreservesDefinednessReason(..),
 ) where
 
 import Control.DeepSeq (NFData (..))
@@ -39,6 +40,8 @@ import Data.Word (Word8)
 import GHC.Generics (Generic)
 import Prettyprinter as Pretty
 import Data.ByteString (ByteString)
+import Booster.Util qualified as Util
+import Data.Text.Encoding qualified as Text
 
 data DefinitionAttributes = DefinitionAttributes
     {
@@ -66,17 +69,27 @@ data AxiomAttributes = AxiomAttributes
     , priority :: Priority -- priorities are <= 200
     , ruleLabel :: Maybe Label
     , simplification :: Maybe Priority
-    , preserving :: Maybe Bool -- this will override the computed attribute
+    , preserving :: Bool -- this will override the computed attribute
     , concrete :: Concrete
     }
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
 data ComputedAxiomAttributes = ComputedAxiomAttributes
-    { containsAcSymbols, preservesDefinedness :: Bool
+    { containsAcSymbols :: Bool,
+      notPreservesDefinednessReasons :: [NotPreservesDefinednessReason]
     }
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
+
+data NotPreservesDefinednessReason = UndefinedSymbol ByteString | UndefinedPredicate
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
+
+instance Pretty NotPreservesDefinednessReason where
+    pretty = \case
+        UndefinedSymbol name -> "non-total symbol " <> (pretty $ Text.decodeUtf8 $ Util.decodeLabel' name)
+        UndefinedPredicate -> "undefined predicate"
 
 type Label = Text
 

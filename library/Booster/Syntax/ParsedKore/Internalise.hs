@@ -670,13 +670,13 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
         fmap (removeTops . Util.modifyVariables renameVariable) $
             withExcept DefinitionPatternError $
                 internalisePattern True Nothing partialDefinition right
-    let preservesDefinedness =
+    let notPreservesDefinednessReasons =
             -- users can override the definedness computation by an explicit attribute
-            fromMaybe (Util.checkTermSymbols Util.isDefinedSymbol rhs.term) axAttributes.preserving
+            if axAttributes.preserving then [] else [UndefinedSymbol s.name | s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) rhs.term]
         containsAcSymbols =
             Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
         computedAttributes =
-            ComputedAxiomAttributes{preservesDefinedness, containsAcSymbols}
+            ComputedAxiomAttributes{notPreservesDefinednessReasons, containsAcSymbols}
         existentials = Set.map (Util.modifyVarName ("Ex#" <>)) existentials'
     return RewriteRule{lhs, rhs, attributes = axAttributes, computedAttributes, existentials}
   where
@@ -737,13 +737,13 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
                 rhs <- internalisePattern' right
                 let -- checking the lhs term, too, as a safe approximation
                     -- (rhs may _introduce_ undefined, lhs may _hide_ it)
-                    alwaysDefined = all (Util.checkTermSymbols Util.isDefinedSymbol) [lhs.term, rhs.term]
+                    undefinedSymbols = [UndefinedSymbol s.name | s <- concatMap (Util.filterTermSymbols (not . Util.isDefinedSymbol)) [lhs.term, rhs.term]]
                     computedAttributes =
                         ComputedAxiomAttributes
                             { containsAcSymbols =
                                 any (Util.checkTermSymbols Util.checkSymbolIsAc) [lhs.term, rhs.term]
-                            , preservesDefinedness =
-                                fromMaybe alwaysDefined attributes.preserving
+                            , notPreservesDefinednessReasons =
+                                if attributes.preserving then [] else undefinedSymbols 
                             }
                 pure $
                     SimplificationAxiom
@@ -753,7 +753,7 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
                 conditions <- mapM internalisePredicate' $ explodeAnd precond
                 rhs <- mapM internalisePredicate' $ explodeAnd right
                 -- undefined predicates will invalidate the rule, no flags required
-                let computedAttributes = ComputedAxiomAttributes False True
+                let computedAttributes = ComputedAxiomAttributes False [UndefinedPredicate]
                 pure $
                     PredicateSimplificationAxiom
                         PredicateEquation{target, conditions, rhs, attributes, computedAttributes}
@@ -801,16 +801,16 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
             removeTops . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)) $
                 left{Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
     rhs <- internaliseSide right
-    let argsDefined =
-            all (Util.checkTermSymbols Util.isDefinedSymbol . snd) argPairs
+    let argsUndefined =
+            [UndefinedSymbol s.name | (_,t) <- argPairs, s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) t]
         rhsPreserves =
             -- users can override the definedness computation by an explicit attribute
-            fromMaybe (Util.checkTermSymbols Util.isDefinedSymbol rhs.term) attributes.preserving
+            if attributes.preserving then [] else [UndefinedSymbol s.name | s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) rhs.term]
         containsAcSymbols =
             any (Util.checkTermSymbols Util.checkSymbolIsAc . snd) argPairs
         computedAttributes =
             ComputedAxiomAttributes
-                { preservesDefinedness = argsDefined && rhsPreserves
+                { notPreservesDefinednessReasons = argsUndefined ++ rhsPreserves
                 , containsAcSymbols
                 }
     pure $

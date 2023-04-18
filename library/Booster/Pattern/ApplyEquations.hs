@@ -285,7 +285,7 @@ applyEquation term rule = runMaybeT $ do
         lift . throw . InternalError $
             "Equation with existentials: " <> Text.pack (show rule)
     -- immediately cancel if not preserving definedness
-    guard rule.computedAttributes.preservesDefinedness
+    guard $ null rule.computedAttributes.notPreservesDefinednessReasons
     -- immediately cancel if rule has concrete() flag and term has any free variables
     guard $ not $ (allMustBeConcrete rule.attributes.concrete) && (not . null . freeVariables) term
     -- match lhs

@@ -42,6 +42,7 @@ import Booster.Definition.Attributes.Base
 import Booster.Syntax.ParsedKore.Base
 import Data.Coerce (Coercible, coerce)
 import Kore.Syntax.Json.Types (Id (..))
+import Data.Maybe (fromMaybe)
 
 {- | A class describing all attributes we want to extract from parsed
  entities
@@ -70,7 +71,7 @@ instance HasAttributes ParsedAxiom where
             <*> readPriority attributes
             <*> (attributes .:? "label")
             <*> (attributes .:? "simplification")
-            <*> (attributes .:? "preserves-definedness")
+            <*> (fromMaybe False <$> (attributes .:? "preserves-definedness"))
             <*> (maybe (Concrete Nothing) id <$> (attributes .:? "concrete"))
 
 sourceName

@@ -154,9 +154,9 @@ applyRule pat rule = runMaybeT $ do
 
     -- Also fail the whole rewrite if a rule applies but may introduce
     -- an undefined term.
-    unless rule.computedAttributes.preservesDefinedness $
+    unless (null rule.computedAttributes.notPreservesDefinednessReasons) $
         failRewrite $
-            DefinednessUnclear rule pat
+            DefinednessUnclear rule pat $ rule.computedAttributes.notPreservesDefinednessReasons
 
     -- apply substitution to rule constraints and simplify (one by one
     -- in isolation). Stop if false, abort rewrite if indeterminate.
@@ -209,7 +209,7 @@ data RewriteFailed k
     | -- | A rule condition is indeterminate
       RuleConditionUnclear (RewriteRule k) Predicate
     | -- | A rewrite rule does not preserve definedness
-      DefinednessUnclear (RewriteRule k) Pattern
+      DefinednessUnclear (RewriteRule k) Pattern [NotPreservesDefinednessReason]
     | -- | A unification produced a non-match substitution
       UnificationIsNotMatch (RewriteRule k) Term Substitution
     | -- | A sort error was detected during unification
@@ -239,13 +239,14 @@ instance Pretty (RewriteFailed k) where
             , ": "
             , pretty predicate
             ]
-    pretty (DefinednessUnclear rule pat) =
-        hsep
+    pretty (DefinednessUnclear rule pat reasons) =
+        hsep $
             [ "Uncertain about definedness of rule "
             , ruleId rule
-            , " applied to "
-            , pretty pat
-            ]
+            -- , " applied to "
+            -- , pretty pat
+            , "because of:"
+            ] ++ map pretty reasons
     pretty (UnificationIsNotMatch rule term subst) =
         hsep
             [ "Unification produced a non-match:"
