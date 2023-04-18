@@ -240,6 +240,9 @@ pattern AndBool ts <-
 pattern DV :: Sort -> Symbol
 pattern DV sort <- Symbol "\\dv" _ _ sort _
 
+pattern DotDotDot :: Term
+pattern DotDotDot = DomainValue (SortApp "internalDummySort" []) "..."
+
 {- | A predicate describes constraints on terms. It will always evaluate
    to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.
 -}
@@ -358,6 +361,7 @@ instance Pretty Term where
                 prettyBS (decodeLabel' symbol.name)
                     <> KPretty.parametersP sortParams
                     <> KPretty.argumentsP args
+            DotDotDot -> "..."
             DomainValue sort bs ->
                 "\\dv"
                     <> KPretty.parametersP [sort]

@@ -205,15 +205,6 @@ instance ReadT Text where
     readT = maybe (Left "empty") Right
 
 
--- instance ReadT a => ReadT [a] where
---     readT Nothing = Left "no list found"
---     readT (Just "") = Right []
---     readT (Just xs) = let split = Text.splitOn "," xs in mapM (readT . Just) split
-
--- instance ReadT Variable where
---     readT Nothing = Left "no variable found"
---     readT (Just str) = 
-
 instance ReadT Concrete where
     readT Nothing = Right $ Concrete Nothing
     readT (Just "") = Right $ Concrete $ Just []

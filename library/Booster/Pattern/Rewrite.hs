@@ -38,6 +38,7 @@ import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
 import Data.Set qualified as Set
+import qualified Data.Hashable as Hashable
 
 newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe LLVM.API) (Except err) a}
     deriving newtype (Functor, Applicative, Monad)
@@ -111,7 +112,7 @@ rewriteStep cutLabels terminalLabels pat = do
                 | labelOf r `elem` terminalLabels ->
                     pure $ RewriteTerminal (labelOf r) x
                 | otherwise ->
-                    pure $ RewriteSingle x
+                    pure $ RewriteSingle (labelOf r) x
             rxs ->
                 pure $ RewriteBranch pat $ NE.fromList $ map snd rxs
 
@@ -274,7 +275,7 @@ ruleId rule =
 -- | Different rewrite results (returned from RPC execute endpoint)
 data RewriteResult pat
     = -- | single result (internal use, not returned)
-      RewriteSingle pat
+      RewriteSingle Text pat
     | -- | branch point
       RewriteBranch pat (NonEmpty pat)
     | -- | no rules could be applied, config is stuck
@@ -292,8 +293,13 @@ data RewriteResult pat
     deriving (Functor, Foldable, Traversable)
 
 instance Pretty (RewriteResult Pattern) where
-    pretty (RewriteSingle pat) =
-        showPattern "Rewritten to" pat
+    pretty (RewriteSingle lbl pat) =
+        hang 4 . vsep $
+            [ "Rewritten to:"
+            , pretty pat
+            , "Using rule:"
+            , parens (pretty lbl)
+            ]
     pretty (RewriteBranch pat nexts) =
         hang 4 . vsep $
             [ "Branch reached at:"
@@ -347,7 +353,6 @@ performRewrite ::
     Pattern ->
     io (Natural, RewriteResult Pattern)
 performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
-    logRewrite $ "Rewriting pattern " <> prettyText pat
     doSteps False 0 pat
   where
     logRewrite = logOther (LevelOther "Rewrite")
@@ -371,15 +376,30 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
             Left other ->
                 error $ show other -- FIXME
             Right (newTerm, traces) -> do
-                forM_ traces $ \(l, mloc, mlabel, r) -> 
+                forM_ traces $ \(l, mloc, mlabel, r) ->
                     logSimplify $ pack $ renderDefault $ vsep [
-                        "Rewriting pattern",
+                        "Simplifying pattern",
                         pretty l,
                         "to",
                         pretty r,
                         "using " <> pretty mloc <> " - " <> pretty mlabel
                     ]
                 pure p{term = newTerm}
+
+    diff (Pattern t1 _) (Pattern t2 _) = mkDiffTerms (t1,t2)
+    mkDiffTerms :: (Term, Term) -> (Term, Term)
+    mkDiffTerms = \case
+        (t1@(SymbolApplication s1 ss1 xs), t2@(SymbolApplication s2 ss2 ys)) ->
+            if Hashable.hash t1 == Hashable.hash t2
+                then (DotDotDot, DotDotDot)
+                else 
+                    let (xs', ys') = 
+                            unzip $ foldr (\xy rest -> case mkDiffTerms xy of
+                                    (DotDotDot, _) -> [(DotDotDot, DotDotDot)]
+                                    r -> r:rest) [] $ zip xs ys
+                    in
+                        (SymbolApplication s1 ss1 xs', SymbolApplication s2 ss2 ys')
+        r -> r
 
     doSteps :: Bool -> Natural -> Pattern -> io (Natural, RewriteResult Pattern)
     doSteps wasSimplified !counter pat'
@@ -394,7 +414,15 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                     runRewriteM def mLlvmLibrary $
                         rewriteStep cutLabels terminalLabels pat'
             case res of
-                Right (RewriteSingle single) ->
+                Right (RewriteSingle lbl single) -> do
+                    let (l, r) = diff pat' single
+                    logRewrite $ pack $ renderDefault $ vsep [
+                            "Rewriting configuration",
+                            pretty l,
+                            "to",
+                            pretty r,
+                            "using " <> pretty lbl
+                        ]
                     doSteps False (counter + 1) single
                 Right terminal@RewriteTerminal{} -> do
                     logRewrite $
@@ -414,14 +442,15 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                 Left (RuleApplicationUnclear rule term _)
                     | not wasSimplified -> do
                         simplifiedPat <- simplifyP pat'
+                        let (l, r) = diff pat' simplifiedPat
                         logRewrite $
                             "Unification unclear for rule "
                                 <> renderOneLineText (ruleId rule)
                                 <> " and term "
-                                <> prettyText term
+                                <> prettyText l
                         logRewrite $
                             "Retrying with simplified pattern "
-                                <> prettyText simplifiedPat
+                                <> prettyText r
                         doSteps True counter simplifiedPat
                 -- if there were no applicable rules and the pattern
                 -- was unsimplified, simplify and re-try once
@@ -438,3 +467,4 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                     logRewrite $ prettyText failure
                     result <- (if wasSimplified then pure else mapM simplifyP) $ RewriteAborted pat'
                     pure (counter, result)
+
