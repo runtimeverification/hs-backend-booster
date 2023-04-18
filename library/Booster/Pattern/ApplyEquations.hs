@@ -36,6 +36,9 @@ import Booster.Pattern.Index
 import Booster.Pattern.Match
 import Booster.Pattern.Simplify
 import Booster.Pattern.Util
+import Data.DList (DList, snoc, toList)
+import Data.Coerce (coerce)
+import qualified Data.Set as Set
 
 newtype EquationM a = EquationM (StateT EquationState (Except EquationFailure) a)
     deriving newtype (Functor, Applicative, Monad)
@@ -58,11 +61,12 @@ data EquationState = EquationState
     , llvmApi :: Maybe LLVM.API
     , termStack :: [Term]
     , changed :: Bool
+    , trace :: DList (Term, Maybe Location, Maybe Label, Term)
     }
 
 startState :: KoreDefinition -> Maybe LLVM.API -> EquationState
 startState definition llvmApi =
-    EquationState{definition, llvmApi, termStack = [], changed = False}
+    EquationState{definition, llvmApi, termStack = [], changed = False, trace = mempty}
 
 getState :: EquationM EquationState
 getState = EquationM get
@@ -72,6 +76,9 @@ countSteps = length . (.termStack) <$> getState
 
 pushTerm :: Term -> EquationM ()
 pushTerm t = EquationM . modify $ \s -> s{termStack = t : s.termStack}
+
+traceRuleApplication :: Term -> RewriteRule tag -> Term -> EquationM ()
+traceRuleApplication t1 r t2 = EquationM . modify $ \s@EquationState{trace} -> s{trace = snoc trace (t1, r.attributes.location, r.attributes.ruleLabel , t2)}
 
 setChanged, resetChanged :: EquationM ()
 setChanged = EquationM . modify $ \s -> s{changed = True}
@@ -96,9 +103,9 @@ runEquationM ::
     KoreDefinition ->
     Maybe LLVM.API ->
     EquationM a ->
-    Either EquationFailure a
+    Either EquationFailure (a, [(Term, Maybe Location, Maybe Label, Term)])
 runEquationM definition llvmApi (EquationM m) =
-    runExcept $ evalStateT m $ startState definition llvmApi
+    fmap (fmap $ toList . trace) <$> runExcept $ runStateT m $ startState definition llvmApi
 
 iterateEquations ::
     Int ->
@@ -132,7 +139,7 @@ evaluateTerm ::
     KoreDefinition ->
     Maybe LLVM.API ->
     Term ->
-    Either EquationFailure Term
+    Either EquationFailure (Term, [(Term, Maybe Location, Maybe Label, Term)])
 evaluateTerm direction def llvmApi =
     runEquationM def llvmApi
         . iterateEquations 100 direction PreferFunctions
@@ -279,6 +286,8 @@ applyEquation term rule = runMaybeT $ do
             "Equation with existentials: " <> Text.pack (show rule)
     -- immediately cancel if not preserving definedness
     guard rule.computedAttributes.preservesDefinedness
+    -- immediately cancel if rule has concrete() flag and term has any free variables
+    guard $ not $ (allMustBeConcrete rule.attributes.concrete) && (not . null . freeVariables) term
     -- match lhs
     koreDef <- (.definition) <$> lift getState
     case matchTerm koreDef rule.lhs.term term of
@@ -291,6 +300,14 @@ applyEquation term rule = runMaybeT $ do
         MatchError msg ->
             lift . throw . InternalError $ "Match error: " <> msg
         MatchSuccess subst -> do
+            let mustBeConcreteVars = getConcreteVars rule.attributes.concrete
+                maybeConcreteVarTerms = Map.elems $ Map.filterWithKey (\k _ -> k `Set.member` mustBeConcreteVars) subst
+                areConcrete = all (null . freeVariables) maybeConcreteVarTerms
+            -- cancel if condition
+            -- forall (v, t) : subst. concrete(v) -> null(FV(t))
+            -- is violated
+            guard $ not areConcrete
+
             -- check conditions, using substitution (will call back
             -- into the simplifier! -> import loop)
             let newConstraints =
@@ -304,6 +321,7 @@ applyEquation term rule = runMaybeT $ do
                     substituteInTerm subst rule.rhs.term
             -- NB no new constraints, as they have been checked to be `Top`
             -- FIXME what about symbolic constraints here?
+            lift $ traceRuleApplication term rule rewritten
             return rewritten
   where
     -- evaluate/simplify a predicate, cut the operation short when it
@@ -317,6 +335,13 @@ applyEquation term rule = runMaybeT $ do
             Bottom -> fail "side condition was false"
             Top -> pure Nothing
             _other -> pure $ Just p
+
+    allMustBeConcrete (Concrete (Just [])) = True
+    allMustBeConcrete _ = False
+
+    getConcreteVars (Concrete xs) = case xs of
+        Nothing -> mempty
+        Just vs -> Set.fromList $ map (\(var, sort) -> Variable (SortApp sort []) var) vs
 
 --------------------------------------------------------------------
 

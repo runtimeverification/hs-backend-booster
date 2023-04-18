@@ -21,10 +21,24 @@ import Data.Char (isDigit)
 import Data.Kind
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
 import Text.Read (readEither)
 import Text.Regex.PCRE
 
 import Booster.Definition.Attributes.Base
+    ( AxiomAttributes(AxiomAttributes),
+      Concrete(..),
+      DefinitionAttributes(..),
+      FileSource(..),
+      Flag(Flag),
+      Location(Location),
+      ModuleAttributes(..),
+      Position(Position),
+      Priority,
+      SortAttributes(..),
+      SymbolAttributes(SymbolAttributes),
+      SymbolType(PartialFunction, Constructor, SortInjection,
+                 TotalFunction) )
 import Booster.Syntax.ParsedKore.Base
 import Data.Coerce (Coercible, coerce)
 import Kore.Syntax.Json.Types (Id (..))
@@ -57,6 +71,7 @@ instance HasAttributes ParsedAxiom where
             <*> (attributes .:? "label")
             <*> (attributes .:? "simplification")
             <*> (attributes .:? "preserves-definedness")
+            <*> (maybe (Concrete Nothing) id <$> (attributes .:? "concrete"))
 
 sourceName
     , locationName ::
@@ -188,6 +203,25 @@ instance ReadT Bool where
 
 instance ReadT Text where
     readT = maybe (Left "empty") Right
+
+
+-- instance ReadT a => ReadT [a] where
+--     readT Nothing = Left "no list found"
+--     readT (Just "") = Right []
+--     readT (Just xs) = let split = Text.splitOn "," xs in mapM (readT . Just) split
+
+-- instance ReadT Variable where
+--     readT Nothing = Left "no variable found"
+--     readT (Just str) = 
+
+instance ReadT Concrete where
+    readT Nothing = Right $ Concrete Nothing
+    readT (Just "") = Right $ Concrete $ Just []
+    readT (Just xs) = let split = Text.splitOn "," xs in Concrete . Just <$> mapM readVar split
+        where
+            readVar str = case Text.splitOn ":" str of
+                [name, sort] -> Right (Text.encodeUtf8 name, Text.encodeUtf8 $ Text.replace "{}" "" sort)
+                _ ->  Left "Invalid variable"
 
 instance ReadT Position where
     readT = maybe (Left "empty position") readLocationType

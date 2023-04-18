@@ -351,6 +351,7 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
     doSteps False 0 pat
   where
     logRewrite = logOther (LevelOther "Rewrite")
+    logSimplify = logOther (LevelOther "Simplify")
 
     prettyText :: Pretty a => a -> Text
     prettyText = pack . renderDefault . pretty
@@ -362,7 +363,6 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
     simplifyP :: Pattern -> io Pattern
     simplifyP p = do
         let result = evaluateTerm TopDown def mLlvmLibrary p.term
-        -- probably in MonadLogger soon?
         case result of
             Left (TooManyIterations n _ t) -> do
                 logWarn $ "Simplification unable to finish in " <> prettyText n <> " steps."
@@ -370,7 +370,15 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                 pure p{term = t}
             Left other ->
                 error $ show other -- FIXME
-            Right newTerm ->
+            Right (newTerm, traces) -> do
+                forM_ traces $ \(l, mloc, mlabel, r) -> 
+                    logSimplify $ pack $ renderDefault $ vsep [
+                        "Rewriting pattern",
+                        pretty l,
+                        "to",
+                        pretty r,
+                        "using " <> pretty mloc <> " - " <> pretty mlabel
+                    ]
                 pure p{term = newTerm}
 
     doSteps :: Bool -> Natural -> Pattern -> io (Natural, RewriteResult Pattern)
@@ -393,6 +401,7 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                         "Terminal rule after " <> showCounter (counter + 1)
                     logRewrite $ prettyText terminal
                     simplified <- mapM simplifyP terminal
+                    logRewrite $ "Simplified pattern " <> prettyText simplified
                     pure (counter + 1, simplified)
                 Right other -> do
                     logRewrite $ "Stopped after " <> showCounter counter

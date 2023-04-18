@@ -12,6 +12,7 @@ module Booster.Definition.Attributes.Base (
     DefinitionAttributes (..),
     ModuleAttributes (..),
     AxiomAttributes (..),
+    Concrete(..),
     ComputedAxiomAttributes (..),
     SymbolType (..),
     SymbolAttributes (..),
@@ -37,6 +38,7 @@ import Data.Text (Text)
 import Data.Word (Word8)
 import GHC.Generics (Generic)
 import Prettyprinter as Pretty
+import Data.ByteString (ByteString)
 
 data DefinitionAttributes = DefinitionAttributes
     {
@@ -65,6 +67,7 @@ data AxiomAttributes = AxiomAttributes
     , ruleLabel :: Maybe Label
     , simplification :: Maybe Priority
     , preserving :: Maybe Bool -- this will override the computed attribute
+    , concrete :: Concrete
     }
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
@@ -102,6 +105,10 @@ data Position = Position
     }
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
+
+newtype Concrete = Concrete (Maybe [(ByteString, ByteString)])
+    deriving stock (Eq, Ord, Read, Show)
+    deriving newtype (NFData)
 
 data SymbolType
     = PartialFunction
