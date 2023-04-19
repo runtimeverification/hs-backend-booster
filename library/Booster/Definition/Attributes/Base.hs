@@ -12,7 +12,8 @@ module Booster.Definition.Attributes.Base (
     DefinitionAttributes (..),
     ModuleAttributes (..),
     AxiomAttributes (..),
-    Concrete (..),
+    Concreteness (..),
+    Constrained(..),
     ComputedAxiomAttributes (..),
     SymbolType (..),
     SymbolAttributes (..),
@@ -21,7 +22,7 @@ module Booster.Definition.Attributes.Base (
     Location (..),
     Position (..),
     FileSource (..),
-    Priority,
+    Priority(..),
     Flag (..),
     pattern IsIdem,
     pattern IsNotIdem,
@@ -43,6 +44,8 @@ import GHC.Generics (Generic)
 import Prettyprinter as Pretty
 
 import Booster.Util qualified as Util
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 data DefinitionAttributes = DefinitionAttributes
     {
@@ -69,9 +72,9 @@ data AxiomAttributes = AxiomAttributes
     { location :: Maybe Location
     , priority :: Priority -- priorities are <= 200
     , ruleLabel :: Maybe Label
-    , simplification :: Maybe Priority
-    , preserving :: Bool -- this will override the computed attribute
-    , concrete :: Concrete
+    , simplification :: Flag "isSimplification"
+    , preserving :: Flag "preservingDefinedness" -- this will override the computed attribute
+    , concreteness :: Concreteness
     }
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
@@ -120,9 +123,18 @@ data Position = Position
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
-newtype Concrete = Concrete (Maybe [(ByteString, ByteString)])
-    deriving stock (Eq, Ord, Read, Show)
-    deriving newtype (NFData)
+data Constrained = Concrete | Symbolic
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
+
+
+type VarnameAndSort = (ByteString, ByteString)
+
+data Concreteness = Unconstrained
+                 | AllConstrained Constrained
+                 | SomeConstrained (Map VarnameAndSort Constrained)
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
 
 data SymbolType
     = PartialFunction

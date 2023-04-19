@@ -32,7 +32,7 @@ import Prettyprinter
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.LLVM.Internal qualified as LLVM
-import Booster.Pattern.ApplyEquations (Direction (..), EquationFailure (..), evaluateTerm)
+import Booster.Pattern.ApplyEquations (Direction (..), EquationFailure (..), evaluateTerm, ApplyEquationResult (..))
 import Booster.Pattern.Base
 import Booster.Pattern.Index (TermIndex (..), kCellTermIndex)
 import Booster.Pattern.Simplify
@@ -135,7 +135,7 @@ applyRule ::
 applyRule pat rule = runMaybeT $ do
     def <- lift getDefinition
     -- unify terms
-    let unified = unifyTerms def rule.lhs.term pat.term
+    let unified = unifyTerms def rule.lhs pat.term
     subst <- case unified of
         UnificationFailed _reason ->
             fail "Unification failed"
@@ -148,7 +148,7 @@ applyRule pat rule = runMaybeT $ do
 
     -- check it is a "matching" substitution (substitutes variables
     -- from the subject term only). Fail the entire rewrite if not.
-    unless (Map.keysSet subst == freeVariables rule.lhs.term) $
+    unless (Map.keysSet subst == freeVariables rule.lhs) $
         failRewrite $
             UnificationIsNotMatch rule pat.term subst
 
@@ -159,12 +159,12 @@ applyRule pat rule = runMaybeT $ do
             DefinednessUnclear rule pat $
                 rule.computedAttributes.notPreservesDefinednessReasons
 
-    -- apply substitution to rule constraints and simplify (one by one
+    -- apply substitution to rule requires constraints and simplify (one by one
     -- in isolation). Stop if false, abort rewrite if indeterminate.
-    let newConstraints =
+    let ruleConditions =
             concatMap (splitBoolPredicates . substituteInPredicate subst) $
-                rule.lhs.constraints <> rule.rhs.constraints
-    unclearConditions <- catMaybes <$> mapM checkConstraint newConstraints
+                rule.requires
+    unclearConditions <- catMaybes <$> mapM checkConstraint ruleConditions
 
     unless (null unclearConditions) $
         failRewrite $
@@ -172,7 +172,7 @@ applyRule pat rule = runMaybeT $ do
 
     let rewritten =
             Pattern
-                (substituteInTerm (refreshExistentials subst) rule.rhs.term)
+                (substituteInTerm (refreshExistentials subst) rule.rhs)
                 -- NB no new constraints, as they have been checked to be `Top`
                 (map (substituteInPredicate subst) $ pat.constraints)
     return (rule, rewritten)
@@ -378,16 +378,47 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                 error $ show other -- FIXME
             Right (newTerm, traces) -> do
                 forM_ traces $ \(l, mloc, mlabel, r) ->
-                    logSimplify $
-                        pack $
-                            renderDefault $
-                                vsep
-                                    [ "Simplifying pattern"
-                                    , pretty l
-                                    , "to"
-                                    , pretty r
-                                    , "using " <> pretty mloc <> " - " <> pretty mlabel
-                                    ]
+                    case r of
+                        Success rewritten ->
+                            logSimplify $ pack $ 
+                                renderDefault $
+                                    vsep
+                                        [ "Simplifying term"
+                                        , pretty l
+                                        , "to"
+                                        , pretty rewritten
+                                        , "using " <> pretty mloc <> " - " <> pretty mlabel
+                                        ]
+                        FailedMatch _ -> pure ()
+                        IndeterminateMatch -> pure ()
+                        RuleNotPreservingDefinedness -> 
+                            logSimplify $ pack $ 
+                                renderDefault $
+                                    vsep
+                                        [ "Simplifying term"
+                                        , pretty l
+                                        , "failed because the rule at"
+                                        , pretty mloc <> " - " <> pretty mlabel
+                                        , "does not preserve definedness"
+                                        ]
+                        IndeterminateCondition -> 
+                            logSimplify $ pack $ 
+                                renderDefault $
+                                    vsep
+                                        [ "Simplifying term"
+                                        , pretty l
+                                        , "failed with indeterminate condition"
+                                        , "using " <> pretty mloc <> " - " <> pretty mlabel
+                                        ]
+                        ConditionBottom -> 
+                            logSimplify $ pack $ 
+                                renderDefault $
+                                    vsep
+                                        [ "Simplifying term"
+                                        , pretty l
+                                        , "failed with false condition"
+                                        , "using " <> pretty mloc <> " - " <> pretty mlabel
+                                        ]
                 pure p{term = newTerm}
 
     diff (Pattern t1 _) (Pattern t2 _) = mkDiffTerms (t1, t2)

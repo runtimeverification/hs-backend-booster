@@ -218,16 +218,18 @@ f2Equations =
 equation :: Maybe Text -> Pattern -> Pattern -> Priority -> RewriteRule t
 equation ruleLabel lhs rhs priority =
     RewriteRule
-        { lhs
-        , rhs
+        { lhs = lhs.term
+        , rhs = rhs.term
+        , requires = lhs.constraints
+        , ensures = rhs.constraints
         , attributes =
             AxiomAttributes
                 { location = Nothing
                 , priority
                 , ruleLabel
-                , simplification = Nothing
-                , preserving = False
-                , concrete = Concrete Nothing
+                , simplification = Flag False
+                , preserving = Flag False
+                , concreteness = Unconstrained
                 }
         , computedAttributes = ComputedAxiomAttributes False []
         , existentials = mempty

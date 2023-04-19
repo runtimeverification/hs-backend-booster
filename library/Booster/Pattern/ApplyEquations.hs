@@ -9,6 +9,7 @@ module Booster.Pattern.ApplyEquations (
     Direction (..),
     EquationPreference (..),
     EquationFailure (..),
+    ApplyEquationResult (..),
 ) where
 
 import Control.Monad
@@ -48,12 +49,13 @@ throw = EquationM . lift . throwE
 
 data EquationFailure
     = IndexIsNone Term
-    | InconsistentFunctionRules [Term]
-    | IndeterminateMatch Term Term
-    | IndeterminateCondition Predicate
+    -- | InconsistentFunctionRules [Term]
+    -- | IndeterminateMatch Term Term
+    -- | IndeterminateCondition Predicate
     | TooManyIterations Int Term Term
     | EquationLoop [Term]
     | InternalError Text
+    -- | DoesNotPreserveDefinedness (RewriteRule "Function")
     deriving stock (Eq, Show)
 
 data EquationState = EquationState
@@ -61,7 +63,7 @@ data EquationState = EquationState
     , llvmApi :: Maybe LLVM.API
     , termStack :: [Term]
     , changed :: Bool
-    , trace :: Seq (Term, Maybe Location, Maybe Label, Term)
+    , trace :: Seq (Term, Maybe Location, Maybe Label, ApplyEquationResult)
     }
 
 startState :: KoreDefinition -> Maybe LLVM.API -> EquationState
@@ -77,10 +79,6 @@ countSteps = length . (.termStack) <$> getState
 pushTerm :: Term -> EquationM ()
 pushTerm t = EquationM . modify $ \s -> s{termStack = t : s.termStack}
 
-traceRuleApplication :: Term -> RewriteRule tag -> Term -> EquationM ()
-traceRuleApplication t1 r t2 =
-    EquationM . modify $
-        \s -> s{trace = s.trace :|> (t1, r.attributes.location, r.attributes.ruleLabel, t2)}
 
 setChanged, resetChanged :: EquationM ()
 setChanged = EquationM . modify $ \s -> s{changed = True}
@@ -105,7 +103,7 @@ runEquationM ::
     KoreDefinition ->
     Maybe LLVM.API ->
     EquationM a ->
-    Either EquationFailure (a, [(Term, Maybe Location, Maybe Label, Term)])
+    Either EquationFailure (a, [(Term, Maybe Location, Maybe Label, ApplyEquationResult)])
 runEquationM definition llvmApi (EquationM m) =
     fmap (fmap $ toList . trace) <$> runExcept $ runStateT m $ startState definition llvmApi
 
@@ -141,7 +139,7 @@ evaluateTerm ::
     KoreDefinition ->
     Maybe LLVM.API ->
     Term ->
-    Either EquationFailure (Term, [(Term, Maybe Location, Maybe Label, Term)])
+    Either EquationFailure (Term, [(Term, Maybe Location, Maybe Label, ApplyEquationResult)])
 evaluateTerm direction def llvmApi =
     runEquationM def llvmApi
         . iterateEquations 100 direction PreferFunctions
@@ -222,109 +220,148 @@ applyAtTop pref term = do
     def <- (.definition) <$> getState
     case pref of
         PreferFunctions -> do
-            fromFunctions <- applyEquations def.functionEquations term
+            -- when applying equations, we want to catch DoesNotPreserveDefinedness/incosistentmatch/etc
+            -- to do with functions, so as not to abort the entire simplification run
+            fromFunctions <- applyEquations def.functionEquations handleFunctionEquation term
             if fromFunctions == term
-                then applyEquations def.simplifications term
+                then applyEquations def.simplifications handleSimplificationEquation term
                 else pure fromFunctions
         PreferSimplifications -> do
-            simplified <- applyEquations def.simplifications term
+            simplified <- applyEquations def.simplifications handleSimplificationEquation term
             if simplified == term
-                then applyEquations def.functionEquations term
+                then applyEquations def.functionEquations handleFunctionEquation term
                 else pure simplified
+
+
+handleFunctionEquation :: (Term -> t) -> t -> t -> ApplyEquationResult -> t
+handleFunctionEquation success continue abort = \case
+    Success rewritten -> success rewritten
+    FailedMatch _ -> continue
+    IndeterminateMatch -> continue
+    IndeterminateCondition -> continue
+    ConditionBottom -> continue
+    RuleNotPreservingDefinedness -> abort
+
+
+handleSimplificationEquation :: (Term -> t) -> t -> t -> ApplyEquationResult -> t
+handleSimplificationEquation success continue _abort = \case
+    Success rewritten -> success rewritten
+    FailedMatch _ -> continue
+    IndeterminateMatch -> continue
+    IndeterminateCondition -> continue
+    ConditionBottom -> continue
+    RuleNotPreservingDefinedness -> continue
+
 
 applyEquations ::
     forall tag.
-    ApplyEquationOps tag =>
     Theory (RewriteRule tag) ->
+    ((Term -> EquationM Term) -> EquationM Term -> EquationM Term -> ApplyEquationResult -> EquationM Term) ->
     Term ->
     EquationM Term
-applyEquations theory term = do
+applyEquations theory handler term = do
     let index = termTopIndex term
     when (index == None) $
         throw (IndexIsNone term)
     let idxEquations, anyEquations :: Map Priority [RewriteRule tag]
         idxEquations = fromMaybe Map.empty $ Map.lookup index theory
         anyEquations = fromMaybe Map.empty $ Map.lookup Anything theory
-        equationGroups :: [[RewriteRule tag]]
-        equationGroups =
-            map snd . Map.toAscList $
+        -- neither simplification nor function equations should need groups,
+        -- since simplification priority is just a suggestion and function equations
+        -- should not contain non-determinism except for the [owise] equation,
+        -- which should be attempted last. Thus, sorting and then applying sequentially is fine.
+        -- Doing this loses the runtime check of InconsistentFunctionRules, however, 
+        -- most function rules are in the same priority group and thus, 
+        -- we would be applying all of them before checking for inconsistency,
+        -- which is inefficient
+        equations :: [RewriteRule tag]
+        equations =
+            concat . map snd . Map.toAscList $
                 if index == Anything
                     then idxEquations
                     else Map.unionWith (<>) idxEquations anyEquations
 
-    -- no need for an error when (null equationGroups), it will just stop.
-    processGroups equationGroups
+    -- no need for an error when (null equations), it will just stop.
+    processEquations equations
   where
     -- process one group of equations at a time, until something has happened
-    processGroups ::
-        [[RewriteRule tag]] ->
+    processEquations ::
+        [RewriteRule tag] ->
         EquationM Term
-    processGroups [] =
+    processEquations [] =
         pure term -- nothing to do, term stays the same
-    processGroups (eqs : rest) = do
+    processEquations (eq : rest) = do
         -- try all equations in this group, and inspect the results
-        results <- catMaybes <$> mapM (applyEquation term) eqs
-        case results of
-            [] ->
-                processGroups rest -- no success at all in this group
-            [newTerm] -> do
-                setChanged >> pure newTerm -- single result
-            (first : second : more) -> do
-                -- either error out or select one result
-                result <- onMultipleResults (Proxy @tag) first (second :| more)
-                -- if a result has been chosen:
-                setChanged >> pure result
+        res <- applyEquation term eq
+        traceRuleApplication term eq.attributes.location eq.attributes.ruleLabel res
+        handler (\t -> setChanged >> pure t) (processEquations rest) (pure term) res   
+         
+
+data ApplyEquationResult = 
+        Success Term
+      | FailedMatch MatchFailReason
+      | IndeterminateMatch
+      | IndeterminateCondition
+      | ConditionBottom
+      | RuleNotPreservingDefinedness
+    deriving stock (Eq, Show)
+
+traceRuleApplication :: Term
+    -> Maybe Location
+    -> Maybe Label
+    -> ApplyEquationResult
+    -> EquationM ()
+traceRuleApplication t loc lbl res =
+    EquationM . modify $
+        \s -> s{trace = s.trace :|> (t, loc, lbl, res)}
+
 
 applyEquation ::
     forall tag.
-    ApplyEquationOps tag =>
     Term ->
     RewriteRule tag ->
-    EquationM (Maybe Term)
-applyEquation term rule = runMaybeT $ do
+    EquationM ApplyEquationResult
+applyEquation term rule = do
     -- ensured by internalisation: no existentials in equations
     unless (null rule.existentials) $
-        lift . throw . InternalError $
+        throw . InternalError $
             "Equation with existentials: " <> Text.pack (show rule)
     -- immediately cancel if not preserving definedness
-    guard $ null rule.computedAttributes.notPreservesDefinednessReasons
-    -- immediately cancel if rule has concrete() flag and term has any free variables
-    guard $ not $ (allMustBeConcrete rule.attributes.concrete) && (not . null . freeVariables) term
-    -- match lhs
-    koreDef <- (.definition) <$> lift getState
-    case matchTerm koreDef rule.lhs.term term of
-        MatchFailed _failReason -> do
-            -- some logging, then
-            fail "match failed"
-        MatchIndeterminate pat subj -> do
-            -- some logging, then
-            onIndeterminateMatch (Proxy @tag) pat subj
-        MatchError msg ->
-            lift . throw . InternalError $ "Match error: " <> msg
-        MatchSuccess subst -> do
-            let mustBeConcreteVars = getConcreteVars rule.attributes.concrete
-                maybeConcreteVarTerms =
-                    Map.elems $ Map.filterWithKey (const . (`Set.member` mustBeConcreteVars)) subst
-            -- cancel if condition
-            -- forall (v, t) : subst. concrete(v) -> null(FV(t))
-            -- is violated
-            guard $ all (null . freeVariables) maybeConcreteVarTerms
+    if not $ null rule.computedAttributes.notPreservesDefinednessReasons
+        then pure RuleNotPreservingDefinedness
+        else do
+            -- immediately cancel if rule has concrete() flag and term has any free variables
+            -- guard $ not $ (allMustBeConcrete rule.attributes.concreteness) && (not . null . freeVariables) term
+            -- match lhs
+            koreDef <- (.definition) <$> getState
+            case matchTerm koreDef rule.lhs term of
+                MatchFailed failReason -> pure $ FailedMatch failReason
+                MatchIndeterminate _pat _subj -> pure IndeterminateMatch
+                MatchSuccess subst -> do
+                    -- cancel if condition
+                    -- forall (v, t) : subst. concrete(v) -> null(FV(t)) /\
+                    --                        symbolic(v) -> isSymbolic(t) 
+                    -- is violated
+                    -- guard $ checkConcreteness subst rule.attributes.concreteness
 
-            -- check conditions, using substitution (will call back
-            -- into the simplifier! -> import loop)
-            let newConstraints =
-                    concatMap (splitBoolPredicates . substituteInPredicate subst) $
-                        rule.lhs.constraints <> rule.rhs.constraints
-            unclearConditions <- catMaybes <$> mapM checkConstraint newConstraints
+                    -- check conditions, using substitution (will call back
+                    -- into the simplifier! -> import loop)
+                    let newConstraints =
+                            concatMap (splitBoolPredicates . substituteInPredicate subst) $
+                                rule.requires
+                    unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint newConstraints
 
-            unless (null unclearConditions) $
-                onIndeterminateCondition (Proxy @tag) (head unclearConditions)
-            let rewritten =
-                    substituteInTerm subst rule.rhs.term
-            -- NB no new constraints, as they have been checked to be `Top`
-            -- FIXME what about symbolic constraints here?
-            lift $ traceRuleApplication term rule rewritten
-            return rewritten
+                    case unclearConditions' of
+                        Nothing -> pure ConditionBottom
+                        Just unclearConditions ->
+                            if not $ null unclearConditions 
+                                then pure IndeterminateCondition
+                                else do
+                                    let rewritten =
+                                            substituteInTerm subst rule.rhs
+                                    -- NB no new constraints, as they have been checked to be `Top`
+                                    -- FIXME what about symbolic constraints here?
+                                    pure $ Success rewritten
   where
     -- evaluate/simplify a predicate, cut the operation short when it
     -- is Bottom.
@@ -338,12 +375,30 @@ applyEquation term rule = runMaybeT $ do
             Top -> pure Nothing
             _other -> pure $ Just p
 
-    allMustBeConcrete (Concrete (Just [])) = True
-    allMustBeConcrete _ = False
+    -- allMustBeConcrete (AllConstrained Concrete) = True
+    -- allMustBeConcrete _ = False
 
-    getConcreteVars (Concrete xs) = case xs of
-        Nothing -> mempty
-        Just vs -> Set.fromList $ map (\(var, sort) -> Variable (SortApp sort []) var) vs
+
+    -- checkConcreteness subst = \case
+    --     Unconstrained -> True
+    --     AllConstrained Concrete -> True -- already checked in the short circuit guard earlier
+    --     AllConstrained Symbolic -> all isSymbolic $ Map.elems subst
+    --     SomeConstrained cs -> all (check subst) $ Map.toList cs
+
+
+    -- -- TODO: this is too restrictive
+    -- isSymbolic = \case
+    --     Var _ -> True
+    --     _ -> False
+
+    -- check :: Map Variable Term
+    --          -> ((VarName, SortName), Constrained) -> Bool
+    -- check subst ((var, srt), conc) =
+    --     case subst Map.!? Variable (SortApp srt []) var of
+    --         Nothing -> error $ show var <> " not found in application of rule " <> show rule
+    --         Just t -> case conc of
+    --             Symbolic -> isVar t
+    --             Concrete -> isConcrete t
 
 --------------------------------------------------------------------
 
@@ -400,66 +455,3 @@ _simplifyConstraint = \case
         let result = t -- FIXME simplify and evaluate here
         EquationM $ put prior
         pure result
-
---------------------------------------------------------------------
-
-{- | Type class to encapsulate the differences between applying
-   simplifications and applying function rules.
--}
-class ApplyEquationOps (tag :: k) where
-    -- | Behaviour when several equations in a priority group match:
-    --
-    -- * for '"Simplification"' equations, choose the first matching
-    --   equation
-    -- * for '"Function"' equations, having several equations at the
-    --   same priority match is an error, and equations are reported.
-    onMultipleResults ::
-        Proxy tag ->
-        Term ->
-        NonEmpty Term ->
-        EquationM Term
-
-    -- | Behaviour when a match cannot be determined
-    --
-    -- * for '"Simplification"' equations, discard and proceed
-    -- * for '"Function"' equations, abort evaluation (equations at
-    --   lower priority should not be tried)
-    onIndeterminateMatch ::
-        Proxy tag ->
-        Term ->
-        Term ->
-        MaybeT EquationM Term
-
-    -- | Behaviour when side conditions cannot be determined
-    --
-    -- * for '"Simplification"' equations, discard and proceed
-    -- * for '"Function"' equations, abort evaluation (equations at
-    --   lower priority should not be tried)
-    onIndeterminateCondition ::
-        Proxy tag ->
-        Predicate ->
-        MaybeT EquationM ()
-
-instance ApplyEquationOps "Simplification" where
-    -- choose first result if more than one
-    onMultipleResults _ one _ = pure one
-
-    -- continue with more equations if application indeterminate
-    onIndeterminateMatch _ _ _ = fail "indeterminate match"
-    onIndeterminateCondition _ _ = fail "indeterminate condition"
-
-instance ApplyEquationOps "Function" where
-    -- report that equations are non-deterministic
-    onMultipleResults _ one (another :| more) =
-        -- FIXME should contain the equations not the terms
-        throw $ InconsistentFunctionRules (one : another : more)
-
-    -- throw error (abort evaluation) when indeterminate match
-    -- (subsequent equations at lower priority cannot be used)
-    onIndeterminateMatch _ pat subj =
-        lift $ throw $ IndeterminateMatch pat subj
-
-    -- abort further evaluation when a side condition is indeterminate
-    -- (subsequent equations at lower priority cannot be used)
-    onIndeterminateCondition _ p =
-        lift $ throw $ IndeterminateCondition p
