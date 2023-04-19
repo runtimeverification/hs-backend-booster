@@ -20,7 +20,7 @@ import Data.Bifunctor
 import Data.Char (isDigit)
 import Data.Coerce (Coercible, coerce)
 import Data.Kind
-import Data.Maybe (fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
@@ -92,23 +92,26 @@ readLocation attributes = do
         Nothing -> pure Nothing
         Just f -> Just . Location f <$> attributes .: locationName
 
-{- | Read 'priority' attribute (with -optional- number in [0..200]) and
-   'owise' flag, returning either the given priority or lowest
-   priority if 'owise'. Reports an error if both are present, defaults
-   to 50 if none.
+{- | Reads 'priority' and 'simplification' attributes (with -optional-
+   number in [0..200]) and 'owise' flag, returning either the given
+   priority or lowest priority if 'owise'. Reports an error if more
+   than one of these is present, defaults to 50 if none.
 -}
 readPriority :: ParsedAttributes -> Except Text Priority
 readPriority attributes = do
-    priority <- attributes .:? "priority"
-    hasOwise <- attributes .! "owise"
-    maybe
-        (pure $ if hasOwise then maxBound else 50)
-        (if hasOwise then throwE . errBothPresent else pure)
-        priority
-  where
-    errBothPresent :: Priority -> Text
-    errBothPresent p =
-        Text.pack $ "Both " <> show p <> " and 'owise' attribute in a rule"
+    priority <-
+        fmap ("priority",) <$> attributes .:? "priority"
+    simplification <-
+        fmap ("simplification",) <$> attributes .:? "simplification"
+    owise <-
+        fmap ("owise",) . (\b -> if b then Just maxBound else Nothing) <$> attributes .! "owise"
+    case catMaybes [simplification, priority, owise] of
+        [] ->
+            pure 50
+        [(_, p)] ->
+            pure p
+        more ->
+            throwE $ "Several priorities given: " <> Text.intercalate "," (map fst more)
 
 instance HasAttributes ParsedSymbol where
     type Attributes ParsedSymbol = SymbolAttributes
