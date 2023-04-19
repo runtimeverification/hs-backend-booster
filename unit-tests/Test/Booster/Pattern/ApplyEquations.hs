@@ -59,7 +59,7 @@ test_evaluateFunction =
             eval TopDown subj @?= Right a
         ]
   where
-    eval direction = evaluateTerm direction funDef Nothing
+    eval direction = fmap fst . evaluateTerm direction funDef Nothing
     a = var "A" someSort
     b = var "B" someSort
     apply f = app f . (: [])
@@ -91,7 +91,7 @@ test_simplify =
             simpl BottomUp subj @?= Right result
         ]
   where
-    simpl direction = evaluateTerm direction simplDef Nothing
+    simpl direction = fmap fst . evaluateTerm direction simplDef Nothing
     a = var "A" someSort
 
 test_errors :: TestTree
@@ -131,7 +131,7 @@ simplDef =
                             (Pattern (app con1 [app con2 [app f2 [varX]]]) [])
                             (Pattern (app con1 [varX]) [])
                             40
-                            `withComputedAttributes` ComputedAxiomAttributes False False
+                            `withComputedAttributes` ComputedAxiomAttributes False [UndefinedSymbol "f2"]
                         , equation -- con1(con2(f1(X))) => con3(X, X)
                             Nothing
                             (Pattern (app con1 [app con2 [app f1 [varX]]]) [])
@@ -212,7 +212,7 @@ f2Equations =
         (Pattern (app f2 [varX]) [])
         (Pattern (app con4 [varX, varX]) [])
         50
-        `withComputedAttributes` ComputedAxiomAttributes False False
+        `withComputedAttributes` ComputedAxiomAttributes False [UndefinedSymbol "f2"]
     ]
 
 equation :: Maybe Text -> Pattern -> Pattern -> Priority -> RewriteRule t
@@ -226,9 +226,10 @@ equation ruleLabel lhs rhs priority =
                 , priority
                 , ruleLabel
                 , simplification = Nothing
-                , preserving = Nothing
+                , preserving = False
+                , concrete = Concrete Nothing
                 }
-        , computedAttributes = ComputedAxiomAttributes False True
+        , computedAttributes = ComputedAxiomAttributes False []
         , existentials = mempty
         }
 

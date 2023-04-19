@@ -301,12 +301,12 @@ applyEquation term rule = runMaybeT $ do
             lift . throw . InternalError $ "Match error: " <> msg
         MatchSuccess subst -> do
             let mustBeConcreteVars = getConcreteVars rule.attributes.concrete
-                maybeConcreteVarTerms = Map.elems $ Map.filterWithKey (\k _ -> k `Set.member` mustBeConcreteVars) subst
-                areConcrete = all (null . freeVariables) maybeConcreteVarTerms
+                maybeConcreteVarTerms =
+                    Map.elems $ Map.filterWithKey (const . (`Set.member` mustBeConcreteVars)) subst
             -- cancel if condition
             -- forall (v, t) : subst. concrete(v) -> null(FV(t))
             -- is violated
-            guard $ not areConcrete
+            guard $ all (null . freeVariables) maybeConcreteVarTerms
 
             -- check conditions, using substitution (will call back
             -- into the simplifier! -> import loop)

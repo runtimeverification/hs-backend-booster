@@ -100,7 +100,7 @@ rule4 =
         (termInKCell "RuleVar" (app con4 [varX, varY]))
         (termInKCell "RuleVar" (app f2 [varY]))
         42
-        `withComputedAttributes` ComputedAxiomAttributes False False
+        `withComputedAttributes` ComputedAxiomAttributes False [UndefinedSymbol "f2"]
 
 termInKCell :: ByteString -> Term -> Pattern
 termInKCell varName = flip Pattern [] . withinKCell varName
@@ -143,9 +143,10 @@ rule ruleLabel lhs rhs priority =
                 , priority
                 , ruleLabel
                 , simplification = Nothing
-                , preserving = Nothing
+                , preserving = False
+                , concrete = Concrete Nothing
                 }
-        , computedAttributes = ComputedAxiomAttributes False True
+        , computedAttributes = ComputedAxiomAttributes False []
         , existentials = mempty
         }
 
@@ -185,7 +186,10 @@ errorCases =
         ]
 rewriteSuccess =
     testCase "con1 app rewrites to f1 app" $
-        (termInKCell "ConfigVar" $ app con1 [d]) `rewritesTo` (termInKCell "ConfigVar" $ app f1 [d])
+        ( termInKCell "ConfigVar" $
+            app con1 [d]
+        )
+            `rewritesTo` ("con1-f1", termInKCell "ConfigVar" $ app f1 [d])
 unifyNotMatch =
     testCase "Indeterminate case when subject has variables" $ do
         let pat = termInKCell "ConfigVar" $ app con3 [var "X" someSort, d]
@@ -200,7 +204,7 @@ unifyNotMatch =
 definednessUnclear =
     testCase "con4 rewrite to f2 might become undefined" $ do
         let pcon4 = termInKCell "ConfigVar" $ app con4 [d, d]
-        pcon4 `failsWith` DefinednessUnclear rule4 pcon4
+        pcon4 `failsWith` DefinednessUnclear rule4 pcon4 [UndefinedSymbol "f2"]
 rewriteStuck =
     testCase "con3 app is stuck (no rules apply)" $ do
         let con3App = termInKCell "ConfigVar" $ app con3 [d, d]
@@ -213,9 +217,9 @@ rulePriority =
                          , termInKCell "ConfigVar" $ app f1 [d2]
                          ]
 
-rewritesTo :: Pattern -> Pattern -> IO ()
-p1 `rewritesTo` p2 =
-    runRewriteM def Nothing (rewriteStep [] [] p1) @?= Right (RewriteSingle p2)
+rewritesTo :: Pattern -> (Text, Pattern) -> IO ()
+p1 `rewritesTo` (lbl, p2) =
+    runRewriteM def Nothing (rewriteStep [] [] p1) @?= Right (RewriteSingle lbl p2)
 
 branchesTo :: Pattern -> [Pattern] -> IO ()
 p `branchesTo` ps =
