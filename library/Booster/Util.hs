@@ -1,13 +1,12 @@
-module Booster.Util(
-      decodeLabel,
+module Booster.Util (
+    decodeLabel,
     decodeLabel',
-  ) where
+) where
+
 import Data.ByteString (ByteString)
-import qualified Data.Map as Map
+import Data.ByteString.Char8 qualified as BS
 import Data.Either (fromRight)
-import qualified Data.ByteString.Char8 as BS
-
-
+import Data.Map qualified as Map
 
 -- | Un-escapes special characters in symbol names
 decodeLabel :: ByteString -> Either String ByteString

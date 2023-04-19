@@ -743,7 +743,7 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
                             { containsAcSymbols =
                                 any (Util.checkTermSymbols Util.checkSymbolIsAc) [lhs.term, rhs.term]
                             , notPreservesDefinednessReasons =
-                                if attributes.preserving then [] else undefinedSymbols 
+                                if attributes.preserving then [] else undefinedSymbols
                             }
                 pure $
                     SimplificationAxiom
@@ -802,7 +802,7 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
                 left{Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
     rhs <- internaliseSide right
     let argsUndefined =
-            [UndefinedSymbol s.name | (_,t) <- argPairs, s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) t]
+            [UndefinedSymbol s.name | (_, t) <- argPairs, s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) t]
         rhsPreserves =
             -- users can override the definedness computation by an explicit attribute
             if attributes.preserving then [] else [UndefinedSymbol s.name | s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) rhs.term]

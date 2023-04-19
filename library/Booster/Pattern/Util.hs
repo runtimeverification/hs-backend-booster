@@ -22,7 +22,6 @@ module Booster.Pattern.Util (
     checkTermSymbols,
     isBottom,
     isConcrete,
-
     filterTermSymbols,
 ) where
 
@@ -150,12 +149,10 @@ checkTermSymbols check = cata $ \case
     SymbolApplicationF symbol _ ts -> check symbol && and ts
     other -> and other
 
-
 filterTermSymbols :: (Symbol -> Bool) -> Term -> [Symbol]
 filterTermSymbols check = cata $ \case
-    SymbolApplicationF symbol _ ts -> (if check symbol then (symbol:) else id) $ concat ts
+    SymbolApplicationF symbol _ ts -> (if check symbol then (symbol :) else id) $ concat ts
     _ -> []
-
 
 isBottom :: Pattern -> Bool
 isBottom = (Bottom `elem`) . constraints

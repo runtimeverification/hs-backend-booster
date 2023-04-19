@@ -25,24 +25,29 @@ import Data.Text.Encoding qualified as Text
 import Text.Read (readEither)
 import Text.Regex.PCRE
 
-import Booster.Definition.Attributes.Base
-    ( AxiomAttributes(AxiomAttributes),
-      Concrete(..),
-      DefinitionAttributes(..),
-      FileSource(..),
-      Flag(Flag),
-      Location(Location),
-      ModuleAttributes(..),
-      Position(Position),
-      Priority,
-      SortAttributes(..),
-      SymbolAttributes(SymbolAttributes),
-      SymbolType(PartialFunction, Constructor, SortInjection,
-                 TotalFunction) )
+import Booster.Definition.Attributes.Base (
+    AxiomAttributes (AxiomAttributes),
+    Concrete (..),
+    DefinitionAttributes (..),
+    FileSource (..),
+    Flag (Flag),
+    Location (Location),
+    ModuleAttributes (..),
+    Position (Position),
+    Priority,
+    SortAttributes (..),
+    SymbolAttributes (SymbolAttributes),
+    SymbolType (
+        Constructor,
+        PartialFunction,
+        SortInjection,
+        TotalFunction
+    ),
+ )
 import Booster.Syntax.ParsedKore.Base
 import Data.Coerce (Coercible, coerce)
-import Kore.Syntax.Json.Types (Id (..))
 import Data.Maybe (fromMaybe)
+import Kore.Syntax.Json.Types (Id (..))
 
 {- | A class describing all attributes we want to extract from parsed
  entities
@@ -72,7 +77,7 @@ instance HasAttributes ParsedAxiom where
             <*> (attributes .:? "label")
             <*> (attributes .:? "simplification")
             <*> (fromMaybe False <$> (attributes .:? "preserves-definedness"))
-            <*> (maybe (Concrete Nothing) id <$> (attributes .:? "concrete"))
+            <*> (fromMaybe (Concrete Nothing) <$> (attributes .:? "concrete"))
 
 sourceName
     , locationName ::
@@ -205,15 +210,14 @@ instance ReadT Bool where
 instance ReadT Text where
     readT = maybe (Left "empty") Right
 
-
 instance ReadT Concrete where
     readT Nothing = Right $ Concrete Nothing
     readT (Just "") = Right $ Concrete $ Just []
     readT (Just xs) = let split = Text.splitOn "," xs in Concrete . Just <$> mapM readVar split
-        where
-            readVar str = case Text.splitOn ":" str of
-                [name, sort] -> Right (Text.encodeUtf8 name, Text.encodeUtf8 $ Text.replace "{}" "" sort)
-                _ ->  Left "Invalid variable"
+      where
+        readVar str = case Text.splitOn ":" str of
+            [name, sort] -> Right (Text.encodeUtf8 name, Text.encodeUtf8 $ Text.replace "{}" "" sort)
+            _ -> Left "Invalid variable"
 
 instance ReadT Position where
     readT = maybe (Left "empty position") readLocationType

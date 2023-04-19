@@ -12,7 +12,7 @@ module Booster.Definition.Attributes.Base (
     DefinitionAttributes (..),
     ModuleAttributes (..),
     AxiomAttributes (..),
-    Concrete(..),
+    Concrete (..),
     ComputedAxiomAttributes (..),
     SymbolType (..),
     SymbolAttributes (..),
@@ -29,19 +29,19 @@ module Booster.Definition.Attributes.Base (
     pattern IsNotAssoc,
     pattern IsMacroOrAlias,
     pattern IsNotMacroOrAlias,
-    NotPreservesDefinednessReason(..),
+    NotPreservesDefinednessReason (..),
 ) where
 
+import Booster.Util qualified as Util
 import Control.DeepSeq (NFData (..))
+import Data.ByteString (ByteString)
 import Data.Hashable (Hashable)
 import Data.String
 import Data.Text (Text)
+import Data.Text.Encoding qualified as Text
 import Data.Word (Word8)
 import GHC.Generics (Generic)
 import Prettyprinter as Pretty
-import Data.ByteString (ByteString)
-import Booster.Util qualified as Util
-import Data.Text.Encoding qualified as Text
 
 data DefinitionAttributes = DefinitionAttributes
     {
@@ -76,8 +76,8 @@ data AxiomAttributes = AxiomAttributes
     deriving anyclass (NFData)
 
 data ComputedAxiomAttributes = ComputedAxiomAttributes
-    { containsAcSymbols :: Bool,
-      notPreservesDefinednessReasons :: [NotPreservesDefinednessReason]
+    { containsAcSymbols :: Bool
+    , notPreservesDefinednessReasons :: [NotPreservesDefinednessReason]
     }
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)

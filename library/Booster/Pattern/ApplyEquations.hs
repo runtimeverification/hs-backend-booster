@@ -36,9 +36,9 @@ import Booster.Pattern.Index
 import Booster.Pattern.Match
 import Booster.Pattern.Simplify
 import Booster.Pattern.Util
-import Data.DList (DList, snoc, toList)
 import Data.Coerce (coerce)
-import qualified Data.Set as Set
+import Data.DList (DList, snoc, toList)
+import Data.Set qualified as Set
 
 newtype EquationM a = EquationM (StateT EquationState (Except EquationFailure) a)
     deriving newtype (Functor, Applicative, Monad)
@@ -78,7 +78,7 @@ pushTerm :: Term -> EquationM ()
 pushTerm t = EquationM . modify $ \s -> s{termStack = t : s.termStack}
 
 traceRuleApplication :: Term -> RewriteRule tag -> Term -> EquationM ()
-traceRuleApplication t1 r t2 = EquationM . modify $ \s@EquationState{trace} -> s{trace = snoc trace (t1, r.attributes.location, r.attributes.ruleLabel , t2)}
+traceRuleApplication t1 r t2 = EquationM . modify $ \s@EquationState{trace} -> s{trace = snoc trace (t1, r.attributes.location, r.attributes.ruleLabel, t2)}
 
 setChanged, resetChanged :: EquationM ()
 setChanged = EquationM . modify $ \s -> s{changed = True}
