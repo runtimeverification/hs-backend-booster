@@ -24,7 +24,7 @@ import Data.Aeson (ToJSON (..), Value (..), object, (.=))
 import Data.Bifunctor (first, second)
 import Data.ByteString.Char8 (ByteString)
 import Data.Function (on)
-import Data.List (foldl', groupBy, partition, sortOn)
+import Data.List (foldl', groupBy, nub, partition, sortOn)
 import Data.List.Extra (groupSort)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -737,13 +737,17 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
                 rhs <- internalisePattern' right
                 let -- checking the lhs term, too, as a safe approximation
                     -- (rhs may _introduce_ undefined, lhs may _hide_ it)
-                    undefinedSymbols = [UndefinedSymbol s.name | s <- concatMap (Util.filterTermSymbols (not . Util.isDefinedSymbol)) [lhs.term, rhs.term]]
+                    undefinedSymbols =
+                        nub . concatMap (Util.filterTermSymbols (not . Util.isDefinedSymbol)) $
+                            [lhs.term, rhs.term]
                     computedAttributes =
                         ComputedAxiomAttributes
                             { containsAcSymbols =
                                 any (Util.checkTermSymbols Util.checkSymbolIsAc) [lhs.term, rhs.term]
                             , notPreservesDefinednessReasons =
-                                if attributes.preserving then [] else undefinedSymbols
+                                if attributes.preserving
+                                    then []
+                                    else map (UndefinedSymbol . (.name)) undefinedSymbols
                             }
                 pure $
                     SimplificationAxiom
@@ -753,7 +757,7 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
                 conditions <- mapM internalisePredicate' $ explodeAnd precond
                 rhs <- mapM internalisePredicate' $ explodeAnd right
                 -- undefined predicates will invalidate the rule, no flags required
-                let computedAttributes = ComputedAxiomAttributes False [UndefinedPredicate]
+                let computedAttributes = ComputedAxiomAttributes False []
                 pure $
                     PredicateSimplificationAxiom
                         PredicateEquation{target, conditions, rhs, attributes, computedAttributes}
@@ -802,15 +806,18 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
                 left{Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
     rhs <- internaliseSide right
     let argsUndefined =
-            [UndefinedSymbol s.name | (_, t) <- argPairs, s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) t]
-        rhsPreserves =
-            -- users can override the definedness computation by an explicit attribute
-            if attributes.preserving then [] else [UndefinedSymbol s.name | s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) rhs.term]
+            concatMap (Util.filterTermSymbols (not . Util.isDefinedSymbol) . snd) argPairs
+        rhsUndefined =
+            Util.filterTermSymbols (not . Util.isDefinedSymbol) rhs.term
         containsAcSymbols =
             any (Util.checkTermSymbols Util.checkSymbolIsAc . snd) argPairs
         computedAttributes =
             ComputedAxiomAttributes
-                { notPreservesDefinednessReasons = argsUndefined ++ rhsPreserves
+                { notPreservesDefinednessReasons =
+                    -- users can override the definedness computation by an explicit attribute
+                    if attributes.preserving
+                        then []
+                        else [UndefinedSymbol s.name | s <- nub (argsUndefined <> rhsUndefined)]
                 , containsAcSymbols
                 }
     pure $

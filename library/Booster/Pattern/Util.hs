@@ -151,7 +151,11 @@ checkTermSymbols check = cata $ \case
 
 filterTermSymbols :: (Symbol -> Bool) -> Term -> [Symbol]
 filterTermSymbols check = cata $ \case
-    SymbolApplicationF symbol _ ts -> (if check symbol then (symbol :) else id) $ concat ts
+    SymbolApplicationF symbol _ ts
+        | check symbol -> symbol : concat ts
+        | otherwise -> concat ts
+    AndTermF t1 t2 -> t1 <> t2
+    InjectionF _ _ t -> t
     _ -> []
 
 isBottom :: Pattern -> Bool
