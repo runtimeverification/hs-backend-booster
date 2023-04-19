@@ -18,7 +18,9 @@ import Control.Monad.Extra (whenM)
 import Control.Monad.Trans.Except
 import Data.Bifunctor
 import Data.Char (isDigit)
+import Data.Coerce (Coercible, coerce)
 import Data.Kind
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
@@ -45,8 +47,6 @@ import Booster.Definition.Attributes.Base (
     ),
  )
 import Booster.Syntax.ParsedKore.Base
-import Data.Coerce (Coercible, coerce)
-import Data.Maybe (fromMaybe)
 import Kore.Syntax.Json.Types (Id (..))
 
 {- | A class describing all attributes we want to extract from parsed

@@ -17,6 +17,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.State
+import Data.Foldable (toList)
 import Data.Functor.Foldable
 import Data.List (elemIndex)
 import Data.List.NonEmpty (NonEmpty ((:|)))
@@ -24,6 +25,8 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust)
 import Data.Proxy
+import Data.Sequence (Seq (..))
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 
@@ -36,9 +39,6 @@ import Booster.Pattern.Index
 import Booster.Pattern.Match
 import Booster.Pattern.Simplify
 import Booster.Pattern.Util
-import Data.Coerce (coerce)
-import Data.DList (DList, snoc, toList)
-import Data.Set qualified as Set
 
 newtype EquationM a = EquationM (StateT EquationState (Except EquationFailure) a)
     deriving newtype (Functor, Applicative, Monad)
@@ -61,7 +61,7 @@ data EquationState = EquationState
     , llvmApi :: Maybe LLVM.API
     , termStack :: [Term]
     , changed :: Bool
-    , trace :: DList (Term, Maybe Location, Maybe Label, Term)
+    , trace :: Seq (Term, Maybe Location, Maybe Label, Term)
     }
 
 startState :: KoreDefinition -> Maybe LLVM.API -> EquationState
@@ -78,7 +78,9 @@ pushTerm :: Term -> EquationM ()
 pushTerm t = EquationM . modify $ \s -> s{termStack = t : s.termStack}
 
 traceRuleApplication :: Term -> RewriteRule tag -> Term -> EquationM ()
-traceRuleApplication t1 r t2 = EquationM . modify $ \s@EquationState{trace} -> s{trace = snoc trace (t1, r.attributes.location, r.attributes.ruleLabel, t2)}
+traceRuleApplication t1 r t2 =
+    EquationM . modify $
+        \s -> s{trace = s.trace :|> (t1, r.attributes.location, r.attributes.ruleLabel, t2)}
 
 setChanged, resetChanged :: EquationM ()
 setChanged = EquationM . modify $ \s -> s{changed = True}

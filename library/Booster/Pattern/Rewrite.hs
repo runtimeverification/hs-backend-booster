@@ -19,10 +19,12 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
+import Data.Hashable qualified as Hashable
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
+import Data.Set qualified as Set
 import Data.Text (Text, pack)
 import Numeric.Natural
 import Prettyprinter
@@ -37,8 +39,6 @@ import Booster.Pattern.Simplify
 import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
-import Data.Hashable qualified as Hashable
-import Data.Set qualified as Set
 
 newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe LLVM.API) (Except err) a}
     deriving newtype (Functor, Applicative, Monad)
@@ -240,13 +240,11 @@ instance Pretty (RewriteFailed k) where
             , ": "
             , pretty predicate
             ]
-    pretty (DefinednessUnclear rule pat reasons) =
+    pretty (DefinednessUnclear rule _pat reasons) =
         hsep $
             [ "Uncertain about definedness of rule "
             , ruleId rule
-            , -- , " applied to "
-              -- , pretty pat
-              "because of:"
+            , "because of:"
             ]
                 ++ map pretty reasons
     pretty (UnificationIsNotMatch rule term subst) =
@@ -452,7 +450,7 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                     pure (counter, simplifiedOther)
                 -- if unification was unclear and the pattern was
                 -- unsimplified, simplify and retry rewriting once
-                Left (RuleApplicationUnclear rule term _)
+                Left (RuleApplicationUnclear rule _term _)
                     | not wasSimplified -> do
                         simplifiedPat <- simplifyP pat'
                         let (l, r) = diff pat' simplifiedPat

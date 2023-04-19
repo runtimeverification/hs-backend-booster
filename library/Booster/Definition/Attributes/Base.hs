@@ -32,7 +32,6 @@ module Booster.Definition.Attributes.Base (
     NotPreservesDefinednessReason (..),
 ) where
 
-import Booster.Util qualified as Util
 import Control.DeepSeq (NFData (..))
 import Data.ByteString (ByteString)
 import Data.Hashable (Hashable)
@@ -42,6 +41,8 @@ import Data.Text.Encoding qualified as Text
 import Data.Word (Word8)
 import GHC.Generics (Generic)
 import Prettyprinter as Pretty
+
+import Booster.Util qualified as Util
 
 data DefinitionAttributes = DefinitionAttributes
     {
