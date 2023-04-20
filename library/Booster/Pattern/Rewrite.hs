@@ -166,20 +166,26 @@ applyRule pat rule = runMaybeT $ do
 
     -- apply substitution to rule requires constraints and simplify (one by one
     -- in isolation). Stop if false, abort rewrite if indeterminate.
-    let ruleConditions =
-            concatMap (splitBoolPredicates . substituteInPredicate subst) $
-                rule.requires
-    unclearConditions <- catMaybes <$> mapM checkConstraint ruleConditions
-
-    unless (null unclearConditions) $
+    let ruleRequires =
+            concatMap (splitBoolPredicates . substituteInPredicate subst) rule.requires
+        failIfUnclear = RuleConditionUnclear rule
+    unclearRequires <- catMaybes <$> mapM (checkConstraint failIfUnclear) ruleRequires
+    unless (null unclearRequires) $
         failRewrite $
-            head unclearConditions
+            head unclearRequires
+
+    -- check ensures constraints (new) from rhs: stop (prune here) if
+    -- any are false, remove all that are trivially true, return the rest
+    let ruleEnsures =
+            concatMap (splitBoolPredicates . substituteInPredicate subst) rule.ensures
+    newConstraints <-
+        catMaybes <$> mapM (checkConstraint id) ruleEnsures
 
     let rewritten =
             Pattern
                 (substituteInTerm (refreshExistentials subst) rule.rhs)
-                -- NB no new constraints, as they have been checked to be `Top`
-                (map (substituteInPredicate subst) $ pat.constraints)
+                -- adding new constraints that have not been trivially `Top`
+                (newConstraints <> map (substituteInPredicate subst) pat.constraints)
     return (rule, rewritten)
   where
     failRewrite = lift . throw
@@ -194,13 +200,16 @@ applyRule pat rule = runMaybeT $ do
         | v `Set.member` vs = freshen v{variableName = vn <> "'"} vs
         | otherwise = v
 
-    checkConstraint :: Predicate -> MaybeT (RewriteM (RewriteFailed k)) (Maybe (RewriteFailed k))
-    checkConstraint p = do
+    checkConstraint ::
+        (Predicate -> a) ->
+        Predicate ->
+        MaybeT (RewriteM (RewriteFailed k)) (Maybe a)
+    checkConstraint onUnclear p = do
         mApi <- lift getLLVM
         case simplifyPredicate mApi p of
             Bottom -> fail "Rule condition was False"
             Top -> pure Nothing
-            other -> pure $ Just $ RuleConditionUnclear rule other
+            other -> pure $ Just $ onUnclear other
 
 {- | Reason why a rewrite did not produce a result. Contains additional
    information for logging what happened during the rewrite.
