@@ -340,7 +340,7 @@ instance Pretty (RewriteResult Pattern) where
         showPattern "Rewrite aborted" pat
 
 showPattern :: Doc a -> Pattern -> Doc a
-showPattern title pat = hang 4 $ vsep [title, pretty pat]
+showPattern title pat = hang 4 $ vsep [title, pretty (PrettyTerm pat.term)]
 
 {- | Interface for RPC execute: Rewrite given term as long as there is
    exactly one result in each step.
@@ -404,9 +404,9 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                             logSimplify . pack . renderDefault $
                                 vsep
                                     [ "Simplifying term"
-                                    , pretty l
+                                    , pretty (PrettyTerm l)
                                     , "to"
-                                    , pretty rewritten
+                                    , pretty (PrettyTerm rewritten)
                                     , "using " <> pretty mloc <> " - " <> pretty mlabel
                                     ]
                         FailedMatch _ -> pure ()
@@ -415,7 +415,7 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                             logSimplify . pack . renderDefault $
                                 vsep
                                     [ "Simplifying term"
-                                    , pretty l
+                                    , pretty (PrettyTerm l)
                                     , "failed because the rule at"
                                     , pretty mloc <> " - " <> pretty mlabel
                                     , "does not preserve definedness"
@@ -424,15 +424,15 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                             logSimplify . pack . renderDefault $
                                 vsep
                                     [ "Simplifying term"
-                                    , pretty l
+                                    , pretty (PrettyTerm l)
                                     , "failed with indeterminate condition"
                                     , "using " <> pretty mloc <> " - " <> pretty mlabel
                                     ]
-                        ConditionBottom ->
+                        ConditionFalse ->
                             logSimplify . pack . renderDefault $
                                 vsep
                                     [ "Simplifying term"
-                                    , pretty l
+                                    , pretty (PrettyTerm l)
                                     , "failed with false condition"
                                     , "using " <> pretty mloc <> " - " <> pretty mlabel
                                     ]
@@ -452,7 +452,7 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                             unzip
                                 $ foldr
                                     ( \xy rest -> case mkDiffTerms xy of
-                                        (DotDotDot, _) -> [(DotDotDot, DotDotDot)]
+                                        (DotDotDot, _) -> (DotDotDot, DotDotDot) : dropWhile (\(l, _) -> l == DotDotDot) rest
                                         r -> r : rest
                                     )
                                     []
@@ -480,9 +480,9 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                             renderDefault $
                                 vsep
                                     [ "Rewriting configuration"
-                                    , pretty l
+                                    , pretty (PrettyTerm l.term)
                                     , "to"
-                                    , pretty r
+                                    , pretty (PrettyTerm r.term)
                                     , "using " <> pretty lbl
                                     ]
                     doSteps False (counter + 1) single
@@ -509,10 +509,10 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                             "Unification unclear for rule "
                                 <> renderOneLineText (ruleId rule)
                                 <> " and term "
-                                <> prettyText l
+                                <> prettyText (PrettyTerm l.term)
                         logRewrite $
                             "Retrying with simplified pattern "
-                                <> prettyText r
+                                <> prettyText (PrettyTerm r.term)
                         doSteps True counter simplifiedPat
                 -- if there were no applicable rules and the pattern
                 -- was unsimplified, simplify and re-try once
@@ -522,7 +522,7 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                         then pure (counter, RewriteStuck pat')
                         else do
                             simplifiedPat <- simplifyP pat'
-                            logRewrite $ "Retrying with simplified pattern " <> prettyText simplifiedPat
+                            logRewrite $ "Retrying with simplified pattern " <> prettyText (PrettyTerm simplifiedPat.term)
                             doSteps True counter simplifiedPat
                 Left failure -> do
                     logRewrite $ "Aborted after " <> showCounter counter

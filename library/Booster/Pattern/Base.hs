@@ -30,6 +30,7 @@ import Data.Hashable qualified as Hashable
 import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
+import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics (Generic)
 import Prettyprinter (Pretty (..))
@@ -361,7 +362,6 @@ instance Pretty Term where
                 prettyBS (decodeLabel' symbol.name)
                     <> KPretty.parametersP sortParams
                     <> KPretty.argumentsP args
-            DotDotDot -> "..."
             DomainValue sort bs ->
                 "\\dv"
                     <> KPretty.parametersP [sort]
@@ -372,6 +372,28 @@ instance Pretty Term where
                 "\\inj"
                     <> KPretty.parametersP [source, target]
                     <> KPretty.argumentsP [t]
+
+newtype PrettyTerm = PrettyTerm Term
+
+instance Pretty PrettyTerm where
+    pretty (PrettyTerm t) = case t of
+        AndTerm t1 t2 ->
+            pretty (PrettyTerm t1) <> "/\\" <> pretty (PrettyTerm t2)
+        SymbolApplication (Symbol "Lbl'Unds'Set'Unds'" _ _ _ _) _ args ->
+            Pretty.braces . Pretty.hsep . Pretty.punctuate Pretty.comma $ concatMap collectSet args
+        SymbolApplication symbol _sortParams args ->
+            pretty (Text.replace "Lbl" "" $ Text.decodeUtf8 $ decodeLabel' symbol.name)
+                <> KPretty.argumentsP (map PrettyTerm args)
+        DotDotDot -> "..."
+        DomainValue _sort bs -> pretty $ show $ Text.decodeLatin1 bs
+        Var var -> pretty var
+        Injection _source _target t' -> pretty $ PrettyTerm t'
+      where
+        collectSet = \case
+            SymbolApplication (Symbol "Lbl'Unds'Set'Unds'" _ _ _ _) _ args ->
+                concatMap collectSet args
+            SymbolApplication (Symbol "LblSetItem" _ _ _ _) _ args -> map (pretty . PrettyTerm) args
+            other -> [pretty $ PrettyTerm other]
 
 instance Pretty Sort where
     pretty (SortApp name params) =

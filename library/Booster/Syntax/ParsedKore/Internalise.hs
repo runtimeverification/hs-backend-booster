@@ -848,8 +848,11 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
             ComputedAxiomAttributes
                 { notPreservesDefinednessReasons =
                     -- users can override the definedness computation by an explicit attribute
+                    -- we could also allow total function rules to be automatically preserving definedness
                     if coerce attrs.preserving
-                        then []
+                        then -- || functionSymbolIsTotal lhs.term
+
+                            []
                         else [UndefinedSymbol s.name | s <- nub (argsUndefined <> rhsUndefined)]
                 , containsAcSymbols
                 }
@@ -867,6 +870,10 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
                 , existentials = Set.empty
                 }
   where
+    -- functionSymbolIsTotal = \case
+    --     Def.SymbolApplication symbol _ _ -> symbol.attributes.symbolType == TotalFunction
+    --     _ -> False
+
     internaliseSide =
         withExcept DefinitionPatternError
             . fmap (removeTops . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))

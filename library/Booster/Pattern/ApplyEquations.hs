@@ -229,7 +229,7 @@ data ApplyEquationResult
     | FailedMatch MatchFailReason
     | IndeterminateMatch
     | IndeterminateCondition
-    | ConditionBottom
+    | ConditionFalse
     | RuleNotPreservingDefinedness
     deriving stock (Eq, Show)
 
@@ -247,9 +247,9 @@ handleFunctionEquation :: ResultHandler
 handleFunctionEquation success continue abort = \case
     Success rewritten -> success rewritten
     FailedMatch _ -> continue
-    IndeterminateMatch -> continue
-    IndeterminateCondition -> continue
-    ConditionBottom -> continue
+    IndeterminateMatch -> abort
+    IndeterminateCondition -> abort
+    ConditionFalse -> continue
     RuleNotPreservingDefinedness -> abort
 
 handleSimplificationEquation :: ResultHandler
@@ -258,7 +258,7 @@ handleSimplificationEquation success continue _abort = \case
     FailedMatch _ -> continue
     IndeterminateMatch -> continue
     IndeterminateCondition -> continue
-    ConditionBottom -> continue
+    ConditionFalse -> continue
     RuleNotPreservingDefinedness -> continue
 
 applyEquations ::
@@ -348,7 +348,7 @@ applyEquation term rule = do
                     unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint newConstraints
 
                     case unclearConditions' of
-                        Nothing -> pure ConditionBottom
+                        Nothing -> pure ConditionFalse
                         Just unclearConditions ->
                             if not $ null unclearConditions
                                 then pure IndeterminateCondition
