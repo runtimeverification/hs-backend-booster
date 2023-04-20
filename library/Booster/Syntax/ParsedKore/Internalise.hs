@@ -783,8 +783,7 @@ internaliseSimpleEquation partialDef precond left right sortVars attributes
             then do
                 lhs <- internalisePattern' $ Syntax.KJAnd left.sort left precond
                 rhs <- internalisePattern' right
-                let
-                    -- checking the lhs term, too, as a safe approximation
+                let -- checking the lhs term, too, as a safe approximation
                     -- (rhs may _introduce_ undefined, lhs may _hide_ it)
                     alwaysDefined = all (Util.checkTermSymbols Util.isDefinedSymbol) [lhs.term, rhs.term]
                     computedAttributes =
