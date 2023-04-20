@@ -25,7 +25,7 @@ import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Set qualified as Set
-import Data.Text (Text, pack)
+import Data.Text as Text (Text, pack, unlines)
 import Numeric.Natural
 import Prettyprinter
 
@@ -388,8 +388,15 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                 logWarn $ "Simplification unable to finish in " <> prettyText n <> " steps."
                 -- could output term before and after at debug or custom log level
                 pure p{term = t}
-            Left other ->
-                error $ show other -- FIXME
+            Left (EquationLoop (t : ts)) -> do
+                let termDiffs = zipWith (curry mkDiffTerms) (t : ts) ts
+                logError "Equation evaluation loop"
+                logSimplify $
+                    "Equation evaluation loop: " <> Text.unlines (map (prettyText . fst) termDiffs)
+                pure p{term = t} -- use result from before the loop
+            Left other -> do
+                logError . pack $ "Simplification error during rewrite: " <> show other
+                pure p
             Right (newTerm, traces) -> do
                 forM_ traces $ \(l, mloc, mlabel, r) ->
                     case r of
@@ -431,7 +438,10 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                                     ]
                 pure p{term = newTerm}
 
-    diff (Pattern t1 _) (Pattern t2 _) = mkDiffTerms (t1, t2)
+    diff p1 p2 =
+        let (t1, t2) = mkDiffTerms (p1.term, p2.term)
+         in -- TODO print differences in predicates
+            (p1{term = t1}, p2{term = t2})
     mkDiffTerms :: (Term, Term) -> (Term, Term)
     mkDiffTerms = \case
         (t1@(SymbolApplication s1 ss1 xs), t2@(SymbolApplication s2 ss2 ys)) ->
