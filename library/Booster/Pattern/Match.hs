@@ -17,19 +17,16 @@ import Control.Monad.Trans.State
 import Control.Monad.Trans.Writer
 import Data.Bifunctor (second)
 import Data.Either.Extra
-import Data.List.NonEmpty as NE (fromList)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Sequence (Seq (..), (><))
 import Data.Sequence qualified as Seq
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Data.Text (Text)
-import Data.Text qualified as Text
 
 import Booster.Definition.Base
 import Booster.Pattern.Base
-import Booster.Pattern.Unify (FailReason (..), checkSubsort, SortError)
+import Booster.Pattern.Unify (FailReason (..), SortError, checkSubsort)
 import Booster.Pattern.Util (
     checkSymbolIsAc,
     freeVariables,
@@ -59,7 +56,6 @@ data MatchFailReason
       ArgLengthsDiffer Term Term
     deriving stock (Eq, Show)
 
-
 {- | Attempts to find a matching substitution for the given
    term1 to term2.
 
@@ -79,8 +75,7 @@ matchTerm KoreDefinition{sorts} term1 term2 =
         freeVars2 = freeVariables term2
         sharedVars = freeVars1 `Set.intersection` freeVars2
      in if not $ Set.null sharedVars
-            then
-                MatchFailed $ SharedVariables sharedVars
+            then MatchFailed $ SharedVariables sharedVars
             else
                 runMatching
                     State

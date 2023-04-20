@@ -23,6 +23,7 @@ import Control.Monad.Trans.State
 import Data.Aeson (ToJSON (..), Value (..), object, (.=))
 import Data.Bifunctor (first, second)
 import Data.ByteString.Char8 (ByteString)
+import Data.Coerce (coerce)
 import Data.Function (on)
 import Data.List (foldl', groupBy, nub, partition, sortOn)
 import Data.List.Extra (groupSort)
@@ -53,8 +54,6 @@ import Booster.Syntax.Json.Internalise
 import Booster.Syntax.ParsedKore.Base
 import Kore.Syntax.Json.Types (Id, Sort)
 import Kore.Syntax.Json.Types qualified as Syntax
-import Data.Coerce (coerce)
-import Debug.Trace (trace)
 
 {- | Traverses all modules of a parsed definition, to build internal
 @KoreDefinition@s for each of the modules (when used as the main
@@ -675,14 +674,29 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
 
     let notPreservesDefinednessReasons =
             -- users can override the definedness computation by an explicit attribute
-            if coerce axAttributes.preserving then [] else [UndefinedSymbol s.name | s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) rhs.term]
+            if coerce axAttributes.preserving
+                then []
+                else
+                    [ UndefinedSymbol s.name
+                    | s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) rhs.term
+                    ]
         containsAcSymbols =
             Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
         computedAttributes =
             ComputedAxiomAttributes{notPreservesDefinednessReasons, containsAcSymbols}
         existentials = Set.map (Util.modifyVarName ("Ex#" <>)) existentials'
-    let attributes = axAttributes{concreteness = Util.modifyVarNameConcreteness ("Rule#" <>) axAttributes.concreteness}
-    return RewriteRule{lhs=lhs.term, rhs=rhs.term, requires = lhs.constraints, ensures = rhs.constraints, attributes, computedAttributes, existentials}
+        attributes =
+            axAttributes{concreteness = Util.modifyVarNameConcreteness ("Rule#" <>) axAttributes.concreteness}
+    return
+        RewriteRule
+            { lhs = lhs.term
+            , rhs = rhs.term
+            , requires = lhs.constraints
+            , ensures = rhs.constraints
+            , attributes
+            , computedAttributes
+            , existentials
+            }
   where
     mkVar (name, sort) = do
         variableSort <- lookupInternalSort Nothing partialDefinition.sorts right sort
@@ -753,10 +767,18 @@ internaliseSimpleEquation partialDef precond left right sortVars attrs
                                     then []
                                     else map (UndefinedSymbol . (.name)) undefinedSymbols
                             }
-                let attributes = attrs{concreteness = Util.modifyVarNameConcreteness ("Eq#" <>) attrs.concreteness}
+                    attributes = attrs{concreteness = Util.modifyVarNameConcreteness ("Eq#" <>) attrs.concreteness}
                 pure $
                     SimplificationAxiom
-                        RewriteRule{lhs=lhs.term, rhs=rhs.term, requires= lhs.constraints,ensures = rhs.constraints, attributes, computedAttributes, existentials = Set.empty}
+                        RewriteRule
+                            { lhs = lhs.term
+                            , rhs = rhs.term
+                            , requires = lhs.constraints
+                            , ensures = rhs.constraints
+                            , attributes
+                            , computedAttributes
+                            , existentials = Set.empty
+                            }
             else do
                 target <- internalisePredicate' left
                 conditions <- mapM internalisePredicate' $ explodeAnd precond
@@ -765,7 +787,13 @@ internaliseSimpleEquation partialDef precond left right sortVars attrs
                 let computedAttributes = ComputedAxiomAttributes False []
                 pure $
                     PredicateSimplificationAxiom
-                        PredicateEquation{target, conditions, rhs, attributes = attrs, computedAttributes}
+                        PredicateEquation
+                            { target
+                            , conditions
+                            , rhs
+                            , attributes = attrs
+                            , computedAttributes
+                            }
     | otherwise = error "internaliseSimpleEquation should only be called for simplifications"
   where
     internalisePattern' =
@@ -825,10 +853,19 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
                         else [UndefinedSymbol s.name | s <- nub (argsUndefined <> rhsUndefined)]
                 , containsAcSymbols
                 }
-    let attributes = attrs{concreteness = Util.modifyVarNameConcreteness ("Eq#" <>) attrs.concreteness}
+        attributes =
+            attrs{concreteness = Util.modifyVarNameConcreteness ("Eq#" <>) attrs.concreteness}
     pure $
         FunctionAxiom
-            RewriteRule{lhs=lhs.term, rhs=rhs.term, requires=lhs.constraints, ensures = rhs.constraints, attributes, computedAttributes, existentials = Set.empty}
+            RewriteRule
+                { lhs = lhs.term
+                , rhs = rhs.term
+                , requires = lhs.constraints
+                , ensures = rhs.constraints
+                , attributes
+                , computedAttributes
+                , existentials = Set.empty
+                }
   where
     internaliseSide =
         withExcept DefinitionPatternError

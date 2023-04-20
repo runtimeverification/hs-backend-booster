@@ -13,7 +13,7 @@ module Booster.Definition.Attributes.Base (
     ModuleAttributes (..),
     AxiomAttributes (..),
     Concreteness (..),
-    Constrained(..),
+    Constrained (..),
     ComputedAxiomAttributes (..),
     SymbolType (..),
     SymbolAttributes (..),
@@ -22,7 +22,7 @@ module Booster.Definition.Attributes.Base (
     Location (..),
     Position (..),
     FileSource (..),
-    Priority(..),
+    Priority (..),
     Flag (..),
     pattern IsIdem,
     pattern IsNotIdem,
@@ -36,6 +36,7 @@ module Booster.Definition.Attributes.Base (
 import Control.DeepSeq (NFData (..))
 import Data.ByteString (ByteString)
 import Data.Hashable (Hashable)
+import Data.Map (Map)
 import Data.String
 import Data.Text (Text)
 import Data.Text.Encoding qualified as Text
@@ -44,8 +45,6 @@ import GHC.Generics (Generic)
 import Prettyprinter as Pretty
 
 import Booster.Util qualified as Util
-import Data.Map (Map)
-import qualified Data.Map as Map
 
 data DefinitionAttributes = DefinitionAttributes
     {
@@ -127,12 +126,12 @@ data Constrained = Concrete | Symbolic
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
-
 type VarnameAndSort = (ByteString, ByteString)
 
-data Concreteness = Unconstrained
-                 | AllConstrained Constrained
-                 | SomeConstrained (Map VarnameAndSort Constrained)
+data Concreteness
+    = Unconstrained
+    | AllConstrained Constrained
+    | SomeConstrained (Map VarnameAndSort Constrained)
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 

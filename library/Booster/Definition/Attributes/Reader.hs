@@ -21,7 +21,9 @@ import Data.Bifunctor
 import Data.Char (isDigit)
 import Data.Coerce (Coercible, coerce)
 import Data.Kind
+import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
@@ -31,13 +33,14 @@ import Text.Regex.PCRE
 import Booster.Definition.Attributes.Base (
     AxiomAttributes (AxiomAttributes),
     Concreteness (..),
+    Constrained (..),
     DefinitionAttributes (..),
     FileSource (..),
     Flag (Flag),
     Location (Location),
     ModuleAttributes (..),
     Position (Position),
-    Priority(..),
+    Priority (..),
     SortAttributes (..),
     SymbolAttributes (SymbolAttributes),
     SymbolType (
@@ -45,12 +48,10 @@ import Booster.Definition.Attributes.Base (
         PartialFunction,
         SortInjection,
         TotalFunction
-    ), Concreteness, Constrained (..),
+    ),
  )
 import Booster.Syntax.ParsedKore.Base
 import Kore.Syntax.Json.Types (Id (..))
-import qualified Data.Set as Set
-import qualified Data.Map as Map
 
 {- | A class describing all attributes we want to extract from parsed
  entities
@@ -117,7 +118,6 @@ readPriority attributes = do
         more ->
             throwE $ "Several priorities given: " <> Text.intercalate "," (map fst more)
 
-
 readConcreteness :: ParsedAttributes -> Except Text Concreteness
 readConcreteness attributes = do
     concrete <- maybe (pure Nothing) ((Just <$>) . mapM readVar) $ getAttribute "concrete" attributes
@@ -135,18 +135,16 @@ readConcreteness attributes = do
         (Just [], Nothing) -> pure $ AllConstrained Concrete
         (Nothing, Just []) -> pure $ AllConstrained Symbolic
         (cs', ss') ->
-            let overlap =  Set.fromList (fromMaybe [] cs') `Set.intersection` Set.fromList (fromMaybe [] ss')
-            in
-                if not $ null overlap then do
-                    loc <- readLocation attributes
-                    throwE $ "Concreteness overlap for " <> Text.intercalate "," (Set.toList $ Set.map (Text.decodeUtf8 . fst) overlap) <> " at " <> Text.pack (show loc)
-                else
-                    pure $ SomeConstrained $ Map.fromList [(c, Concrete) | c <- fromMaybe [] cs'] <> Map.fromList [(s, Symbolic) | s <- fromMaybe [] ss']
-
-    where
-        readVar str = except $ case Text.splitOn ":" str of
-            [name, sort] -> Right (Text.encodeUtf8 name, Text.encodeUtf8 sort)
-            _ -> Left "Invalid variable"
+            let overlap = Set.fromList (fromMaybe [] cs') `Set.intersection` Set.fromList (fromMaybe [] ss')
+             in if not $ null overlap
+                    then do
+                        loc <- readLocation attributes
+                        throwE $ "Concreteness overlap for " <> Text.intercalate "," (Set.toList $ Set.map (Text.decodeUtf8 . fst) overlap) <> " at " <> Text.pack (show loc)
+                    else pure $ SomeConstrained $ Map.fromList [(c, Concrete) | c <- fromMaybe [] cs'] <> Map.fromList [(s, Symbolic) | s <- fromMaybe [] ss']
+  where
+    readVar str = except $ case Text.splitOn ":" str of
+        [name, sort] -> Right (Text.encodeUtf8 name, Text.encodeUtf8 sort)
+        _ -> Left "Invalid variable"
 
 instance HasAttributes ParsedSymbol where
     type Attributes ParsedSymbol = SymbolAttributes
@@ -201,11 +199,9 @@ extractAttribute name attribs =
 (.:) :: ReadT a => ParsedAttributes -> Text -> Except Text a
 (.:) = flip extractAttribute
 
-
 (.:?) :: forall a. ReadT a => ParsedAttributes -> Text -> Except Text (Maybe a)
 attribs .:? name =
     except . first (readError name) . mapM readT $ getAttribute name attribs
-
 
 (.!) :: Coercible Bool b => ParsedAttributes -> Text -> Except Text b
 attrs .! name = except $ case getAttribute name attrs of
@@ -236,7 +232,6 @@ instance ReadT Priority where
         | all isDigit (Text.unpack n) = Priority <$> readEither (Text.unpack n)
         | otherwise = Left $ "invalid priority value " <> show n
     readT ns = Left $ "invalid priority value " <> show ns
-
 
 instance ReadT Text where
     readT :: [Text] -> Either String Text

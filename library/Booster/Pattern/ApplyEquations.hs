@@ -21,13 +21,10 @@ import Control.Monad.Trans.State
 import Data.Foldable (toList)
 import Data.Functor.Foldable
 import Data.List (elemIndex)
-import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust)
-import Data.Proxy
 import Data.Sequence (Seq (..))
-import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 
@@ -49,13 +46,9 @@ throw = EquationM . lift . throwE
 
 data EquationFailure
     = IndexIsNone Term
-    -- | InconsistentFunctionRules [Term]
-    -- | IndeterminateMatch Term Term
-    -- | IndeterminateCondition Predicate
     | TooManyIterations Int Term Term
     | EquationLoop [Term]
     | InternalError Text
-    -- | DoesNotPreserveDefinedness (RewriteRule "Function")
     deriving stock (Eq, Show)
 
 data EquationState = EquationState
@@ -78,7 +71,6 @@ countSteps = length . (.termStack) <$> getState
 
 pushTerm :: Term -> EquationM ()
 pushTerm t = EquationM . modify $ \s -> s{termStack = t : s.termStack}
-
 
 setChanged, resetChanged :: EquationM ()
 setChanged = EquationM . modify $ \s -> s{changed = True}
@@ -232,7 +224,6 @@ applyAtTop pref term = do
                 then applyEquations def.functionEquations handleFunctionEquation term
                 else pure simplified
 
-
 handleFunctionEquation :: (Term -> t) -> t -> t -> ApplyEquationResult -> t
 handleFunctionEquation success continue abort = \case
     Success rewritten -> success rewritten
@@ -242,7 +233,6 @@ handleFunctionEquation success continue abort = \case
     ConditionBottom -> continue
     RuleNotPreservingDefinedness -> abort
 
-
 handleSimplificationEquation :: (Term -> t) -> t -> t -> ApplyEquationResult -> t
 handleSimplificationEquation success continue _abort = \case
     Success rewritten -> success rewritten
@@ -251,7 +241,6 @@ handleSimplificationEquation success continue _abort = \case
     IndeterminateCondition -> continue
     ConditionBottom -> continue
     RuleNotPreservingDefinedness -> continue
-
 
 applyEquations ::
     forall tag.
@@ -270,18 +259,17 @@ applyEquations theory handler term = do
         -- since simplification priority is just a suggestion and function equations
         -- should not contain non-determinism except for the [owise] equation,
         -- which should be attempted last. Thus, sorting and then applying sequentially is fine.
-        -- Doing this loses the runtime check of InconsistentFunctionRules, however, 
-        -- most function rules are in the same priority group and thus, 
+        -- Doing this loses the runtime check of InconsistentFunctionRules, however,
+        -- most function rules are in the same priority group and thus,
         -- we would be applying all of them before checking for inconsistency,
         -- which is inefficient
         equations :: [RewriteRule tag]
         equations =
-            concat . map snd . Map.toAscList $
+            concatMap snd . Map.toAscList $
                 if index == Anything
                     then idxEquations
                     else Map.unionWith (<>) idxEquations anyEquations
 
-    -- no need for an error when (null equations), it will just stop.
     processEquations equations
   where
     -- process one group of equations at a time, until something has happened
@@ -291,30 +279,28 @@ applyEquations theory handler term = do
     processEquations [] =
         pure term -- nothing to do, term stays the same
     processEquations (eq : rest) = do
-        -- try all equations in this group, and inspect the results
         res <- applyEquation term eq
         traceRuleApplication term eq.attributes.location eq.attributes.ruleLabel res
-        handler (\t -> setChanged >> pure t) (processEquations rest) (pure term) res   
-         
+        handler (\t -> setChanged >> pure t) (processEquations rest) (pure term) res
 
-data ApplyEquationResult = 
-        Success Term
-      | FailedMatch MatchFailReason
-      | IndeterminateMatch
-      | IndeterminateCondition
-      | ConditionBottom
-      | RuleNotPreservingDefinedness
+data ApplyEquationResult
+    = Success Term
+    | FailedMatch MatchFailReason
+    | IndeterminateMatch
+    | IndeterminateCondition
+    | ConditionBottom
+    | RuleNotPreservingDefinedness
     deriving stock (Eq, Show)
 
-traceRuleApplication :: Term
-    -> Maybe Location
-    -> Maybe Label
-    -> ApplyEquationResult
-    -> EquationM ()
+traceRuleApplication ::
+    Term ->
+    Maybe Location ->
+    Maybe Label ->
+    ApplyEquationResult ->
+    EquationM ()
 traceRuleApplication t loc lbl res =
     EquationM . modify $
         \s -> s{trace = s.trace :|> (t, loc, lbl, res)}
-
 
 applyEquation ::
     forall tag.
@@ -340,7 +326,7 @@ applyEquation term rule = do
                 MatchSuccess subst -> do
                     -- cancel if condition
                     -- forall (v, t) : subst. concrete(v) -> null(FV(t)) /\
-                    --                        symbolic(v) -> isSymbolic(t) 
+                    --                        symbolic(v) -> isSymbolic(t)
                     -- is violated
                     -- guard $ checkConcreteness subst rule.attributes.concreteness
 
@@ -354,7 +340,7 @@ applyEquation term rule = do
                     case unclearConditions' of
                         Nothing -> pure ConditionBottom
                         Just unclearConditions ->
-                            if not $ null unclearConditions 
+                            if not $ null unclearConditions
                                 then pure IndeterminateCondition
                                 else do
                                     let rewritten =
@@ -375,30 +361,28 @@ applyEquation term rule = do
             Top -> pure Nothing
             _other -> pure $ Just p
 
-    -- allMustBeConcrete (AllConstrained Concrete) = True
-    -- allMustBeConcrete _ = False
+-- allMustBeConcrete (AllConstrained Concrete) = True
+-- allMustBeConcrete _ = False
 
+-- checkConcreteness subst = \case
+--     Unconstrained -> True
+--     AllConstrained Concrete -> True -- already checked in the short circuit guard earlier
+--     AllConstrained Symbolic -> all isSymbolic $ Map.elems subst
+--     SomeConstrained cs -> all (check subst) $ Map.toList cs
 
-    -- checkConcreteness subst = \case
-    --     Unconstrained -> True
-    --     AllConstrained Concrete -> True -- already checked in the short circuit guard earlier
-    --     AllConstrained Symbolic -> all isSymbolic $ Map.elems subst
-    --     SomeConstrained cs -> all (check subst) $ Map.toList cs
+-- -- TODO: this is too restrictive
+-- isSymbolic = \case
+--     Var _ -> True
+--     _ -> False
 
-
-    -- -- TODO: this is too restrictive
-    -- isSymbolic = \case
-    --     Var _ -> True
-    --     _ -> False
-
-    -- check :: Map Variable Term
-    --          -> ((VarName, SortName), Constrained) -> Bool
-    -- check subst ((var, srt), conc) =
-    --     case subst Map.!? Variable (SortApp srt []) var of
-    --         Nothing -> error $ show var <> " not found in application of rule " <> show rule
-    --         Just t -> case conc of
-    --             Symbolic -> isVar t
-    --             Concrete -> isConcrete t
+-- check :: Map Variable Term
+--          -> ((VarName, SortName), Constrained) -> Bool
+-- check subst ((var, srt), conc) =
+--     case subst Map.!? Variable (SortApp srt []) var of
+--         Nothing -> error $ show var <> " not found in application of rule " <> show rule
+--         Just t -> case conc of
+--             Symbolic -> isVar t
+--             Concrete -> isConcrete t
 
 --------------------------------------------------------------------
 

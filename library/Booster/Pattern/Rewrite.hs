@@ -32,7 +32,12 @@ import Prettyprinter
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.LLVM.Internal qualified as LLVM
-import Booster.Pattern.ApplyEquations (Direction (..), EquationFailure (..), evaluateTerm, ApplyEquationResult (..))
+import Booster.Pattern.ApplyEquations (
+    ApplyEquationResult (..),
+    Direction (..),
+    EquationFailure (..),
+    evaluateTerm,
+ )
 import Booster.Pattern.Base
 import Booster.Pattern.Index (TermIndex (..), kCellTermIndex)
 import Booster.Pattern.Simplify
@@ -380,45 +385,41 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                 forM_ traces $ \(l, mloc, mlabel, r) ->
                     case r of
                         Success rewritten ->
-                            logSimplify $ pack $ 
-                                renderDefault $
-                                    vsep
-                                        [ "Simplifying term"
-                                        , pretty l
-                                        , "to"
-                                        , pretty rewritten
-                                        , "using " <> pretty mloc <> " - " <> pretty mlabel
-                                        ]
+                            logSimplify . pack . renderDefault $
+                                vsep
+                                    [ "Simplifying term"
+                                    , pretty l
+                                    , "to"
+                                    , pretty rewritten
+                                    , "using " <> pretty mloc <> " - " <> pretty mlabel
+                                    ]
                         FailedMatch _ -> pure ()
                         IndeterminateMatch -> pure ()
-                        RuleNotPreservingDefinedness -> 
-                            logSimplify $ pack $ 
-                                renderDefault $
-                                    vsep
-                                        [ "Simplifying term"
-                                        , pretty l
-                                        , "failed because the rule at"
-                                        , pretty mloc <> " - " <> pretty mlabel
-                                        , "does not preserve definedness"
-                                        ]
-                        IndeterminateCondition -> 
-                            logSimplify $ pack $ 
-                                renderDefault $
-                                    vsep
-                                        [ "Simplifying term"
-                                        , pretty l
-                                        , "failed with indeterminate condition"
-                                        , "using " <> pretty mloc <> " - " <> pretty mlabel
-                                        ]
-                        ConditionBottom -> 
-                            logSimplify $ pack $ 
-                                renderDefault $
-                                    vsep
-                                        [ "Simplifying term"
-                                        , pretty l
-                                        , "failed with false condition"
-                                        , "using " <> pretty mloc <> " - " <> pretty mlabel
-                                        ]
+                        RuleNotPreservingDefinedness ->
+                            logSimplify . pack . renderDefault $
+                                vsep
+                                    [ "Simplifying term"
+                                    , pretty l
+                                    , "failed because the rule at"
+                                    , pretty mloc <> " - " <> pretty mlabel
+                                    , "does not preserve definedness"
+                                    ]
+                        IndeterminateCondition ->
+                            logSimplify . pack . renderDefault $
+                                vsep
+                                    [ "Simplifying term"
+                                    , pretty l
+                                    , "failed with indeterminate condition"
+                                    , "using " <> pretty mloc <> " - " <> pretty mlabel
+                                    ]
+                        ConditionBottom ->
+                            logSimplify . pack . renderDefault $
+                                vsep
+                                    [ "Simplifying term"
+                                    , pretty l
+                                    , "failed with false condition"
+                                    , "using " <> pretty mloc <> " - " <> pretty mlabel
+                                    ]
                 pure p{term = newTerm}
 
     diff (Pattern t1 _) (Pattern t2 _) = mkDiffTerms (t1, t2)

@@ -26,8 +26,8 @@ module Booster.Pattern.Util (
     filterTermSymbols,
 ) where
 
-import Booster.Definition.Attributes.Base (Flag (..), SymbolAttributes (..), SymbolType (..), Concreteness (..))
-import Booster.Pattern.Base
+import Data.Bifunctor (first)
+import Data.ByteString (ByteString)
 import Data.Coerce (coerce)
 import Data.Functor.Foldable (Corecursive (embed), cata)
 import Data.Map (Map)
@@ -35,8 +35,14 @@ import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Data.ByteString (ByteString)
-import Data.Bifunctor (first)
+
+import Booster.Definition.Attributes.Base (
+    Concreteness (..),
+    Flag (..),
+    SymbolAttributes (..),
+    SymbolType (..),
+ )
+import Booster.Pattern.Base
 
 -- | Returns the sort of a term
 sortOfTerm :: Term -> Sort
@@ -109,7 +115,6 @@ modifyVariablesInP f = cata $ \case
 
 modifyVarName :: (VarName -> VarName) -> Variable -> Variable
 modifyVarName f v = v{variableName = f v.variableName}
-
 
 modifyVarNameConcreteness :: (ByteString -> ByteString) -> Concreteness -> Concreteness
 modifyVarNameConcreteness f = \case
