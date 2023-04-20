@@ -850,7 +850,7 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
                     -- users can override the definedness computation by an explicit attribute
                     -- we could also allow total function rules to be automatically preserving definedness
                     if coerce attrs.preserving
-                        then -- || functionSymbolIsTotal lhs.term
+                        then -- \|| functionSymbolIsTotal lhs.term
 
                             []
                         else [UndefinedSymbol s.name | s <- nub (argsUndefined <> rhsUndefined)]
