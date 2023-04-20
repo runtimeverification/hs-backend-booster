@@ -224,7 +224,26 @@ applyAtTop pref term = do
                 then applyEquations def.functionEquations handleFunctionEquation term
                 else pure simplified
 
-handleFunctionEquation :: (Term -> t) -> t -> t -> ApplyEquationResult -> t
+data ApplyEquationResult
+    = Success Term
+    | FailedMatch MatchFailReason
+    | IndeterminateMatch
+    | IndeterminateCondition
+    | ConditionBottom
+    | RuleNotPreservingDefinedness
+    deriving stock (Eq, Show)
+
+type ResultHandler =
+    -- | action on successful equation application
+    (Term -> EquationM Term) ->
+    -- | action on failed match
+    EquationM Term ->
+    -- | action on aborted equation application
+    EquationM Term ->
+    ApplyEquationResult ->
+    EquationM Term
+
+handleFunctionEquation :: ResultHandler
 handleFunctionEquation success continue abort = \case
     Success rewritten -> success rewritten
     FailedMatch _ -> continue
@@ -233,7 +252,7 @@ handleFunctionEquation success continue abort = \case
     ConditionBottom -> continue
     RuleNotPreservingDefinedness -> abort
 
-handleSimplificationEquation :: (Term -> t) -> t -> t -> ApplyEquationResult -> t
+handleSimplificationEquation :: ResultHandler
 handleSimplificationEquation success continue _abort = \case
     Success rewritten -> success rewritten
     FailedMatch _ -> continue
@@ -245,7 +264,7 @@ handleSimplificationEquation success continue _abort = \case
 applyEquations ::
     forall tag.
     Theory (RewriteRule tag) ->
-    ((Term -> EquationM Term) -> EquationM Term -> EquationM Term -> ApplyEquationResult -> EquationM Term) ->
+    ResultHandler ->
     Term ->
     EquationM Term
 applyEquations theory handler term = do
@@ -282,15 +301,6 @@ applyEquations theory handler term = do
         res <- applyEquation term eq
         traceRuleApplication term eq.attributes.location eq.attributes.ruleLabel res
         handler (\t -> setChanged >> pure t) (processEquations rest) (pure term) res
-
-data ApplyEquationResult
-    = Success Term
-    | FailedMatch MatchFailReason
-    | IndeterminateMatch
-    | IndeterminateCondition
-    | ConditionBottom
-    | RuleNotPreservingDefinedness
-    deriving stock (Eq, Show)
 
 traceRuleApplication ::
     Term ->
