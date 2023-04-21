@@ -7,13 +7,14 @@ License     : BSD-3-Clause
 -}
 module Proxy (
     KoreServer (..),
+    ProxyOptions (..),
     serverError,
     respondEither,
 ) where
 
 import Control.Concurrent.MVar qualified as MVar
 import Control.Monad.Logger qualified as Log
-import Data.Aeson.Types (Value (..))
+import Data.Aeson (Value (..))
 import Data.Maybe (catMaybes, isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -45,17 +46,24 @@ data KoreServer = KoreServer
 serverError :: String -> Value -> ErrorObj
 serverError detail = ErrorObj ("Server error: " <> detail) (-32032)
 
+-- | proxy-specific options and dev-options for experimentation
+data ProxyOptions = ProxyOptions
+    { simplifyAfterExec :: Bool
+    -- ^ run kore simplifier on all result terms after executing
+    }
+
 respondEither ::
     forall m.
     Log.MonadLogger m =>
+    ProxyOptions ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res)
-respondEither booster kore req = case req of
+respondEither ProxyOptions{simplifyAfterExec} booster kore req = case req of
     Execute execReq
         | isJust execReq.stepTimeout -> kore req
         | isJust execReq.movingAverageStepTimeout -> kore req
-        | otherwise -> loop 0 execReq
+        | otherwise -> loop 0 execReq >>= traverse (postExecSimplify execReq._module)
     Implies _ -> loggedKore "Implies" req
     Simplify _ -> loggedKore "Simplify" req
     AddModule _ -> do
@@ -71,7 +79,8 @@ respondEither booster kore req = case req of
     toRequestState :: ExecuteState -> KoreJson.KoreJson
     toRequestState ExecuteState{term = t, substitution, predicate} =
         let subAndPred = catMaybes [KoreJson.term <$> substitution, KoreJson.term <$> predicate]
-         in t{KoreJson.term = foldr (KoreJson.KJAnd $ KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []) t.term subAndPred}
+            termSort = KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []
+         in t{KoreJson.term = foldr (KoreJson.KJAnd termSort) t.term subAndPred}
 
     -- loop :: Depth -> ExecuteRequest -> m (Either Response)
     loop currentDepth r = do
@@ -126,3 +135,78 @@ respondEither booster kore req = case req of
                         pure $ Right $ Execute boosterResult{depth = currentDepth + boosterResult.depth}
                 -- can only be an error at this point
                 res -> pure res
+
+    postExecSimplify :: Maybe Text -> API 'Res -> m (API 'Res)
+    postExecSimplify mbModule
+        | not simplifyAfterExec = pure . id
+        | otherwise = \case
+            Execute res ->
+                Execute <$> simplifyResult res
+            other -> pure other
+      where
+        simplifyResult :: ExecuteResult -> m ExecuteResult
+        simplifyResult res@ExecuteResult{reason, state, nextStates} = do
+            Log.logInfoNS "proxy" . Text.pack $ "Simplifying state in " <> show reason <> " result"
+            simplifiedState <- runSimplify state
+            simplifiedNexts <- maybe (pure []) (mapM runSimplify) nextStates
+            let filteredNexts = filter (not . isBottom) simplifiedNexts
+            let result = case reason of
+                    Branching
+                        | length filteredNexts == 1 ->
+                            res -- What now? would have to re-loop. Return as-is.
+                        | length filteredNexts == 0 ->
+                            res{reason = Stuck, nextStates = Nothing}
+                    -- otherwise falling through to _otherReason
+                    CutPointRule
+                        | null filteredNexts ->
+                            -- HACK. Would want to return the prior state
+                            res{reason = Stuck, nextStates = Nothing}
+                    _otherReason ->
+                            res{state = simplifiedState, nextStates}
+            pure result
+
+        isBottom :: ExecuteState -> Bool
+        isBottom ExecuteState{term}
+            | KoreJson.KJBottom _ <- term.term = True
+        isBottom ExecuteState{predicate = Just p}
+            | KoreJson.KJBottom _ <- p.term = True
+        isBottom _ = False
+
+        runSimplify :: ExecuteState -> m ExecuteState
+        runSimplify s = do
+            let toSimplify = toRequestState s
+            Log.logInfoNS "proxy" $ "Simplify request"
+            simplResult <- kore $ Simplify SimplifyRequest{state = toSimplify, _module = mbModule}
+            case simplResult of
+                -- This request should not fail, as the only possible
+                -- failure mode would be malformed or invalid kore
+                Right (Simplify simplified) -> do
+                    -- to convert back to a term/constraints form,
+                    -- we run a trivial execute request (in booster)
+                    -- We cannot call the booster internaliser without access to the server state
+                    -- Again this should not fail.
+                    let request =
+                            (emptyRequest simplified.state)
+                                { _module = mbModule
+                                , maxDepth = Just $ Depth 0
+                                }
+                    Log.logInfoNS "proxy" $ "0-step execute request"
+                    result <- booster $ Execute request
+                    case result of
+                        Right (Execute ExecuteResult{state = finalState}) -> pure finalState
+                        _other -> pure s
+                _other ->
+                    -- TODO log error
+                    pure s -- if we hit an error here, return the original
+
+emptyRequest :: KoreJson.KoreJson -> ExecuteRequest
+emptyRequest state =
+    ExecuteRequest
+        { state
+        , maxDepth = Nothing
+        , _module = Nothing
+        , cutPointRules = Nothing
+        , terminalRules = Nothing
+        , movingAverageStepTimeout = Nothing
+        , stepTimeout = Nothing
+        }

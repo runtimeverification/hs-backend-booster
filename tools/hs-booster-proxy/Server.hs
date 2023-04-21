@@ -56,7 +56,19 @@ main :: IO ()
 main = do
     startTime <- getTime Monotonic
     options <- execParser clParser
-    let CLProxyOptions{clOptions = clOPts@CLOptions{definitionFile, mainModuleName, port, logLevels, llvmLibraryFile, eventlogEnabledUserEvents}, koreSolverOptions} = options
+    let CLProxyOptions
+            { clOptions =
+                clOPts@CLOptions
+                    { definitionFile
+                    , mainModuleName
+                    , port
+                    , logLevels
+                    , llvmLibraryFile
+                    , eventlogEnabledUserEvents
+                    }
+            , koreSolverOptions
+            , proxyOptions
+            } = options
         (logLevel, customLevels) = adjustLogLevels logLevels
         levelFilter :: Logger.LogSource -> LogLevel -> Bool
         levelFilter _source lvl =
@@ -109,7 +121,7 @@ main = do
                         server =
                             jsonRpcServer
                                 srvSettings
-                                (const $ Proxy.respondEither boosterRespond koreRespond)
+                                (const $ Proxy.respondEither proxyOptions boosterRespond koreRespond)
                                 [handleErrorCall, handleSomeException]
                     runLoggingT server monadLogger
   where
@@ -131,6 +143,7 @@ toSeverity LevelOther{} = Nothing
 data CLProxyOptions = CLProxyOptions
     { clOptions :: CLOptions
     , koreSolverOptions :: !KoreSolverOptions
+    , proxyOptions :: Proxy.ProxyOptions
     }
 
 parserInfoModifiers :: InfoMod options
@@ -143,6 +156,15 @@ clProxyOptionsParser =
     CLProxyOptions
         <$> clOptionsParser
         <*> parseKoreSolverOptions
+        <*> parseProxyOptions
+  where
+    parseProxyOptions =
+        Proxy.ProxyOptions
+            <$> switch
+                ( long "simplify-after-exec"
+                    <> help "(development) Run kore simplifier on execute results before returning"
+                    <> hidden
+                )
 
 mkKoreServer :: Log.LoggerEnv IO -> CLOptions -> KoreSolverOptions -> IO KoreServer
 mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainModuleName} koreSolverOptions =
