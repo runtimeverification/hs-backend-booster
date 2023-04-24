@@ -533,11 +533,11 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
             _
             Syntax.KJAnd{first = con1@Syntax.KJApp{}, second = con2@Syntax.KJApp{}}
             Syntax.KJApp{name}
-            | hasAttribute "constructor"
-            , con1.name == con2.name
-            , con1.name == name ->
-                -- no confusion same constructor. Could assert `name` is a constructor
-                pure Nothing
+                | hasAttribute "constructor"
+                , con1.name == con2.name
+                , con1.name == name ->
+                    -- no confusion same constructor. Could assert `name` is a constructor
+                    pure Nothing
         Syntax.KJNot _ (Syntax.KJAnd{first = con1@Syntax.KJApp{}, second = con2@Syntax.KJApp{}})
             | hasAttribute "constructor"
             , con1.name /= con2.name ->
