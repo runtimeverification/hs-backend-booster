@@ -170,10 +170,15 @@ jobs:
         run: |
           nix --version
           export JQ=$(nix-build '<nixpkgs>' -A jq --no-link)/bin/jq
+          echo "got here"
           booster=$(nix build .#hs-backend-booster:exe:hs-backend-booster --extra-experimental-features 'nix-command flakes' --print-build-logs --json | $JQ -r '.[].outputs | to_entries[].value')
+          echo "got here2"
           drv=$(nix-store --query --deriver ${booster})
+          echo "got here3"
           nix-store --query --requisites --include-outputs ${drv} | cachix push runtimeverification
+          echo "got here4"
           nix build .#hs-backend-booster:exe:parsetest --extra-experimental-features 'nix-command flakes' --print-build-logs
+          echo "got here5"
           nix build .#hs-backend-booster:exe:rpc-client --extra-experimental-features 'nix-command flakes' --print-build-logs
 
       - name: Run unit tests
