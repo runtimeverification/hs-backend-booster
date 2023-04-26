@@ -428,7 +428,7 @@ data AxiomData
 * matching logic simplification equation
   \implies(<requires>, \equals(lhs, \and(<rhs>, <ensures>)))
   (with lhs something different from a symbol application). Used in
-  domains.md for SortBool simplification
+  domains.md for SortBool simplification and for ceil rules but ignored here.
 * functional/total rule
   \exists(V:_ , \equals(V, <total-symbol>(..args..))) [functional()]
 * no confusion, same constructor (con)
@@ -603,13 +603,14 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
                         rhs
                         attribs
         SimplificationAxiom' requires lhs rhs sortVars attribs ->
-            internaliseSimpleEquation
-                partialDefinition
-                requires
-                lhs
-                rhs
-                sortVars
-                attribs
+            Just
+                <$> internaliseSimpleEquation
+                    partialDefinition
+                    requires
+                    lhs
+                    rhs
+                    sortVars
+                    attribs
         FunctionAxiom' requires args lhs rhs sortVars attribs ->
             Just
                 <$> internaliseFunctionEquation
@@ -725,49 +726,50 @@ removeTrueBools p = p{Def.constraints = filter (/= Def.Predicate Def.TrueBool) p
 internaliseSimpleEquation ::
     KoreDefinition -> -- context
     Syntax.KorePattern -> -- requires
-    Syntax.KorePattern -> -- LHS
+    Syntax.KorePattern -> -- LHS, assumed to be a _symbol application_
     Syntax.KorePattern -> -- And(RHS, ensures)
     [Syntax.Id] -> -- sort variables
     AxiomAttributes ->
-    Except DefinitionError (Maybe AxiomResult)
+    Except DefinitionError AxiomResult
 internaliseSimpleEquation partialDef precond left right sortVars attrs
-    | coerce attrs.simplification = do
-        lhsIsTerm <- withExcept DefinitionPatternError $ isTermM left
-        if lhsIsTerm
-            then do
-                lhs <- internalisePattern' $ Syntax.KJAnd left.sort left precond
-                rhs <- internalisePattern' right
-                let
-                    -- checking the lhs term, too, as a safe approximation
-                    -- (rhs may _introduce_ undefined, lhs may _hide_ it)
-                    undefinedSymbols =
-                        nub . concatMap (Util.filterTermSymbols (not . Util.isDefinedSymbol)) $
-                            [lhs.term, rhs.term]
-                    computedAttributes =
-                        ComputedAxiomAttributes
-                            { containsAcSymbols =
-                                any (Util.checkTermSymbols Util.checkSymbolIsAc) [lhs.term, rhs.term]
-                            , notPreservesDefinednessReasons =
-                                if coerce attrs.preserving
-                                    then []
-                                    else map (UndefinedSymbol . (.name)) undefinedSymbols
-                            }
-                    attributes = attrs{concreteness = Util.modifyVarNameConcreteness ("Eq#" <>) attrs.concreteness}
-                pure . Just $
-                    SimplificationAxiom
-                        RewriteRule
-                            { lhs = lhs.term
-                            , rhs = rhs.term
-                            , requires = lhs.constraints
-                            , ensures = rhs.constraints
-                            , attributes
-                            , computedAttributes
-                            , existentials = Set.empty
-                            }
-            else -- we hit a simplification with top level ML
-            -- connective, which we want to ignore
-                pure Nothing
-    | otherwise = error "internaliseSimpleEquation should only be called for simplifications"
+    | not (coerce attrs.simplification) =
+        error $ "internaliseSimpleEquation should only be called for simplifications" <> show attrs
+    | Syntax.KJApp{} <- left = do
+        -- this ensures that `left` is a _term_ (invariant guarded by classifyAxiom)
+        lhs <- internalisePattern' $ Syntax.KJAnd left.sort left precond
+        rhs <- internalisePattern' right
+        let
+            -- checking the lhs term, too, as a safe approximation
+            -- (rhs may _introduce_ undefined, lhs may _hide_ it)
+            undefinedSymbols =
+                nub . concatMap (Util.filterTermSymbols (not . Util.isDefinedSymbol)) $
+                    [lhs.term, rhs.term]
+            computedAttributes =
+                ComputedAxiomAttributes
+                    { containsAcSymbols =
+                        any (Util.checkTermSymbols Util.checkSymbolIsAc) [lhs.term, rhs.term]
+                    , notPreservesDefinednessReasons =
+                        if coerce attrs.preserving
+                            then []
+                            else map (UndefinedSymbol . (.name)) undefinedSymbols
+                    }
+            attributes =
+                attrs{concreteness = Util.modifyVarNameConcreteness ("Eq#" <>) attrs.concreteness}
+        pure $
+            SimplificationAxiom
+                RewriteRule
+                    { lhs = lhs.term
+                    , rhs = rhs.term
+                    , requires = lhs.constraints
+                    , ensures = rhs.constraints
+                    , attributes
+                    , computedAttributes
+                    , existentials = Set.empty
+                    }
+    | otherwise =
+        -- we hit a simplification with top level ML connective or an
+        -- unexpected top-level term, which we want to ignore
+        error $ "internaliseSimpleEquation should only be called with app nodes as LHS" <> show left
   where
     internalisePattern' =
         withExcept DefinitionPatternError
