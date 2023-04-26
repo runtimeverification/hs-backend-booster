@@ -108,9 +108,18 @@ constructors =
         , let t1 = app con1 [var "X" someSort]
               t2 = app con2 [var "Y" someSort]
            in test "different constructors" t1 t2 $ failed (DifferentSymbols t1 t2)
-        , let t1 = app con1 [var "X" someSort]
-              t2 = app f1 [var "Y" someSort]
-           in test "Constructor and function" t1 t2 $ remainder [(t1, t2)]
+        , let y = var "Y" someSort
+              t1 = app con3 [var "X" someSort, var "X" someSort]
+              t2 = app con3 [y, y]
+           in test "Matching the same variable in a constructor (success)" t1 t2 $
+                success [("X", someSort, y)]
+        , let y = var "Y" someSort
+              z = var "Z" someSort
+              t1 = app con3 [var "X" someSort, var "X" someSort]
+              t2 = app con3 [y, z]
+           in test "Matching the same variable in a constructor (failing)" t1 t2 $
+                failed $
+                    VariableConflict (Variable someSort "X") y z
         ]
 
 functions :: TestTree
@@ -135,7 +144,8 @@ functions =
               c2T = app con2 [someDv]
               con3f1c1 = app con3 [f1T, c1T]
               con3f2c2 = app con3 [f2T, c2T]
-           in test "different constrs after different functions" con3f1c1 con3f2c2 $ failed (DifferentSymbols c1T c2T)
+           in test "different constrs after different functions" con3f1c1 con3f2c2 $
+                failed (DifferentSymbols c1T c2T)
         ]
 
 varsAndValues :: TestTree

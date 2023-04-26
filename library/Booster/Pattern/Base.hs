@@ -28,6 +28,7 @@ import Data.Hashable qualified as Hashable
 import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
+import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics (Generic)
 import Prettyprinter (Pretty (..))
@@ -114,8 +115,12 @@ instance Monoid TermAttributes where
 
 -- | A term together with its attributes.
 data Term = Term TermAttributes (TermF Term)
-    deriving stock (Eq, Ord, Show, Generic)
+    deriving stock (Ord, Show, Generic)
     deriving anyclass (NFData)
+
+instance Eq Term where
+    Term TermAttributes{hash = hash1} t1f == Term TermAttributes{hash = hash2} t2f =
+        hash1 == hash2 && t1f == t2f -- compare directly to cater for collisions
 
 instance Hashable Term where
     hash (Term TermAttributes{hash} _) = hash
@@ -164,7 +169,8 @@ pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts
              in Term
                     argAttributes
                         { isEvaluated = newEvaluatedFlag
-                        , hash = Hashable.hash ("SymbolApplication" :: ByteString, sym, sorts, map (hash . getAttributes) args)
+                        , hash =
+                            Hashable.hash ("SymbolApplication" :: ByteString, sym, sorts, map (hash . getAttributes) args)
                         }
                     $ SymbolApplicationF sym sorts args
 
@@ -234,6 +240,9 @@ pattern AndBool ts <-
 pattern DV :: Sort -> Symbol
 pattern DV sort <- Symbol "\\dv" _ _ sort _
 
+pattern DotDotDot :: Term
+pattern DotDotDot = DomainValue (SortApp "internalDummySort" []) "..."
+
 {- | A predicate describes constraints on terms. It will always evaluate
    to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.
 -}
@@ -243,7 +252,16 @@ newtype Predicate = Predicate Term
 
 pattern NotBool :: Term -> Term
 pattern NotBool t =
-    SymbolApplication (Symbol "LblnotBool'Unds'" [] [SortBool] SortBool (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias)) [] [t]
+    SymbolApplication
+        ( Symbol
+                "LblnotBool'Unds'"
+                []
+                [SortBool]
+                SortBool
+                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias)
+            )
+        []
+        [t]
 
 pattern TrueBool, FalseBool :: Term
 pattern TrueBool = DomainValue SortBool "true"
@@ -355,6 +373,28 @@ instance Pretty Term where
                 "\\inj"
                     <> KPretty.parametersP [source, target]
                     <> KPretty.argumentsP [t]
+
+newtype PrettyTerm = PrettyTerm Term
+
+instance Pretty PrettyTerm where
+    pretty (PrettyTerm t) = case t of
+        AndTerm t1 t2 ->
+            pretty (PrettyTerm t1) <> "/\\" <> pretty (PrettyTerm t2)
+        SymbolApplication (Symbol "Lbl'Unds'Set'Unds'" _ _ _ _) _ args ->
+            Pretty.braces . Pretty.hsep . Pretty.punctuate Pretty.comma $ concatMap collectSet args
+        SymbolApplication symbol _sortParams args ->
+            pretty (Text.replace "Lbl" "" $ Text.decodeUtf8 $ decodeLabel' symbol.name)
+                <> KPretty.argumentsP (map PrettyTerm args)
+        DotDotDot -> "..."
+        DomainValue _sort bs -> pretty $ show $ Text.decodeLatin1 bs
+        Var var -> pretty var
+        Injection _source _target t' -> pretty $ PrettyTerm t'
+      where
+        collectSet = \case
+            SymbolApplication (Symbol "Lbl'Unds'Set'Unds'" _ _ _ _) _ args ->
+                concatMap collectSet args
+            SymbolApplication (Symbol "LblSetItem" _ _ _ _) _ args -> map (pretty . PrettyTerm) args
+            other -> [pretty $ PrettyTerm other]
 
 instance Pretty Sort where
     pretty (SortApp name params) =

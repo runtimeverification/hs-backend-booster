@@ -58,7 +58,8 @@ internalisePattern allowAlias sortVars definition p = do
     -- construct an AndTerm from all terms (checking sort consistency)
     term <- andTerm p =<< mapM (internaliseTerm allowAlias sortVars definition) terms
     -- internalise all predicates
-    constraints <- catMaybes <$> mapM (internaliseBoolPredicate allowAlias sortVars definition) predicates
+    constraints <-
+        catMaybes <$> mapM (internaliseBoolPredicate allowAlias sortVars definition) predicates
     pure Internal.Pattern{term, constraints}
   where
     andTerm :: Syntax.KorePattern -> [Internal.Term] -> Except PatternError Internal.Term
@@ -81,7 +82,8 @@ internaliseTermOrPredicate ::
     Syntax.KorePattern ->
     Except [PatternError] Internal.TermOrPredicate
 internaliseTermOrPredicate allowAlias sortVars definition syntaxPatt =
-    Internal.BoolPredicate <$> (withExcept (: []) $ internaliseBoolPredicate allowAlias sortVars definition syntaxPatt)
+    Internal.BoolPredicate
+        <$> (withExcept (: []) $ internaliseBoolPredicate allowAlias sortVars definition syntaxPatt)
         <|> Internal.TermAndPredicate
             <$> (withExcept (: []) $ internalisePattern allowAlias sortVars definition syntaxPatt)
 

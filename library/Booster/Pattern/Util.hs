@@ -1,5 +1,3 @@
-{-# OPTIONS -fno-warn-unrecognised-pragmas #-}
-
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -12,7 +10,9 @@ module Booster.Pattern.Util (
     substituteInTerm,
     substituteInPredicate,
     modifyVariables,
+    modifyVariablesInT,
     modifyVarName,
+    modifyVarNameConcreteness,
     freeVariables,
     isConstructorSymbol,
     isSortInjectionSymbol,
@@ -22,11 +22,11 @@ module Booster.Pattern.Util (
     checkTermSymbols,
     isBottom,
     isConcrete,
-    decodeLabel,
+    filterTermSymbols,
 ) where
 
-import Booster.Definition.Attributes.Base (Flag (..), SymbolAttributes (..), SymbolType (..))
-import Booster.Pattern.Base
+import Data.Bifunctor (first)
+import Data.ByteString (ByteString)
 import Data.Coerce (coerce)
 import Data.Functor.Foldable (Corecursive (embed), cata)
 import Data.Map (Map)
@@ -34,6 +34,14 @@ import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
+
+import Booster.Definition.Attributes.Base (
+    Concreteness (..),
+    Flag (..),
+    SymbolAttributes (..),
+    SymbolType (..),
+ )
+import Booster.Pattern.Base
 
 -- | Returns the sort of a term
 sortOfTerm :: Term -> Sort
@@ -58,7 +66,6 @@ retractPattern :: TermOrPredicate -> Maybe Pattern
 retractPattern (TermAndPredicate patt) = Just patt
 retractPattern _ = Nothing
 
-{-# HLINT ignore substituteInTerm "Redundant bracket" #-}
 substituteInTerm :: Map Variable Term -> Term -> Term
 substituteInTerm substitution = goSubst
   where
@@ -79,19 +86,25 @@ substituteInPredicate substitution (Predicate t) = Predicate $ substituteInTerm 
 modifyVariables :: (Variable -> Variable) -> Pattern -> Pattern
 modifyVariables f p =
     Pattern
-        { term = modifyT p.term
-        , constraints = map modifyP p.constraints
+        { term = modifyVariablesInT f p.term
+        , constraints = map (modifyVariablesInP f) p.constraints
         }
-  where
-    modifyT :: Term -> Term
-    modifyT = cata $ \case
-        VarF v -> Var $ f v
-        other -> embed other
-    modifyP :: Predicate -> Predicate
-    modifyP (Predicate t) = Predicate $ modifyT t
+
+modifyVariablesInT :: (Variable -> Variable) -> Term -> Term
+modifyVariablesInT f = cata $ \case
+    VarF v -> Var (f v)
+    other -> embed other
+
+modifyVariablesInP :: (Variable -> Variable) -> Predicate -> Predicate
+modifyVariablesInP f (Predicate t) = Predicate $ modifyVariablesInT f t
 
 modifyVarName :: (VarName -> VarName) -> Variable -> Variable
 modifyVarName f v = v{variableName = f v.variableName}
+
+modifyVarNameConcreteness :: (ByteString -> ByteString) -> Concreteness -> Concreteness
+modifyVarNameConcreteness f = \case
+    SomeConstrained m -> SomeConstrained $ Map.mapKeys (first f) m
+    other -> other
 
 freeVariables :: Term -> Set Variable
 freeVariables (Term attributes _) = attributes.variables
@@ -134,6 +147,15 @@ checkTermSymbols :: (Symbol -> Bool) -> Term -> Bool
 checkTermSymbols check = cata $ \case
     SymbolApplicationF symbol _ ts -> check symbol && and ts
     other -> and other
+
+filterTermSymbols :: (Symbol -> Bool) -> Term -> [Symbol]
+filterTermSymbols check = cata $ \case
+    SymbolApplicationF symbol _ ts
+        | check symbol -> symbol : concat ts
+        | otherwise -> concat ts
+    AndTermF t1 t2 -> t1 <> t2
+    InjectionF _ _ t -> t
+    _ -> []
 
 isBottom :: Pattern -> Bool
 isBottom = (Predicate FalseBool `elem`) . constraints
