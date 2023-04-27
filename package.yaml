@@ -198,7 +198,9 @@ executables:
     main: Server.hs
     dependencies:
       - aeson
+      - aeson-pretty
       - base
+      - bytestring
       - casing
       - clock
       - conduit-extra

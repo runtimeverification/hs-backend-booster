@@ -12,11 +12,17 @@ module Proxy (
 ) where
 
 import Control.Concurrent.MVar qualified as MVar
+import Control.Monad (when)
 import Control.Monad.Logger qualified as Log
+import Data.Aeson (ToJSON)
+import Data.Aeson.Encode.Pretty
 import Data.Aeson.Types (Value (..))
+import Data.ByteString (ByteString)
+import Data.ByteString.Lazy (toStrict)
 import Data.Maybe (catMaybes, isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
 import Network.JSONRPC
 import SMT qualified
 
@@ -128,4 +134,10 @@ respondEither booster kore req = case req of
                             "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                         pure $ Right $ Execute boosterResult{depth = currentDepth + boosterResult.depth}
                 -- can only be an error at this point
-                res -> pure res
+                res -> do
+                    let printJson :: ToJSON a => a -> ByteString
+                        printJson = toStrict . encodePretty' rpcJsonConfig
+                    when (getNat currentDepth > 0) $
+                        Log.logWarnNS "proxy" . Text.decodeLatin1 $
+                            "Error in internal execute request: " <> either printJson printJson res
+                    pure res
