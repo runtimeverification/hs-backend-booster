@@ -21,6 +21,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.State
+import Data.Either.Extra
 import Data.Foldable (toList)
 import Data.Functor.Foldable
 import Data.List (elemIndex)
@@ -357,7 +358,7 @@ applyEquations theory handler term = do
     processEquations [] =
         pure term -- nothing to do, term stays the same
     processEquations (eq : rest) = do
-        res <- applyEquation term eq
+        res <- fromEither <$> applyEquation term eq
         traceRuleApplication term eq.attributes.location eq.attributes.ruleLabel res
         handler (\t -> setChanged >> pure t) (processEquations rest) (pure term) res
 
@@ -375,63 +376,63 @@ applyEquation ::
     forall tag.
     Term ->
     RewriteRule tag ->
-    EquationM ApplyEquationResult
-applyEquation term rule = do
+    EquationM (Either ApplyEquationResult ApplyEquationResult)
+applyEquation term rule = runExceptT $ do
     -- ensured by internalisation: no existentials in equations
     unless (null rule.existentials) $
-        throw . InternalError $
+        lift . throw . InternalError $
             "Equation with existentials: " <> Text.pack (show rule)
     -- immediately cancel if not preserving definedness
-    if not $ null rule.computedAttributes.notPreservesDefinednessReasons
-        then pure RuleNotPreservingDefinedness
-        else do
-            -- immediately cancel if rule has concrete() flag and term has any free variables
-            -- guard $ not $ (allMustBeConcrete rule.attributes.concreteness) && (not . null . freeVariables) term
-            -- match lhs
-            koreDef <- (.definition) <$> getState
-            case matchTerm koreDef rule.lhs term of
-                MatchFailed failReason -> pure $ FailedMatch failReason
-                MatchIndeterminate _pat _subj -> pure IndeterminateMatch
-                MatchSuccess subst -> do
-                    -- cancel if condition
-                    -- forall (v, t) : subst. concrete(v) -> null(FV(t)) /\
-                    --                        symbolic(v) -> isSymbolic(t)
-                    -- is violated
-                    -- guard $ checkConcreteness subst rule.attributes.concreteness
+    when (null rule.computedAttributes.notPreservesDefinednessReasons) $
+        throwE RuleNotPreservingDefinedness
+    -- immediately cancel if rule has concrete() flag and term is not constructor-like
+    when (allMustBeConcrete rule.attributes.concreteness && not (getAttributes term).isConstructorLike) $
+        throwE (FailedMatch undefined) -- FIXME FailedMatch? Or a new result type.
+        -- match lhs
+    koreDef <- (.definition) <$> lift getState
+    case matchTerm koreDef rule.lhs term of
+        MatchFailed failReason -> throwE $ FailedMatch failReason
+        MatchIndeterminate _pat _subj -> throwE IndeterminateMatch
+        MatchSuccess subst -> do
+            -- cancel if condition
+            -- forall (v, t) : subst. concrete(v) -> null(FV(t)) /\
+            --                        symbolic(v) -> isSymbolic(t)
+            -- is violated
+            -- guard $ checkConcreteness subst rule.attributes.concreteness
 
-                    -- check conditions, using substitution (will call back
-                    -- into the simplifier! -> import loop)
-                    let newConstraints =
-                            concatMap (splitBoolPredicates . substituteInPredicate subst) $
-                                rule.requires
-                    unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint newConstraints
+            -- check conditions, using substitution (will call back
+            -- into the simplifier! -> import loop)
+            let newConstraints =
+                    concatMap (splitBoolPredicates . substituteInPredicate subst) $
+                        rule.requires
+            unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint newConstraints
 
-                    case unclearConditions' of
-                        Nothing -> pure ConditionFalse
-                        Just unclearConditions ->
-                            if not $ null unclearConditions
-                                then pure IndeterminateCondition
-                                else do
-                                    let rewritten =
-                                            substituteInTerm subst rule.rhs
-                                    -- NB no new constraints, as they have been checked to be `Top`
-                                    -- FIXME what about symbolic constraints here?
-                                    pure $ Success rewritten
+            case unclearConditions' of
+                Nothing -> pure ConditionFalse
+                Just unclearConditions ->
+                    if not $ null unclearConditions
+                        then pure IndeterminateCondition
+                        else do
+                            let rewritten =
+                                    substituteInTerm subst rule.rhs
+                            -- NB no new constraints, as they have been checked to be `Top`
+                            -- FIXME what about symbolic constraints here?
+                            pure $ Success rewritten
   where
     -- evaluate/simplify a predicate, cut the operation short when it
     -- is Bottom.
     checkConstraint ::
         Predicate ->
-        MaybeT EquationM (Maybe Predicate)
+        MaybeT (ExceptT ApplyEquationResult EquationM) (Maybe Predicate)
     checkConstraint p = do
-        mApi <- (.llvmApi) <$> lift getState
+        mApi <- (.llvmApi) <$> lift (lift getState)
         case simplifyPredicate mApi p of
             Bottom -> fail "side condition was false"
             Top -> pure Nothing
             _other -> pure $ Just p
 
--- allMustBeConcrete (AllConstrained Concrete) = True
--- allMustBeConcrete _ = False
+    allMustBeConcrete (AllConstrained Concrete) = True
+    allMustBeConcrete _ = False
 
 -- checkConcreteness subst = \case
 --     Unconstrained -> True
