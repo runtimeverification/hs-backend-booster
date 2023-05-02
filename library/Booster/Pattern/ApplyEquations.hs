@@ -21,7 +21,6 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.State
-import Data.Either.Extra
 import Data.Foldable (toList)
 import Data.Functor.Foldable
 import Data.List (elemIndex)
@@ -368,7 +367,7 @@ applyEquations theory handler term = do
     processEquations [] =
         pure term -- nothing to do, term stays the same
     processEquations (eq : rest) = do
-        res <- fromEither . fmap Success <$> applyEquation term eq
+        res <- applyEquation term eq
         traceRuleApplication term eq.attributes.location eq.attributes.ruleLabel res
         handler (\t -> setChanged >> pure t) (processEquations rest) (pure term) res
 
@@ -386,8 +385,8 @@ applyEquation ::
     forall tag.
     Term ->
     RewriteRule tag ->
-    EquationM (Either ApplyEquationResult Term)
-applyEquation term rule = runExceptT $ do
+    EquationM ApplyEquationResult
+applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     -- ensured by internalisation: no existentials in equations
     unless (null rule.existentials) $
         lift . throw . InternalError $
