@@ -29,6 +29,7 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust)
 import Data.Sequence (Seq (..))
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Prettyprinter
@@ -108,6 +109,12 @@ instance Pretty EquationTrace where
                 , "failed with false condition"
                 , "using " <> locationInfo
                 ]
+        MatchConstraintViolated constrained varName ->
+            pretty $
+                "Concreteness constraint violated: "
+                    <> show constrained
+                    <> " variable "
+                    <> show varName
       where
         locationInfo = pretty location <> " - " <> pretty label
         prettyTerm = pretty $ PrettyTerm subjectTerm
@@ -291,6 +298,7 @@ data ApplyEquationResult
     | IndeterminateCondition
     | ConditionFalse
     | RuleNotPreservingDefinedness
+    | MatchConstraintViolated Constrained VarName
     deriving stock (Eq, Show)
 
 type ResultHandler =
@@ -311,6 +319,7 @@ handleFunctionEquation success continue abort = \case
     IndeterminateCondition -> abort
     ConditionFalse -> continue
     RuleNotPreservingDefinedness -> abort
+    MatchConstraintViolated{} -> continue
 
 handleSimplificationEquation :: ResultHandler
 handleSimplificationEquation success continue _abort = \case
@@ -320,6 +329,7 @@ handleSimplificationEquation success continue _abort = \case
     IndeterminateCondition -> continue
     ConditionFalse -> continue
     RuleNotPreservingDefinedness -> continue
+    MatchConstraintViolated{} -> continue
 
 applyEquations ::
     forall tag.
@@ -351,14 +361,14 @@ applyEquations theory handler term = do
 
     processEquations equations
   where
-    -- process one group of equations at a time, until something has happened
+    -- process one equation at a time, until something has happened
     processEquations ::
         [RewriteRule tag] ->
         EquationM Term
     processEquations [] =
         pure term -- nothing to do, term stays the same
     processEquations (eq : rest) = do
-        res <- fromEither <$> applyEquation term eq
+        res <- fromEither . fmap Success <$> applyEquation term eq
         traceRuleApplication term eq.attributes.location eq.attributes.ruleLabel res
         handler (\t -> setChanged >> pure t) (processEquations rest) (pure term) res
 
@@ -376,29 +386,29 @@ applyEquation ::
     forall tag.
     Term ->
     RewriteRule tag ->
-    EquationM (Either ApplyEquationResult ApplyEquationResult)
+    EquationM (Either ApplyEquationResult Term)
 applyEquation term rule = runExceptT $ do
     -- ensured by internalisation: no existentials in equations
     unless (null rule.existentials) $
         lift . throw . InternalError $
             "Equation with existentials: " <> Text.pack (show rule)
     -- immediately cancel if not preserving definedness
-    when (null rule.computedAttributes.notPreservesDefinednessReasons) $
+    unless (null rule.computedAttributes.notPreservesDefinednessReasons) $
         throwE RuleNotPreservingDefinedness
-    -- immediately cancel if rule has concrete() flag and term is not constructor-like
-    when (allMustBeConcrete rule.attributes.concreteness && not (getAttributes term).isConstructorLike) $
-        throwE (FailedMatch undefined) -- FIXME FailedMatch? Or a new result type.
-        -- match lhs
+    -- immediately cancel if rule has concrete() flag and term has variables
+    when (allMustBeConcrete rule.attributes.concreteness && not (Set.null (freeVariables term))) $
+        throwE (MatchConstraintViolated Concrete "* (term has variables)")
+    -- match lhs
     koreDef <- (.definition) <$> lift getState
     case matchTerm koreDef rule.lhs term of
         MatchFailed failReason -> throwE $ FailedMatch failReason
         MatchIndeterminate _pat _subj -> throwE IndeterminateMatch
         MatchSuccess subst -> do
             -- cancel if condition
-            -- forall (v, t) : subst. concrete(v) -> null(FV(t)) /\
-            --                        symbolic(v) -> isSymbolic(t)
+            -- forall (v, t) : subst. concrete(v) -> isConstructorLike(t) /\
+            --                        symbolic(v) -> not $ t isConstructorLike(t)
             -- is violated
-            -- guard $ checkConcreteness subst rule.attributes.concreteness
+            checkConcreteness rule.attributes.concreteness subst
 
             -- check conditions, using substitution (will call back
             -- into the simplifier! -> import loop)
@@ -408,16 +418,16 @@ applyEquation term rule = runExceptT $ do
             unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint newConstraints
 
             case unclearConditions' of
-                Nothing -> pure ConditionFalse
+                Nothing -> throwE ConditionFalse
                 Just unclearConditions ->
                     if not $ null unclearConditions
-                        then pure IndeterminateCondition
+                        then throwE IndeterminateCondition
                         else do
                             let rewritten =
                                     substituteInTerm subst rule.rhs
                             -- NB no new constraints, as they have been checked to be `Top`
                             -- FIXME what about symbolic constraints here?
-                            pure $ Success rewritten
+                            pure rewritten
   where
     -- evaluate/simplify a predicate, cut the operation short when it
     -- is Bottom.
@@ -434,25 +444,42 @@ applyEquation term rule = runExceptT $ do
     allMustBeConcrete (AllConstrained Concrete) = True
     allMustBeConcrete _ = False
 
--- checkConcreteness subst = \case
---     Unconstrained -> True
---     AllConstrained Concrete -> True -- already checked in the short circuit guard earlier
---     AllConstrained Symbolic -> all isSymbolic $ Map.elems subst
---     SomeConstrained cs -> all (check subst) $ Map.toList cs
+    checkConcreteness ::
+        Concreteness ->
+        Map Variable Term ->
+        ExceptT ApplyEquationResult EquationM ()
+    checkConcreteness Unconstrained _ = pure ()
+    checkConcreteness (AllConstrained constrained) subst =
+        mapM_ (\(var, t) -> mkCheck (toPair var) constrained t) $ Map.assocs subst
+    checkConcreteness (SomeConstrained mapping) subst =
+        void $ Map.traverseWithKey (verifyVar subst) (Map.mapWithKey mkCheck mapping)
 
--- -- TODO: this is too restrictive
--- isSymbolic = \case
---     Var _ -> True
---     _ -> False
+    toPair Variable{variableSort, variableName} =
+        case variableSort of
+            SortApp sortName _ -> (variableName, sortName)
+            SortVar varName -> (variableName, varName)
 
--- check :: Map Variable Term
---          -> ((VarName, SortName), Constrained) -> Bool
--- check subst ((var, srt), conc) =
---     case subst Map.!? Variable (SortApp srt []) var of
---         Nothing -> error $ show var <> " not found in application of rule " <> show rule
---         Just t -> case conc of
---             Symbolic -> isVar t
---             Concrete -> isConcrete t
+    mkCheck ::
+        (VarName, SortName) ->
+        Constrained ->
+        Term ->
+        ExceptT ApplyEquationResult EquationM ()
+    mkCheck (varName, _) constrained (Term attributes _)
+        | not test = throwE $ MatchConstraintViolated constrained varName
+        | otherwise = pure ()
+      where
+        test = case constrained of
+            Concrete -> attributes.isConstructorLike
+            Symbolic -> not attributes.isConstructorLike
+
+    verifyVar ::
+        Map Variable Term ->
+        (VarName, SortName) ->
+        (Term -> ExceptT ApplyEquationResult EquationM ()) ->
+        ExceptT ApplyEquationResult EquationM ()
+    verifyVar subst (variableName, sortName) check =
+        maybe (error $ "Variable not found: " <> show (variableName, sortName)) check $
+            Map.lookup Variable{variableSort = SortApp sortName [], variableName} subst
 
 --------------------------------------------------------------------
 
