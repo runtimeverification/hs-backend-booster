@@ -27,6 +27,7 @@ import Data.Functor.Foldable
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Hashable (Hashable)
 import Data.Hashable qualified as Hashable
+import Data.List (foldl1')
 import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -167,7 +168,11 @@ pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts
         SymbolApplication sym [source, target] [arg]
             | sym == injectionSymbol = Injection source target arg
         SymbolApplication sym sorts args =
-            let argAttributes = mconcat $ map getAttributes args
+            let argAttributes
+                    | null args = mempty
+                    -- avoid using default isConstructorLike = False
+                    -- if there are arg.s
+                    | otherwise = foldl1' (<>) $ map getAttributes args
                 symIsConstructor =
                     sym.attributes.symbolType `elem` [Constructor, SortInjection]
              in Term
