@@ -477,8 +477,12 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
         (Term -> ExceptT ApplyEquationResult EquationM ()) ->
         ExceptT ApplyEquationResult EquationM ()
     verifyVar subst (variableName, sortName) check =
-        maybe (error $ "Variable not found: " <> show (variableName, sortName)) check $
-            Map.lookup Variable{variableSort = SortApp sortName [], variableName} subst
+        maybe
+            ( lift . throw . InternalError . Text.pack $
+                "Variable not found: " <> show (variableName, sortName)
+            )
+            check
+            $ Map.lookup Variable{variableSort = SortApp sortName [], variableName} subst
 
 --------------------------------------------------------------------
 
