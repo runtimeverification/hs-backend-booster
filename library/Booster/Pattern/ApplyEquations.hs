@@ -109,11 +109,13 @@ instance Pretty EquationTrace where
                 , "using " <> locationInfo
                 ]
         MatchConstraintViolated constrained varName ->
-            pretty $
-                "Concreteness constraint violated: "
-                    <> show constrained
-                    <> " variable "
-                    <> show varName
+            vsep
+                [ "Concreteness constraint violated: "
+                , pretty $ show constrained <> " variable " <> show varName
+                , " in rule " <> locationInfo
+                , "Term:"
+                , prettyTerm
+                ]
       where
         locationInfo = pretty location <> " - " <> pretty label
         prettyTerm = pretty $ PrettyTerm subjectTerm
