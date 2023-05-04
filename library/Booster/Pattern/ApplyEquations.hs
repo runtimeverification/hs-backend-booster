@@ -505,7 +505,6 @@ pattern FalseBool = DomainValue SortBool "false"
     If and as soon as this function is used inside equation
     application, it needs to run within the same 'EquationM' context
     so we can detect simplification loops and avoid monad nesting.
-
 -}
 simplifyConstraint ::
     KoreDefinition ->
@@ -514,7 +513,7 @@ simplifyConstraint ::
     Predicate
 simplifyConstraint def mbApi p =
     either (const p) fst
-        . runEquationM  def mbApi
+        . runEquationM def mbApi
         $ simplifyConstraint' p
 
 -- version for internal nested evaluation
@@ -525,16 +524,16 @@ simplifyConstraint' :: Predicate -> EquationM Predicate
 simplifyConstraint' = \case
     EqualsTerm t TrueBool
         | isConcrete t -> do
-              mbApi <- (.llvmApi) <$> getState
-              case mbApi of
-                  Just api ->
-                      if simplifyBool api t
-                      then pure Top
-                      else pure Bottom
-                  Nothing ->
-                      evalBool t >>= prune
+            mbApi <- (.llvmApi) <$> getState
+            case mbApi of
+                Just api ->
+                    if simplifyBool api t
+                        then pure Top
+                        else pure Bottom
+                Nothing ->
+                    evalBool t >>= prune
         | otherwise ->
-              evalBool t >>= prune
+            evalBool t >>= prune
     EqualsTerm TrueBool t ->
         -- although "true" is usually 2nd
         simplifyConstraint' (EqualsTerm t TrueBool)
