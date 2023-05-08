@@ -29,6 +29,7 @@ import Kore.JsonRpc.Types qualified as ExecuteRequest (ExecuteRequest (..))
 import Kore.Log qualified
 import Kore.Syntax.Definition (SentenceAxiom)
 import Kore.Syntax.Json.Types qualified as KoreJson
+import Stats qualified
 
 data KoreServer = KoreServer
     { serverState :: MVar.MVar Kore.ServerState
@@ -48,10 +49,11 @@ serverError detail = ErrorObj ("Server error: " <> detail) (-32032)
 respondEither ::
     forall m.
     Log.MonadLogger m =>
+    Stats.StatsVar ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res)
-respondEither booster kore req = case req of
+respondEither statsVar booster kore req = case req of
     Execute execReq
         | isJust execReq.stepTimeout -> kore req
         | isJust execReq.movingAverageStepTimeout -> kore req

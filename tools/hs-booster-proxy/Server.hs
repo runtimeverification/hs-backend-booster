@@ -65,6 +65,7 @@ import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
 import Proxy (KoreServer (..))
 import Proxy qualified
 import SMT qualified
+import Stats qualified
 
 main :: IO ()
 main = do
@@ -125,6 +126,7 @@ main = do
                     boosterState <-
                         liftIO $
                             newMVar Booster.ServerState{definitions, defaultMain = mainModuleName, mLlvmLibrary}
+                    statVar <- Stats.newStats
 
                     runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
@@ -134,7 +136,7 @@ main = do
                         server =
                             jsonRpcServer
                                 srvSettings
-                                (const $ Proxy.respondEither boosterRespond koreRespond)
+                                (const $ Proxy.respondEither statVar boosterRespond koreRespond)
                                 [handleErrorCall, handleSomeException]
                     runLoggingT server monadLogger
   where
