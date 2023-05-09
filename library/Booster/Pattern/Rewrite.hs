@@ -38,6 +38,7 @@ import Booster.Pattern.ApplyEquations (
     evaluateTerm,
     isMatchFailure,
     isSuccess,
+    simplifyConstraint,
  )
 import Booster.Pattern.Base
 import Booster.Pattern.Index (TermIndex (..), kCellTermIndex)
@@ -57,9 +58,6 @@ throw = RewriteM . lift . throwE
 
 getDefinition :: RewriteM err KoreDefinition
 getDefinition = RewriteM $ fst <$> ask
-
-getLLVM :: RewriteM err (Maybe LLVM.API)
-getLLVM = RewriteM $ snd <$> ask
 
 {- | Performs a rewrite step (using suitable rewrite rules from the
    definition).
@@ -109,6 +107,7 @@ rewriteStep cutLabels terminalLabels pat = do
         -- let finalResults = filter (not . isBottom . simplifyPattern dl . snd) results
 
         let labelOf = fromMaybe "" . (.ruleLabel) . (.attributes)
+            ruleIdT = renderOneLineText . ruleId
 
         case results of
             [] ->
@@ -119,7 +118,7 @@ rewriteStep cutLabels terminalLabels pat = do
                 | labelOf r `elem` terminalLabels ->
                     pure $ RewriteTerminal (labelOf r) x
                 | otherwise ->
-                    pure $ RewriteSingle (labelOf r) x
+                    pure $ RewriteSingle (ruleIdT r) x
             rxs ->
                 pure $ RewriteBranch pat $ NE.fromList $ map snd rxs
 
@@ -207,8 +206,8 @@ applyRule pat rule = runMaybeT $ do
         Predicate ->
         MaybeT (RewriteM (RewriteFailed k)) (Maybe a)
     checkConstraint onUnclear p = do
-        mApi <- lift getLLVM
-        case simplifyPredicate mApi p of
+        (def, mApi) <- lift $ RewriteM ask
+        case simplifyConstraint def mApi p of
             Bottom -> fail "Rule condition was False"
             Top -> pure Nothing
             other -> pure $ Just $ onUnclear other
