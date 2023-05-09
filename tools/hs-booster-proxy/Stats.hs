@@ -38,12 +38,15 @@ instance (Floating a, PrintfArg a, Ord a) => Pretty (RequestStats a) where
         vsep
             [ "Requests: " <> pretty stats.count
             , "Total time: " <> withUnit stats.total
-            , "Average time per request: "
-                <> withUnit stats.average
-                <> brackets ("+- " <> withUnit stats.stddev)
-            , "Average time spent in kore-rpc code: "
-                <> withUnit stats.korePartAvg
-                <> brackets ("max " <> withUnit stats.koreMax)
+            , "Average time per request:"
+                <+> withUnit stats.average
+                <+> parens ("+-" <+> withUnit stats.stddev)
+                    <> ", range"
+                <+> brackets (withUnit stats.minVal <> ", " <> withUnit stats.maxVal)
+            , "Average time spent in kore-rpc code:"
+                <+> withUnit stats.korePartAvg
+                    <> ", max"
+                <+> withUnit stats.koreMax
             ]
       where
         withUnit = pretty . microsWithUnit
@@ -144,8 +147,15 @@ finaliseStats Stats'{count, total, squares, maxVal, minVal, korePart, koreMax} =
     korePartAvg = korePart / fromIntegral count
 
 showStats :: MVar (Map APIMethods (Stats' Double)) -> IO ()
-showStats var =
-    readMVar var
-        >>= putStrLn . renderDefault . vsep . Map.elems . Map.mapWithKey prettyAssoc . Map.map finaliseStats
+showStats var = do
+    statMap <- readMVar var
+    let finalStats =
+            Map.elems . Map.mapWithKey prettyAssoc . Map.map finaliseStats $ statMap
+    putStrLn . renderDefault . vsep $
+        [ "---------------------------"
+        , "RPC request time statistics"
+        , "---------------------------"
+        ]
+            <> finalStats
   where
     prettyAssoc key value = hang 4 $ vsep [pretty $ show key <> ": ", pretty value]
