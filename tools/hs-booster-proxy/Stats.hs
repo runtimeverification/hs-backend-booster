@@ -28,7 +28,8 @@ data RequestStats a = RequestStats
     , total :: a
     , maxVal :: a
     , minVal :: a
-    , korePartAvg :: a
+    , koreTotal :: a
+    , koreAverage :: a
     , koreMax :: a
     }
     deriving stock (Eq, Show)
@@ -43,8 +44,10 @@ instance (Floating a, PrintfArg a, Ord a) => Pretty (RequestStats a) where
                 <+> parens ("+-" <+> withUnit stats.stddev)
                     <> ", range"
                 <+> brackets (withUnit stats.minVal <> ", " <> withUnit stats.maxVal)
-            , "Average time spent in kore-rpc code:"
-                <+> withUnit stats.korePartAvg
+            , "Total time in kore-rpc code:"
+                <+> withUnit stats.koreTotal
+            , "Average time per request in kore-rpc code:"
+                <+> withUnit stats.koreAverage
                     <> ", max"
                 <+> withUnit stats.koreMax
             ]
@@ -65,7 +68,7 @@ data Stats' a = Stats'
     , squares :: a
     , maxVal :: a
     , minVal :: a
-    , korePart :: a
+    , koreTotal :: a
     , koreMax :: a
     }
 
@@ -81,7 +84,7 @@ addStats' stats1 stats2 =
         , squares = stats1.squares + stats2.squares
         , maxVal = max stats1.maxVal stats2.maxVal
         , minVal = min stats1.minVal stats2.minVal
-        , korePart = stats1.korePart + stats2.korePart
+        , koreTotal = stats1.koreTotal + stats2.koreTotal
         , koreMax = max stats1.koreMax stats2.koreMax
         }
 
@@ -93,7 +96,7 @@ singleStats' x korePart =
         , squares = x * x
         , maxVal = x
         , minVal = x
-        , korePart
+        , koreTotal = korePart
         , koreMax = korePart
         }
 
@@ -130,7 +133,7 @@ timed action = do
     pure (result, time)
 
 finaliseStats :: Floating a => Stats' a -> RequestStats a
-finaliseStats Stats'{count, total, squares, maxVal, minVal, korePart, koreMax} =
+finaliseStats Stats'{count, total, squares, maxVal, minVal, koreTotal, koreMax} =
     RequestStats
         { count
         , total
@@ -138,13 +141,14 @@ finaliseStats Stats'{count, total, squares, maxVal, minVal, korePart, koreMax} =
         , stddev
         , maxVal
         , minVal
-        , korePartAvg
+        , koreTotal
+        , koreAverage
         , koreMax
         }
   where
     average = total / fromIntegral count
     stddev = sqrt $ squares / fromIntegral count - average * average
-    korePartAvg = korePart / fromIntegral count
+    koreAverage = koreTotal / fromIntegral count
 
 showStats :: MVar (Map APIMethods (Stats' Double)) -> IO ()
 showStats var = do
