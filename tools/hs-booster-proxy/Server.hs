@@ -10,9 +10,10 @@ module Main (main) where
 import Control.Concurrent.MVar (newMVar)
 import Control.Concurrent.MVar qualified as MVar
 import Control.DeepSeq (force)
-import Control.Exception (evaluate)
-import Control.Monad (forM_, void)
+import Control.Exception (AsyncException (UserInterrupt), evaluate, handleJust)
+import Control.Monad (forM_, void, when)
 import Control.Monad.Catch (bracket)
+import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Logger (
     LogLevel (..),
@@ -32,6 +33,7 @@ import System.Clock (
     Clock (..),
     getTime,
  )
+import System.Exit
 
 import Booster.CLOptions
 import Booster.JsonRpc qualified as Booster
@@ -138,7 +140,12 @@ main = do
                                 srvSettings
                                 (const $ Proxy.respondEither statVar boosterRespond koreRespond)
                                 [handleErrorCall, handleSomeException]
-                    runLoggingT server monadLogger
+                        interruptHandler _ = do
+                            when (logLevel >= LevelInfo) $
+                                putStrLn "[Info#proxy] Server shutting down"
+                            whenJust statVar Stats.showStats
+                            exitSuccess
+                    handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger
   where
     clParser =
         info
@@ -147,6 +154,10 @@ main = do
 
     withMDLib Nothing f = f Nothing
     withMDLib (Just fp) f = withDLib fp $ \dl -> f (Just dl)
+
+    isInterrupt :: AsyncException -> Maybe ()
+    isInterrupt UserInterrupt = Just ()
+    isInterrupt _other = Nothing
 
 toSeverity :: LogLevel -> Maybe Log.Severity
 toSeverity LevelDebug = Just Log.Debug
