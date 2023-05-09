@@ -84,6 +84,7 @@ main = do
                     , eventlogEnabledUserEvents
                     }
             , koreSolverOptions
+            , proxyOptions = ProxyOptions{printStats}
             } = options
         (logLevel, customLevels) = adjustLogLevels logLevels
         levelFilter :: Logger.LogSource -> LogLevel -> Bool
@@ -128,7 +129,7 @@ main = do
                     boosterState <-
                         liftIO $
                             newMVar Booster.ServerState{definitions, defaultMain = mainModuleName, mLlvmLibrary}
-                    statVar <- Just <$> Stats.newStats
+                    statVar <- if printStats then Just <$> Stats.newStats else pure Nothing
 
                     runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
@@ -168,7 +169,13 @@ toSeverity LevelOther{} = Nothing
 
 data CLProxyOptions = CLProxyOptions
     { clOptions :: CLOptions
+    , proxyOptions :: ProxyOptions
     , koreSolverOptions :: !KoreSolverOptions
+    }
+
+newtype ProxyOptions = ProxyOptions
+    { printStats :: Bool
+    -- ^ print timing statistics per request and on shutdown
     }
 
 parserInfoModifiers :: InfoMod options
@@ -180,7 +187,15 @@ clProxyOptionsParser :: Parser CLProxyOptions
 clProxyOptionsParser =
     CLProxyOptions
         <$> clOptionsParser
+        <*> parseProxyOptions
         <*> parseKoreSolverOptions
+  where
+    parseProxyOptions =
+        ProxyOptions
+            <$> switch
+                ( long "print-stats"
+                    <> help "(development) Print timing information per request and on shutdown"
+                )
 
 mkKoreServer :: Log.LoggerEnv IO -> CLOptions -> KoreSolverOptions -> IO KoreServer
 mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainModuleName} koreSolverOptions =
