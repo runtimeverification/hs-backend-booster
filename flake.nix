@@ -197,8 +197,6 @@
           integration = with nixpkgsFor system;
             with flakes.${defaultCompiler};
             callPackage ./test/rpc-integration {
-              booster =
-                packages."hs-backend-booster:exe:booster";
               booster-dev =
                 packages."hs-backend-booster:exe:booster-dev";
               rpc-client = packages."hs-backend-booster:exe:rpc-client";
