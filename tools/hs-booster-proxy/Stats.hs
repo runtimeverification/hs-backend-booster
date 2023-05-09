@@ -4,6 +4,8 @@ module Stats (
     finaliseStats,
     showStats,
     timed,
+    microsWithUnit,
+    APIMethods (..),
     RequestStats (..),
     StatsVar,
 ) where
@@ -44,13 +46,13 @@ instance (Floating a, PrintfArg a, Ord a) => Pretty (RequestStats a) where
                 <> brackets ("max " <> withUnit stats.koreMax)
             ]
       where
-        withUnit = pretty . withUnit'
+        withUnit = pretty . microsWithUnit
 
-        withUnit' :: a -> String
-        withUnit' x
-            | x > 10 ** 5 = printf "%.2fs" $ x / 10 ** 6
-            | x > 10 ** 2 = printf "%.3fms" $ x / 10 ** 3
-            | otherwise = printf "%.1fμs" x
+microsWithUnit :: (Floating a, Ord a, PrintfArg a) => a -> String
+microsWithUnit x
+    | x > 10 ** 5 = printf "%.2fs" $ x / 10 ** 6
+    | x > 10 ** 2 = printf "%.3fms" $ x / 10 ** 3
+    | otherwise = printf "%.1fμs" x
 
 -- internal helper type
 -- all values are in microseconds

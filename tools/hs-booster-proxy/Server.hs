@@ -126,7 +126,7 @@ main = do
                     boosterState <-
                         liftIO $
                             newMVar Booster.ServerState{definitions, defaultMain = mainModuleName, mLlvmLibrary}
-                    statVar <- Stats.newStats
+                    statVar <- Just <$> Stats.newStats
 
                     runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
