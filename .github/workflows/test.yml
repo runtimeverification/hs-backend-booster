@@ -34,10 +34,11 @@ jobs:
         uses: actions/cache@v3
         with:
           path: stack-cache
-          key: stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('stack.yaml.lock') }}
+          key: stack-2-${{ env.ghc_version }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('stack.yaml.lock') }}
           restore-keys: |
-            stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
-            stack-2-${{ runner.os }}-${{ hashFiles('stack.yaml') }}
+            stack-2-${{ env.ghc_version }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
+            stack-2-${{ env.ghc_version }}-${{ hashFiles('stack.yaml') }}
+            stack-2-${{ env.ghc_version }}
 
       - name: 'Set up Docker'
         uses: ./.github/actions/with-docker
