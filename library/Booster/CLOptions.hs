@@ -70,7 +70,9 @@ clOptionsParser =
                     <> short 't'
                     <> help
                         ( "Eventlog tracing options: "
-                            <> intercalate ", " [toKebab $ fromHumps $ show t | t <- [minBound .. maxBound] :: [CustomUserEventType]]
+                            <> intercalate
+                                ", "
+                                [toKebab $ fromHumps $ show t | t <- [minBound .. maxBound] :: [CustomUserEventType]]
                         )
                 )
             )
@@ -87,11 +89,13 @@ clOptionsParser =
 
     readEventLogTracing :: String -> Either String CustomUserEventType
     readEventLogTracing =
-        (\s -> maybe (Left $ s <> " not supported in eventlog tracing") Right $ readMaybe s) . toPascal . fromKebab
+        (\s -> maybe (Left $ s <> " not supported in eventlog tracing") Right $ readMaybe s)
+            . toPascal
+            . fromKebab
 
 -- custom log levels that can be selected
 allowedLogLevels :: [String]
-allowedLogLevels = ["Rewrite"]
+allowedLogLevels = ["Rewrite", "Simplify"]
 
 -- Partition provided log levels into standard and custom ones, and
 -- select the lowest standard level. Default to 'LevelInfo' if no

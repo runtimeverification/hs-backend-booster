@@ -24,7 +24,7 @@
         };
       allNixpkgsFor = perSystem nixpkgsForSystem;
       nixpkgsFor = system: allNixpkgsFor.${system};
-      index-state = "2023-01-19T00:00:00Z";
+      index-state = "2023-04-24T00:00:00Z";
 
       boosterBackendFor = { compiler, pkgs, profiling ? false, k }:
         let
@@ -40,6 +40,7 @@
         in
         pkgs.haskell-nix.cabalProject {
           name = "hs-backend-booster";
+          supportHpack = true;
           compiler-nix-name = compiler;
           src = pkgs.nix-gitignore.gitignoreSourcePure [
             ''
@@ -60,7 +61,7 @@
               haskell-language-server = { inherit index-state; };
               fourmolu = {
                 inherit index-state;
-                version = "0.8.2.0";
+                version = "0.12.0.0";
               };
               hlint = "latest";
             };
@@ -74,7 +75,7 @@
           modules = [{
             enableProfiling = profiling;
             enableLibraryProfiling = profiling;
-            packages.hs-backend-booster.components.exes.hs-booster-proxy = add-z3 "hs-booster-proxy";
+            packages.hs-backend-booster.components.exes.booster = add-z3 "booster";
             packages.hs-backend-booster.components.tests.llvm-integration = {
               build-tools = with pkgs; lib.mkForce [ makeWrapper ];
               postInstall = ''
@@ -86,11 +87,11 @@
           }];
         };
 
-      defaultCompiler = "ghc925";
+      defaultCompiler = "ghc927";
 
       # Get flake outputs for different GHC versions
       flakesFor = pkgs: k:
-        let compilers = [ defaultCompiler "ghc924" ];
+        let compilers = [ defaultCompiler ];
 
         in builtins.listToAttrs (lib.lists.forEach compilers (compiler:
           lib.attrsets.nameValuePair compiler
@@ -135,12 +136,12 @@
           pkgs = nixpkgsFor system;
           flakes = flakesFor pkgs k-framework.packages.${system}.k;
         in {
-          hs-backend-booster =
-            packages."hs-backend-booster:exe:hs-backend-booster";
+          booster =
+            packages."hs-backend-booster:exe:booster";
+          booster-dev = packages."hs-backend-booster:exe:booster-dev";
           rpc-client = packages."hs-backend-booster:exe:rpc-client";
           parsetest = packages."hs-backend-booster:exe:parsetest";
           dltest = packages."hs-backend-booster:exe:dltest";
-          hs-booster-proxy = packages."hs-backend-booster:exe:hs-booster-proxy";
         } // packages // collectOutputs "packages" flakes);
 
       apps = perSystem (system:
@@ -162,12 +163,12 @@
           };
 
         in {
-          hs-backend-booster = apps."hs-backend-booster:exe:hs-backend-booster";
+          booster = apps."hs-backend-booster:exe:booster";
+          booster-dev = apps."hs-backend-booster:exe:booster-dev";
           rpc-client = apps."hs-backend-booster:exe:rpc-client";
           parsetest = apps."hs-backend-booster:exe:parsetest";
           parsetest-binary = apps."hs-backend-booster:exe:parsetest-binary";
           dltest = apps."hs-backend-booster:exe:dltest";
-          hs-booster-proxy = apps."hs-backend-booster:exe:hs-booster-proxy";
           update-haskell-backend = {
             type = "app";
             program = "${scripts}/update-haskell-backend.sh";
@@ -196,8 +197,8 @@
           integration = with nixpkgsFor system;
             with flakes.${defaultCompiler};
             callPackage ./test/rpc-integration {
-              hs-backend-booster =
-                packages."hs-backend-booster:exe:hs-backend-booster";
+              booster-dev =
+                packages."hs-backend-booster:exe:booster-dev";
               rpc-client = packages."hs-backend-booster:exe:rpc-client";
               inherit (k-framework.packages.${system}) k;
             };
@@ -210,8 +211,8 @@
         (_: prev:
           let inherit ((flakesFor prev k-framework.packages.${prev.system}.k).${defaultCompiler}) packages;
           in {
-            hs-backend-booster =
-              packages."hs-backend-booster:exe:hs-backend-booster";
+            booster =
+              packages."hs-backend-booster:exe:booster";
             rpc-client = packages."hs-backend-booster:exe:rpc-client";
           })
       ];
