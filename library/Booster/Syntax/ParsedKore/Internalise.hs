@@ -437,8 +437,10 @@ data AxiomData
    according to their purpose.
 
 * Rewrite rule:
-  with anti-left:    \rewrites(\and{}(\not(_), <aliasName>(..)), _)
-  without anti-left: \rewrites(<aliasName>(..)), _)
+  - with anti-left and alias:    \rewrites(\and{}(\not(_), <aliasName>(..)), _)
+  - without anti-left, but alias: \rewrites(<aliasName>(..)), _)
+  - simple format: (lhs positions flexible but \and mandatory)
+    \rewrites(\and(<lhs>, <reqs>), rhs) or \rewrites(\and(<reqs>, <lhs>), <rhs>)
 * Subsort axiom:
   \exists(V:<super>, \equals(V, inj{<sub>,<super>}(V':<sub>)))
 * equation (simplification or function equation)
@@ -481,6 +483,9 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
                     <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
             | Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs <- lhs ->
                 Just . RewriteRuleAxiom' aliasName aliasArgs rhs
+                    <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
+            | Syntax.KJAnd{} <- lhs ->
+                Just . RewriteRuleAxiomNoAlias' lhs rhs
                     <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
             | otherwise ->
                 throwE $ DefinitionAxiomError $ MalformedRewriteRule parsedAx
