@@ -48,8 +48,8 @@ import Booster.Pattern.Simplify
 import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
-import Control.Monad.Trans.State.Strict (StateT (runStateT), get, modify, put)
-import Data.Sequence (Seq, (<|), (|>))
+import Control.Monad.Trans.State.Strict (StateT (runStateT), get, modify)
+import Data.Sequence (Seq, (|>))
 
 newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe LLVM.API) (Except err) a}
     deriving newtype (Functor, Applicative, Monad)
@@ -333,7 +333,7 @@ data RewriteTrace pat
 
 instance Pretty (RewriteTrace Pattern) where
     pretty = \case
-        RewriteSingleStep lbl uniqueId pat' single ->
+        RewriteSingleStep lbl _uniqueId pat' single ->
             let
                 (l, r) = diff pat' single
              in
