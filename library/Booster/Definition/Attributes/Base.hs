@@ -98,7 +98,7 @@ instance Pretty NotPreservesDefinednessReason where
 
 type Label = Text
 
-newtype UniqueId = UniqueId Text
+newtype UniqueId = UniqueId {getUniqueId :: Text}
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
