@@ -20,11 +20,13 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
+import Control.Monad.Trans.State.Strict (StateT (runStateT), get, modify)
 import Data.Hashable qualified as Hashable
-import Data.List.NonEmpty (NonEmpty (..))
+import Data.List.NonEmpty (NonEmpty (..), toList)
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
+import Data.Sequence (Seq, (|>))
 import Data.Set qualified as Set
 import Data.Text as Text (Text, pack, unlines)
 import Numeric.Natural
@@ -48,8 +50,6 @@ import Booster.Pattern.Simplify
 import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
-import Control.Monad.Trans.State.Strict (StateT (runStateT), get, modify)
-import Data.Sequence (Seq, (|>))
 
 newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe LLVM.API) (Except err) a}
     deriving newtype (Functor, Applicative, Monad)
@@ -125,7 +125,7 @@ rewriteStep cutLabels terminalLabels pat = do
                 | otherwise ->
                     pure $ RewriteFinished (Just $ ruleLabelOrLocT r) (uniqueId r) x
             rxs ->
-                pure $ RewriteBranch (uniqueId $ fst $ head rxs) pat $ NE.fromList $ map snd rxs
+                pure $ RewriteBranch pat $ NE.fromList $ map (\(r, p) -> (labelOf r, uniqueId r, p)) rxs
 
 {- | Tries to apply one rewrite rule:
 
@@ -296,7 +296,7 @@ ruleLabelOrLoc rule =
 -- | Different rewrite results (returned from RPC execute endpoint)
 data RewriteResult pat
     = -- | branch point
-      RewriteBranch (Maybe UniqueId) pat (NonEmpty pat)
+      RewriteBranch pat (NonEmpty (Text, Maybe UniqueId, pat))
     | -- | no rules could be applied, config is stuck
       RewriteStuck pat
     | -- | cut point rule, return current (lhs) and single next state
@@ -324,6 +324,8 @@ apliedRuleAndResultFromRewriteResult = \case
 data RewriteTrace pat
     = -- | single step of execution
       RewriteSingleStep Text (Maybe UniqueId) pat pat
+    | -- | branching step of execution
+      RewriteBranchingStep pat (NonEmpty (Text, Maybe UniqueId))
     | -- | attempted rewrite failed
       RewriteStepFailed (RewriteFailed "Rewrite")
     | -- | Applied simplification to the pattern
@@ -333,9 +335,9 @@ data RewriteTrace pat
 
 instance Pretty (RewriteTrace Pattern) where
     pretty = \case
-        RewriteSingleStep lbl _uniqueId pat' single ->
+        RewriteSingleStep lbl _uniqueId pat rewritten ->
             let
-                (l, r) = diff pat' single
+                (l, r) = diff pat rewritten
              in
                 hang 4 . vsep $
                     [ "Rewriting configuration"
@@ -345,6 +347,13 @@ instance Pretty (RewriteTrace Pattern) where
                     , "Using rule:"
                     , pretty lbl
                     ]
+        RewriteBranchingStep pat branches ->
+            hang 4 . vsep $
+                [ "Configuration"
+                , pretty (PrettyTerm $ term pat)
+                , "branches on rules:"
+                , hang 2 $ vsep [pretty lbl | (lbl, _) <- toList branches]
+                ]
         RewriteSimplified{} -> "Applied simplification"
         RewriteStepFailed failure -> pretty failure
 
@@ -470,21 +479,22 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                         incrementCounter
                         doSteps False single
                     Right terminal@(RewriteTerminal lbl uniqueId single) -> do
-                        -- logRewrite $ prettyText terminal
                         rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
                         logRewrite $
                             "Terminal rule after " <> showCounter (counter + 1)
                         simplified <- mapM simplifyP terminal
-                        -- logRewrite $ "Simplified pattern " <> prettyText simplified
                         incrementCounter
                         pure simplified
+                    Right branching@(RewriteBranch pat'' branches) -> do
+                        rewriteTrace $ RewriteBranchingStep pat'' $ fmap (\(lbl, uid, _) -> (lbl, uid)) branches
+                        simplifiedBranching <- mapM simplifyP branching
+                        logRewrite $ "Stopped due to branching after " <> showCounter counter
+                        pure simplifiedBranching
                     Right other -> do
-                        -- logRewrite $ prettyText other
                         case apliedRuleAndResultFromRewriteResult other of
                             Just (lbl, uniqueId, single) -> rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
                             Nothing -> pure ()
                         simplifiedOther <- mapM simplifyP other
-                        -- logRewrite $ "Simplified: " <> prettyText simplifiedOther
                         logRewrite $ "Stopped after " <> showCounter counter
                         pure simplifiedOther
                     -- if unification was unclear and the pattern was

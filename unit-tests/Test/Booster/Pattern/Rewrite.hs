@@ -216,17 +216,18 @@ rulePriority =
     testCase "con1 rewrites to a branch when higher priority does not apply" $ do
         let d2 = dv someSort "otherThing"
         (termInKCell "ConfigVar" $ app con1 [d2])
-            `branchesTo` [ termInKCell "ConfigVar" $ app con4 [d2, d2]
-                         , termInKCell "ConfigVar" $ app f1 [d2]
+            `branchesTo` [ ("con1-f2", termInKCell "ConfigVar" $ app con4 [d2, d2])
+                         , ("con1-f1'", termInKCell "ConfigVar" $ app f1 [d2])
                          ]
 
 rewritesTo :: Pattern -> (Text, Pattern) -> IO ()
 p1 `rewritesTo` (lbl, p2) =
     runRewriteM def Nothing (rewriteStep [] [] p1) @?= Right (RewriteFinished (Just lbl) Nothing p2)
 
-branchesTo :: Pattern -> [Pattern] -> IO ()
+branchesTo :: Pattern -> [(Text, Pattern)] -> IO ()
 p `branchesTo` ps =
-    runRewriteM def Nothing (rewriteStep [] [] p) @?= Right (RewriteBranch Nothing p $ NE.fromList ps)
+    runRewriteM def Nothing (rewriteStep [] [] p)
+        @?= Right (RewriteBranch p $ NE.fromList $ map (\(lbl, p') -> (lbl, Nothing, p')) ps)
 
 failsWith :: Pattern -> RewriteFailed "Rewrite" -> IO ()
 failsWith p err =
@@ -256,10 +257,10 @@ canRewrite =
                 rule3Dv2 = dv someSort "somethingElse"
                 con3Term = termInKCell "C" $ app con3 [rule3Dv1, d]
                 con1Term = termInKCell "C" $ app con1 [rule3Dv2]
-                branch1 = termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2]
-                branch2 = termInKCell "C" $ app f1 [rule3Dv2]
+                branch1 = ("con1-f2", Nothing, termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2])
+                branch2 = ("con1-f1'", Nothing, termInKCell "C" $ app f1 [rule3Dv2])
             runRewrite con3Term
-                >>= (@?= (1, RewriteBranch Nothing con1Term (NE.fromList [branch1, branch2])))
+                >>= (@?= (1, RewriteBranch con1Term (NE.fromList [branch1, branch2])))
         , testCase "Returns stuck when no rules could be applied" $ do
             let con3NoRules = termInKCell "C" $ app con3 [d, d]
             runRewrite con3NoRules >>= (@?= (0, RewriteStuck con3NoRules))
@@ -306,10 +307,10 @@ supportsDepthControl =
                 rule3Dv2 = dv someSort "somethingElse"
                 con3Term = termInKCell "C" $ app con3 [rule3Dv1, d]
                 con1Dv2 = termInKCell "C" $ app con1 [rule3Dv2]
-                branch1 = termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2]
-                branch2 = termInKCell "C" $ app f1 [rule3Dv2]
+                branch1 = ("con1-f2", Nothing, termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2])
+                branch2 = ("con1-f1'", Nothing, termInKCell "C" $ app f1 [rule3Dv2])
             runRewriteDepth 2 con3Term
-                >>= (@?= (1, RewriteBranch Nothing con1Dv2 (NE.fromList [branch1, branch2])))
+                >>= (@?= (1, RewriteBranch con1Dv2 (NE.fromList [branch1, branch2])))
         ]
   where
     con1Term = termInKCell "C" $ app con1 [d]
@@ -334,10 +335,10 @@ supportsCutPoints =
                 rule3Dv2 = dv someSort "somethingElse"
                 con3Term = termInKCell "C" $ app con3 [rule3Dv1, d]
                 con1Dv2 = termInKCell "C" $ app con1 [rule3Dv2]
-                branch1 = termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2]
-                branch2 = termInKCell "C" $ app f1 [rule3Dv2]
+                branch1 = ("con1-f2", Nothing, termInKCell "C" $ app con4 [rule3Dv2, rule3Dv2])
+                branch2 = ("con1-f1'", Nothing, termInKCell "C" $ app f1 [rule3Dv2])
             runRewriteCutPoint "con1-f2" con3Term
-                >>= (@?= (1, RewriteBranch Nothing con1Dv2 (NE.fromList [branch1, branch2])))
+                >>= (@?= (1, RewriteBranch con1Dv2 (NE.fromList [branch1, branch2])))
         ]
   where
     con1Term = termInKCell "C" $ app con1 [d]

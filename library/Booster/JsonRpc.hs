@@ -171,7 +171,7 @@ execResponse ::
     (Natural, Seq (RewriteTrace Pattern), RewriteResult Pattern) ->
     Either ErrorObj (API 'Res)
 execResponse req (d, traces, rr) = case rr of
-    RewriteBranch _ p nexts ->
+    RewriteBranch p nexts ->
         Right $
             Execute
                 ExecuteResult
@@ -179,7 +179,7 @@ execResponse req (d, traces, rr) = case rr of
                     , depth
                     , logs
                     , state = toExecState p
-                    , nextStates = Just $ map toExecState $ toList nexts
+                    , nextStates = Just $ map (\(_, _, p') -> toExecState p') $ toList nexts
                     , rule = Nothing
                     }
     RewriteStuck p ->
@@ -342,6 +342,7 @@ execResponse req (d, traces, rr) = case rr of
                                     }
                             , origin = Booster
                             }
+        RewriteBranchingStep _ _ -> Nothing -- we may or may not want to emit a trace here in the future
         RewriteStepFailed reason
             | fromMaybe False logFailedRewrites ->
                 Just $
