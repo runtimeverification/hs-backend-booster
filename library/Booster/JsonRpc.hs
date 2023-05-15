@@ -34,7 +34,6 @@ import Booster.Definition.Attributes.Base (getUniqueId, uniqueId)
 import Booster.Definition.Base (KoreDefinition (..))
 import Booster.Definition.Base qualified as Definition (RewriteRule (..))
 import Booster.LLVM.Internal qualified as LLVM
-import Booster.Pattern.ApplyEquations (EquationTrace (..), subjectTerm)
 import Booster.Pattern.ApplyEquations qualified as ApplyEquations
 import Booster.Pattern.Base (Pattern (..))
 import Booster.Pattern.Rewrite (
@@ -246,8 +245,8 @@ execResponse req (d, traces, rr) = case rr of
         } = req
     depth = Depth d
 
-    mkLogEquationTrace :: EquationTrace -> Maybe LogEntry
-    mkLogEquationTrace EquationTrace{subjectTerm, ruleId = uid, result} = case result of
+    mkLogEquationTrace :: ApplyEquations.EquationTrace -> Maybe LogEntry
+    mkLogEquationTrace ApplyEquations.EquationTrace{subjectTerm, ruleId = uid, result} = case result of
         ApplyEquations.Success rewrittenTrm
             | fromMaybe False logSuccessfulSimplifications ->
                 Just $
@@ -259,7 +258,7 @@ execResponse req (d, traces, rr) = case rr of
                             Success
                                 { rewrittenTerm = Just $ execStateToKoreJson $ toExecState $ Pattern rewrittenTrm []
                                 , substitution = Nothing
-                                , ruleId
+                                , ruleId = fromMaybe "UNKNOWN" _ruleId
                                 }
                         }
         ApplyEquations.FailedMatch _failReason
@@ -269,7 +268,7 @@ execResponse req (d, traces, rr) = case rr of
                         { originalTerm
                         , originalTermIndex
                         , origin
-                        , result = Failure{reason = "Failed match", ruleId}
+                        , result = Failure{reason = "Failed match", _ruleId}
                         }
         ApplyEquations.IndeterminateMatch
             | fromMaybe False logFailedSimplifications ->
@@ -278,7 +277,7 @@ execResponse req (d, traces, rr) = case rr of
                         { originalTerm
                         , originalTermIndex
                         , origin
-                        , result = Failure{reason = "Indeterminate match", ruleId}
+                        , result = Failure{reason = "Indeterminate match", _ruleId}
                         }
         ApplyEquations.IndeterminateCondition
             | fromMaybe False logFailedSimplifications ->
@@ -287,7 +286,7 @@ execResponse req (d, traces, rr) = case rr of
                         { originalTerm
                         , originalTermIndex
                         , origin
-                        , result = Failure{reason = "Indeterminate side-condition", ruleId}
+                        , result = Failure{reason = "Indeterminate side-condition", _ruleId}
                         }
         ApplyEquations.ConditionFalse
             | fromMaybe False logFailedSimplifications ->
@@ -296,7 +295,7 @@ execResponse req (d, traces, rr) = case rr of
                         { originalTerm
                         , originalTermIndex
                         , origin
-                        , result = Failure{reason = "Side-condition is false", ruleId}
+                        , result = Failure{reason = "Side-condition is false", _ruleId}
                         }
         ApplyEquations.RuleNotPreservingDefinedness
             | fromMaybe False logFailedSimplifications ->
@@ -305,7 +304,7 @@ execResponse req (d, traces, rr) = case rr of
                         { originalTerm
                         , originalTermIndex
                         , origin
-                        , result = Failure{reason = "The equation does not preserve definedness", ruleId}
+                        , result = Failure{reason = "The equation does not preserve definedness", _ruleId}
                         }
         ApplyEquations.MatchConstraintViolated _ varName
             | fromMaybe False logFailedSimplifications ->
@@ -317,7 +316,7 @@ execResponse req (d, traces, rr) = case rr of
                         , result =
                             Failure
                                 { reason = "Symbolic/concrete constraint violated for variable: " <> Text.decodeUtf8 varName
-                                , ruleId
+                                , _ruleId
                                 }
                         }
         _ -> Nothing
@@ -325,7 +324,7 @@ execResponse req (d, traces, rr) = case rr of
         originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern subjectTerm []
         originalTermIndex = Nothing
         origin = Booster
-        ruleId = maybe "UNKNOWN" getUniqueId uid
+        _ruleId = fmap getUniqueId uid
 
     mkLogRewriteTrace :: RewriteTrace Pattern -> Maybe [LogEntry]
     mkLogRewriteTrace = \case
@@ -349,33 +348,33 @@ execResponse req (d, traces, rr) = case rr of
                     singleton $
                         Rewrite
                             { result = case reason of
-                                NoRulesForTerm{} -> Failure{reason = "No rules found", ruleId = ""}
-                                NoApplicableRules{} -> Failure{reason = "No applicable rules found", ruleId = ""}
-                                TermIndexIsNone{} -> Failure{reason = "Term index is None for term", ruleId = ""}
+                                NoRulesForTerm{} -> Failure{reason = "No rules found", _ruleId = Nothing}
+                                NoApplicableRules{} -> Failure{reason = "No applicable rules found", _ruleId = Nothing}
+                                TermIndexIsNone{} -> Failure{reason = "Term index is None for term", _ruleId = Nothing}
                                 RuleApplicationUnclear r _ _ ->
                                     Failure
                                         { reason = "Uncertain about unification of rule"
-                                        , ruleId = maybe "UNKNOWN" getUniqueId (uniqueId $ Definition.attributes r)
+                                        , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
                                         }
                                 RuleConditionUnclear r _ ->
                                     Failure
                                         { reason = "Uncertain about a condition in rule"
-                                        , ruleId = maybe "UNKNOWN" getUniqueId (uniqueId $ Definition.attributes r)
+                                        , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
                                         }
                                 DefinednessUnclear r _ undefReasons ->
                                     Failure
                                         { reason = "Uncertain about definedness of rule because of: " <> pack (show undefReasons)
-                                        , ruleId = maybe "UNKNOWN" getUniqueId (uniqueId $ Definition.attributes r)
+                                        , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
                                         }
                                 UnificationIsNotMatch r _ _ ->
                                     Failure
                                         { reason = "Unification produced a non-match"
-                                        , ruleId = maybe "UNKNOWN" getUniqueId (uniqueId $ Definition.attributes r)
+                                        , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
                                         }
                                 RewriteSortError r _ _ ->
                                     Failure
                                         { reason = "Sort error while unifying"
-                                        , ruleId = maybe "UNKNOWN" getUniqueId (uniqueId $ Definition.attributes r)
+                                        , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
                                         }
                             , origin = Booster
                             }
@@ -391,28 +390,28 @@ execResponse req (d, traces, rr) = case rr of
                                 { originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern trm []
                                 , originalTermIndex = Nothing
                                 , origin = Booster
-                                , result = Failure{reason = "No index found for term", ruleId = ""}
+                                , result = Failure{reason = "No index found for term", _ruleId = Nothing}
                                 }
                         ApplyEquations.TooManyIterations i _ _ ->
                             Simplification
                                 { originalTerm = Nothing
                                 , originalTermIndex = Nothing
                                 , origin = Booster
-                                , result = Failure{reason = "Reached iteration depth limit " <> pack (show i), ruleId = ""}
+                                , result = Failure{reason = "Reached iteration depth limit " <> pack (show i), _ruleId = Nothing}
                                 }
                         ApplyEquations.EquationLoop _ _ ->
                             Simplification
                                 { originalTerm = Nothing
                                 , originalTermIndex = Nothing
                                 , origin = Booster
-                                , result = Failure{reason = "Loop detected", ruleId = ""}
+                                , result = Failure{reason = "Loop detected", _ruleId = Nothing}
                                 }
                         ApplyEquations.InternalError err ->
                             Simplification
                                 { originalTerm = Nothing
                                 , originalTermIndex = Nothing
                                 , origin = Booster
-                                , result = Failure{reason = "Internal error: " <> err, ruleId = ""}
+                                , result = Failure{reason = "Internal error: " <> err, _ruleId = Nothing}
                                 }
         _ -> Nothing
 
