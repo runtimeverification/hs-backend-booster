@@ -518,5 +518,4 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                     Left failure -> do
                         logRewrite $ "Aborted after " <> showCounter counter
                         rewriteTrace $ RewriteStepFailed failure
-                        res' <- (if wasSimplified then pure else mapM simplifyP) $ RewriteAborted pat'
-                        pure res'
+                        (if wasSimplified then pure else mapM simplifyP) $ RewriteAborted pat'
