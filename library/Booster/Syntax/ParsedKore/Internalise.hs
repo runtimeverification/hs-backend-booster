@@ -254,7 +254,7 @@ addModule
                     withExcept DefinitionAttributeError $
                         (,Set.singleton (textToBS parsedSort.name.getId))
                             <$> mkAttributes parsedSort
-            sorts' <- (currentSorts <>) <$> traverse mkSortEntry newSorts
+            newSorts' <- traverse mkSortEntry newSorts
 
             -- ensure parsed symbols are not duplicates and only refer
             -- to known sorts
@@ -267,8 +267,9 @@ addModule
             unless (null symCollisions) $
                 throwE $
                     DuplicateSymbols symCollisions
+            let sorts' = currentSorts <> newSorts'
             newSymbols' <- traverse (internaliseSymbol sorts') parsedSymbols
-            let symbols = Map.fromList newSymbols' <> currentSymbols
+            let symbols = addKmapSymbols newSorts' (Map.fromList newSymbols') <> currentSymbols
 
             let defWithNewSortsAndSymbols =
                     Partial
@@ -378,6 +379,27 @@ addModule
                 transitiveClosure $ Map.unionWith (<>) (Map.map snd priorSortMap) newSubsorts
             newSubsorts =
                 Map.fromListWith (<>) $ map (second Set.singleton . swap) subsortPairs
+
+        addKmapSymbols :: Map Def.SortName (SortAttributes, Set Def.SortName) -> Map Def.SymbolName Def.Symbol -> Map Def.SymbolName Def.Symbol
+        addKmapSymbols sorts symbols = 
+            let 
+                extractedMapSymbolNames :: Map Def.SymbolName (Def.SymbolName, Def.SymbolName, Def.SymbolName)
+                extractedMapSymbolNames = Map.fromList $
+                    foldr (\(SortAttributes{kmapElementSymbol, kmapConcatSymbol, kmapUnitSymbol}, _) rest -> case
+                        (kmapElementSymbol, kmapConcatSymbol, kmapUnitSymbol) of
+                            (Just e, Just c, Just u) -> let r = (Text.encodeUtf8 e,Text.encodeUtf8 c,Text.encodeUtf8 u) in 
+                                (Text.encodeUtf8 e,r): (Text.encodeUtf8 c, r): (Text.encodeUtf8 u, r) : rest
+                            _ -> rest) [] $ Map.elems sorts
+                final = Map.mapWithKey (\symbolName sym -> case Map.lookup symbolName extractedMapSymbolNames of
+                    Just (e,c,u) -> 
+                        sym{Def.kmapAttributes = Just Def.KMapAttributes{
+                            elementSymbol = final Map.! e,
+                            concatSymbol = final Map.! c,
+                            unitSymbol = final Map.! u
+                        }}
+                    Nothing -> sym) symbols
+            in final
+            
 
 -- Result type from internalisation of different axioms
 data AxiomResult
@@ -1005,7 +1027,7 @@ internaliseSymbol sorts parsedSymbol = do
     argSorts <- mapM check parsedSymbol.argSorts
     attributes <- withExcept DefinitionAttributeError $ mkAttributes parsedSymbol
     let name = textToBS parsedSymbol.name.getId
-        internalSymbol = Def.Symbol{name, sortVars, resultSort, argSorts, attributes}
+        internalSymbol = Def.Symbol{name, sortVars, resultSort, argSorts, attributes, kmapAttributes = Nothing}
     pure (name, internalSymbol)
   where
     knownVars = Set.fromList sortVarsT

@@ -26,7 +26,7 @@ module Booster.Pattern.Util (
     filterTermSymbols,
 ) where
 
-import Data.Bifunctor (first)
+import Data.Bifunctor (first, bimap)
 import Data.ByteString (ByteString)
 import Data.Coerce (coerce)
 import Data.Functor.Foldable (Corecursive (embed), cata)
@@ -52,6 +52,7 @@ sortOfTerm (SymbolApplication symbol sorts _) =
 sortOfTerm (DomainValue sort _) = sort
 sortOfTerm (Var Variable{variableSort}) = variableSort
 sortOfTerm (Injection _ sort _) = sort
+sortOfTerm (KMap attrs _ _) = attrs.unitSymbol.resultSort
 
 applySubst :: Map VarName Sort -> Sort -> Sort
 applySubst subst var@(SortVar n) =
@@ -80,6 +81,7 @@ substituteInTerm substitution = goSubst
                 SymbolApplication sym sorts $ map goSubst args
             AndTerm t1 t2 -> AndTerm (goSubst t1) (goSubst t2)
             Injection ss s sub -> Injection ss s (goSubst sub)
+            KMap attrs keyVals rest -> KMap attrs (bimap goSubst goSubst <$> keyVals) (goSubst <$> rest)
 
 substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
 substituteInPredicate substitution = cata $ \case

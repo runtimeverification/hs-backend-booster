@@ -177,8 +177,11 @@ data SymbolAttributes = SymbolAttributes
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData, Hashable)
 
-newtype SortAttributes = SortAttributes
+data SortAttributes = SortAttributes
     { argCount :: Int
+    , kmapUnitSymbol :: Maybe Text
+    , kmapElementSymbol :: Maybe Text
+    , kmapConcatSymbol :: Maybe Text
     }
     deriving stock (Eq, Show, Generic)
     deriving anyclass (NFData)

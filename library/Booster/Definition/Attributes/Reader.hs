@@ -193,8 +193,11 @@ instance HasAttributes ParsedSymbol where
 instance HasAttributes ParsedSort where
     type Attributes ParsedSort = SortAttributes
 
-    mkAttributes ParsedSort{sortVars} =
-        pure SortAttributes{argCount = length sortVars}
+    mkAttributes ParsedSort{sortVars, attributes} =do
+        kmapElementSymbol <- attributes .:? "element"
+        kmapConcatSymbol <- attributes .:? "concat"
+        kmapUnitSymbol <- attributes .:? "unit"
+        pure SortAttributes{argCount = length sortVars, kmapElementSymbol, kmapConcatSymbol, kmapUnitSymbol}
 
 ----------------------------------------
 
