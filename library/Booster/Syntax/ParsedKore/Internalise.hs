@@ -47,6 +47,9 @@ import Booster.Definition.Attributes.Reader as Attributes (
 import Booster.Definition.Base as Def
 import Booster.Pattern.Base (Variable (..))
 import Booster.Pattern.Base qualified as Def
+import Booster.Pattern.Base qualified as Def.Symbol (Symbol (..))
+
+import Booster.Definition.Attributes.Base qualified as Def
 import Booster.Pattern.Index as Idx
 import Booster.Pattern.Util qualified as Util
 import Booster.Prettyprinter hiding (attributes)
@@ -380,26 +383,43 @@ addModule
             newSubsorts =
                 Map.fromListWith (<>) $ map (second Set.singleton . swap) subsortPairs
 
-        addKmapSymbols :: Map Def.SortName (SortAttributes, Set Def.SortName) -> Map Def.SymbolName Def.Symbol -> Map Def.SymbolName Def.Symbol
-        addKmapSymbols sorts symbols = 
-            let 
-                extractedMapSymbolNames :: Map Def.SymbolName (Def.SymbolName, Def.SymbolName, Def.SymbolName)
-                extractedMapSymbolNames = Map.fromList $
-                    foldr (\(SortAttributes{kmapElementSymbol, kmapConcatSymbol, kmapUnitSymbol}, _) rest -> case
-                        (kmapElementSymbol, kmapConcatSymbol, kmapUnitSymbol) of
-                            (Just e, Just c, Just u) -> let r = (Text.encodeUtf8 e,Text.encodeUtf8 c,Text.encodeUtf8 u) in 
-                                (Text.encodeUtf8 e,r): (Text.encodeUtf8 c, r): (Text.encodeUtf8 u, r) : rest
-                            _ -> rest) [] $ Map.elems sorts
-                final = Map.mapWithKey (\symbolName sym -> case Map.lookup symbolName extractedMapSymbolNames of
-                    Just (e,c,u) -> 
-                        sym{Def.kmapAttributes = Just Def.KMapAttributes{
-                            elementSymbol = final Map.! e,
-                            concatSymbol = final Map.! c,
-                            unitSymbol = final Map.! u
-                        }}
-                    Nothing -> sym) symbols
-            in final
-            
+        addKmapSymbols ::
+            Map Def.SortName (SortAttributes, Set Def.SortName) ->
+            Map Def.SymbolName Def.Symbol ->
+            Map Def.SymbolName Def.Symbol
+        addKmapSymbols sorts symbols =
+            let
+                extractElementSortName :: Def.SymbolName -> Def.SortName
+                extractElementSortName symbolName = case Map.lookup symbolName symbols of
+                    Just Def.Symbol{argSorts = [Def.SortApp sortName [], _]} -> sortName
+                    Just _ -> error $ "symbol " <> show symbolName <> "is malformed"
+                    Nothing -> error $ "symbol " <> show symbolName <> "not found"
+
+                extractedMapSymbolNames :: Map Def.SymbolName Def.KMapDefinition
+                extractedMapSymbolNames =
+                    Map.fromList
+                        $ foldr
+                            ( \(mapSortName, (SortAttributes{kmapAttributes}, _)) rest -> case kmapAttributes of
+                                Just symbolNames@KMapAttributes{unitSymbolName, elementSymbolName, concatSymbolName} ->
+                                    let
+                                        elementSortName = extractElementSortName elementSymbolName
+                                        def = KMapDefinition{symbolNames, mapSortName, elementSortName}
+                                     in
+                                        (unitSymbolName, def) : (elementSymbolName, def) : (concatSymbolName, def) : rest
+                                _ -> rest
+                            )
+                            []
+                        $ Map.toList sorts
+                final =
+                    Map.mapWithKey
+                        ( \symbolName sym@Def.Symbol{attributes} -> case Map.lookup symbolName extractedMapSymbolNames of
+                            Just def ->
+                                sym{Def.Symbol.attributes = attributes{Def.isKMapSymbol = Just def}}
+                            Nothing -> sym
+                        )
+                        symbols
+             in
+                final
 
 -- Result type from internalisation of different axioms
 data AxiomResult
@@ -1027,7 +1047,7 @@ internaliseSymbol sorts parsedSymbol = do
     argSorts <- mapM check parsedSymbol.argSorts
     attributes <- withExcept DefinitionAttributeError $ mkAttributes parsedSymbol
     let name = textToBS parsedSymbol.name.getId
-        internalSymbol = Def.Symbol{name, sortVars, resultSort, argSorts, attributes, kmapAttributes = Nothing}
+        internalSymbol = Def.Symbol{name, sortVars, resultSort, argSorts, attributes}
     pure (name, internalSymbol)
   where
     knownVars = Set.fromList sortVarsT

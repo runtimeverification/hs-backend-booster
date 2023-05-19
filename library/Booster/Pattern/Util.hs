@@ -26,7 +26,7 @@ module Booster.Pattern.Util (
     filterTermSymbols,
 ) where
 
-import Data.Bifunctor (first, bimap)
+import Data.Bifunctor (bimap, first)
 import Data.ByteString (ByteString)
 import Data.Coerce (coerce)
 import Data.Functor.Foldable (Corecursive (embed), cata)
@@ -39,6 +39,7 @@ import Data.Set qualified as Set
 import Booster.Definition.Attributes.Base (
     Concreteness (..),
     Flag (..),
+    KMapDefinition (..),
     SymbolAttributes (..),
     SymbolType (..),
  )
@@ -52,7 +53,7 @@ sortOfTerm (SymbolApplication symbol sorts _) =
 sortOfTerm (DomainValue sort _) = sort
 sortOfTerm (Var Variable{variableSort}) = variableSort
 sortOfTerm (Injection _ sort _) = sort
-sortOfTerm (KMap attrs _ _) = attrs.unitSymbol.resultSort
+sortOfTerm (KMap def _ _) = SortApp def.mapSortName []
 
 applySubst :: Map VarName Sort -> Sort -> Sort
 applySubst subst var@(SortVar n) =

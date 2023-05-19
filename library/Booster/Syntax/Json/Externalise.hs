@@ -11,10 +11,10 @@ module Booster.Syntax.Json.Externalise (
 import Data.Foldable ()
 import Data.Text.Encoding qualified as Text
 
+import Booster.Pattern.Base (externaliseKmapUnsafe)
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
 import Kore.Syntax.Json.Types qualified as Syntax
-import Booster.Pattern.Base (externaliseKmapUnsafe)
 
 {- | Converts an internal pattern to a pair of term and predicate in
  external format. The predicate is 'And'ed to avoid leaking
@@ -58,8 +58,8 @@ externaliseTerm = \case
             (symbolNameToId Internal.injectionSymbol.name)
             (map externaliseSort [source, target])
             [externaliseTerm trm]
-    Internal.KMap attrs keyVals rest -> externaliseTerm $ externaliseKmapUnsafe attrs keyVals rest
-    
+    Internal.KMap def keyVals rest -> externaliseTerm $ externaliseKmapUnsafe def keyVals rest
+
 externalisePredicate :: Syntax.Sort -> Internal.Predicate -> Syntax.KorePattern
 externalisePredicate sort =
     let recursion = externalisePredicate sort

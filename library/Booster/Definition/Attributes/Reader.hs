@@ -37,6 +37,7 @@ import Booster.Definition.Attributes.Base (
     DefinitionAttributes (..),
     FileSource (..),
     Flag (Flag),
+    KMapAttributes (..),
     Location (Location),
     ModuleAttributes (..),
     Position (Position),
@@ -52,6 +53,7 @@ import Booster.Definition.Attributes.Base (
     UniqueId (..),
  )
 import Booster.Syntax.ParsedKore.Base
+import Data.Text.Encoding (encodeUtf8)
 import Kore.Syntax.Json.Types (Id (..))
 
 {- | A class describing all attributes we want to extract from parsed
@@ -189,15 +191,26 @@ instance HasAttributes ParsedSymbol where
             <*> isIdem
             <*> isAssoc
             <*> (coerce <$> (attributes .! "macro" <||> attributes .! "alias'Kywd'"))
+            <*> pure Nothing
 
 instance HasAttributes ParsedSort where
     type Attributes ParsedSort = SortAttributes
 
-    mkAttributes ParsedSort{sortVars, attributes} =do
-        kmapElementSymbol <- attributes .:? "element"
-        kmapConcatSymbol <- attributes .:? "concat"
-        kmapUnitSymbol <- attributes .:? "unit"
-        pure SortAttributes{argCount = length sortVars, kmapElementSymbol, kmapConcatSymbol, kmapUnitSymbol}
+    mkAttributes ParsedSort{sortVars, attributes} = do
+        mElem <- attributes .:? "element"
+        mConcat <- attributes .:? "concat"
+        mUnit <- attributes .:? "unit"
+        hook <- attributes .:? "hook"
+        let kmapAttributes = case (encodeUtf8 <$> mElem, encodeUtf8 <$> mConcat, encodeUtf8 <$> mUnit, hook) of
+                (Just elementSymbolName, Just concatSymbolName, Just unitSymbolName, Just ("MAP.Map" :: Text)) ->
+                    Just
+                        KMapAttributes
+                            { unitSymbolName
+                            , elementSymbolName
+                            , concatSymbolName
+                            }
+                _ -> Nothing
+        pure SortAttributes{argCount = length sortVars, kmapAttributes}
 
 ----------------------------------------
 
