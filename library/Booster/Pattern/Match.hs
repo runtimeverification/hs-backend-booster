@@ -200,7 +200,7 @@ match1
 match1
     t1@KMap{}
     t2 =
-        failWith $ DifferentSymbols t1 t2
+        lift $ throwE $ MatchIndeterminate  t1 t2
 
 failWith :: FailReason -> StateT s (Except MatchResult) ()
 failWith = lift . throwE . MatchFailed . General
