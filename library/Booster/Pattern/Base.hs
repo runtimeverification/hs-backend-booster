@@ -169,7 +169,7 @@ kmapConcatSymbol def =
         , resultSort = SortApp def.mapSortName []
         , attributes =
             SymbolAttributes
-                { symbolType = TotalFunction
+                { symbolType = PartialFunction
                 , isIdem = IsNotIdem
                 , isAssoc = IsAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
@@ -184,7 +184,7 @@ kmapElementSymbol def =
         , resultSort = SortApp def.mapSortName []
         , attributes =
             SymbolAttributes
-                { symbolType = TotalFunction
+                { symbolType = PartialFunction
                 , isIdem = IsNotIdem
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
@@ -351,7 +351,7 @@ pattern KMap def keyVals rest <- Term _ (KMapF def keyVals rest)
                                 ( "KMap" :: ByteString
                                 , def
                                 , map (\(k, v) -> (hash $ getAttributes k, hash $ getAttributes v)) keyVals
-                                , (hash . getAttributes) <$> rest
+                                , hash . getAttributes <$> rest
                                 )
                         , isConstructorLike =
                             argAttributes.isConstructorLike
