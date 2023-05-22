@@ -222,7 +222,7 @@ unify1
                 "Argument counts differ for same constructor" <> show (t1, t2)
         | sorts1 /= sorts2 = failWith (DifferentSorts t1 t2)
         | otherwise =
-            enqueueProblems $ map (RegularTerm,) $ zip args1 args2
+            enqueueProblems $ zipWith (curry (RegularTerm,)) args1 args2
 ----- Variables
 -- twice the exact same variable: verify sorts are equal
 unify1

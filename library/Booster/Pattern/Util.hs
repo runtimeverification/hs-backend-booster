@@ -173,6 +173,18 @@ filterTermSymbols check = cata $ \case
         | otherwise -> concat ts
     AndTermF t1 t2 -> t1 <> t2
     InjectionF _ _ t -> t
+    KMapF def [] Nothing -> [kmapUnitSymbol def | check $ kmapUnitSymbol def]
+    KMapF _ [] t -> fromMaybe [] t
+    KMapF def kvs t ->
+        let
+            concatSymbol = kmapConcatSymbol def
+            elementSymbol = kmapElementSymbol def
+            unitSymbol = kmapUnitSymbol def
+         in
+            (if check concatSymbol then (concatSymbol :) else id) $
+                (if check elementSymbol then (elementSymbol :) else id) $
+                    (if check unitSymbol then (unitSymbol :) else id) $
+                        concatMap (uncurry (<>)) kvs ++ fromMaybe [] t
     _ -> []
 
 isBottom :: Pattern -> Bool
