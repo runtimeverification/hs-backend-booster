@@ -63,7 +63,7 @@ sorts =
         , test "sort variable in subject" (app con1 [dSub]) (app con1 [varZ]) $
             sortErr (FoundSortVariable "me, too!")
         , test "several sort variables" (app con3 [varX, varY]) (app con3 [dSome, varZ]) $
-            sortErr (FoundSortVariable "sort me!")
+            sortErr (FoundSortVariable "me, too!")
         ]
   where
     sVar = SortVar "sort me!"
@@ -207,7 +207,7 @@ andTerms =
                 "And-term on the left, remainder returns both pairs"
                 (AndTerm fa fb)
                 d
-                (remainder [(fb, d), (fa, d)])
+                (remainder [(fa, d), (fb, d)])
         , let d = dv someSort "a"
               fa = app f1 [d]
               fb = app f1 [dv someSort "b"]
@@ -215,7 +215,7 @@ andTerms =
                 "And-term on the right, remainder returns both pairs"
                 d
                 (AndTerm fa fb)
-                (remainder [(d, fb), (d, fa)])
+                (remainder [(d, fa), (d, fb)])
         , let da = dv someSort "a"
               db = dv someSort "b"
               ca = app con1 [da]
