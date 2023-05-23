@@ -207,6 +207,7 @@ sortMapKmap =
                 , elementSymbolName = "Lbl'UndsPipe'-'-GT-Unds'"
                 , concatSymbolName = "Lbl'Unds'Map'Unds'"
                 }
+        , keySortName = "SortKItem"
         , elementSortName = "SortKItem"
         , mapSortName = "SortMap"
         }
