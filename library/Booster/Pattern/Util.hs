@@ -174,7 +174,7 @@ filterTermSymbols check = cata $ \case
     AndTermF t1 t2 -> t1 <> t2
     InjectionF _ _ t -> t
     KMapF def [] Nothing -> [kmapUnitSymbol def | check $ kmapUnitSymbol def]
-    KMapF _ [] t -> fromMaybe [] t
+    KMapF _ [] (Just t) -> t
     KMapF def kvs t ->
         let
             concatSymbol = kmapConcatSymbol def

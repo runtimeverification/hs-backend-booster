@@ -82,8 +82,7 @@ instance Pretty FailReason where
             ]
     pretty (KeyNotFound k m) =
         vsep
-            [ "Key " <> pretty k
-            , "not found in map"
+            [ "Key " <> pretty k <> " not found in map"
             , pretty m
             ]
 
