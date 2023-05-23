@@ -42,15 +42,16 @@ import Booster.Pattern.Rewrite (
     RewriteTrace (..),
     performRewrite,
  )
+import Booster.Pattern.Util (sortOfTerm)
 import Booster.Syntax.Json (KoreJson (..), addHeader)
-import Booster.Syntax.Json.Externalise (externalisePattern)
+import Booster.Syntax.Json.Externalise
 import Booster.Syntax.Json.Internalise (internalisePattern)
 import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base
 import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinitions)
 import Data.List (singleton)
 import Data.Sequence (Seq)
-import Kore.JsonRpc.Error
+import Kore.JsonRpc.Error as RpcError
 import Kore.JsonRpc.Server
 import Kore.JsonRpc.Types
 import Kore.JsonRpc.Types.Log
@@ -110,6 +111,28 @@ respond stateVar =
                                 Log.logInfo $
                                     "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
                                 pure $ Right $ AddModule ()
+
+        Simplify req -> withContext req._module $ \(def, mLlvmLibrary) -> do
+            let internalised = runExcept $ internalisePattern False Nothing def req.state.term
+            case internalised of
+                Left patternError -> do
+                    Log.logDebug $ "Error internalising cterm" <> Text.pack (show patternError)
+                    pure $ Left $ backendError CouldNotVerifyPattern patternError
+                Right Pattern{term, constraints} ->
+                    case ApplyEquations.evaluateTerm ApplyEquations.TopDown def mLlvmLibrary term of
+                        Right (newTerm, _traces) -> do
+                            let (t, p) = externalisePattern Pattern{constraints, term = newTerm}
+                                tSort = externaliseSort (sortOfTerm newTerm)
+                                result = addHeader $ maybe t (KoreJson.KJAnd tSort t) p
+                            pure . Right . Simplify $
+                                SimplifyResult
+                                    { state = result
+                                    , logs = Nothing -- FIXME
+                                    }
+                        Left (ApplyEquations.EquationLoop _traces terms) ->
+                            pure . Left . backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
+                        Left other ->
+                            pure . Left . backendError RpcError.Aborted $ show other -- FIXME
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left cancelUnsupportedInBatchMode

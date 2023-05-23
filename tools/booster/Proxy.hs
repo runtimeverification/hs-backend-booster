@@ -11,6 +11,7 @@ module Proxy (
     respondEither,
 ) where
 
+import Control.Applicative (liftA2)
 import Control.Concurrent.MVar qualified as MVar
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO)
@@ -29,6 +30,7 @@ import Kore.Internal.TermLike (TermLike, VariableName)
 import Kore.JsonRpc qualified as Kore (ServerState)
 import Kore.JsonRpc.Types
 import Kore.JsonRpc.Types qualified as ExecuteRequest (ExecuteRequest (..))
+import Kore.JsonRpc.Types qualified as SimplifyRequest (SimplifyRequest (..))
 import Kore.Log qualified
 import Kore.Syntax.Definition (SentenceAxiom)
 import Stats (APIMethods (..), StatsVar, addStats, microsWithUnit, timed)
@@ -64,8 +66,36 @@ respondEither mbStatsVar booster kore req = case req of
             startLoop execReq
     Implies _ ->
         loggedKore Stats.ImpliesM req
-    Simplify _ ->
-        loggedKore Stats.SimplifyM req
+    Simplify simplifyReq -> do
+        -- execute in booster first, then in kore. Log the difference
+        (boosterResult, boosterTime) <- withTime $ booster req
+        case boosterResult of
+            Right (Simplify boosterRes) -> do
+                let koreReq = Simplify simplifyReq{ SimplifyRequest.state = boosterRes.state }
+                (koreResult, koreTime) <- withTime $ kore koreReq
+                case koreResult of
+                    Right (Simplify koreRes) -> do
+                        logStats Stats.SimplifyM (boosterTime + koreTime, koreTime)
+                        when (koreRes.state /= boosterRes.state) $
+                            -- TODO pretty instance for KoreJson terms for logging
+                            Log.logInfoNS "proxy" . Text.pack . unlines $
+                                [ "Booster simplification:"
+                                , show boosterRes.state
+                                , "to"
+                                , show koreRes.state
+                                ]
+                        pure . Right . Simplify $
+                            SimplifyResult
+                                { state = koreRes.state
+                                , logs = liftA2 (++) boosterRes.logs koreRes.logs
+                                }
+                    koreError -> -- can only be an error
+                        pure koreError
+            Left boosterError -> do
+                -- log the problem and try with kore
+                Log.logWarnNS "proxy" . Text.pack $ "Problem with simplify request: " <> show boosterError
+                loggedKore Stats.SimplifyM req
+            Right _
     AddModule _ -> do
         -- execute in booster first, assuming that kore won't throw an
         -- error if booster did not. The response is empty anyway.
