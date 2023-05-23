@@ -389,9 +389,9 @@ addModule
             Map Def.SymbolName Def.Symbol
         addKmapSymbols sorts symbols =
             let
-                extractElementSortName :: Def.SymbolName -> Def.SortName
-                extractElementSortName symbolName = case Map.lookup symbolName symbols of
-                    Just Def.Symbol{argSorts = [Def.SortApp sortName [], _]} -> sortName
+                extractKeyElemSortName :: Def.SymbolName -> (Def.SortName, Def.SortName)
+                extractKeyElemSortName symbolName = case Map.lookup symbolName symbols of
+                    Just Def.Symbol{argSorts = [Def.SortApp keySortName [], Def.SortApp elemSortName []]} -> (keySortName, elemSortName)
                     Just _ -> error $ "symbol " <> show symbolName <> "is malformed"
                     Nothing -> error $ "symbol " <> show symbolName <> "not found"
 
@@ -402,8 +402,8 @@ addModule
                             ( \(mapSortName, (SortAttributes{kmapAttributes}, _)) rest -> case kmapAttributes of
                                 Just symbolNames@KMapAttributes{unitSymbolName, elementSymbolName, concatSymbolName} ->
                                     let
-                                        elementSortName = extractElementSortName elementSymbolName
-                                        def = KMapDefinition{symbolNames, mapSortName, elementSortName}
+                                        (keySortName, elementSortName) = extractKeyElemSortName elementSymbolName
+                                        def = KMapDefinition{symbolNames, mapSortName, keySortName, elementSortName}
                                      in
                                         (unitSymbolName, def) : (elementSymbolName, def) : (concatSymbolName, def) : rest
                                 _ -> rest

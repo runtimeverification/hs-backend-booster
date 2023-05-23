@@ -16,9 +16,13 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Either.Extra
+import Data.List (partition)
 import Data.List.NonEmpty as NE (NonEmpty, fromList)
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Sequence (Seq (..), (><))
+import Data.Sequence qualified as Seq
+
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Prettyprinter
@@ -31,8 +35,6 @@ import Booster.Pattern.Util (
     sortOfTerm,
     substituteInTerm,
  )
-import Data.HashPSQ qualified as PriorityQueue
-import Data.List (partition)
 
 -- | Result of a unification (a substitution or an indication of what went wrong)
 data UnificationResult
@@ -118,21 +120,17 @@ unifyTerms KoreDefinition{sorts} term1 term2 =
                     State
                         { uSubstitution = Map.empty
                         , uTargetVars = freeVars1
-                        , uQueue = PriorityQueue.singleton (term1, term2) RegularTerm ()
+                        , uQueue = Seq.singleton (term1, term2) -- PriorityQueue.singleton (term1, term2) RegularTerm ()
+                        , uMapQueue = mempty
                         , uIndeterminate = []
                         , uSubsorts = Map.map snd sorts
                         }
 
-data UnificationPriority = RegularTerm | InternalMap deriving (Eq)
-
-instance Ord UnificationPriority where
-    InternalMap <= RegularTerm = False
-    _ <= _ = True
-
 data UnificationState = State
     { uSubstitution :: Substitution
     , uTargetVars :: Set Variable
-    , uQueue :: PriorityQueue.HashPSQ (Term, Term) UnificationPriority () -- work queue with a priority
+    , uQueue :: Seq (Term, Term) -- PriorityQueue.HashPSQ (Term, Term) UnificationPriority () -- work queue with a priority
+    , uMapQueue :: Seq (Term, Term)
     , uIndeterminate :: [(Term, Term)] -- list of postponed indeterminate terms (function results)
     , uSubsorts :: SortTable
     }
@@ -142,9 +140,18 @@ type SortTable = Map SortName (Set SortName)
 unification :: StateT UnificationState (Except UnificationResult) ()
 unification = do
     queue <- gets uQueue
-    case PriorityQueue.minView queue of
-        Nothing -> checkIndeterminate -- done
-        Just ((term1, term2), _, _, rest) -> do
+    mapQueue <- gets uMapQueue
+    case queue of
+        Empty -> case mapQueue of
+            Empty -> checkIndeterminate -- done
+            (term1, term2) :<| rest -> do
+                modify $ \s -> s{uMapQueue = rest}
+                unify1 term1 term2
+                unification
+        (term1, term2) :<| rest -> do
+            -- case PriorityQueue.minView queue of
+            --     Nothing -> checkIndeterminate -- done
+            --     Just ((term1, term2), _, _, rest) -> do
             modify $ \s -> s{uQueue = rest}
             unify1 term1 term2
             unification
@@ -175,15 +182,15 @@ unify1
     (AndTerm t1a t1b)
     term2 =
         do
-            enqueueProblem RegularTerm t1a term2
-            enqueueProblem RegularTerm t1b term2
+            enqueueRegularProblem t1a term2
+            enqueueRegularProblem t1b term2
 -- and-term in subject: must unify with both arguments
 unify1
     term1
     (AndTerm t2a t2b) =
         do
-            enqueueProblem RegularTerm term1 t2a
-            enqueueProblem RegularTerm term1 t2b
+            enqueueRegularProblem term1 t2a
+            enqueueRegularProblem term1 t2b
 ----- Injections
 -- two injections. Try to unify the contained terms if the sorts
 -- agree. Target sorts must be the same, source sorts may differ if
@@ -195,7 +202,7 @@ unify1
         | target1 /= target2 = do
             failWith (DifferentSorts pat subj)
         | source1 == source2 = do
-            enqueueProblem RegularTerm trm1 trm2
+            enqueueRegularProblem trm1 trm2
         | Var v <- trm1 = do
             -- variable in pattern, check source sorts and bind
             subsorts <- gets uSubsorts
@@ -222,7 +229,7 @@ unify1
                 "Argument counts differ for same constructor" <> show (t1, t2)
         | sorts1 /= sorts2 = failWith (DifferentSorts t1 t2)
         | otherwise =
-            enqueueProblems $ zipWith (curry (RegularTerm,)) args1 args2
+            enqueueRegularProblems $ Seq.fromList $ zip args1 args2
 ----- Variables
 -- twice the exact same variable: verify sorts are equal
 unify1
@@ -277,17 +284,17 @@ unify1
     t2@(KMap def2 _ _)
         | def1 == def2 = do
             State{uSubstitution = currentSubst, uQueue = queue} <- get
-            case PriorityQueue.findMin queue of
-                Just (_, RegularTerm, _) ->
-                    -- defer unification until all regular terms have unified
-                    enqueueProblem InternalMap t1 t2
-                _ ->
+            case queue of
+                Empty ->
                     case (substituteInTerm currentSubst t1, substituteInTerm currentSubst t2) of
                         (KMap _ [kv@(k, v)] (Just rest@(Var _)), KMap _ m Nothing)
                             | allConstructorLike (kv : m) -> unifySimpleMapShape k v rest m
                         (KMap _ m Nothing, KMap _ [kv@(k, v)] (Just rest@(Var _)))
                             | allConstructorLike (kv : m) -> unifySimpleMapShape k v rest m
                         _ -> addIndeterminate t1 t2
+                _ ->
+                    -- defer unification until all regular terms have unified
+                    enqueueMapProblem t1 t2
         | otherwise = failWith $ DifferentSorts t1 t2
       where
         allConstructorLike :: [(Term, Term)] -> Bool
@@ -296,10 +303,9 @@ unify1
         unifySimpleMapShape k v rest m = case partition ((k ==) . fst) m of
             ([], _) -> failWith $ KeyNotFound k $ KMap def1 m Nothing
             ([(_, v')], mRest) -> do
-                enqueueProblem RegularTerm v v'
-                enqueueProblem RegularTerm rest $ KMap def1 mRest Nothing
+                enqueueRegularProblem v v'
+                enqueueRegularProblem rest $ KMap def1 mRest Nothing
             (_ : _, _) -> error "map invariant violated, duplicate keys found"
-
 -- could be unifying a map with a function which returns a map
 unify1
     t1@SymbolApplication{}
@@ -324,13 +330,23 @@ failWith = lift . throwE . UnificationFailed
 internalError :: String -> a
 internalError = error
 
-enqueueProblem :: Monad m => UnificationPriority -> Term -> Term -> StateT UnificationState m ()
-enqueueProblem p term1 term2 =
-    modify $ \s@State{uQueue} -> s{uQueue = PriorityQueue.insert (term1, term2) p () uQueue}
+enqueueRegularProblem, enqueueMapProblem :: Monad m => Term -> Term -> StateT UnificationState m ()
+enqueueRegularProblem term1 term2 =
+    modify $ \s@State{uQueue} ->
+        s
+            { uQueue = uQueue :|> (term1, term2)
+            }
+enqueueMapProblem term1 term2 =
+    modify $ \s@State{uMapQueue} ->
+        s
+            { uMapQueue = uMapQueue :|> (term1, term2)
+            }
 
-enqueueProblems :: Monad m => [(UnificationPriority, (Term, Term))] -> StateT UnificationState m ()
-enqueueProblems ts =
-    modify $ \s@State{uQueue} -> s{uQueue = foldr (\(p, t) q -> PriorityQueue.insert t p () q) uQueue ts}
+enqueueRegularProblems :: Monad m => Seq (Term, Term) -> StateT UnificationState m ()
+enqueueRegularProblems ts =
+    modify $ \s@State{uQueue} -> s{uQueue = uQueue >< ts}
+
+-- modify $ \s@State{uQueue} -> s{uQueue = foldr (\(p, t) q -> PriorityQueue.insert t p () q) uQueue ts}
 
 {- | Binds a variable to a term to add to the resulting unifier.
 

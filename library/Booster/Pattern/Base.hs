@@ -148,7 +148,7 @@ getAttributes (Term a _) = a
 kmapUnitSymbol, kmapConcatSymbol, kmapElementSymbol :: KMapDefinition -> Symbol
 kmapUnitSymbol def =
     Symbol
-        { name = def.symbolNames.concatSymbolName
+        { name = def.symbolNames.unitSymbolName
         , sortVars = []
         , argSorts = []
         , resultSort = SortApp def.mapSortName []
@@ -180,7 +180,7 @@ kmapElementSymbol def =
     Symbol
         { name = def.symbolNames.elementSymbolName
         , sortVars = []
-        , argSorts = [SortApp def.elementSortName [], SortApp def.mapSortName []]
+        , argSorts = [SortApp def.keySortName [], SortApp def.elementSortName []]
         , resultSort = SortApp def.mapSortName []
         , attributes =
             SymbolAttributes
@@ -202,12 +202,12 @@ externaliseKmapUnsafe def keyVals rest =
         ([], Just r) -> r
         ((cK, cV) : cs, Nothing) ->
             foldr
-                (\(k, v) r -> k |-> v `con` r)
+                (\(k, v) r -> (k |-> v) `con` r)
                 (cK |-> cV)
                 cs
         (_, Just s) ->
             foldr
-                (\(k, v) r -> k |-> v `con` r)
+                (\(k, v) r -> (k |-> v) `con` r)
                 s
                 keyVals
   where
@@ -217,6 +217,7 @@ externaliseKmapUnsafe def keyVals rest =
     unit = SymbolApplication (stripIsKmap $ kmapUnitSymbol def) [] []
     k |-> v = SymbolApplication (stripIsKmap $ kmapElementSymbol def) [] [k, v]
     a `con` b = SymbolApplication (stripIsKmap $ kmapConcatSymbol def) [] [a, b]
+{-# INLINE externaliseKmapUnsafe #-}
 
 internaliseKmap :: KMapDefinition -> Term -> ([(Term, Term)], Maybe Term)
 internaliseKmap def@KMapDefinition{symbolNames = KMapAttributes{elementSymbolName, concatSymbolName, unitSymbolName}} = \case
@@ -339,7 +340,9 @@ pattern KMap def keyVals rest <- Term _ (KMapF def keyVals rest)
                         ([], Just s) -> getAttributes s
                         (_ : _, Nothing) -> foldl1' (<>) $ concatMap (\(k, v) -> [getAttributes k, getAttributes v]) keyVals
                         (_ : _, Just r) -> foldr (<>) (getAttributes r) $ concatMap (\(k, v) -> [getAttributes k, getAttributes v]) keyVals
-                (keyVals', rest') = maybe ([], Nothing) (internaliseKmap def) rest
+                (keyVals', rest') = case rest of
+                    Just (KMap def' kvs r) | def' == def -> (kvs, r)
+                    r -> ([], r)
              in Term
                     argAttributes
                         { isEvaluated =

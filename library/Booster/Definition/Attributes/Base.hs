@@ -190,6 +190,7 @@ data KMapAttributes = KMapAttributes
 
 data KMapDefinition = KMapDefinition
     { symbolNames :: KMapAttributes
+    , keySortName :: ByteString
     , elementSortName :: ByteString
     , mapSortName :: ByteString
     }

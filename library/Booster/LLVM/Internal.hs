@@ -35,11 +35,9 @@ import Control.Monad.Trans.Reader qualified as Reader
 import Data.Binary (Binary, get, put)
 import Data.ByteString.Char8 (ByteString, pack)
 import Data.ByteString.Char8 qualified as BS
-import Data.Foldable (foldrM)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
-import Data.Maybe (fromMaybe)
 import Foreign (ForeignPtr, finalizeForeignPtr, newForeignPtr, withForeignPtr)
 import Foreign qualified
 import Foreign.C qualified as C
@@ -339,12 +337,11 @@ marshallSort = \case
 marshallTerm :: Term -> LLVM KorePatternPtr
 marshallTerm t = do
     kore <- ask
-    let marshallSymbolApplication symbol sorts trms = do
+    case t of
+        SymbolApplication symbol sorts trms -> do
             trm <- liftIO . kore.patt.fromSymbol =<< marshallSymbol symbol sorts
             forM_ trms $ marshallTerm >=> liftIO . kore.patt.addArgument trm
             pure trm
-    case t of
-        SymbolApplication symbol sorts trms -> marshallSymbolApplication symbol sorts trms
         AndTerm l r -> do
             andSym <- liftIO $ kore.symbol.new "\\and"
             void $ liftIO . kore.symbol.addArgument andSym =<< marshallSort (sortOfTerm l)
@@ -357,15 +354,4 @@ marshallTerm t = do
         Injection source target trm -> do
             inj <- liftIO . kore.patt.fromSymbol =<< marshallSymbol injectionSymbol [source, target]
             marshallTerm trm >>= liftIO . kore.patt.addArgument inj
-        KMap def [] Nothing -> marshallTerm $ SymbolApplication (kmapUnitSymbol def) [] []
-        KMap _ [] (Just rest) -> marshallTerm rest
-        KMap def keyVals rest -> do
-            restPtr <- marshallTerm $ fromMaybe (SymbolApplication (kmapUnitSymbol def) [] []) rest
-            foldrM
-                ( \(k, v) rPtr -> do
-                    kvPtr <- marshallSymbolApplication (kmapElementSymbol def) [] [k, v]
-                    trm <- liftIO . kore.patt.fromSymbol =<< marshallSymbol (kmapConcatSymbol def) []
-                    liftIO $ kore.patt.addArgument trm kvPtr >> kore.patt.addArgument trm rPtr
-                )
-                restPtr
-                keyVals
+        KMap def keyVals rest -> marshallTerm $ externaliseKmapUnsafe def keyVals rest
