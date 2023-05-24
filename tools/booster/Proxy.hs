@@ -16,7 +16,9 @@ import Control.Concurrent.MVar qualified as MVar
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Logger qualified as Log
+import Data.Aeson (ToJSON (..))
 import Data.Aeson.Types (Value (..))
+import Data.Aeson.KeyMap qualified as Aeson
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -91,11 +93,16 @@ respondEither mbStatsVar booster kore req = case req of
                                 }
                     koreError -> -- can only be an error
                         pure koreError
-            Left boosterError -> do
-                -- log the problem and try with kore
-                Log.logWarnNS "proxy" . Text.pack $ "Problem with simplify request: " <> show boosterError
+            Left ErrorObj{getErrMsg, getErrData = Object errObj} -> do
+                -- in case of problems, log the problem and try with kore
+                let boosterError = maybe "???" fromString $ Aeson.lookup "error" errObj
+                    fromString (String s) = s
+                    fromString other = Text.pack (show other)
+                Log.logInfoNS "proxy" . Text.unwords $
+                    [ "Problem with simplify request: ", Text.pack getErrMsg, "-", boosterError]
                 loggedKore Stats.SimplifyM req
-            Right _
+            _wrong ->
+                pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
     AddModule _ -> do
         -- execute in booster first, assuming that kore won't throw an
         -- error if booster did not. The response is empty anyway.
