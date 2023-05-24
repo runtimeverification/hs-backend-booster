@@ -111,7 +111,6 @@ respond stateVar =
                                 Log.logInfo $
                                     "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
                                 pure $ Right $ AddModule ()
-
         Simplify req -> withContext req._module $ \(def, mLlvmLibrary) -> do
             let internalised =
                     runExcept $ internaliseTermOrPredicate False Nothing def req.state.term
@@ -135,7 +134,7 @@ respond stateVar =
                             pure . Left . backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
                         Left other ->
                             pure . Left . backendError RpcError.Aborted $ show other -- FIXME
-                -- predicate only
+                            -- predicate only
                 Right (APredicate predicate) ->
                     case ApplyEquations.traceSimplifyConstraint def mLlvmLibrary predicate of
                         Right (newPred, _traces) -> do

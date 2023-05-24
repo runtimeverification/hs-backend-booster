@@ -17,8 +17,8 @@ import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Logger qualified as Log
 import Data.Aeson (ToJSON (..))
-import Data.Aeson.Types (Value (..))
 import Data.Aeson.KeyMap qualified as Aeson
+import Data.Aeson.Types (Value (..))
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -73,7 +73,7 @@ respondEither mbStatsVar booster kore req = case req of
         (boosterResult, boosterTime) <- withTime $ booster req
         case boosterResult of
             Right (Simplify boosterRes) -> do
-                let koreReq = Simplify simplifyReq{ SimplifyRequest.state = boosterRes.state }
+                let koreReq = Simplify simplifyReq{SimplifyRequest.state = boosterRes.state}
                 (koreResult, koreTime) <- withTime $ kore koreReq
                 case koreResult of
                     Right (Simplify koreRes) -> do
@@ -91,7 +91,8 @@ respondEither mbStatsVar booster kore req = case req of
                                 { state = koreRes.state
                                 , logs = liftA2 (++) boosterRes.logs koreRes.logs
                                 }
-                    koreError -> -- can only be an error
+                    koreError ->
+                        -- can only be an error
                         pure koreError
             Left ErrorObj{getErrMsg, getErrData = Object errObj} -> do
                 -- in case of problems, log the problem and try with kore
@@ -99,7 +100,7 @@ respondEither mbStatsVar booster kore req = case req of
                     fromString (String s) = s
                     fromString other = Text.pack (show other)
                 Log.logInfoNS "proxy" . Text.unwords $
-                    [ "Problem with simplify request: ", Text.pack getErrMsg, "-", boosterError]
+                    ["Problem with simplify request: ", Text.pack getErrMsg, "-", boosterError]
                 loggedKore Stats.SimplifyM req
             _wrong ->
                 pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
