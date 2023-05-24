@@ -286,10 +286,10 @@ unify1
             case queue of
                 Empty ->
                     case (substituteInTerm currentSubst t1, substituteInTerm currentSubst t2) of
-                        (KMap _ [kv@(k, v)] (Just rest@(Var _)), KMap _ m Nothing)
-                            | allConstructorLike (kv : m) -> unifySimpleMapShape k v rest m
-                        (KMap _ m Nothing, KMap _ [kv@(k, v)] (Just rest@(Var _)))
-                            | allConstructorLike (kv : m) -> unifySimpleMapShape k v rest m
+                        (KMap _ kvs (Just restVar@Var{}), KMap _ m Nothing)
+                            | allConstructorLike kvs && allConstructorLike m -> unifySimpleMapShape kvs restVar m
+                        (KMap _ m Nothing, KMap _ kvs (Just restVar@Var{}))
+                            | allConstructorLike kvs && allConstructorLike m -> unifySimpleMapShape kvs restVar m
                         _ -> addIndeterminate t1 t2
                 _ ->
                     -- defer unification until all regular terms have unified
@@ -299,12 +299,22 @@ unify1
         allConstructorLike :: [(Term, Term)] -> Bool
         allConstructorLike = all (\(Term attrs _, _) -> attrs.isConstructorLike)
 
-        unifySimpleMapShape k v rest m = case partition ((k ==) . fst) m of
-            ([], _) -> failWith $ KeyNotFound k $ KMap def1 m Nothing
-            ([(_, v')], mRest) -> do
-                enqueueRegularProblem v v'
-                enqueueRegularProblem rest $ KMap def1 mRest Nothing
-            (_ : _, _) -> error "map invariant violated, duplicate keys found"
+
+        findAllKeys :: [(Term, Term)] -> [(Term, Term)] -> Either [Term] ([(Term, Term)], [(Term, Term)])
+        findAllKeys kvs m =
+            let keys = Set.fromList $ map fst kvs
+                (matched, rest) = partition ((`Set.member` keys) . fst) m
+                matchedMap = Map.fromList matched
+                matchedKeys = Set.fromList $ map fst matched
+            in if length kvs == length matched
+                then Right ([(v, matchedMap Map.! k) | (k, v) <- kvs], rest)
+                else Left [k | (k, _) <- kvs, not $ k `Set.member` matchedKeys]
+
+        unifySimpleMapShape kvs restVar m = case findAllKeys kvs m of
+            Left notFoundKeys ->  failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 m Nothing
+            Right (matched, rest) -> do
+                forM_ matched $ \(v,v') -> enqueueRegularProblem v v'
+                enqueueRegularProblem restVar $ KMap def1 rest Nothing
 -- could be unifying a map with a function which returns a map
 unify1
     t1@SymbolApplication{}
