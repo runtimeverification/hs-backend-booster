@@ -312,7 +312,7 @@ unify1
         unifySimpleMapShape kvs restVar m = case findAllKeys kvs m of
             Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 m Nothing
             Right (matched, rest) -> do
-                forM_ matched $ \(v, v') -> enqueueRegularProblem v v'
+                forM_ matched $ uncurry enqueueRegularProblem
                 enqueueRegularProblem restVar $ KMap def1 rest Nothing
 -- could be unifying a map with a function which returns a map
 unify1
