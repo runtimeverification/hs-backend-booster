@@ -35,7 +35,7 @@ import Booster.Definition.Base (KoreDefinition (..))
 import Booster.Definition.Base qualified as Definition (RewriteRule (..))
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.ApplyEquations qualified as ApplyEquations
-import Booster.Pattern.Base (Pattern (..))
+import Booster.Pattern.Base (Pattern (..), TermOrPredicate (..))
 import Booster.Pattern.Rewrite (
     RewriteFailed (..),
     RewriteResult (..),
@@ -43,9 +43,9 @@ import Booster.Pattern.Rewrite (
     performRewrite,
  )
 import Booster.Pattern.Util (sortOfTerm)
-import Booster.Syntax.Json (KoreJson (..), addHeader)
+import Booster.Syntax.Json (KoreJson (..), addHeader, sortOfJson)
 import Booster.Syntax.Json.Externalise
-import Booster.Syntax.Json.Internalise (internalisePattern)
+import Booster.Syntax.Json.Internalise (internalisePattern, internaliseTermOrPredicate)
 import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base
 import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinitions)
@@ -113,26 +113,43 @@ respond stateVar =
                                 pure $ Right $ AddModule ()
 
         Simplify req -> withContext req._module $ \(def, mLlvmLibrary) -> do
-            let internalised = runExcept $ internalisePattern False Nothing def req.state.term
+            let internalised =
+                    runExcept $ internaliseTermOrPredicate False Nothing def req.state.term
             case internalised of
-                Left patternError -> do
-                    Log.logDebug $ "Error internalising cterm" <> Text.pack (show patternError)
-                    pure $ Left $ backendError CouldNotVerifyPattern patternError
-                Right Pattern{term, constraints} ->
+                Left patternErrors -> do
+                    Log.logDebug $ "Error internalising cterm: " <> Text.pack (show patternErrors)
+                    pure $ Left $ backendError CouldNotVerifyPattern patternErrors
+                -- term and predicate (pattern)
+                Right (TermAndPredicate Pattern{term, constraints}) ->
                     case ApplyEquations.evaluateTerm ApplyEquations.TopDown def mLlvmLibrary term of
                         Right (newTerm, _traces) -> do
                             let (t, p) = externalisePattern Pattern{constraints, term = newTerm}
                                 tSort = externaliseSort (sortOfTerm newTerm)
-                                result = addHeader $ maybe t (KoreJson.KJAnd tSort t) p
+                                result = maybe t (KoreJson.KJAnd tSort t) p
                             pure . Right . Simplify $
                                 SimplifyResult
-                                    { state = result
+                                    { state = addHeader result
                                     , logs = Nothing -- FIXME
                                     }
                         Left (ApplyEquations.EquationLoop _traces terms) ->
                             pure . Left . backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
                         Left other ->
                             pure . Left . backendError RpcError.Aborted $ show other -- FIXME
+                -- predicate only
+                Right (APredicate predicate) ->
+                    case ApplyEquations.traceSimplifyConstraint def mLlvmLibrary predicate of
+                        Right (newPred, _traces) -> do
+                            let predicateSort =
+                                    fromMaybe (error "not a predicate") $
+                                        sortOfJson req.state.term
+                                result = externalisePredicate predicateSort newPred
+                            pure . Right . Simplify $
+                                SimplifyResult
+                                    { state = addHeader result
+                                    , logs = Nothing -- FIXME
+                                    }
+                        Left something ->
+                            pure . Left . backendError RpcError.Aborted $ show something -- FIXME
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left cancelUnsupportedInBatchMode
