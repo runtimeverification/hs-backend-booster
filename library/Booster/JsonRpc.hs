@@ -23,7 +23,7 @@ import Data.Conduit.Network (serverSettings)
 import Data.Foldable
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (catMaybes, fromMaybe, isJust)
+import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
 import Data.Text (Text, pack)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
@@ -114,6 +114,14 @@ respond stateVar =
         Simplify req -> withContext req._module $ \(def, mLlvmLibrary) -> do
             let internalised =
                     runExcept $ internaliseTermOrPredicate False Nothing def req.state.term
+            let mkTraces
+                    | all not . catMaybes $
+                        [req.logSuccessfulSimplifications, req.logFailedSimplifications] =
+                        const Nothing
+                    | otherwise =
+                        Just
+                            . mapMaybe (mkLogEquationTrace (req.logSuccessfulSimplifications, req.logFailedSimplifications))
+                            . toList
             case internalised of
                 Left patternErrors -> do
                     Log.logDebug $ "Error internalising cterm: " <> Text.pack (show patternErrors)
@@ -121,14 +129,14 @@ respond stateVar =
                 -- term and predicate (pattern)
                 Right (TermAndPredicate Pattern{term, constraints}) ->
                     case ApplyEquations.evaluateTerm ApplyEquations.TopDown def mLlvmLibrary term of
-                        Right (newTerm, _traces) -> do
+                        Right (newTerm, traces) -> do
                             let (t, p) = externalisePattern Pattern{constraints, term = newTerm}
                                 tSort = externaliseSort (sortOfTerm newTerm)
                                 result = maybe t (KoreJson.KJAnd tSort t) p
                             pure . Right . Simplify $
                                 SimplifyResult
                                     { state = addHeader result
-                                    , logs = Nothing -- FIXME
+                                    , logs = mkTraces traces
                                     }
                         Left (ApplyEquations.EquationLoop _traces terms) ->
                             pure . Left . backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
@@ -137,7 +145,7 @@ respond stateVar =
                             -- predicate only
                 Right (APredicate predicate) ->
                     case ApplyEquations.traceSimplifyConstraint def mLlvmLibrary predicate of
-                        Right (newPred, _traces) -> do
+                        Right (newPred, traces) -> do
                             let predicateSort =
                                     fromMaybe (error "not a predicate") $
                                         sortOfJson req.state.term
@@ -145,7 +153,7 @@ respond stateVar =
                             pure . Right . Simplify $
                                 SimplifyResult
                                     { state = addHeader result
-                                    , logs = Nothing -- FIXME
+                                    , logs = mkTraces traces
                                     }
                         Left something ->
                             pure . Left . backendError RpcError.Aborted $ show something -- FIXME
@@ -284,176 +292,6 @@ execResponse req (d, traces, rr) = case rr of
         } = req
     depth = Depth d
 
-    mkLogEquationTrace :: ApplyEquations.EquationTrace -> Maybe LogEntry
-    mkLogEquationTrace ApplyEquations.EquationTrace{subjectTerm, ruleId = uid, result} = case result of
-        ApplyEquations.Success rewrittenTrm
-            | fromMaybe False logSuccessfulSimplifications ->
-                Just $
-                    Simplification
-                        { originalTerm
-                        , originalTermIndex
-                        , origin
-                        , result =
-                            Success
-                                { rewrittenTerm = Just $ execStateToKoreJson $ toExecState $ Pattern rewrittenTrm []
-                                , substitution = Nothing
-                                , ruleId = fromMaybe "UNKNOWN" _ruleId
-                                }
-                        }
-        ApplyEquations.FailedMatch _failReason
-            | fromMaybe False logFailedSimplifications ->
-                Just $
-                    Simplification
-                        { originalTerm
-                        , originalTermIndex
-                        , origin
-                        , result = Failure{reason = "Failed match", _ruleId}
-                        }
-        ApplyEquations.IndeterminateMatch
-            | fromMaybe False logFailedSimplifications ->
-                Just $
-                    Simplification
-                        { originalTerm
-                        , originalTermIndex
-                        , origin
-                        , result = Failure{reason = "Indeterminate match", _ruleId}
-                        }
-        ApplyEquations.IndeterminateCondition
-            | fromMaybe False logFailedSimplifications ->
-                Just $
-                    Simplification
-                        { originalTerm
-                        , originalTermIndex
-                        , origin
-                        , result = Failure{reason = "Indeterminate side-condition", _ruleId}
-                        }
-        ApplyEquations.ConditionFalse
-            | fromMaybe False logFailedSimplifications ->
-                Just $
-                    Simplification
-                        { originalTerm
-                        , originalTermIndex
-                        , origin
-                        , result = Failure{reason = "Side-condition is false", _ruleId}
-                        }
-        ApplyEquations.RuleNotPreservingDefinedness
-            | fromMaybe False logFailedSimplifications ->
-                Just $
-                    Simplification
-                        { originalTerm
-                        , originalTermIndex
-                        , origin
-                        , result = Failure{reason = "The equation does not preserve definedness", _ruleId}
-                        }
-        ApplyEquations.MatchConstraintViolated _ varName
-            | fromMaybe False logFailedSimplifications ->
-                Just $
-                    Simplification
-                        { originalTerm
-                        , originalTermIndex
-                        , origin
-                        , result =
-                            Failure
-                                { reason = "Symbolic/concrete constraint violated for variable: " <> Text.decodeUtf8 varName
-                                , _ruleId
-                                }
-                        }
-        _ -> Nothing
-      where
-        originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern subjectTerm []
-        originalTermIndex = Nothing
-        origin = Booster
-        _ruleId = fmap getUniqueId uid
-
-    mkLogRewriteTrace :: RewriteTrace Pattern -> Maybe [LogEntry]
-    mkLogRewriteTrace = \case
-        RewriteSingleStep _ uid _ res
-            | fromMaybe False logSuccessfulRewrites ->
-                Just $
-                    singleton $
-                        Rewrite
-                            { result =
-                                Success
-                                    { rewrittenTerm = Just $ execStateToKoreJson $ toExecState res
-                                    , substitution = Nothing
-                                    , ruleId = maybe "UNKNOWN" getUniqueId uid
-                                    }
-                            , origin = Booster
-                            }
-        RewriteBranchingStep _ _ -> Nothing -- we may or may not want to emit a trace here in the future
-        RewriteStepFailed reason
-            | fromMaybe False logFailedRewrites ->
-                Just $
-                    singleton $
-                        Rewrite
-                            { result = case reason of
-                                NoRulesForTerm{} -> Failure{reason = "No rules found", _ruleId = Nothing}
-                                NoApplicableRules{} -> Failure{reason = "No applicable rules found", _ruleId = Nothing}
-                                TermIndexIsNone{} -> Failure{reason = "Term index is None for term", _ruleId = Nothing}
-                                RuleApplicationUnclear r _ _ ->
-                                    Failure
-                                        { reason = "Uncertain about unification of rule"
-                                        , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
-                                        }
-                                RuleConditionUnclear r _ ->
-                                    Failure
-                                        { reason = "Uncertain about a condition in rule"
-                                        , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
-                                        }
-                                DefinednessUnclear r _ undefReasons ->
-                                    Failure
-                                        { reason = "Uncertain about definedness of rule because of: " <> pack (show undefReasons)
-                                        , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
-                                        }
-                                UnificationIsNotMatch r _ _ ->
-                                    Failure
-                                        { reason = "Unification produced a non-match"
-                                        , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
-                                        }
-                                RewriteSortError r _ _ ->
-                                    Failure
-                                        { reason = "Sort error while unifying"
-                                        , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
-                                        }
-                            , origin = Booster
-                            }
-        RewriteSimplified (Right equationTraces)
-            | fromMaybe False logSuccessfulSimplifications || fromMaybe False logFailedSimplifications ->
-                mapM mkLogEquationTrace equationTraces
-        RewriteSimplified (Left failure)
-            | fromMaybe False logFailedSimplifications -> Just $
-                singleton $
-                    case failure of
-                        ApplyEquations.IndexIsNone trm ->
-                            Simplification
-                                { originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern trm []
-                                , originalTermIndex = Nothing
-                                , origin = Booster
-                                , result = Failure{reason = "No index found for term", _ruleId = Nothing}
-                                }
-                        ApplyEquations.TooManyIterations i _ _ ->
-                            Simplification
-                                { originalTerm = Nothing
-                                , originalTermIndex = Nothing
-                                , origin = Booster
-                                , result = Failure{reason = "Reached iteration depth limit " <> pack (show i), _ruleId = Nothing}
-                                }
-                        ApplyEquations.EquationLoop _ _ ->
-                            Simplification
-                                { originalTerm = Nothing
-                                , originalTermIndex = Nothing
-                                , origin = Booster
-                                , result = Failure{reason = "Loop detected", _ruleId = Nothing}
-                                }
-                        ApplyEquations.InternalError err ->
-                            Simplification
-                                { originalTerm = Nothing
-                                , originalTermIndex = Nothing
-                                , origin = Booster
-                                , result = Failure{reason = "Internal error: " <> err, _ruleId = Nothing}
-                                }
-        _ -> Nothing
-
     logs
         | not
             ( fromMaybe False logSuccessfulRewrites
@@ -462,10 +300,197 @@ execResponse req (d, traces, rr) = case rr of
                 || fromMaybe False logFailedSimplifications
             ) =
             Nothing
-        | otherwise = fmap concat $ mapM mkLogRewriteTrace $ toList traces
+        | otherwise =
+            fmap concat
+                . mapM
+                    ( mkLogRewriteTrace
+                        (logSuccessfulRewrites, logFailedRewrites)
+                        (logSuccessfulSimplifications, logFailedSimplifications)
+                    )
+                $ toList traces
 
-    toExecState :: Pattern -> ExecuteState
-    toExecState pat =
-        ExecuteState{term = addHeader t, predicate = fmap addHeader p, substitution = Nothing}
+toExecState :: Pattern -> ExecuteState
+toExecState pat =
+    ExecuteState{term = addHeader t, predicate = fmap addHeader p, substitution = Nothing}
+  where
+    (t, p) = externalisePattern pat
+
+mkLogEquationTrace :: (Maybe Bool, Maybe Bool) -> ApplyEquations.EquationTrace -> Maybe LogEntry
+mkLogEquationTrace
+    (logSuccessfulSimplifications, logFailedSimplifications)
+    ApplyEquations.EquationTrace{subjectTerm, ruleId = uid, result} =
+        case result of
+            ApplyEquations.Success rewrittenTrm
+                | fromMaybe False logSuccessfulSimplifications ->
+                    Just $
+                        Simplification
+                            { originalTerm
+                            , originalTermIndex
+                            , origin
+                            , result =
+                                Success
+                                    { rewrittenTerm = Just $ execStateToKoreJson $ toExecState $ Pattern rewrittenTrm []
+                                    , substitution = Nothing
+                                    , ruleId = fromMaybe "UNKNOWN" _ruleId
+                                    }
+                            }
+            ApplyEquations.FailedMatch _failReason
+                | fromMaybe False logFailedSimplifications ->
+                    Just $
+                        Simplification
+                            { originalTerm
+                            , originalTermIndex
+                            , origin
+                            , result = Failure{reason = "Failed match", _ruleId}
+                            }
+            ApplyEquations.IndeterminateMatch
+                | fromMaybe False logFailedSimplifications ->
+                    Just $
+                        Simplification
+                            { originalTerm
+                            , originalTermIndex
+                            , origin
+                            , result = Failure{reason = "Indeterminate match", _ruleId}
+                            }
+            ApplyEquations.IndeterminateCondition
+                | fromMaybe False logFailedSimplifications ->
+                    Just $
+                        Simplification
+                            { originalTerm
+                            , originalTermIndex
+                            , origin
+                            , result = Failure{reason = "Indeterminate side-condition", _ruleId}
+                            }
+            ApplyEquations.ConditionFalse
+                | fromMaybe False logFailedSimplifications ->
+                    Just $
+                        Simplification
+                            { originalTerm
+                            , originalTermIndex
+                            , origin
+                            , result = Failure{reason = "Side-condition is false", _ruleId}
+                            }
+            ApplyEquations.RuleNotPreservingDefinedness
+                | fromMaybe False logFailedSimplifications ->
+                    Just $
+                        Simplification
+                            { originalTerm
+                            , originalTermIndex
+                            , origin
+                            , result = Failure{reason = "The equation does not preserve definedness", _ruleId}
+                            }
+            ApplyEquations.MatchConstraintViolated _ varName
+                | fromMaybe False logFailedSimplifications ->
+                    Just $
+                        Simplification
+                            { originalTerm
+                            , originalTermIndex
+                            , origin
+                            , result =
+                                Failure
+                                    { reason = "Symbolic/concrete constraint violated for variable: " <> Text.decodeUtf8 varName
+                                    , _ruleId
+                                    }
+                            }
+            _ -> Nothing
       where
-        (t, p) = externalisePattern pat
+        originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern subjectTerm []
+        originalTermIndex = Nothing
+        origin = Booster
+        _ruleId = fmap getUniqueId uid
+
+mkLogRewriteTrace ::
+    (Maybe Bool, Maybe Bool) ->
+    (Maybe Bool, Maybe Bool) ->
+    RewriteTrace Pattern ->
+    Maybe [LogEntry]
+mkLogRewriteTrace
+    (logSuccessfulRewrites, logFailedRewrites)
+    equationLogOpts@(logSuccessfulSimplifications, logFailedSimplifications) =
+        \case
+            RewriteSingleStep _ uid _ res
+                | fromMaybe False logSuccessfulRewrites ->
+                    Just $
+                        singleton $
+                            Rewrite
+                                { result =
+                                    Success
+                                        { rewrittenTerm = Just $ execStateToKoreJson $ toExecState res
+                                        , substitution = Nothing
+                                        , ruleId = maybe "UNKNOWN" getUniqueId uid
+                                        }
+                                , origin = Booster
+                                }
+            RewriteBranchingStep _ _ -> Nothing -- we may or may not want to emit a trace here in the future
+            RewriteStepFailed reason
+                | fromMaybe False logFailedRewrites ->
+                    Just $
+                        singleton $
+                            Rewrite
+                                { result = case reason of
+                                    NoRulesForTerm{} -> Failure{reason = "No rules found", _ruleId = Nothing}
+                                    NoApplicableRules{} -> Failure{reason = "No applicable rules found", _ruleId = Nothing}
+                                    TermIndexIsNone{} -> Failure{reason = "Term index is None for term", _ruleId = Nothing}
+                                    RuleApplicationUnclear r _ _ ->
+                                        Failure
+                                            { reason = "Uncertain about unification of rule"
+                                            , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
+                                            }
+                                    RuleConditionUnclear r _ ->
+                                        Failure
+                                            { reason = "Uncertain about a condition in rule"
+                                            , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
+                                            }
+                                    DefinednessUnclear r _ undefReasons ->
+                                        Failure
+                                            { reason = "Uncertain about definedness of rule because of: " <> pack (show undefReasons)
+                                            , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
+                                            }
+                                    UnificationIsNotMatch r _ _ ->
+                                        Failure
+                                            { reason = "Unification produced a non-match"
+                                            , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
+                                            }
+                                    RewriteSortError r _ _ ->
+                                        Failure
+                                            { reason = "Sort error while unifying"
+                                            , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
+                                            }
+                                , origin = Booster
+                                }
+            RewriteSimplified (Right equationTraces)
+                | fromMaybe False logSuccessfulSimplifications || fromMaybe False logFailedSimplifications ->
+                    mapM (mkLogEquationTrace equationLogOpts) equationTraces
+            RewriteSimplified (Left failure)
+                | fromMaybe False logFailedSimplifications -> Just $
+                    singleton $
+                        case failure of
+                            ApplyEquations.IndexIsNone trm ->
+                                Simplification
+                                    { originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern trm []
+                                    , originalTermIndex = Nothing
+                                    , origin = Booster
+                                    , result = Failure{reason = "No index found for term", _ruleId = Nothing}
+                                    }
+                            ApplyEquations.TooManyIterations i _ _ ->
+                                Simplification
+                                    { originalTerm = Nothing
+                                    , originalTermIndex = Nothing
+                                    , origin = Booster
+                                    , result = Failure{reason = "Reached iteration depth limit " <> pack (show i), _ruleId = Nothing}
+                                    }
+                            ApplyEquations.EquationLoop _ _ ->
+                                Simplification
+                                    { originalTerm = Nothing
+                                    , originalTermIndex = Nothing
+                                    , origin = Booster
+                                    , result = Failure{reason = "Loop detected", _ruleId = Nothing}
+                                    }
+                            ApplyEquations.InternalError err ->
+                                Simplification
+                                    { originalTerm = Nothing
+                                    , originalTermIndex = Nothing
+                                    , origin = Booster
+                                    , result = Failure{reason = "Internal error: " <> err, _ruleId = Nothing}
+                                    }
+            _ -> Nothing
