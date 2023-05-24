@@ -299,21 +299,20 @@ unify1
         allConstructorLike :: [(Term, Term)] -> Bool
         allConstructorLike = all (\(Term attrs _, _) -> attrs.isConstructorLike)
 
-
         findAllKeys :: [(Term, Term)] -> [(Term, Term)] -> Either [Term] ([(Term, Term)], [(Term, Term)])
         findAllKeys kvs m =
             let keys = Set.fromList $ map fst kvs
                 (matched, rest) = partition ((`Set.member` keys) . fst) m
                 matchedMap = Map.fromList matched
                 matchedKeys = Set.fromList $ map fst matched
-            in if length kvs == length matched
-                then Right ([(v, matchedMap Map.! k) | (k, v) <- kvs], rest)
-                else Left [k | (k, _) <- kvs, not $ k `Set.member` matchedKeys]
+             in if length kvs == length matched
+                    then Right ([(v, matchedMap Map.! k) | (k, v) <- kvs], rest)
+                    else Left [k | (k, _) <- kvs, not $ k `Set.member` matchedKeys]
 
         unifySimpleMapShape kvs restVar m = case findAllKeys kvs m of
-            Left notFoundKeys ->  failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 m Nothing
+            Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 m Nothing
             Right (matched, rest) -> do
-                forM_ matched $ \(v,v') -> enqueueRegularProblem v v'
+                forM_ matched $ \(v, v') -> enqueueRegularProblem v v'
                 enqueueRegularProblem restVar $ KMap def1 rest Nothing
 -- could be unifying a map with a function which returns a map
 unify1
