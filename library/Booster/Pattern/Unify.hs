@@ -16,7 +16,6 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Either.Extra
-import Data.List (partition)
 import Data.List.NonEmpty as NE (NonEmpty, fromList)
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -35,7 +34,6 @@ import Booster.Pattern.Util (
     sortOfTerm,
     substituteInTerm,
  )
-import GHC.Generics (M1 (M1))
 
 -- | Result of a unification (a substitution or an indication of what went wrong)
 data UnificationResult
