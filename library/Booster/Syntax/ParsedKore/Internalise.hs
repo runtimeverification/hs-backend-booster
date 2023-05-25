@@ -272,7 +272,7 @@ addModule
                     DuplicateSymbols symCollisions
             let sorts' = currentSorts <> newSorts'
             newSymbols' <- traverse (internaliseSymbol sorts') parsedSymbols
-            let symbols = addKmapSymbols newSorts' (Map.fromList newSymbols') <> currentSymbols
+            symbols <- (<> currentSymbols) <$> addKmapSymbols newSorts' (Map.fromList newSymbols')
 
             let defWithNewSortsAndSymbols =
                     Partial
@@ -386,40 +386,37 @@ addModule
         addKmapSymbols ::
             Map Def.SortName (SortAttributes, Set Def.SortName) ->
             Map Def.SymbolName Def.Symbol ->
-            Map Def.SymbolName Def.Symbol
-        addKmapSymbols sorts symbols =
+            Except DefinitionError (Map Def.SymbolName Def.Symbol)
+        addKmapSymbols sorts symbols = do
             let
-                extractKeyElemSortName :: Def.SymbolName -> (Def.SortName, Def.SortName)
+                extractKeyElemSortName :: Def.SymbolName -> Except DefinitionError (Def.SortName, Def.SortName)
                 extractKeyElemSortName symbolName = case Map.lookup symbolName symbols of
-                    Just Def.Symbol{argSorts = [Def.SortApp keySortName [], Def.SortApp elemSortName []]} -> (keySortName, elemSortName)
-                    Just _ -> error $ "symbol " <> show symbolName <> "is malformed"
-                    Nothing -> error $ "symbol " <> show symbolName <> "not found"
+                    Just Def.Symbol{argSorts = [Def.SortApp keySortName [], Def.SortApp elemSortName []]} -> pure (keySortName, elemSortName)
+                    Just s -> throwE $ ElemSymbolMalformed s
+                    Nothing -> throwE $ ElemSymbolNotFound symbolName
 
-                extractedMapSymbolNames :: Map Def.SymbolName Def.KMapDefinition
-                extractedMapSymbolNames =
-                    Map.fromList
-                        $ foldr
-                            ( \(mapSortName, (SortAttributes{kmapAttributes}, _)) rest -> case kmapAttributes of
-                                Just symbolNames@KMapAttributes{unitSymbolName, elementSymbolName, concatSymbolName} ->
-                                    let
-                                        (keySortName, elementSortName) = extractKeyElemSortName elementSymbolName
-                                        def = KMapDefinition{symbolNames, mapSortName, keySortName, elementSortName}
-                                     in
-                                        (unitSymbolName, def) : (elementSymbolName, def) : (concatSymbolName, def) : rest
-                                _ -> rest
-                            )
-                            []
-                        $ Map.toList sorts
-                final =
-                    Map.mapWithKey
-                        ( \symbolName sym@Def.Symbol{attributes} -> case Map.lookup symbolName extractedMapSymbolNames of
-                            Just def ->
-                                sym{Def.Symbol.attributes = attributes{Def.isKMapSymbol = Just def}}
-                            Nothing -> sym
-                        )
-                        symbols
-             in
-                final
+            -- extractedMapSymbolNames :: Map Def.SymbolName Def.KMapDefinition
+            extractedMapSymbolNames <-
+                foldM
+                    ( \rest (mapSortName, (SortAttributes{kmapAttributes}, _)) -> case kmapAttributes of
+                        Just symbolNames@KMapAttributes{unitSymbolName, elementSymbolName, concatSymbolName} -> do
+                            (keySortName, elementSortName) <- extractKeyElemSortName elementSymbolName
+                            let def = KMapDefinition{symbolNames, mapSortName, keySortName, elementSortName}
+                            pure $
+                                Map.fromList [(unitSymbolName, def), (elementSymbolName, def), (concatSymbolName, def)]
+                                    `Map.union` rest
+                        _ -> pure rest
+                    )
+                    mempty
+                    (Map.toList sorts)
+            pure $
+                Map.mapWithKey
+                    ( \symbolName sym@Def.Symbol{attributes} -> case Map.lookup symbolName extractedMapSymbolNames of
+                        Just def ->
+                            sym{Def.Symbol.attributes = attributes{Def.isKMapSymbol = Just def}}
+                        Nothing -> sym
+                    )
+                    symbols
 
 -- Result type from internalisation of different axioms
 data AxiomResult
@@ -600,6 +597,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
             | hasAttribute "comm" -> pure Nothing -- could check symbol axiom.first.name
             | hasAttribute "idem" -> pure Nothing -- could check axiom.first.name
             | hasAttribute "unit" -> pure Nothing -- could check axiom.first.name and the unit symbol in axiom.first.args
+            | hasAttribute "overload" -> pure Nothing
             | hasAttribute "simplification" -- special case of injection simplification
             , Syntax.KJApp{name = sym1} <- axiom.first
             , sym1 == Syntax.Id "inj"
@@ -1101,6 +1099,8 @@ data DefinitionError
     | DefinitionAxiomError AxiomError
     | DefinitionTermOrPredicateError TermOrPredicateError
     | AddModuleError Text
+    | ElemSymbolMalformed Def.Symbol
+    | ElemSymbolNotFound Def.SymbolName
     deriving stock (Eq, Show)
 
 instance Pretty DefinitionError where
@@ -1133,6 +1133,10 @@ instance Pretty DefinitionError where
             pretty $ "Expected a pattern but found a predicate: " <> show p
         AddModuleError msg ->
             pretty $ "Add-module error: " <> msg
+        ElemSymbolMalformed sym ->
+            pretty $ "element{} symbol is malformed: " <> show sym
+        ElemSymbolNotFound sym ->
+            pretty $ "Expected an element{} symbol " <> show sym
 
 {- | ToJSON instance (user-facing for add-module endpoint):
 Renders the error string as 'error', with minimal context.

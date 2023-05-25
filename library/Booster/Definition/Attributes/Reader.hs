@@ -201,16 +201,33 @@ instance HasAttributes ParsedSort where
         mConcat <- attributes .:? "concat"
         mUnit <- attributes .:? "unit"
         hook <- attributes .:? "hook"
-        let kmapAttributes = case (encodeUtf8 <$> mElem, encodeUtf8 <$> mConcat, encodeUtf8 <$> mUnit, hook) of
-                (Just elementSymbolName, Just concatSymbolName, Just unitSymbolName, Just ("MAP.Map" :: Text)) ->
-                    Just
-                        KMapAttributes
-                            { unitSymbolName
-                            , elementSymbolName
-                            , concatSymbolName
-                            }
-                _ -> Nothing
-        pure SortAttributes{argCount = length sortVars, kmapAttributes}
+        case (encodeUtf8 <$> mElem, encodeUtf8 <$> mConcat, encodeUtf8 <$> mUnit, hook) of
+            (Just elementSymbolName, Just concatSymbolName, Just unitSymbolName, Just ("MAP.Map" :: Text)) ->
+                pure
+                    SortAttributes
+                        { argCount = length sortVars
+                        , kmapAttributes =
+                            Just
+                                KMapAttributes
+                                    { unitSymbolName
+                                    , elementSymbolName
+                                    , concatSymbolName
+                                    }
+                        }
+            (Just _, Just _, Just _, Just _) ->
+                -- ignore any other hooked sorts like lists/sets
+                pure
+                    SortAttributes
+                        { argCount = length sortVars
+                        , kmapAttributes = Nothing
+                        }
+            (Nothing, Nothing, Nothing, _) ->
+                pure
+                    SortAttributes
+                        { argCount = length sortVars
+                        , kmapAttributes = Nothing
+                        }
+            _ -> throwE "Malformed hooked sort. Should contain unit, element and concat."
 
 ----------------------------------------
 

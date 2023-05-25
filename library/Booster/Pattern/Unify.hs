@@ -35,6 +35,7 @@ import Booster.Pattern.Util (
     sortOfTerm,
     substituteInTerm,
  )
+import GHC.Generics (M1 (M1))
 
 -- | Result of a unification (a substitution or an indication of what went wrong)
 data UnificationResult
@@ -63,6 +64,8 @@ data FailReason
       VariableConflict Variable Term Term
     | -- | Key not found in map
       KeyNotFound Term Term
+    | -- | Key not found in map
+      DuplicateKeys Term Term
     deriving stock (Eq, Show)
 
 instance Pretty FailReason where
@@ -83,6 +86,11 @@ instance Pretty FailReason where
     pretty (KeyNotFound k m) =
         vsep
             [ "Key " <> pretty k <> " not found in map"
+            , pretty m
+            ]
+    pretty (DuplicateKeys k m) =
+        vsep
+            [ "Key " <> pretty k <> " appears more than once in map"
             , pretty m
             ]
 
@@ -301,19 +309,31 @@ unify1
 
         findAllKeys :: [(Term, Term)] -> [(Term, Term)] -> Either [Term] ([(Term, Term)], [(Term, Term)])
         findAllKeys kvs m =
-            let keys = Set.fromList $ map fst kvs
-                (matched, rest) = partition ((`Set.member` keys) . fst) m
-                matchedMap = Map.fromList matched
-                matchedKeys = Set.fromList $ map fst matched
-             in if length kvs == length matched
-                    then Right ([(v, matchedMap Map.! k) | (k, v) <- kvs], rest)
-                    else Left [k | (k, _) <- kvs, not $ k `Set.member` matchedKeys]
+            let searchMap = Map.fromList kvs
+                subjectMap = Map.fromList m
+                matchedMap = Map.intersectionWith (,) searchMap subjectMap
+                restMap = Map.difference subjectMap matchedMap
+                unmatched = Map.keys $ Map.difference searchMap subjectMap
+             in if null unmatched
+                    then Right (Map.elems matchedMap, Map.toList restMap)
+                    else Left unmatched
 
-        unifySimpleMapShape kvs restVar m = case findAllKeys kvs m of
-            Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 m Nothing
-            Right (matched, rest) -> do
-                forM_ matched $ uncurry enqueueRegularProblem
-                enqueueRegularProblem restVar $ KMap def1 rest Nothing
+        duplicateKeys :: [(Term, Term)] -> Maybe Term
+        duplicateKeys kvs =
+            let duplicates = Map.filter (> (1 :: Int)) $ foldr (flip (Map.insertWith (+)) 1 . fst) mempty kvs
+             in case Map.toList duplicates of
+                    [] -> Nothing
+                    (k, _) : _ -> Just k
+
+        unifySimpleMapShape kvs restVar m
+            | Just duplicate <- duplicateKeys kvs =
+                failWith $ DuplicateKeys duplicate $ KMap def1 kvs (Just restVar)
+            | Just duplicate <- duplicateKeys m = failWith $ DuplicateKeys duplicate $ KMap def1 m Nothing
+            | otherwise = case findAllKeys kvs m of
+                Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 m Nothing
+                Right (matched, rest) -> do
+                    forM_ matched $ uncurry enqueueRegularProblem
+                    enqueueRegularProblem restVar $ KMap def1 rest Nothing
 -- could be unifying a map with a function which returns a map
 unify1
     t1@SymbolApplication{}
