@@ -43,4 +43,5 @@ in {
   };
   existentials = mkIntegrationTest { name = "existentials"; };
   module-addition = mkIntegrationTest { name = "module-addition"; };
+  simplify = mkIntegrationTest { name = "simplify"; };
 }
