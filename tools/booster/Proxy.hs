@@ -80,7 +80,7 @@ respondEither mbStatsVar booster kore req = case req of
                         logStats Stats.SimplifyM (boosterTime + koreTime, koreTime)
                         when (koreRes.state /= boosterRes.state) $
                             -- TODO pretty instance for KoreJson terms for logging
-                            Log.logInfoNS "proxy" . Text.pack . unlines $
+                            Log.logOtherNS "proxy" (Log.LevelOther "Simplify") . Text.pack . unlines $
                                 [ "Booster simplification:"
                                 , show boosterRes.state
                                 , "to"
