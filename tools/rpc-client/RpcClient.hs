@@ -49,7 +49,6 @@ main = do
         request <-
             trace "[Info] Preparing request data" $
                 prepareRequestData mode optionFile options
-        traceIO $ "Sending request " <> BS.unpack request
         start <- getTime Monotonic
         trace "[Info] Sending request..." $
             sendAll s request
