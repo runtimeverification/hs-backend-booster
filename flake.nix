@@ -197,8 +197,12 @@
           integration = with nixpkgsFor system;
             with flakes.${defaultCompiler};
             callPackage ./test/rpc-integration {
-              booster = packages."hs-backend-booster:exe:booster";
-              rpc-client = packages."hs-backend-booster:exe:rpc-client";
+              booster-dev = 
+                packages."hs-backend-booster:exe:booster-dev";
+              booster = 
+                packages."hs-backend-booster:exe:booster";
+              rpc-client = 
+                packages."hs-backend-booster:exe:rpc-client";
               inherit (k-framework.packages.${system}) k;
             };
         });
