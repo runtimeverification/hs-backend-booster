@@ -35,7 +35,7 @@ import Kore.JsonRpc.Types qualified as ExecuteRequest (ExecuteRequest (..))
 import Kore.JsonRpc.Types qualified as SimplifyRequest (SimplifyRequest (..))
 import Kore.Log qualified
 import Kore.Syntax.Definition (SentenceAxiom)
-import Stats (APIMethods (..), StatsVar, addStats, microsWithUnit, timed)
+import Stats (StatsVar, addStats, microsWithUnit, timed)
 
 data KoreServer = KoreServer
     { serverState :: MVar.MVar Kore.ServerState
@@ -63,11 +63,11 @@ respondEither ::
 respondEither mbStatsVar booster kore req = case req of
     Execute execReq
         | isJust execReq.stepTimeout || isJust execReq.movingAverageStepTimeout ->
-            loggedKore Stats.ExecuteM req
+            loggedKore ExecuteM req
         | otherwise ->
             startLoop execReq
     Implies _ ->
-        loggedKore Stats.ImpliesM req
+        loggedKore ImpliesM req
     Simplify simplifyReq -> do
         -- execute in booster first, then in kore. Log the difference
         (boosterResult, boosterTime) <- withTime $ booster req
@@ -77,7 +77,7 @@ respondEither mbStatsVar booster kore req = case req of
                 (koreResult, koreTime) <- withTime $ kore koreReq
                 case koreResult of
                     Right (Simplify koreRes) -> do
-                        logStats Stats.SimplifyM (boosterTime + koreTime, koreTime)
+                        logStats SimplifyM (boosterTime + koreTime, koreTime)
                         when (koreRes.state /= boosterRes.state) $
                             -- TODO pretty instance for KoreJson terms for logging
                             Log.logOtherNS "proxy" (Log.LevelOther "Simplify") . Text.pack . unlines $
@@ -101,7 +101,7 @@ respondEither mbStatsVar booster kore req = case req of
                     fromString other = Text.pack (show other)
                 Log.logInfoNS "proxy" . Text.unwords $
                     ["Problem with simplify request: ", Text.pack getErrMsg, "-", boosterError]
-                loggedKore Stats.SimplifyM req
+                loggedKore SimplifyM req
             _wrong ->
                 pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
     AddModule _ -> do
@@ -112,7 +112,7 @@ respondEither mbStatsVar booster kore req = case req of
             Left _err -> pure boosterResult
             Right _ -> do
                 (koreRes, koreTime) <- withTime $ kore req
-                logStats Stats.AddModuleM (boosterTime + koreTime, koreTime)
+                logStats AddModuleM (boosterTime + koreTime, koreTime)
                 pure koreRes
     Cancel ->
         pure $ Left $ ErrorObj "Cancel not supported" (-32601) Null
@@ -190,7 +190,7 @@ respondEither mbStatsVar booster kore req = case req of
                                 -- return, setting the correct depth
                                 Log.logInfoNS "proxy" . Text.pack $
                                     "Kore " <> show koreResult.reason
-                                logStats Stats.ExecuteM (time + bTime + kTime, koreTime + kTime)
+                                logStats ExecuteM (time + bTime + kTime, koreTime + kTime)
                                 pure $ Right $ Execute koreResult{depth = currentDepth + boosterResult.depth + koreResult.depth}
                         -- can only be an error at this point
                         res -> pure res
@@ -200,7 +200,7 @@ respondEither mbStatsVar booster kore req = case req of
                     -- depth, in case we previously looped
                     Log.logInfoNS "proxy" . Text.pack $
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
-                    logStats Stats.ExecuteM (time + bTime, koreTime)
+                    logStats ExecuteM (time + bTime, koreTime)
                     pure $ Right $ Execute boosterResult{depth = currentDepth + boosterResult.depth}
             -- can only be an error at this point
             res -> pure res
