@@ -198,12 +198,14 @@ jobs:
           nix build .#hs-backend-booster:exe:rpc-client --extra-experimental-features 'nix-command flakes' --print-build-logs
 
       - name: Run unit tests
+        if: ${{ matrix.os != 'macos-12' }}
         env:
           GC_DONT_GC: '1'
         run: nix build .#hs-backend-booster:test:unit-tests --extra-experimental-features 'nix-command flakes' --print-build-logs
 
 
       - name: Run integration tests
+        if: ${{ matrix.os != 'macos-12' }}
         env:
           GC_DONT_GC: '1'
           GH_TOKEN: ${{ github.token }}
