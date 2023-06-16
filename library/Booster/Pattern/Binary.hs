@@ -56,7 +56,7 @@ data Version = Version
     , minor :: Int16
     , patch :: Int16
     }
-    deriving (Show)
+    deriving (Eq, Ord, Show)
 
 data Block
     = BTerm Term
@@ -96,11 +96,18 @@ insertInternedString pos str =
 areCompatible :: Version -> Version -> Bool
 areCompatible a b = a.major == b.major && a.minor == b.minor
 
-decodeMagicHeaderAndVersion :: Get Version
+decodeMagicHeaderAndVersion :: Get (Version, Int)
 decodeMagicHeaderAndVersion = do
     header <- getByteString 5
     unless (header == "\127KORE") $ fail "Invalid magic header for binary KORE"
-    Version <$> getInt16le <*> getInt16le <*> getInt16le
+    version <- Version <$> getInt16le <*> getInt16le <*> getInt16le
+    (version,) <$> decodeLengthField version
+  where
+    -- read the length field if version >= 1.2, use zero (variable length) otherwise
+    decodeLengthField :: Version -> Get Int
+    decodeLengthField version
+        | version >= Version 1 2 0 = fromIntegral <$> getWord64le
+        | otherwise = pure 0
 
 {- | Length (non-negative integer) is encoded in one of two special
   formats (depending on the version).
@@ -323,6 +330,7 @@ decodeBlock = do
         BSymbol _ _ -> "Symbol"
 
 {- | The term in binary format is stored as follows:
+
 Bytes   1    4      2         2         2                ?
       +----+------+---------+---------+---------------+---------+
       | 7f | KORE | <major> | <minor> | <patch-level> | <BLOCK> |
@@ -330,11 +338,19 @@ Bytes   1    4      2         2         2                ?
 with the first byte ignored (7f) a fixed magic header "KORE", major,
 minor, patch-level 16-bit integers (little-endian), and the block
 encoded as described in @'decodeBlock'@.
+
+Version 1.2.0 adds an 8-byte length field before the block.
+
+Bytes   1    4      2         2         2               8          <length>
+      +----+------+---------+---------+---------------+----------+---------+
+      | 7f | KORE | <major> | <minor> | <patch-level> | <length> | <BLOCK> |
+      +----+------+---------+---------+---------------+----------+---------+
+
 https://github.com/runtimeverification/llvm-backend/blob/master/docs/binary_kore.md
 -}
 decodeTerm' :: Maybe KoreDefinition -> Get Term
 decodeTerm' mDef = do
-    version <- decodeMagicHeaderAndVersion
+    (version, _length) <- decodeMagicHeaderAndVersion
     runDecodeM version mDef decodeBlock >>= \case
         [BTerm trm] -> pure trm
         _ -> fail "Expecting a single term on the top of the stack"
@@ -344,7 +360,7 @@ decodeTerm = decodeTerm' . Just
 
 decodePattern :: Maybe KoreDefinition -> Get Pattern
 decodePattern mDef = do
-    version <- decodeMagicHeaderAndVersion
+    (version, _length) <- decodeMagicHeaderAndVersion
     res <- reverse <$> runDecodeM version mDef decodeBlock
     case res of
         BTerm trm : preds' -> do
@@ -356,7 +372,7 @@ decodePattern mDef = do
 
 decodeSingleBlock :: Get Block
 decodeSingleBlock = do
-    version <- decodeMagicHeaderAndVersion
+    (version, _length) <- decodeMagicHeaderAndVersion
     runDecodeM version Nothing decodeBlock >>= \case
         [b] -> pure b
         _ -> fail "Expecting a single block on the top of the stack"
