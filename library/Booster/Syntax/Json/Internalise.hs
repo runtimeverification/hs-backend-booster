@@ -58,8 +58,7 @@ internalisePattern allowAlias sortVars definition p = do
     -- construct an AndTerm from all terms (checking sort consistency)
     term <- andTerm p =<< mapM (internaliseTerm allowAlias sortVars definition) terms
     -- internalise all predicates
-    constraints <-
-        catMaybes <$> mapM (internaliseBoolPredicate allowAlias sortVars definition) predicates
+    constraints <- mapM (internaliseBoolPredicate allowAlias sortVars definition) predicates
     pure Internal.Pattern{term, constraints}
   where
     andTerm :: Syntax.KorePattern -> [Internal.Term] -> Except PatternError Internal.Term
@@ -186,13 +185,13 @@ internaliseBoolPredicate ::
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     Syntax.KorePattern ->
-    Except PatternError (Maybe Internal.Predicate)
+    Except PatternError Internal.Predicate
 internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pat = case pat of
     Syntax.KJEVar{} -> term
     Syntax.KJSVar{} -> term
     Syntax.KJApp{} -> term
     Syntax.KJString{} -> term
-    Syntax.KJTop{} -> pure Nothing -- a Top predicate can be discarded immediately
+    Syntax.KJTop{} -> pure $ Internal.Predicate Internal.TrueBool
     Syntax.KJBottom{} -> notSupported -- TODO should we throw here?
     Syntax.KJNot{} -> notSupported
     Syntax.KJAnd{} -> notSupported
@@ -203,7 +202,10 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
     Syntax.KJExists{} -> notSupported
     Syntax.KJMu{} -> notSupported
     Syntax.KJNu{} -> notSupported
-    Syntax.KJCeil{} -> notSupported
+    Syntax.KJCeil{arg} -> do
+        t <- internaliseTerm allowAlias sortVars definition arg
+        let sort = sortOfTerm t
+        pure $ Internal.Predicate $ Internal.InternalCeil sort t
     Syntax.KJFloor{} -> notSupported
     Syntax.KJEquals{argSort, first = arg1, second = arg2} -> do
         -- distinguish term and predicate equality
@@ -219,10 +221,10 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
                 ensureEqualSorts (sortOfTerm a) argS
                 ensureEqualSorts (sortOfTerm b) argS
                 case (a, b) of
-                    (Internal.TrueBool, x) -> pure $ Just $ Internal.Predicate x
-                    (x, Internal.TrueBool) -> pure $ Just $ Internal.Predicate x
-                    (Internal.FalseBool, x) -> pure $ Just $ Internal.Predicate $ Internal.NotBool x
-                    (x, Internal.FalseBool) -> pure $ Just $ Internal.Predicate $ Internal.NotBool x
+                    (Internal.TrueBool, x) -> pure $ Internal.Predicate x
+                    (x, Internal.TrueBool) -> pure $ Internal.Predicate x
+                    (Internal.FalseBool, x) -> pure $ Internal.Predicate $ Internal.NotBool x
+                    (x, Internal.FalseBool) -> pure $ Internal.Predicate $ Internal.NotBool x
                     _ -> notSupported
             (False, False) -> notSupported
             _other ->

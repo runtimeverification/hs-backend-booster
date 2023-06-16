@@ -1,4 +1,4 @@
-{ stdenv, coreutils, lib, hs-backend-booster, rpc-client, git, k }:
+{ stdenv, coreutils, lib, kore-rpc-booster, rpc-client, git, k }:
 
 let
   mkIntegrationTest =
@@ -15,7 +15,7 @@ let
         ${lib.strings.concatMapStrings (f: ''
           export ${f}
         '') buildFlags}
-        export SERVER=${hs-backend-booster}/bin/hs-backend-booster
+        export SERVER=${kore-rpc-booster}/bin/kore-rpc-booster
         export CLIENT=${rpc-client}/bin/rpc-client
 
         patchShebangs runDirectoryTest.sh
@@ -43,4 +43,5 @@ in {
   };
   existentials = mkIntegrationTest { name = "existentials"; };
   module-addition = mkIntegrationTest { name = "module-addition"; };
+  simplify = mkIntegrationTest { name = "simplify"; };
 }

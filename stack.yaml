@@ -1,4 +1,4 @@
-resolver: lts-20.8
+resolver: lts-20.20
 
 packages:
 - .
@@ -12,7 +12,7 @@ extra-deps:
   - typerep-map-0.6.0.0
   - monad-validate-1.2.0.0@sha256:9850f408431098b28806dd464b6825a88a0b56c84f380d7fe0454c1df9d6f881,3505
   - git: https://github.com/runtimeverification/haskell-backend.git
-    commit: c5d61bd8a1ebeca522b1f6612f3c35b1c4c65a59
+    commit: 740a60ee231ad63b811f0ca023cbf747ae0aa82d
     subdirs:
       - kore
       - kore-rpc-types
@@ -27,6 +27,6 @@ extra-deps:
 # Allow a newer minor version of GHC than the snapshot specifies
 compiler-check: newer-minor
 
-local-bin-path: ./.build/kore/bin
+local-bin-path: ./.build/booster/bin
 
 allow-newer: true

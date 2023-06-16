@@ -100,9 +100,9 @@ library:
     - alex
 
 executables:
-  hs-backend-booster:
-    source-dirs: executable
-    main: Main.hs
+  booster-dev:
+    source-dirs: tools/booster-dev
+    main: Server.hs
     dependencies:
     - base
     - containers
@@ -145,6 +145,7 @@ executables:
       - directory
       - filepath
       - hs-backend-booster
+      - prettyprinter
       - text
       - transformers
     ghc-options:
@@ -193,8 +194,8 @@ executables:
     ghc-options:
     - -rtsopts
 
-  hs-booster-proxy:
-    source-dirs: tools/hs-booster-proxy
+  kore-rpc-booster:
+    source-dirs: tools/booster
     main: Server.hs
     dependencies:
       - aeson
@@ -207,12 +208,14 @@ executables:
       - containers
       - deepseq
       - exceptions
+      - extra
       - hs-backend-booster
       - json-rpc
       - kore
       - kore-rpc-types
       - monad-logger
       - optparse-applicative
+      - prettyprinter
       - stm
       - text
       - transformers

@@ -18,7 +18,10 @@ module Booster.Definition.Attributes.Base (
     SymbolType (..),
     SymbolAttributes (..),
     SortAttributes (..),
+    KMapAttributes (..),
+    KMapDefinition (..),
     Label,
+    UniqueId (..),
     Location (..),
     Position (..),
     FileSource (..),
@@ -71,6 +74,7 @@ data AxiomAttributes = AxiomAttributes
     { location :: Maybe Location
     , priority :: Priority -- priorities are <= 200
     , ruleLabel :: Maybe Label
+    , uniqueId :: Maybe UniqueId
     , simplification :: Flag "isSimplification"
     , preserving :: Flag "preservingDefinedness" -- this will override the computed attribute
     , concreteness :: Concreteness
@@ -95,6 +99,10 @@ instance Pretty NotPreservesDefinednessReason where
         UndefinedPredicate -> "undefined predicate"
 
 type Label = Text
+
+newtype UniqueId = UniqueId {getUniqueId :: Text}
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
 
 newtype Priority = Priority Word8
     deriving stock (Eq, Ord, Read, Show, Bounded)
@@ -167,12 +175,31 @@ data SymbolAttributes = SymbolAttributes
     , isIdem :: Flag "isIdem"
     , isAssoc :: Flag "isAssoc"
     , isMacroOrAlias :: Flag "isMacroOrAlias"
+    , isKMapSymbol :: Maybe KMapDefinition
     }
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData, Hashable)
 
-newtype SortAttributes = SortAttributes
+data KMapAttributes = KMapAttributes
+    { unitSymbolName :: ByteString
+    , elementSymbolName :: ByteString
+    , concatSymbolName :: ByteString
+    }
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData, Hashable)
+
+data KMapDefinition = KMapDefinition
+    { symbolNames :: KMapAttributes
+    , keySortName :: ByteString
+    , elementSortName :: ByteString
+    , mapSortName :: ByteString
+    }
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData, Hashable)
+
+data SortAttributes = SortAttributes
     { argCount :: Int
+    , kmapAttributes :: Maybe KMapAttributes
     }
     deriving stock (Eq, Show, Generic)
     deriving anyclass (NFData)

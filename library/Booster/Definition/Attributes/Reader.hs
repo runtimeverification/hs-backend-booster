@@ -37,6 +37,7 @@ import Booster.Definition.Attributes.Base (
     DefinitionAttributes (..),
     FileSource (..),
     Flag (Flag),
+    KMapAttributes (..),
     Location (Location),
     ModuleAttributes (..),
     Position (Position),
@@ -49,8 +50,10 @@ import Booster.Definition.Attributes.Base (
         SortInjection,
         TotalFunction
     ),
+    UniqueId (..),
  )
 import Booster.Syntax.ParsedKore.Base
+import Data.Text.Encoding (encodeUtf8)
 import Kore.Syntax.Json.Types (Id (..))
 
 {- | A class describing all attributes we want to extract from parsed
@@ -80,15 +83,18 @@ instance HasAttributes ParsedAxiom where
             <$> readLocation attributes
             <*> readPriority attributes
             <*> (attributes .:? "label")
+            <*> (fmap UniqueId <$> (attributes .:? uniqueIdName))
             <*> (attributes .! "simplification")
             <*> (attributes .! "preserves-definedness")
             <*> readConcreteness attributes
 
 sourceName
-    , locationName ::
+    , locationName
+    , uniqueIdName ::
         Text
 sourceName = "org'Stop'kframework'Stop'attributes'Stop'Source"
 locationName = "org'Stop'kframework'Stop'attributes'Stop'Location"
+uniqueIdName = "UNIQUE'Unds'ID"
 
 readLocation :: ParsedAttributes -> Except Text (Maybe Location)
 readLocation attributes = do
@@ -185,12 +191,43 @@ instance HasAttributes ParsedSymbol where
             <*> isIdem
             <*> isAssoc
             <*> (coerce <$> (attributes .! "macro" <||> attributes .! "alias'Kywd'"))
+            <*> pure Nothing
 
 instance HasAttributes ParsedSort where
     type Attributes ParsedSort = SortAttributes
 
-    mkAttributes ParsedSort{sortVars} =
-        pure SortAttributes{argCount = length sortVars}
+    mkAttributes ParsedSort{sortVars, attributes} = do
+        mElem <- attributes .:? "element"
+        mConcat <- attributes .:? "concat"
+        mUnit <- attributes .:? "unit"
+        hook <- attributes .:? "hook"
+        case (encodeUtf8 <$> mElem, encodeUtf8 <$> mConcat, encodeUtf8 <$> mUnit, hook) of
+            (Just elementSymbolName, Just concatSymbolName, Just unitSymbolName, Just ("MAP.Map" :: Text)) ->
+                pure
+                    SortAttributes
+                        { argCount = length sortVars
+                        , kmapAttributes =
+                            Just
+                                KMapAttributes
+                                    { unitSymbolName
+                                    , elementSymbolName
+                                    , concatSymbolName
+                                    }
+                        }
+            (Just _, Just _, Just _, Just _) ->
+                -- ignore any other hooked sorts like lists/sets
+                pure
+                    SortAttributes
+                        { argCount = length sortVars
+                        , kmapAttributes = Nothing
+                        }
+            (Nothing, Nothing, Nothing, _) ->
+                pure
+                    SortAttributes
+                        { argCount = length sortVars
+                        , kmapAttributes = Nothing
+                        }
+            _ -> throwE "Malformed hooked sort. Should contain unit, element and concat."
 
 ----------------------------------------
 

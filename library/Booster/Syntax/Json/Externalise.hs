@@ -4,6 +4,7 @@ License     : BSD-3-Clause
 -}
 module Booster.Syntax.Json.Externalise (
     externalisePattern,
+    externalisePredicate,
     externaliseSort,
     externaliseTerm,
 ) where
@@ -11,6 +12,7 @@ module Booster.Syntax.Json.Externalise (
 import Data.Foldable ()
 import Data.Text.Encoding qualified as Text
 
+import Booster.Pattern.Base (externaliseKmapUnsafe)
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
 import Kore.Syntax.Json.Types qualified as Syntax
@@ -57,6 +59,7 @@ externaliseTerm = \case
             (symbolNameToId Internal.injectionSymbol.name)
             (map externaliseSort [source, target])
             [externaliseTerm trm]
+    Internal.KMap def keyVals rest -> externaliseTerm $ externaliseKmapUnsafe def keyVals rest
 
 externalisePredicate :: Syntax.Sort -> Internal.Predicate -> Syntax.KorePattern
 externalisePredicate sort (Internal.Predicate t) =

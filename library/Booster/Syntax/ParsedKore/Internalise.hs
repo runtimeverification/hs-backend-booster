@@ -37,7 +37,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Tuple (swap)
 import GHC.Records (HasField (..))
-import Prettyprinter
+import Prettyprinter as Pretty
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Attributes.Reader as Attributes (
@@ -45,8 +45,12 @@ import Booster.Definition.Attributes.Reader as Attributes (
     readLocation,
  )
 import Booster.Definition.Base as Def
+import Booster.Definition.Util (HasSourceRef (..), SourceRef)
 import Booster.Pattern.Base (Variable (..))
 import Booster.Pattern.Base qualified as Def
+import Booster.Pattern.Base qualified as Def.Symbol (Symbol (..))
+
+import Booster.Definition.Attributes.Base qualified as Def
 import Booster.Pattern.Index as Idx
 import Booster.Pattern.Util qualified as Util
 import Booster.Prettyprinter hiding (attributes)
@@ -252,7 +256,7 @@ addModule
                     withExcept DefinitionAttributeError $
                         (,Set.singleton (textToBS parsedSort.name.getId))
                             <$> mkAttributes parsedSort
-            sorts' <- (currentSorts <>) <$> traverse mkSortEntry newSorts
+            newSorts' <- traverse mkSortEntry newSorts
 
             -- ensure parsed symbols are not duplicates and only refer
             -- to known sorts
@@ -265,8 +269,9 @@ addModule
             unless (null symCollisions) $
                 throwE $
                     DuplicateSymbols symCollisions
+            let sorts' = currentSorts <> newSorts'
             newSymbols' <- traverse (internaliseSymbol sorts') parsedSymbols
-            let symbols = Map.fromList newSymbols' <> currentSymbols
+            symbols <- (<> currentSymbols) <$> addKmapSymbols newSorts' (Map.fromList newSymbols')
 
             let defWithNewSortsAndSymbols =
                     Partial
@@ -368,6 +373,41 @@ addModule
             newSubsorts =
                 Map.fromListWith (<>) $ map (second Set.singleton . swap) subsortPairs
 
+        addKmapSymbols ::
+            Map Def.SortName (SortAttributes, Set Def.SortName) ->
+            Map Def.SymbolName Def.Symbol ->
+            Except DefinitionError (Map Def.SymbolName Def.Symbol)
+        addKmapSymbols sorts symbols = do
+            let
+                extractKeyElemSortName :: Def.SymbolName -> Except DefinitionError (Def.SortName, Def.SortName)
+                extractKeyElemSortName symbolName = case Map.lookup symbolName symbols of
+                    Just Def.Symbol{argSorts = [Def.SortApp keySortName [], Def.SortApp elemSortName []]} -> pure (keySortName, elemSortName)
+                    Just s -> throwE $ ElemSymbolMalformed s
+                    Nothing -> throwE $ ElemSymbolNotFound symbolName
+
+            -- extractedMapSymbolNames :: Map Def.SymbolName Def.KMapDefinition
+            extractedMapSymbolNames <-
+                foldM
+                    ( \rest (mapSortName, (SortAttributes{kmapAttributes}, _)) -> case kmapAttributes of
+                        Just symbolNames@KMapAttributes{unitSymbolName, elementSymbolName, concatSymbolName} -> do
+                            (keySortName, elementSortName) <- extractKeyElemSortName elementSymbolName
+                            let def = KMapDefinition{symbolNames, mapSortName, keySortName, elementSortName}
+                            pure $
+                                Map.fromList [(unitSymbolName, def), (elementSymbolName, def), (concatSymbolName, def)]
+                                    `Map.union` rest
+                        _ -> pure rest
+                    )
+                    mempty
+                    (Map.toList sorts)
+            pure $
+                Map.mapWithKey
+                    ( \symbolName sym@Def.Symbol{attributes} -> case Map.lookup symbolName extractedMapSymbolNames of
+                        Just def ->
+                            sym{Def.Symbol.attributes = attributes{Def.isKMapSymbol = Just def}}
+                        Nothing -> sym
+                    )
+                    symbols
+
 -- Result type from internalisation of different axioms
 data AxiomResult
     = -- | Rewrite rule
@@ -400,6 +440,7 @@ retractSimplificationRule _ = Nothing
 -- is passed to the internalising function later)
 data AxiomData
     = RewriteRuleAxiom' Text [Syntax.KorePattern] Syntax.KorePattern AxiomAttributes
+    | RewriteRuleAxiomNoAlias' Syntax.KorePattern Syntax.KorePattern AxiomAttributes
     | SubsortAxiom' Syntax.Sort Syntax.Sort
     | FunctionAxiom'
         Syntax.KorePattern -- requires
@@ -419,8 +460,10 @@ data AxiomData
    according to their purpose.
 
 * Rewrite rule:
-  with anti-left:    \rewrites(\and{}(\not(_), <aliasName>(..)), _)
-  without anti-left: \rewrites(<aliasName>(..)), _)
+  - with anti-left and alias:    \rewrites(\and{}(\not(_), <aliasName>(..)), _)
+  - without anti-left, but alias: \rewrites(<aliasName>(..)), _)
+  - simple format: (lhs positions flexible but \and mandatory)
+    \rewrites(\and(<lhs>, <reqs>), rhs) or \rewrites(\and(<reqs>, <lhs>), <rhs>)
 * Subsort axiom:
   \exists(V:<super>, \equals(V, inj{<sub>,<super>}(V':<sub>)))
 * equation (simplification or function equation)
@@ -463,6 +506,9 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
                     <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
             | Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs <- lhs ->
                 Just . RewriteRuleAxiom' aliasName aliasArgs rhs
+                    <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
+            | Syntax.KJAnd{} <- lhs ->
+                Just . RewriteRuleAxiomNoAlias' lhs rhs
                     <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
             | otherwise ->
                 throwE $ DefinitionAxiomError $ MalformedRewriteRule parsedAx
@@ -533,6 +579,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
             | hasAttribute "comm" -> pure Nothing -- could check symbol axiom.first.name
             | hasAttribute "idem" -> pure Nothing -- could check axiom.first.name
             | hasAttribute "unit" -> pure Nothing -- could check axiom.first.name and the unit symbol in axiom.first.args
+            | hasAttribute "overload" -> pure Nothing
             | hasAttribute "simplification" -- special case of injection simplification
             , Syntax.KJApp{name = sym1} <- axiom.first
             , sym1 == Syntax.Id "inj"
@@ -592,6 +639,15 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
             throwE $
                 DefinitionSortError $
                     GeneralError ("Sort variable " <> super <> " in subsort axiom")
+        RewriteRuleAxiomNoAlias' lhs rhs' attribs ->
+            let (rhs, existentials) = extractExistentials rhs'
+             in Just . RewriteRuleAxiom
+                    <$> internaliseRewriteRuleNoAlias
+                        partialDefinition
+                        existentials
+                        lhs
+                        rhs
+                        attribs
         RewriteRuleAxiom' alias args rhs' attribs ->
             let (rhs, existentials) = extractExistentials rhs'
              in Just . RewriteRuleAxiom
@@ -625,6 +681,59 @@ internaliseAxiom (Partial partialDefinition) parsedAxiom =
 orFailWith :: Maybe a -> e -> Except e a
 mbX `orFailWith` err = maybe (throwE err) pure mbX
 
+internaliseRewriteRuleNoAlias ::
+    KoreDefinition ->
+    [(Id, Sort)] ->
+    Syntax.KorePattern ->
+    Syntax.KorePattern ->
+    AxiomAttributes ->
+    Except DefinitionError (RewriteRule k)
+internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
+    let ref = sourceRef axAttributes
+    -- prefix all variables in lhs and rhs with "Rule#" to avoid
+    -- name clashes with patterns from the user
+    -- filter out literal `Top` constraints
+    lhs <-
+        fmap (removeTrueBools . Util.modifyVariables (Util.modifyVarName ("Rule#" <>))) $
+            withExcept (DefinitionPatternError ref) $
+                internalisePattern True Nothing partialDefinition left
+    existentials' <- fmap Set.fromList $ withExcept (DefinitionPatternError ref) $ mapM mkVar exs
+    let renameVariable v
+            | v `Set.member` existentials' = Util.modifyVarName ("Ex#" <>) v
+            | otherwise = Util.modifyVarName ("Rule#" <>) v
+    rhs <-
+        fmap (removeTrueBools . Util.modifyVariables renameVariable) $
+            withExcept (DefinitionPatternError ref) $
+                internalisePattern True Nothing partialDefinition right
+    let notPreservesDefinednessReasons =
+            -- users can override the definedness computation by an explicit attribute
+            if coerce axAttributes.preserving
+                then []
+                else
+                    [ UndefinedSymbol s.name
+                    | s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) rhs.term
+                    ]
+        containsAcSymbols =
+            Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
+        computedAttributes =
+            ComputedAxiomAttributes{notPreservesDefinednessReasons, containsAcSymbols}
+        existentials = Set.map (Util.modifyVarName ("Ex#" <>)) existentials'
+    return
+        RewriteRule
+            { lhs = lhs.term
+            , rhs = rhs.term
+            , requires = lhs.constraints
+            , ensures = rhs.constraints
+            , attributes = axAttributes
+            , computedAttributes
+            , existentials
+            }
+  where
+    mkVar (name, sort) = do
+        variableSort <- lookupInternalSort Nothing partialDefinition.sorts right sort
+        let variableName = textToBS name.getId
+        pure $ Variable{variableSort, variableName}
+
 internaliseRewriteRule ::
     KoreDefinition ->
     [(Id, Sort)] ->
@@ -634,13 +743,16 @@ internaliseRewriteRule ::
     AxiomAttributes ->
     Except DefinitionError (RewriteRule k)
 internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttributes = do
+    let ref = sourceRef axAttributes
     alias <-
         withExcept (DefinitionAliasError $ Text.decodeLatin1 aliasName) $
             Map.lookup aliasName partialDefinition.aliases
                 `orFailWith` UnknownAlias aliasName
     args <-
         traverse
-            (withExcept DefinitionPatternError . internaliseTerm True Nothing partialDefinition)
+            ( withExcept (DefinitionPatternError ref)
+                . internaliseTerm True Nothing partialDefinition
+            )
             aliasArgs
     result <- expandAlias alias args
 
@@ -650,14 +762,14 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
     lhs <-
         fmap (removeTrueBools . Util.modifyVariables (Util.modifyVarName ("Rule#" <>))) $
             Util.retractPattern result
-                `orFailWith` DefinitionTermOrPredicateError (PatternExpected result)
-    existentials' <- fmap Set.fromList $ withExcept DefinitionPatternError $ mapM mkVar exs
+                `orFailWith` DefinitionTermOrPredicateError ref (PatternExpected result)
+    existentials' <- fmap Set.fromList $ withExcept (DefinitionPatternError ref) $ mapM mkVar exs
     let renameVariable v
             | v `Set.member` existentials' = Util.modifyVarName ("Ex#" <>) v
             | otherwise = Util.modifyVarName ("Rule#" <>) v
     rhs <-
         fmap (removeTrueBools . Util.modifyVariables renameVariable) $
-            withExcept DefinitionPatternError $
+            withExcept (DefinitionPatternError ref) $
                 internalisePattern True Nothing partialDefinition right
 
     let notPreservesDefinednessReasons =
@@ -704,7 +816,7 @@ expandAlias alias currentArgs
     substitute substitution termOrPredicate =
         case termOrPredicate of
             Def.BoolPredicate predicate ->
-                Def.BoolPredicate $ Util.substituteInPredicate substitution <$> predicate
+                Def.BoolPredicate $ Util.substituteInPredicate substitution predicate
             Def.TermAndPredicate Def.Pattern{term, constraints} ->
                 Def.TermAndPredicate
                     Def.Pattern
@@ -772,7 +884,7 @@ internaliseSimpleEquation partialDef precond left right sortVars attrs
         error $ "internaliseSimpleEquation should only be called with app nodes as LHS" <> show left
   where
     internalisePattern' =
-        withExcept DefinitionPatternError
+        withExcept (DefinitionPatternError (sourceRef attrs))
             . fmap (removeTrueBools . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))
             . internalisePattern True (Just sortVars) partialDef
 
@@ -801,7 +913,7 @@ internaliseFunctionEquation ::
 internaliseFunctionEquation partialDef requires args leftTerm right sortVars attrs = do
     -- internalise the LHS (LHS term and requires)
     left <- -- expected to be a simple term, f(X_1, X_2,..)
-        withExcept DefinitionPatternError $
+        withExcept (DefinitionPatternError (sourceRef attrs)) $
             internalisePattern True (Just sortVars) partialDef $
                 Syntax.KJAnd leftTerm.sort leftTerm requires
     -- extract argument binders from predicates and inline in to LHS term
@@ -820,11 +932,9 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
             ComputedAxiomAttributes
                 { notPreservesDefinednessReasons =
                     -- users can override the definedness computation by an explicit attribute
-                    -- we could also allow total function rules to be automatically preserving definedness
-                    if coerce attrs.preserving
-                        then -- \|| functionSymbolIsTotal lhs.term
-
-                            []
+                    -- we also assume that rules for total functions always preserve definedness
+                    if coerce attrs.preserving || functionSymbolIsTotal lhs.term
+                        then []
                         else [UndefinedSymbol s.name | s <- nub (argsUndefined <> rhsUndefined)]
                 , containsAcSymbols
                 }
@@ -842,17 +952,17 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
                 , existentials = Set.empty
                 }
   where
-    -- functionSymbolIsTotal = \case
-    --     Def.SymbolApplication symbol _ _ -> symbol.attributes.symbolType == TotalFunction
-    --     _ -> False
+    functionSymbolIsTotal = \case
+        Def.SymbolApplication symbol _ _ -> symbol.attributes.symbolType == TotalFunction
+        _ -> False
 
     internaliseSide =
-        withExcept DefinitionPatternError
+        withExcept (DefinitionPatternError (sourceRef attrs))
             . fmap (removeTrueBools . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))
             . internalisePattern True (Just sortVars) partialDef
 
     internaliseTerm' =
-        withExcept DefinitionPatternError
+        withExcept (DefinitionPatternError (sourceRef attrs))
             . internaliseTerm True (Just sortVars) partialDef
 
     internaliseArg ::
@@ -953,11 +1063,13 @@ data DefinitionError
     | DuplicateNames [Text]
     | DefinitionAttributeError Text
     | DefinitionSortError SortError
-    | DefinitionPatternError PatternError
+    | DefinitionPatternError SourceRef PatternError
     | DefinitionAliasError Text AliasError
     | DefinitionAxiomError AxiomError
-    | DefinitionTermOrPredicateError TermOrPredicateError
+    | DefinitionTermOrPredicateError SourceRef TermOrPredicateError
     | AddModuleError Text
+    | ElemSymbolMalformed Def.Symbol
+    | ElemSymbolNotFound Def.SymbolName
     deriving stock (Eq, Show)
 
 instance Pretty DefinitionError where
@@ -980,16 +1092,21 @@ instance Pretty DefinitionError where
             pretty $ "Attribute error: " <> msg
         DefinitionSortError sortErr ->
             pretty $ "Sort error: " <> renderSortError sortErr
-        DefinitionPatternError patErr ->
-            pretty $ "Pattern error: " <> show patErr -- TODO define a pretty instance?
+        DefinitionPatternError ref patErr ->
+            "Pattern error in " <> pretty ref <> ": " <> pretty (show patErr)
+        -- TODO define a pretty instance?
         DefinitionAliasError name err ->
             pretty $ "Alias error in " <> Text.unpack name <> ": " <> show err
         DefinitionAxiomError err ->
             "Bad rewrite rule " <> pretty err
-        DefinitionTermOrPredicateError (PatternExpected p) ->
-            pretty $ "Expected a pattern but found a predicate: " <> show p
+        DefinitionTermOrPredicateError ref (PatternExpected p) ->
+            "Expected a pattern in " <> pretty ref <> " but found a predicate: " <> pretty (show p)
         AddModuleError msg ->
             pretty $ "Add-module error: " <> msg
+        ElemSymbolMalformed sym ->
+            pretty $ "Element{} symbol is malformed: " <> show sym
+        ElemSymbolNotFound sym ->
+            pretty $ "Expected an element{} symbol " <> show sym
 
 {- | ToJSON instance (user-facing for add-module endpoint):
 Renders the error string as 'error', with minimal context.
@@ -1002,8 +1119,8 @@ instance ToJSON DefinitionError where
             "Duplicate symbols" `withContext` map toJSON syms
         DuplicateAliases aliases ->
             "DuplicateAliases" `withContext` map toJSON aliases
-        DefinitionPatternError patErr ->
-            "Pattern error in definition" `withContext` [toJSON patErr]
+        DefinitionPatternError ref patErr ->
+            ("Pattern error at " <> render ref <> " in definition") `withContext` [toJSON patErr]
         DefinitionAxiomError (MalformedRewriteRule rule) ->
             "Malformed rewrite rule" `withContext` [toJSON rule]
         DefinitionAxiomError (MalformedEquation rule) ->
@@ -1011,11 +1128,14 @@ instance ToJSON DefinitionError where
         DefinitionAxiomError (UnexpectedAxiom rule) ->
             "Unknown kind of axiom" `withContext` [toJSON rule]
         other ->
-            object ["error" .= renderOneLineText (pretty other), "context" .= Null]
+            object ["error" .= render other, "context" .= Null]
       where
         withContext :: Text -> [Value] -> Value
         withContext errMsg context =
             object ["error" .= errMsg, "context" .= context]
+
+        render :: Pretty a => a -> Text
+        render = renderOneLineText . pretty
 
 data AliasError
     = UnknownAlias AliasName

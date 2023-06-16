@@ -11,6 +11,8 @@ module Booster.Pattern.ApplyEquations (
     ApplyEquationResult (..),
     isMatchFailure,
     isSuccess,
+    simplifyConstraint,
+    traceSimplifyConstraint,
 ) where
 
 import Control.Monad
@@ -26,6 +28,7 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust)
 import Data.Sequence (Seq (..))
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Prettyprinter
@@ -65,6 +68,7 @@ data EquationTrace = EquationTrace
     { subjectTerm :: Term
     , location :: Maybe Location
     , label :: Maybe Label
+    , ruleId :: Maybe UniqueId
     , result :: ApplyEquationResult
     }
     deriving stock (Eq, Show)
@@ -76,7 +80,7 @@ instance Pretty EquationTrace where
                 [ "Simplifying term"
                 , prettyTerm
                 , "to"
-                , pretty (PrettyTerm rewritten)
+                , pretty rewritten
                 , "using " <> locationInfo
                 ]
         FailedMatch _ ->
@@ -105,9 +109,17 @@ instance Pretty EquationTrace where
                 , "failed with false condition"
                 , "using " <> locationInfo
                 ]
+        MatchConstraintViolated constrained varName ->
+            vsep
+                [ "Concreteness constraint violated: "
+                , pretty $ show constrained <> " variable " <> show varName
+                , " in rule " <> locationInfo
+                , "Term:"
+                , prettyTerm
+                ]
       where
         locationInfo = pretty location <> " - " <> pretty label
-        prettyTerm = pretty $ PrettyTerm subjectTerm
+        prettyTerm = pretty subjectTerm
 
 isMatchFailure, isSuccess :: EquationTrace -> Bool
 isMatchFailure EquationTrace{result = FailedMatch{}} = True
@@ -219,6 +231,8 @@ applyTerm BottomUp pref =
         SymbolApplicationF sym sorts args -> do
             t <- SymbolApplication sym sorts <$> sequence args
             applyAtTop pref t
+        KMapF def keyVals rest ->
+            KMap def <$> mapM (uncurry $ liftM2 (,)) keyVals <*> sequence rest
 applyTerm TopDown pref = \t@(Term attributes _) ->
     if attributes.isEvaluated
         then pure t
@@ -257,6 +271,10 @@ applyTerm TopDown pref = \t@(Term attributes _) ->
                 else
                     SymbolApplication sym sorts
                         <$> mapM (applyTerm TopDown pref) args
+        KMap def keyVals rest ->
+            KMap def
+                <$> mapM (\(k, v) -> (,) <$> applyTerm TopDown pref k <*> applyTerm TopDown pref v) keyVals
+                <*> maybe (pure Nothing) ((Just <$>) . applyTerm TopDown pref) rest
 
 {- | Try to apply function equations and simplifications to the given
    top-level term, in priority order and per group.
@@ -288,6 +306,7 @@ data ApplyEquationResult
     | IndeterminateCondition
     | ConditionFalse
     | RuleNotPreservingDefinedness
+    | MatchConstraintViolated Constrained VarName
     deriving stock (Eq, Show)
 
 type ResultHandler =
@@ -308,6 +327,7 @@ handleFunctionEquation success continue abort = \case
     IndeterminateCondition -> abort
     ConditionFalse -> continue
     RuleNotPreservingDefinedness -> abort
+    MatchConstraintViolated{} -> continue
 
 handleSimplificationEquation :: ResultHandler
 handleSimplificationEquation success continue _abort = \case
@@ -317,6 +337,7 @@ handleSimplificationEquation success continue _abort = \case
     IndeterminateCondition -> continue
     ConditionFalse -> continue
     RuleNotPreservingDefinedness -> continue
+    MatchConstraintViolated{} -> continue
 
 applyEquations ::
     forall tag.
@@ -348,7 +369,7 @@ applyEquations theory handler term = do
 
     processEquations equations
   where
-    -- process one group of equations at a time, until something has happened
+    -- process one equation at a time, until something has happened
     processEquations ::
         [RewriteRule tag] ->
         EquationM Term
@@ -356,119 +377,146 @@ applyEquations theory handler term = do
         pure term -- nothing to do, term stays the same
     processEquations (eq : rest) = do
         res <- applyEquation term eq
-        traceRuleApplication term eq.attributes.location eq.attributes.ruleLabel res
+        traceRuleApplication term eq.attributes.location eq.attributes.ruleLabel eq.attributes.uniqueId res
         handler (\t -> setChanged >> pure t) (processEquations rest) (pure term) res
 
 traceRuleApplication ::
     Term ->
     Maybe Location ->
     Maybe Label ->
+    Maybe UniqueId ->
     ApplyEquationResult ->
     EquationM ()
-traceRuleApplication t loc lbl res =
+traceRuleApplication t loc lbl uid res =
     EquationM . modify $
-        \s -> s{trace = s.trace :|> EquationTrace t loc lbl res}
+        \s -> s{trace = s.trace :|> EquationTrace t loc lbl uid res}
 
 applyEquation ::
     forall tag.
     Term ->
     RewriteRule tag ->
     EquationM ApplyEquationResult
-applyEquation term rule = do
+applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     -- ensured by internalisation: no existentials in equations
     unless (null rule.existentials) $
-        throw . InternalError $
+        lift . throw . InternalError $
             "Equation with existentials: " <> Text.pack (show rule)
     -- immediately cancel if not preserving definedness
-    if not $ null rule.computedAttributes.notPreservesDefinednessReasons
-        then pure RuleNotPreservingDefinedness
-        else do
-            -- immediately cancel if rule has concrete() flag and term has any free variables
-            -- guard $ not $ (allMustBeConcrete rule.attributes.concreteness) && (not . null . freeVariables) term
-            -- match lhs
-            koreDef <- (.definition) <$> getState
-            case matchTerm koreDef rule.lhs term of
-                MatchFailed failReason -> pure $ FailedMatch failReason
-                MatchIndeterminate _pat _subj -> pure IndeterminateMatch
-                MatchSuccess subst -> do
-                    -- cancel if condition
-                    -- forall (v, t) : subst. concrete(v) -> null(FV(t)) /\
-                    --                        symbolic(v) -> isSymbolic(t)
-                    -- is violated
-                    -- guard $ checkConcreteness subst rule.attributes.concreteness
+    unless (null rule.computedAttributes.notPreservesDefinednessReasons) $
+        throwE RuleNotPreservingDefinedness
+    -- immediately cancel if rule has concrete() flag and term has variables
+    when (allMustBeConcrete rule.attributes.concreteness && not (Set.null (freeVariables term))) $
+        throwE (MatchConstraintViolated Concrete "* (term has variables)")
+    -- match lhs
+    koreDef <- (.definition) <$> lift getState
+    case matchTerm koreDef rule.lhs term of
+        MatchFailed failReason -> throwE $ FailedMatch failReason
+        MatchIndeterminate _pat _subj -> throwE IndeterminateMatch
+        MatchSuccess subst -> do
+            -- cancel if condition
+            -- forall (v, t) : subst. concrete(v) -> isConstructorLike(t) /\
+            --                        symbolic(v) -> not $ t isConstructorLike(t)
+            -- is violated
+            checkConcreteness rule.attributes.concreteness subst
 
-                    -- check conditions, using substitution (will call back
-                    -- into the simplifier! -> import loop)
-                    let newConstraints =
-                            concatMap (splitBoolPredicates . substituteInPredicate subst) $
-                                rule.requires
-                    unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint newConstraints
+            -- check conditions, using substitution (will call back
+            -- into the simplifier! -> import loop)
+            let newConstraints =
+                    concatMap (splitBoolPredicates . substituteInPredicate subst) $
+                        rule.requires
+            unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint newConstraints
 
-                    case unclearConditions' of
-                        Nothing -> pure ConditionFalse
-                        Just unclearConditions ->
-                            if not $ null unclearConditions
-                                then pure IndeterminateCondition
-                                else do
-                                    let rewritten =
-                                            substituteInTerm subst rule.rhs
-                                    -- NB no new constraints, as they have been checked to be `Top`
-                                    -- FIXME what about symbolic constraints here?
-                                    pure $ Success rewritten
+            case unclearConditions' of
+                Nothing -> throwE ConditionFalse
+                Just unclearConditions ->
+                    if not $ null unclearConditions
+                        then throwE IndeterminateCondition
+                        else do
+                            let rewritten =
+                                    substituteInTerm subst rule.rhs
+                            -- NB no new constraints, as they have been checked to be `Top`
+                            -- FIXME what about symbolic constraints here?
+                            pure rewritten
   where
     -- evaluate/simplify a predicate, cut the operation short when it
     -- is Bottom.
     checkConstraint ::
         Predicate ->
-        MaybeT EquationM (Maybe Predicate)
+        MaybeT (ExceptT ApplyEquationResult EquationM) (Maybe Predicate)
     checkConstraint p = do
-        mApi <- (.llvmApi) <$> lift getState
+        mApi <- (.llvmApi) <$> lift (lift getState)
         case simplifyPredicate mApi p of
             Predicate FalseBool -> fail "side condition was false"
             Predicate TrueBool -> pure Nothing
             other -> pure $ Just other
 
--- allMustBeConcrete (AllConstrained Concrete) = True
--- allMustBeConcrete _ = False
+    allMustBeConcrete (AllConstrained Concrete) = True
+    allMustBeConcrete _ = False
 
--- checkConcreteness subst = \case
---     Unconstrained -> True
---     AllConstrained Concrete -> True -- already checked in the short circuit guard earlier
---     AllConstrained Symbolic -> all isSymbolic $ Map.elems subst
---     SomeConstrained cs -> all (check subst) $ Map.toList cs
+    checkConcreteness ::
+        Concreteness ->
+        Map Variable Term ->
+        ExceptT ApplyEquationResult EquationM ()
+    checkConcreteness Unconstrained _ = pure ()
+    checkConcreteness (AllConstrained constrained) subst =
+        mapM_ (\(var, t) -> mkCheck (toPair var) constrained t) $ Map.assocs subst
+    checkConcreteness (SomeConstrained mapping) subst =
+        void $ Map.traverseWithKey (verifyVar subst) (Map.mapWithKey mkCheck mapping)
 
--- -- TODO: this is too restrictive
--- isSymbolic = \case
---     Var _ -> True
---     _ -> False
+    toPair Variable{variableSort, variableName} =
+        case variableSort of
+            SortApp sortName _ -> (variableName, sortName)
+            SortVar varName -> (variableName, varName)
 
--- check :: Map Variable Term
---          -> ((VarName, SortName), Constrained) -> Bool
--- check subst ((var, srt), conc) =
---     case subst Map.!? Variable (SortApp srt []) var of
---         Nothing -> error $ show var <> " not found in application of rule " <> show rule
---         Just t -> case conc of
---             Symbolic -> isVar t
---             Concrete -> isConcrete t
+    mkCheck ::
+        (VarName, SortName) ->
+        Constrained ->
+        Term ->
+        ExceptT ApplyEquationResult EquationM ()
+    mkCheck (varName, _) constrained (Term attributes _)
+        | not test = throwE $ MatchConstraintViolated constrained varName
+        | otherwise = pure ()
+      where
+        test = case constrained of
+            Concrete -> attributes.isConstructorLike
+            Symbolic -> not attributes.isConstructorLike
+
+    verifyVar ::
+        Map Variable Term ->
+        (VarName, SortName) ->
+        (Term -> ExceptT ApplyEquationResult EquationM ()) ->
+        ExceptT ApplyEquationResult EquationM ()
+    verifyVar subst (variableName, sortName) check =
+        maybe
+            ( lift . throw . InternalError . Text.pack $
+                "Variable not found: " <> show (variableName, sortName)
+            )
+            check
+            $ Map.lookup Variable{variableSort = SortApp sortName [], variableName} subst
 
 --------------------------------------------------------------------
 
 {- Simplification for boolean predicates
 
-  This is used inside function evaluation as well as simplification,
-  so it should run using the same state as the caller instead of
-  running nested but needs to both evaluate and simplify.
+    This is used during rewriting to simplify side conditions of rules
+    (to decide whether or not a rule can apply, not to retain the
+    ensured conditions).
 
   Outer MaybeT: failure indicates a constraint was false
   Inner Maybe: Nothing if constraint was true, otherwise simplified constraint
 
 _simplifyConstraint ::
     Predicate ->
-    EquationM Predicate
---  Awaiting a simplier representation of constraints, we are assuming
---  all predicates are of the form 'P ==Bool true' and evaluating them
---  using simplifyBool if they are concrete.
-_simplifyConstraint = \case
+    Either EquationFailure (Predicate, [EquationTrace])
+traceSimplifyConstraint def mbApi p =
+    runEquationM def mbApi $ simplifyConstraint' p
+
+-- version for internal nested evaluation
+simplifyConstraint' :: Predicate -> EquationM Predicate
+-- We are assuming all predicates are of the form 'P ==Bool true' and
+-- evaluating them using simplifyBool if they are concrete.
+-- Non-concrete \equals predicates are simplified using evaluateTerm.
+simplifyConstraint' = \case
     EqualsTerm t TrueBool
         | isConcrete t -> do
             mbApi <- (.llvmApi) <$> getState
@@ -483,7 +531,7 @@ _simplifyConstraint = \case
             evalBool t >>= prune
     EqualsTerm TrueBool t ->
         -- although "true" is usually 2nd
-        _simplifyConstraint (EqualsTerm t TrueBool)
+        simplifyConstraint' (EqualsTerm t TrueBool)
     other ->
         pure other -- should not occur, predicates should be '_ ==Bool true'
   where
@@ -492,11 +540,20 @@ _simplifyConstraint = \case
             TrueBool -> Top
             FalseBool -> Bottom
             other -> EqualsTerm other TrueBool
+
     evalBool :: Term -> EquationM Term
     evalBool t = do
-        prior <- getState -- save state before so we can "switch"
-        -- between evaluate and simplify modes
-        let result = t -- FIXME simplify and evaluate here
+        prior <- getState -- save prior state so we can revert
+        result <- iterateEquations 100 TopDown PreferFunctions t
         EquationM $ put prior
         pure result
 -}
+
+simplifyConstraint = undefined
+
+traceSimplifyConstraint ::
+    KoreDefinition ->
+    Maybe LLVM.API ->
+    Predicate ->
+    Either EquationFailure (Predicate, [EquationTrace])
+traceSimplifyConstraint = undefined
