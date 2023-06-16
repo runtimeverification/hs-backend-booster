@@ -32,6 +32,7 @@ import Data.List (intercalate)
 import Data.Map qualified as Map
 import Data.Word (Word64)
 import GHC.Word (Word8)
+import Text.Printf
 
 -- | tags indicating the next element in a block, see @'decodeBlock'@
 pattern
@@ -56,7 +57,10 @@ data Version = Version
     , minor :: Int16
     , patch :: Int16
     }
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord)
+
+instance Show Version where
+    show version = printf "%d.%d.%d" version.major version.minor version.patch
 
 data Block
     = BTerm Term
@@ -335,18 +339,25 @@ Bytes   1    4      2         2         2               8          <length>
 
 https://github.com/runtimeverification/llvm-backend/blob/master/docs/binary_kore.md
 -}
-decodeMagicHeaderAndVersion :: Get (Version, Int)
+decodeMagicHeaderAndVersion :: Get (Version, Maybe Int)
 decodeMagicHeaderAndVersion = do
     header <- getByteString 5
     unless (header == "\127KORE") $ fail "Invalid magic header for binary KORE"
     version <- Version <$> getInt16le <*> getInt16le <*> getInt16le
+    unless (supported version) $
+        fail $ "Binary kore version " <> show version <> " not supported"
     (version,) <$> decodeLengthField version
   where
     -- read the length field if version >= 1.2, use zero (variable length) otherwise
-    decodeLengthField :: Version -> Get Int
+    decodeLengthField :: Version -> Get (Maybe Int)
     decodeLengthField version
-        | version >= Version 1 2 0 = fromIntegral <$> getWord64le
-        | otherwise = pure 0
+        | version >= Version 1 2 0 =
+            (\n -> if n > 0 then Just n else Nothing) . fromIntegral <$> getWord64le
+        | otherwise =
+            pure Nothing
+
+supported :: Version -> Bool
+supported version = version.major == 1 && version.minor `elem` [0..2]
 
 decodeTerm' :: Maybe KoreDefinition -> Get Term
 decodeTerm' mDef = do
