@@ -96,19 +96,6 @@ insertInternedString pos str =
 areCompatible :: Version -> Version -> Bool
 areCompatible a b = a.major == b.major && a.minor == b.minor
 
-decodeMagicHeaderAndVersion :: Get (Version, Int)
-decodeMagicHeaderAndVersion = do
-    header <- getByteString 5
-    unless (header == "\127KORE") $ fail "Invalid magic header for binary KORE"
-    version <- Version <$> getInt16le <*> getInt16le <*> getInt16le
-    (version,) <$> decodeLengthField version
-  where
-    -- read the length field if version >= 1.2, use zero (variable length) otherwise
-    decodeLengthField :: Version -> Get Int
-    decodeLengthField version
-        | version >= Version 1 2 0 = fromIntegral <$> getWord64le
-        | otherwise = pure 0
-
 {- | Length (non-negative integer) is encoded in one of two special
   formats (depending on the version).
   Version 1.0.x: stored big-endian in a fixed amount of bytes.
@@ -348,6 +335,19 @@ Bytes   1    4      2         2         2               8          <length>
 
 https://github.com/runtimeverification/llvm-backend/blob/master/docs/binary_kore.md
 -}
+decodeMagicHeaderAndVersion :: Get (Version, Int)
+decodeMagicHeaderAndVersion = do
+    header <- getByteString 5
+    unless (header == "\127KORE") $ fail "Invalid magic header for binary KORE"
+    version <- Version <$> getInt16le <*> getInt16le <*> getInt16le
+    (version,) <$> decodeLengthField version
+  where
+    -- read the length field if version >= 1.2, use zero (variable length) otherwise
+    decodeLengthField :: Version -> Get Int
+    decodeLengthField version
+        | version >= Version 1 2 0 = fromIntegral <$> getWord64le
+        | otherwise = pure 0
+
 decodeTerm' :: Maybe KoreDefinition -> Get Term
 decodeTerm' mDef = do
     (version, _length) <- decodeMagicHeaderAndVersion
