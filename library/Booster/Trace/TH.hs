@@ -8,6 +8,7 @@ module Booster.Trace.TH (mkSumPatterns) where
 
 import Data.Data (Typeable)
 import Data.Kind (Type)
+import Data.Proxy (Proxy (..))
 import Data.Typeable (typeOf)
 import Language.Haskell.TH qualified as TH
 
@@ -82,7 +83,7 @@ mkUnmatchedPattern pos names = do
         ]
 
 class MkSumPatterns (es :: [Type]) where
-    mkSumPatterns' :: proxy es -> Int -> [TH.Name] -> TH.Q [TH.Dec]
+    mkSumPatterns' :: Proxy es -> Int -> [TH.Name] -> TH.Q [TH.Dec]
 
 instance MkSumPatterns '[] where
     mkSumPatterns' _ pos = mkUnmatchedPattern (pos - 1)
@@ -90,7 +91,7 @@ instance MkSumPatterns '[] where
 instance (Typeable e, MkSumPatterns es) => MkSumPatterns (e ': es) where
     mkSumPatterns' _ pos names = do
         let name = TH.mkName $ (show $ typeOf (undefined :: e)) ++ "E"
-        (++) <$> mkPattern name pos <*> mkSumPatterns' (undefined :: proxy es) (pos + 1) (names ++ [name])
+        (++) <$> mkPattern name pos <*> mkSumPatterns' (Proxy @es) (pos + 1) (names ++ [name])
 
 mkSumPatterns :: forall (es :: [Type]). MkSumPatterns es => TH.Q [TH.Dec]
-mkSumPatterns = mkSumPatterns' (undefined :: proxy es) 0 []
+mkSumPatterns = mkSumPatterns' (Proxy @es) 0 []

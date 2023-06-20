@@ -31,8 +31,8 @@ data CustomUserEventType = Timing | LlvmCalls deriving (Show, Enum, Read, Bounde
 class CustomUserEvent e where
     encodeUserEvent :: e -> Put
     decodeUserEvent :: Get e
-    userEventTag :: proxy e -> ByteString
-    eventType :: proxy e -> CustomUserEventType
+    userEventTag :: Proxy e -> ByteString
+    eventType :: Proxy e -> CustomUserEventType
 
 class DecodeUserEvents es where
     decodeUserEvents' :: ByteString -> Get (Sum es)
@@ -80,12 +80,12 @@ instance CustomUserEvent Stop where
 
 encodeCustomUserEvent :: forall e. CustomUserEvent e => e -> Put
 encodeCustomUserEvent e = do
-    putByteString $ userEventTag (undefined :: proxy e)
+    putByteString $ userEventTag (Proxy @e)
     encodeUserEvent e
 
 traceIO :: forall m e. MonadIO m => CustomUserEvent e => e -> m ()
 traceIO e
-    | userTracingEnabled && customUserEventEnabled (eventType (undefined :: proxy e)) = do
+    | userTracingEnabled && customUserEventEnabled (eventType (Proxy @e)) = do
         let message = BL.toStrict $ runPut $ encodeCustomUserEvent e
         when (BS.length message > 2 ^ (16 :: Int)) $ error "eventlog message too long"
         liftIO $ traceBinaryEventIO message
@@ -93,7 +93,7 @@ traceIO e
 
 trace :: forall e a. CustomUserEvent e => e -> a -> a
 trace e a
-    | userTracingEnabled && customUserEventEnabled (eventType (undefined :: proxy e)) = do
+    | userTracingEnabled && customUserEventEnabled (eventType (Proxy @e)) = do
         let message = BL.toStrict $ runPut $ encodeCustomUserEvent e
         if BS.length message > 2 ^ (16 :: Int)
             then error "eventlog message too long"
