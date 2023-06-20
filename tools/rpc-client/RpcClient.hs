@@ -195,17 +195,33 @@ parseMode =
     subparser
         ( command
             "send"
-            (info (SendRaw <$> strArgument (metavar "FILENAME")) (progDesc "send the raw file contents directly"))
+            ( info (SendRaw <$> strArgument (metavar "FILENAME")) (progDesc "send the raw file contents directly")
+            )
             <> command
                 "execute"
-                (info (Exec <$> strArgument (metavar "FILENAME")) (progDesc "execute (rewrite) the state in the file"))
+                ( info
+                    (Exec <$> strArgument (metavar "FILENAME"))
+                    (progDesc "execute (rewrite) the state in the file")
+                )
             <> command
                 "simplify"
-                (info (Simpl <$> strArgument (metavar "FILENAME")) (progDesc "simplify the state or condition in the file"))
-            <> command "add-module"
-               (info (AddModule <$> strArgument (metavar "FILENAME")) (progDesc "add the module in the given kore file"))
-            <> command "get-model"
-               (info (GetModel <$> strArgument (metavar "FILENAME")) (progDesc "check satisfiability/provide model for the state in the file")))
+                ( info
+                    (Simpl <$> strArgument (metavar "FILENAME"))
+                    (progDesc "simplify the state or condition in the file")
+                )
+            <> command
+                "add-module"
+                ( info
+                    (AddModule <$> strArgument (metavar "FILENAME"))
+                    (progDesc "add the module in the given kore file")
+                )
+            <> command
+                "get-model"
+                ( info
+                    (GetModel <$> strArgument (metavar "FILENAME"))
+                    (progDesc "check satisfiability/provide model for the state in the file")
+                )
+        )
 
 ----------------------------------------
 prepareRequestData :: Mode -> Maybe FilePath -> [(String, String)] -> IO BS.ByteString
