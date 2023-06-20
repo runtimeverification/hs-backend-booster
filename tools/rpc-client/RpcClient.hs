@@ -188,15 +188,16 @@ parsePostProcessing =
 
 parseMode :: Parser Mode
 parseMode =
-    parse Exec "execute" "execute (rewrite) the state in the file"
-        <|> parse SendRaw "send" "send the raw file contents directly"
-        <|> parse Simpl "simplify" "simplify the state or condition in the file"
-  where
-    --    <|> parse Check "implies" "check implication between antecedent and consequent in the file"
-
-    parse :: (String -> Mode) -> String -> String -> Parser Mode
-    parse constr modeName helpText =
-        constr <$> strOption (long modeName <> metavar "FILENAME" <> help helpText)
+    subparser
+        ( command
+            "send"
+            (info (SendRaw <$> strArgument (metavar "FILENAME")) (progDesc "send the raw file contents directly"))
+            <> command
+                "execute"
+                (info (Exec <$> strArgument (metavar "FILENAME")) (progDesc "execute (rewrite) the state in the file"))
+            <> command
+                "simplify"
+                (info (Simpl <$> strArgument (metavar "FILENAME")) (progDesc "simplify the state or condition in the file"))
 
 ----------------------------------------
 prepareRequestData :: Mode -> Maybe FilePath -> [(String, String)] -> IO BS.ByteString
