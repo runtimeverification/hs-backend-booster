@@ -200,7 +200,7 @@ jobs:
       - name: Run unit tests
         env:
           GC_DONT_GC: '1'
-        run: nix build .#hs-backend-booster:test:unit-tests --extra-experimental-features 'nix-command flakes' --print-build-logs
+        run: nix run .#hs-backend-booster:test:unit-tests --extra-experimental-features 'nix-command flakes' --print-build-logs
 
 
       - name: Run integration tests
