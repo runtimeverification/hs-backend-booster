@@ -43,16 +43,23 @@
           name = "hs-backend-booster";
           supportHpack = true;
           compiler-nix-name = compiler;
-          src = pkgs.nix-gitignore.gitignoreSourcePure [
-            ''
-              /test/parser
-              /test/internalisation
-              /test/rpc-integration
-              /scripts
-              /.github
-            ''
-            ./.gitignore
-          ] ./.;
+          src = pkgs.applyPatches {
+            name = "booster-backend-src";
+            src = pkgs.nix-gitignore.gitignoreSourcePure [
+              ''
+                /test/parser
+                /test/internalisation
+                /test/rpc-integration
+                /scripts
+                /.github
+              ''
+              ./.gitignore
+            ] ./.;
+            postPatch = ''
+              substituteInPlace library/Booster/VersionInfo.hs \
+                --replace '$(GitRev.gitHash)' '"${self.rev or "dirty"}"'
+            '';
+          };
           inherit index-state;
 
           shell = {
@@ -76,7 +83,15 @@
           modules = [{
             enableProfiling = profiling;
             enableLibraryProfiling = profiling;
-            packages.hs-backend-booster.components.exes.kore-rpc-booster = add-z3 "kore-rpc-booster";
+            packages.hs-backend-booster.components.exes.kore-rpc-booster = {
+              build-tools = with pkgs; lib.mkForce [ makeWrapper ];
+              postInstall = ''
+                wrapProgram $out/bin/kore-rpc-booster --prefix PATH : ${
+                  with pkgs;
+                  lib.makeBinPath [ z3 ]
+                }
+              '';
+            };
             packages.hs-backend-booster.components.tests.llvm-integration = {
               build-tools = with pkgs; lib.mkForce [ makeWrapper ];
               postInstall = ''
