@@ -58,8 +58,8 @@
           shell = {
             withHoogle = true;
             tools = {
-              cabal = { inherit index-state; };
-              haskell-language-server = { inherit index-state; };
+              cabal = "latest";
+              haskell-language-server = "latest";
               fourmolu = {
                 inherit index-state;
                 version = "0.12.0.0";

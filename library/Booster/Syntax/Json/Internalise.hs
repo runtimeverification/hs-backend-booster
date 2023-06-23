@@ -194,6 +194,9 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
     Syntax.KJTop{} -> pure $ Internal.Predicate Internal.TrueBool
     Syntax.KJBottom{} -> notSupported -- TODO should we throw here?
     Syntax.KJNot{} -> notSupported
+    -- Syntax.KJNot{arg} -> do
+    --     Internal.Predicate p <- internaliseBoolPredicate allowAlias sortVars definition arg
+    --     pure $ Internal.Predicate $ Internal.NotBool p
     Syntax.KJAnd{} -> notSupported
     Syntax.KJOr{} -> notSupported
     Syntax.KJImplies{} -> notSupported
@@ -217,14 +220,16 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
                 b <- internaliseTerm allowAlias sortVars definition arg2
                 argS <- lookupInternalSort' argSort
                 -- check that argS and sorts of a and b "agree"
-                ensureEqualSorts Internal.SortBool argS
                 ensureEqualSorts (sortOfTerm a) argS
                 ensureEqualSorts (sortOfTerm b) argS
-                case (a, b) of
-                    (Internal.TrueBool, x) -> pure $ Internal.Predicate x
-                    (x, Internal.TrueBool) -> pure $ Internal.Predicate x
-                    (Internal.FalseBool, x) -> pure $ Internal.Predicate $ Internal.NotBool x
-                    (x, Internal.FalseBool) -> pure $ Internal.Predicate $ Internal.NotBool x
+                case (argS, a, b) of
+                    (Internal.SortBool, Internal.TrueBool, x) -> pure $ Internal.Predicate x
+                    (Internal.SortBool, x, Internal.TrueBool) -> pure $ Internal.Predicate x
+                    (Internal.SortBool, Internal.FalseBool, x) -> pure $ Internal.Predicate $ Internal.NotBool x
+                    (Internal.SortBool, x, Internal.FalseBool) -> pure $ Internal.Predicate $ Internal.NotBool x
+                    (Internal.SortInt, _, _) -> pure $ Internal.Predicate $ Internal.EqualsInt a b
+                    -- (Internal.SortK, _, _) -> pure $ Internal.Predicate $ Internal.EqualsK a b
+                    (Internal.SortBytes, _, _) -> pure $ Internal.Predicate $ Internal.EqualsK (Internal.KSeq Internal.SortBytes a) (Internal.KSeq Internal.SortBytes b)
                     _ -> notSupported
             (False, False) -> notSupported
             _other ->

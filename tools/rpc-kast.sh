@@ -8,7 +8,7 @@ profile=false
 verbose=false
 
 run_pretty_json_request() {
-    kore_json="$(jq .term $1)"
+    kore_json="$(jj -i $1 params.state.term)"
     if [[ "$kore_json" == "null" ]]; then
         echo "Error: malformed Kore JSON request"
         exit 1
@@ -18,7 +18,7 @@ run_pretty_json_request() {
 }
 
 run_pretty_json_simplify_response() {
-    kore_json="$(jq .result.state.term $1)"
+    kore_json="$(jj .result.state.term $1)"
     if [[ "$kore_json" == "null" ]]; then
         echo "Error: malformed Kore JSON 'simplify' response"
         exit 1
@@ -28,7 +28,7 @@ run_pretty_json_simplify_response() {
 }
 
 run_pretty_json_execute_response() {
-    kore_json="$(jq .result.state.term.term $1)"
+    kore_json="$(jj .result.state.term.term $1)"
     if [[ "$kore_json" == "null" ]]; then
         echo "Error: malformed Kore JSON 'simplify' response"
         exit 1

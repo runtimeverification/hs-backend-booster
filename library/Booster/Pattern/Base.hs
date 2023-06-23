@@ -53,8 +53,12 @@ data Sort
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData, Hashable)
 
-pattern SortBool :: Sort
+pattern SortBool, SortInt, SortK, SortKItem, SortBytes :: Sort
 pattern SortBool = SortApp "SortBool" []
+pattern SortInt = SortApp "SortInt" []
+pattern SortK = SortApp "SortK" []
+pattern SortKItem = SortApp "SortKItem" []
+pattern SortBytes = SortApp "SortBytes" []
 
 -- | A variable for symbolic execution or for terms in a rule.
 data Variable = Variable
@@ -421,6 +425,59 @@ pattern NotBool t =
             )
         []
         [t]
+
+pattern EqualsInt, EqualsK :: Term -> Term -> Term
+pattern EqualsInt a b =
+    SymbolApplication
+        ( Symbol
+                "Lbl'UndsEqlsEqls'Int'Unds'"
+                []
+                [SortInt, SortInt]
+                SortBool
+                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias Nothing)
+            )
+        []
+        [a, b]
+
+pattern EqualsK a b =
+    SymbolApplication
+        ( Symbol
+                "Lbl'UndsEqlsEqls'K'Unds'"
+                []
+                [SortK, SortK]
+                SortBool
+                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias Nothing)
+            )
+        []
+        [a, b]
+
+
+-- kseq{}(inj{<sort>, SortKItem{}}(<a>),dotk{}()
+pattern KSeq :: Sort -> Term ->Term
+pattern KSeq sort a =
+    SymbolApplication
+        ( Symbol
+                "kseq"
+                []
+                [SortKItem, SortK]
+                SortK
+                (SymbolAttributes Constructor IsNotIdem IsNotAssoc IsNotMacroOrAlias Nothing)
+            )
+        []
+        [
+            Injection sort SortKItem a
+            ,
+            SymbolApplication
+                ( Symbol
+                        "dotk"
+                        []
+                        []
+                        SortK
+                        (SymbolAttributes Constructor IsNotIdem IsNotAssoc IsNotMacroOrAlias Nothing)
+                    )
+                []
+                []
+        ]
 
 pattern InternalCeil :: Sort ->  Term -> Term
 pattern InternalCeil s t =

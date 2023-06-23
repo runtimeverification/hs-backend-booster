@@ -216,6 +216,7 @@ executables:
       - monad-logger
       - optparse-applicative
       - prettyprinter
+      - recursion-schemes
       - stm
       - text
       - transformers
