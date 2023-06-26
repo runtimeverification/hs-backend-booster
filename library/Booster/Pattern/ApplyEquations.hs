@@ -15,6 +15,7 @@ module Booster.Pattern.ApplyEquations (
     isSuccess,
     simplifyConstraint,
     traceSimplifyConstraint,
+    traceSimplifyPattern,
 ) where
 
 import Control.Monad
@@ -568,3 +569,20 @@ simplifyConstraint' = \case
         result <- iterateEquations 100 TopDown PreferFunctions t
         EquationM $ put prior
         pure result
+
+--------------------------------------------------------------------
+
+{- | Simplify a Pattern, processing its constraints independently.
+     Returns either the first failure or the new pattern if no failure was encountered
+-}
+traceSimplifyPattern ::
+    KoreDefinition ->
+    Maybe LLVM.API ->
+    Pattern ->
+    Either EquationFailure (Pattern, [EquationTrace])
+traceSimplifyPattern def mLlvmLibrary Pattern{term, constraints} = do
+    (newTerm, termTraces) <- evaluateTerm TopDown def mLlvmLibrary term
+    simplified <- traverse (traceSimplifyConstraint def mLlvmLibrary) constraints
+    let newConstraints = map fst simplified
+        constraintsTraces = mconcat $ map snd simplified
+    pure (Pattern{constraints = newConstraints, term = newTerm}, termTraces <> constraintsTraces)
