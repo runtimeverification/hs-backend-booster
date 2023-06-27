@@ -70,7 +70,7 @@ echo "Server PID ${server_pid}"
 
 sleep 2
 
-for test in $( ls $dir/state-*.{execute,send,simplify} ); do
+for test in $( ls $dir/state-*.{execute,send,simplify,add-module,get-model} 2>/dev/null ); do
     tmp=${test#$dir/state-}
     testname=${tmp%.*}
     # determine send mode from suffix
@@ -82,6 +82,6 @@ for test in $( ls $dir/state-*.{execute,send,simplify} ); do
         params=""
     fi
     # call rpc-client
-    echo "$client --$mode $test $params --expect $dir/response-${testname}.json $*"
-    $client --$mode $test $params --expect $dir/response-${testname}.json $*
+    echo "$client $mode $test $params --expect $dir/response-${testname}.json $*"
+    $client $mode $test $params --expect $dir/response-${testname}.json $*
 done

@@ -91,6 +91,8 @@ data Options = Options
 data Mode
     = Exec FilePath
     | Simpl FilePath
+    | AddModule FilePath
+    | GetModel FilePath
     | Check FilePath FilePath
     | SendRaw FilePath
     deriving stock (Show)
@@ -99,6 +101,8 @@ getModeFile :: Mode -> FilePath
 getModeFile = \case
     Exec f -> f
     Simpl f -> f
+    AddModule f -> f
+    GetModel f -> f
     Check f1 _ -> f1
     SendRaw f -> f
 
@@ -188,15 +192,36 @@ parsePostProcessing =
 
 parseMode :: Parser Mode
 parseMode =
-    parse Exec "execute" "execute (rewrite) the state in the file"
-        <|> parse SendRaw "send" "send the raw file contents directly"
-        <|> parse Simpl "simplify" "simplify the state or condition in the file"
-  where
-    --    <|> parse Check "implies" "check implication between antecedent and consequent in the file"
-
-    parse :: (String -> Mode) -> String -> String -> Parser Mode
-    parse constr modeName helpText =
-        constr <$> strOption (long modeName <> metavar "FILENAME" <> help helpText)
+    subparser
+        ( command
+            "send"
+            ( info (SendRaw <$> strArgument (metavar "FILENAME")) (progDesc "send the raw file contents directly")
+            )
+            <> command
+                "execute"
+                ( info
+                    (Exec <$> strArgument (metavar "FILENAME"))
+                    (progDesc "execute (rewrite) the state in the file")
+                )
+            <> command
+                "simplify"
+                ( info
+                    (Simpl <$> strArgument (metavar "FILENAME"))
+                    (progDesc "simplify the state or condition in the file")
+                )
+            <> command
+                "add-module"
+                ( info
+                    (AddModule <$> strArgument (metavar "FILENAME"))
+                    (progDesc "add the module in the given kore file")
+                )
+            <> command
+                "get-model"
+                ( info
+                    (GetModel <$> strArgument (metavar "FILENAME"))
+                    (progDesc "check satisfiability/provide model for the state in the file")
+                )
+        )
 
 ----------------------------------------
 prepareRequestData :: Mode -> Maybe FilePath -> [(String, String)] -> IO BS.ByteString
@@ -210,6 +235,22 @@ prepareRequestData (Exec file) mbOptFile opts =
     prepareOneTermRequest "execute" file mbOptFile opts
 prepareRequestData (Simpl file) mbOptFile opts =
     prepareOneTermRequest "simplify" file mbOptFile opts
+prepareRequestData (AddModule file) mbOptFile opts = do
+    unless (isNothing mbOptFile) $
+        hPutStrLn stderr "[Warning] Add-module mode, ignoring given option file"
+    unless (null opts) $
+        hPutStrLn stderr "[Warning] Raw mode, ignoring given request options"
+    moduleText <- readFile file
+    pure . Json.encode $
+        object
+            [ "jsonrpc" ~> "2.0"
+            , "id" ~> "1"
+            , "method" ~> "add-module"
+            ]
+            +: "params"
+            ~> Json.Object (object ["module" ~> moduleText])
+prepareRequestData (GetModel file) mbOptFile opts =
+    prepareOneTermRequest "get-model" file mbOptFile opts
 prepareRequestData (Check _file1 _file2) _mbOptFile _opts = do
     error "not implemented yet"
 
