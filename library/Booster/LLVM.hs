@@ -1,8 +1,8 @@
 module Booster.LLVM (simplifyBool, simplifyTerm) where
 
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.Binary.Get
 import Data.Binary
+import Data.Binary.Get
 import Data.ByteString (fromStrict)
 import Data.Map qualified as Map
 import Data.Set qualified as Set
