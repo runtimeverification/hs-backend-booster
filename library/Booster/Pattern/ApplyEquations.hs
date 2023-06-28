@@ -36,7 +36,7 @@ import Data.Functor.Foldable
 import Data.List (elemIndex)
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Sequence (Seq (..))
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -229,7 +229,17 @@ iterateEquations maxIterations direction preference startTerm =
                     TooManyIterations currentCount startTerm currentTerm
             pushTerm currentTerm
             -- evaluate functions and simplify (recursively at each level)
-            newTerm <- applyTerm direction preference currentTerm
+            newTerm' <- applyTerm direction preference currentTerm
+
+            -- Between iterations, simplify all fully-concrete
+            -- sub-terms with the LLVM backend (top-down traversal)
+            conf <- getConfig
+            newTerm <- do
+                let result = simplifyConcrete conf.llvmApi conf.definition newTerm'
+                when (result /= newTerm') setChanged
+                pure result
+
+            -- check whether finished
             changeFlag <- getChanged
             if changeFlag
                 then checkForLoop newTerm >> resetChanged >> go newTerm
@@ -327,45 +337,35 @@ applyTerm BottomUp pref =
 applyTerm TopDown pref = \t@(Term attributes _) ->
     if attributes.isEvaluated
         then pure t
-        else do
-            config <- getConfig
-            -- All fully concrete values go to the LLVM backend (top-down only)
-            if isConcrete t && isJust config.llvmApi
-                then do
-                    let result = simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
-                    when (result /= t) setChanged
-                    pure result
-                else apply t
-  where
-    apply = \case
-        dv@DomainValue{} ->
-            pure dv
-        v@Var{} ->
-            pure v
-        Injection src trg t ->
-            Injection src trg <$> applyTerm TopDown pref t -- no injection simplification
-        AndTerm arg1 arg2 ->
-            AndTerm -- no \and simplification
-                <$> applyTerm TopDown pref arg1
-                <*> applyTerm TopDown pref arg2
-        app@(SymbolApplication sym sorts args) -> do
-            -- try to apply equations
-            t <- applyAtTop pref app
-            if t /= app
-                then do
-                    case t of
-                        SymbolApplication sym' sorts' args' ->
-                            SymbolApplication sym' sorts'
-                                <$> mapM (applyTerm TopDown pref) args'
-                        _otherwise ->
-                            applyTerm TopDown pref t -- won't loop
-                else
-                    SymbolApplication sym sorts
-                        <$> mapM (applyTerm TopDown pref) args
-        KMap def keyVals rest ->
-            KMap def
-                <$> mapM (\(k, v) -> (,) <$> applyTerm TopDown pref k <*> applyTerm TopDown pref v) keyVals
-                <*> maybe (pure Nothing) ((Just <$>) . applyTerm TopDown pref) rest
+        else case t of
+            dv@DomainValue{} ->
+                pure dv
+            v@Var{} ->
+                pure v
+            Injection src trg t' ->
+                Injection src trg <$> applyTerm TopDown pref t' -- no injection simplification
+            AndTerm arg1 arg2 ->
+                AndTerm -- no \and simplification
+                    <$> applyTerm TopDown pref arg1
+                    <*> applyTerm TopDown pref arg2
+            app@(SymbolApplication sym sorts args) -> do
+                -- try to apply equations
+                newT <- applyAtTop pref app
+                if newT /= app
+                    then do
+                        case newT of
+                            SymbolApplication sym' sorts' args' ->
+                                SymbolApplication sym' sorts'
+                                    <$> mapM (applyTerm TopDown pref) args'
+                            _otherwise ->
+                                applyTerm TopDown pref newT -- won't loop
+                    else
+                        SymbolApplication sym sorts
+                            <$> mapM (applyTerm TopDown pref) args
+            KMap def keyVals rest ->
+                KMap def
+                    <$> mapM (\(k, v) -> (,) <$> applyTerm TopDown pref k <*> applyTerm TopDown pref v) keyVals
+                    <*> maybe (pure Nothing) ((Just <$>) . applyTerm TopDown pref) rest
 
 {- | Try to apply function equations and simplifications to the given
    top-level term, in priority order and per group.
