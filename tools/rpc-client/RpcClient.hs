@@ -93,6 +93,7 @@ data Mode
     | Simpl FilePath
     | AddModule FilePath
     | GetModel FilePath
+    | SimplImpl FilePath FilePath
     | Check FilePath FilePath
     | SendRaw FilePath
     deriving stock (Show)
@@ -103,6 +104,7 @@ getModeFile = \case
     Simpl f -> f
     AddModule f -> f
     GetModel f -> f
+    SimplImpl f1 _ -> f1
     Check f1 _ -> f1
     SendRaw f -> f
 
@@ -221,6 +223,9 @@ parseMode =
                     (GetModel <$> strArgument (metavar "FILENAME"))
                     (progDesc "check satisfiability/provide model for the state in the file")
                 )
+            <> command
+                "simplify-implication"
+                (info (SimplImpl <$> strArgument (metavar "ANTECEDENT_FILENAME") <*> argument str (metavar "CONSEQUENT_FILENAME")) (progDesc "simplify (and attempt to establish validity of) implication between antecedent and consequent in the file"))
         )
 
 ----------------------------------------
@@ -251,6 +256,8 @@ prepareRequestData (AddModule file) mbOptFile opts = do
             ~> Json.Object (object ["module" ~> moduleText])
 prepareRequestData (GetModel file) mbOptFile opts =
     prepareOneTermRequest "get-model" file mbOptFile opts
+prepareRequestData (SimplImpl antecedentFile consequentFile) mbOptFile opts =
+    prepareImpliesRequest "simplify-implication" antecedentFile consequentFile mbOptFile opts
 prepareRequestData (Check _file1 _file2) _mbOptFile _opts = do
     error "not implemented yet"
 
@@ -278,6 +285,37 @@ prepareOneTermRequest method file mbOptFile opts = do
                 ]
                 +: "params"
                 ~> Json.Object (params +: "state" ~> term)
+    pure $ Json.encode requestData
+
+prepareImpliesRequest ::
+    String -> FilePath -> FilePath -> Maybe FilePath -> [(String, String)] -> IO BS.ByteString
+prepareImpliesRequest method antecedentFile consequentFile mbOptFile opts = do
+    antecedent :: Json.Value <-
+        Json.toJSON
+            <$> ( BS.readFile antecedentFile -- decode given term to test whether it is valid
+                    >>= either error pure . Json.eitherDecode @Syntax.KoreJson
+                )
+    consequent :: Json.Value <-
+        Json.toJSON
+            <$> ( BS.readFile consequentFile -- decode given term to test whether it is valid
+                    >>= either error pure . Json.eitherDecode @Syntax.KoreJson
+                )
+    paramsFromFile <-
+        maybe
+            (pure JsonKeyMap.empty)
+            ( BS.readFile
+                >=> either error (pure . getObject) . Json.eitherDecode @Json.Value
+            )
+            mbOptFile
+    let params = paramsFromFile <> object opts
+    let requestData =
+            object
+                [ "jsonrpc" ~> "2.0"
+                , "id" ~> "1"
+                , "method" ~> method
+                ]
+                +: "params"
+                ~> Json.Object (params +: "antecedent" ~> antecedent +: "consequent" ~> consequent)
     pure $ Json.encode requestData
 
 getObject :: Json.Value -> Json.Object

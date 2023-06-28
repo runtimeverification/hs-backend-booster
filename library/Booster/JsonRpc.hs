@@ -43,6 +43,7 @@ import Booster.Pattern.Rewrite (
     RewriteTrace (..),
     performRewrite,
  )
+import Booster.Pattern.Unify (UnificationResult (..), unifyTerms)
 import Booster.Pattern.Util (sortOfPattern)
 import Booster.Prettyprinter (renderDefault)
 import Booster.Syntax.Json (KoreJson (..), addHeader, sortOfJson)
@@ -165,6 +166,41 @@ respond stateVar =
                                     }
                         Left something ->
                             pure . Left . backendError RpcError.Aborted $ show something -- FIXME
+        SimplifyImplies req -> withContext req._module $ \(def, mLlvmLibrary) -> do
+            let logTraces =
+                    mapM_ (Log.logOther (Log.LevelOther "Simplify") . pack . renderDefault . pretty)
+            let internalisedAntecedent =
+                    runExcept $ internaliseTermOrPredicate False Nothing def req.antecedent.term
+                internalisedConsequent =
+                    runExcept $ internaliseTermOrPredicate False Nothing def req.consequent.term
+            case (internalisedAntecedent, internalisedConsequent) of
+                (Left patternErrorsAntecedent, _) -> do
+                    Log.logError $ "Error internalising cterm: " <> Text.pack (show patternErrorsAntecedent)
+                    pure $ Left $ backendError CouldNotVerifyPattern patternErrorsAntecedent
+                (_, Left patternErrorsConsequent) -> do
+                    Log.logError $ "Error internalising cterm: " <> Text.pack (show patternErrorsConsequent)
+                    pure $ Left $ backendError CouldNotVerifyPattern patternErrorsConsequent
+                (Right (TermAndPredicate antecedentPattern), Right (TermAndPredicate consequentPattern)) -> do
+                    Log.logInfoNS "booster" "Simplifying antecedent"
+                    case ApplyEquations.traceSimplifyPattern def mLlvmLibrary antecedentPattern of
+                        Right (newAntecedentPattern, antecedentTraces) -> do
+                            logTraces $ filter (not . ApplyEquations.isMatchFailure) antecedentTraces
+                            Log.logInfoNS "booster" "Simplifying consequent"
+                            case ApplyEquations.traceSimplifyPattern def mLlvmLibrary consequentPattern of
+                                Right (newConsequentPattern, consequentTraces) -> do
+                                    logTraces $ filter (not . ApplyEquations.isMatchFailure) consequentTraces
+                                    -- now, try unify simplified antecedent and consequent
+                                    case unifyTerms def newAntecedentPattern.term newConsequentPattern.term of
+                                        UnificationSuccess subst -> do
+                                            Log.logInfoNS "booster" (Text.pack $ show subst)
+                                            pure $ Left notImplemented
+                                        other -> do
+                                            Log.logInfoNS "booster" "unable to unify antecedent with consequent"
+                                            pure . Left . backendError RpcError.Aborted $ show other -- FIXME
+                                Left other -> pure . Left . backendError RpcError.Aborted $ show other -- FIXME
+                        Left other ->
+                            pure . Left . backendError RpcError.Aborted $ show other -- FIXME
+                (_, _) -> pure $ Left notImplemented
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left cancelUnsupportedInBatchMode
