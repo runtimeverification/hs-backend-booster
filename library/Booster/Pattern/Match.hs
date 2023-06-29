@@ -185,7 +185,7 @@ match1
 -- injection in pattern, no injection in subject: fail
 match1
     inj@Injection{}
-    trm  =
+    trm =
         failWith $ DifferentSymbols inj trm
 ----- Symbol Applications
 -- two symbol applications: fail if names differ, recurse
