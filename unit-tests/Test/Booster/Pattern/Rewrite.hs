@@ -11,7 +11,6 @@ module Test.Booster.Pattern.Rewrite (
 
 import Control.Exception (ErrorCall, catch)
 import Control.Monad.Logger.CallStack
-import Data.ByteString.Char8 (ByteString)
 import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -25,7 +24,6 @@ import Booster.Definition.Base
 import Booster.Pattern.Base
 import Booster.Pattern.Index (TermIndex (..))
 import Booster.Pattern.Rewrite
-import Booster.Pattern.Util (sortOfTerm)
 import Booster.Syntax.Json.Internalise (trm)
 import Booster.Syntax.ParsedKore.Internalise (symb)
 import Test.Booster.Fixture hiding (inj)
@@ -141,8 +139,6 @@ kCell =
 kseq =
     [symb| symbol kseq{}(SortKItem{}, SortK{}) : SortK{} [constructor{}()] |]
 
-injKItem :: Term -> Term
-injKItem t = Injection (sortOfTerm t) kItemSort t
 
 rule :: Maybe Text -> Pattern -> Pattern -> Priority -> RewriteRule "Rewrite"
 rule ruleLabel lhs rhs priority =
@@ -313,7 +309,7 @@ canRewrite =
                 (Steps 1)
                 [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con3{}( \dv{SomeSort{}}("otherThing"), \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
                 [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("somethingElse")                        ) ), C:SortK{}) ) |]
-                (`RewriteBranch` (NE.fromList [branch1, branch2]))
+                (`RewriteBranch` NE.fromList [branch1, branch2])
         , testCase "Returns stuck when no rules could be applied" $ do
             rewrites
                 (Steps 0)
@@ -398,7 +394,7 @@ supportsDepthControl =
                 (Steps 1)
                 [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con3{}( \dv{SomeSort{}}("otherThing"), \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
                 [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("somethingElse")                        ) ), C:SortK{}) ) |]
-                (`RewriteBranch` (NE.fromList [branch1, branch2]))
+                (`RewriteBranch` NE.fromList [branch1, branch2])
         ]
   where
     rewritesToDepth :: MaxDepth -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
@@ -445,7 +441,7 @@ supportsCutPoints =
                 (Steps 1)
                 [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con3{}( \dv{SomeSort{}}("otherThing"), \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
                 [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("somethingElse")                        ) ), C:SortK{}) ) |]
-                (`RewriteBranch` (NE.fromList [branch1, branch2]))
+                (`RewriteBranch` NE.fromList [branch1, branch2])
         ]
   where
     rewritesToCutPoint :: Text -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
