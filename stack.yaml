@@ -24,7 +24,7 @@ extra-deps:
 # extra-lib-dirs: [/path/to/dir]
 
 # Allow a newer minor version of GHC than the snapshot specifies
-compiler-check: newer-minor
+# compiler-check: newer-minor
 
 local-bin-path: ./.build/booster/bin
 
