@@ -139,7 +139,6 @@ kCell =
 kseq =
     [symb| symbol kseq{}(SortKItem{}, SortK{}) : SortK{} [constructor{}()] |]
 
-
 rule :: Maybe Text -> Pattern -> Pattern -> Priority -> RewriteRule "Rewrite"
 rule ruleLabel lhs rhs priority =
     RewriteRule
