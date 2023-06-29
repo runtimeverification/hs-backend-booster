@@ -114,7 +114,7 @@
                 },
                 "result": {
                     "tag": "failure",
-                    "reason": "Failed match",
+                    "reason": "Indeterminate match",
                     "rule-id": "d8b4ae4926d8ec7b1d5abaa5fed68fd6c7f3f5a21c76a51231394a2b36fbf995"
                 }
             },
@@ -553,7 +553,7 @@
                 },
                 "result": {
                     "tag": "failure",
-                    "reason": "Failed match",
+                    "reason": "Indeterminate match",
                     "rule-id": "d8b4ae4926d8ec7b1d5abaa5fed68fd6c7f3f5a21c76a51231394a2b36fbf995"
                 }
             },
