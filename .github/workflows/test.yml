@@ -209,9 +209,11 @@ jobs:
           GC_DONT_GC: '1'
           GH_TOKEN: ${{ github.token }}
         run: |
+          pwd
+          ls -al
           nix run .#hs-backend-booster:test:llvm-integration --extra-experimental-features 'nix-command flakes' --print-build-logs
           export JQ=$(nix-build '<nixpkgs>' -A jq --no-link)/bin/jq
-          for dir in $(cd test/rpc-integation && ls -d test-*); do
+          for dir in $(cd hs-backend-booster/test/rpc-integation && ls -d test-*); do
               name=${dir##test-}
               echo $name
               nix build .#checks.${{ matrix.nix }}.integration.$name --extra-experimental-features 'nix-command flakes' --print-build-logs -o $name.md
