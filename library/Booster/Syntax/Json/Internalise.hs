@@ -191,17 +191,7 @@ internaliseTermRaw qq allowAlias sortVars definition@KoreDefinition{sorts, symbo
         Syntax.KJRewrites{} -> predicate
         Syntax.KJDV{sort, value} ->
             Internal.DomainValue
-                <$> ( if qq
-                        then
-                            pure $
-                                Internal.SortApp
-                                    ( textToBS $ case sort of
-                                        Syntax.SortApp{name = Syntax.Id n} -> n
-                                        Syntax.SortVar{name = Syntax.Id n} -> n
-                                    )
-                                    []
-                        else lookupInternalSort' sort
-                    )
+                <$> lookupInternalSort' sort
                 <*> pure (textToBS value)
         Syntax.KJMultiOr{} -> predicate
         Syntax.KJLeftAssoc{symbol, sorts = argSorts, argss} ->
