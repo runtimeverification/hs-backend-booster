@@ -30,6 +30,7 @@ import Booster.Pattern.Unify (FailReason (..), SortError, checkSubsort)
 import Booster.Pattern.Util (
     checkSymbolIsAc,
     freeVariables,
+    isConstructorSymbol,
     modifyVariablesInP,
     sortOfTerm,
     substituteInTerm,
@@ -193,7 +194,9 @@ match1
     t1@(SymbolApplication symbol1 sorts1 args1)
     t2@(SymbolApplication symbol2 sorts2 args2)
         | symbol1.name /= symbol2.name =
-            failWith (DifferentSymbols t1 t2)
+            if isConstructorSymbol symbol1 && isConstructorSymbol symbol2
+                then failWith (DifferentSymbols t1 t2)
+                else indeterminate t1 t2
         | length args1 /= length args2 =
             lift $ throwE $ MatchFailed $ ArgLengthsDiffer t1 t2
         | sorts1 /= sorts2 =
