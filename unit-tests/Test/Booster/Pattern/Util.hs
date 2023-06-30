@@ -16,17 +16,17 @@ test_subst =
         "Substitution"
         [ test
             "con1(X)[con1(Y)/X]"
-            (Map.fromList [(Variable someSort "X", app con1 [var "Y" someSort])])
+            (Map.fromList [(Variable someSort "X" FromConfig, app con1 [var "Y" someSort])])
             (app con1 [var "X" someSort])
             (app con1 [app con1 [var "Y" someSort]])
         , test
             "con1(X)/\\con1(X)[con1(Y)/X]"
-            (Map.fromList [(Variable someSort "X", app con1 [var "Y" someSort])])
+            (Map.fromList [(Variable someSort "X" FromConfig, app con1 [var "Y" someSort])])
             (AndTerm (app con1 [var "X" someSort]) (app con1 [var "X" someSort]))
             (AndTerm (app con1 [app con1 [var "Y" someSort]]) (app con1 [app con1 [var "Y" someSort]]))
         , test
             "con1(X)/\\con1(Y)[con1(Y)/X]"
-            (Map.fromList [(Variable someSort "X", app con1 [var "Y" someSort])])
+            (Map.fromList [(Variable someSort "X" FromConfig, app con1 [var "Y" someSort])])
             (AndTerm (app con1 [var "X" someSort]) (app con1 [var "Y" someSort]))
             (AndTerm (app con1 [app con1 [var "Y" someSort]]) (app con1 [var "Y" someSort]))
         ]
@@ -41,7 +41,7 @@ someSort :: Sort
 someSort = SortApp "SomeSort" []
 
 var :: VarName -> Sort -> Term
-var variableName variableSort = Var $ Variable{variableSort, variableName}
+var variableName variableSort = Var $ Variable{variableSort, variableName, variableInternalType = FromConfig}
 
 app :: Symbol -> [Term] -> Term
 app s = SymbolApplication s []

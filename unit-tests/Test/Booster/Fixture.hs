@@ -62,7 +62,7 @@ testDefinition =
     getName other = error $ "subSortOf: " <> show other <> " not supported"
 
 var :: VarName -> Sort -> Term
-var variableName variableSort = Var $ Variable{variableSort, variableName}
+var variableName variableSort = Var $ Variable{variableSort, variableName, variableInternalType = FromConfig}
 
 dv :: Sort -> ByteString -> Term
 dv = DomainValue

@@ -27,7 +27,7 @@ genSort =
         [SortApp <$> Gen.utf8 (Range.linear 1 32) Gen.alphaNum <*> upTo 10 genSort]
 
 genVariable :: Gen Variable
-genVariable = Variable <$> genSort <*> Gen.utf8 (Range.linear 1 32) Gen.alphaNum
+genVariable = Variable <$> genSort <*> Gen.utf8 (Range.linear 1 32) Gen.alphaNum <*> pure FromConfig
 
 {- | In order to test the binary decoding without needing a proper definition,
    we generate symbols with dummy sort and attributes.

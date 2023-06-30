@@ -12,7 +12,6 @@ module Booster.Pattern.Util (
     modifyVariables,
     modifyVariablesInT,
     modifyVariablesInP,
-    modifyVarName,
     modifyVarNameConcreteness,
     freeVariables,
     isConstructorSymbol,
@@ -116,8 +115,6 @@ modifyVariablesInP f = cata $ \case
         Forall (f v) (modifyVariablesInP f pr)
     other -> embed other
 
-modifyVarName :: (VarName -> VarName) -> Variable -> Variable
-modifyVarName f v = v{variableName = f v.variableName}
 
 modifyVarNameConcreteness :: (ByteString -> ByteString) -> Concreteness -> Concreteness
 modifyVarNameConcreteness f = \case

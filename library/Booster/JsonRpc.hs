@@ -36,7 +36,7 @@ import Booster.Definition.Base (KoreDefinition (..))
 import Booster.Definition.Base qualified as Definition (RewriteRule (..))
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.ApplyEquations qualified as ApplyEquations
-import Booster.Pattern.Base (Pattern (..), TermOrPredicate (..))
+import Booster.Pattern.Base (Pattern (..), TermOrPredicate (..), VarType (..))
 import Booster.Pattern.Rewrite (
     RewriteFailed (..),
     RewriteResult (..),
@@ -73,7 +73,7 @@ respond stateVar =
                 pure $ Left $ unsupportedOption ("moving-average-step-timeout" :: String)
         Execute req -> withContext req._module $ \(def, mLlvmLibrary) -> do
             -- internalise given constrained term
-            let internalised = runExcept $ internalisePattern False Nothing def req.state.term
+            let internalised = runExcept $ internalisePattern False FromConfig Nothing def req.state.term
 
             case internalised of
                 Left patternError -> do
@@ -115,7 +115,7 @@ respond stateVar =
                                 pure $ Right $ AddModule ()
         Simplify req -> withContext req._module $ \(def, mLlvmLibrary) -> do
             let internalised =
-                    runExcept $ internaliseTermOrPredicate False Nothing def req.state.term
+                    runExcept $ internaliseTermOrPredicate False FromConfig Nothing def req.state.term
             let mkTraces
                     | all not . catMaybes $
                         [req.logSuccessfulSimplifications, req.logFailedSimplifications] =

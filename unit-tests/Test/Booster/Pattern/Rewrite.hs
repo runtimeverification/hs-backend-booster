@@ -199,9 +199,9 @@ unifyNotMatch =
             -- "non-match" substitution:
             subst =
                 Map.fromList
-                    [ (Variable someSort "X", dv someSort "otherThing")
-                    , (Variable someSort "Y", d)
-                    , (Variable kItemSort "RuleVar", var "ConfigVar" kItemSort)
+                    [ (Variable someSort "X" FromConfig, dv someSort "otherThing")
+                    , (Variable someSort "Y" FromConfig, d)
+                    , (Variable kItemSort "RuleVar" FromConfig, var "ConfigVar" kItemSort)
                     ]
         pat `failsWith` UnificationIsNotMatch rule3 pat.term subst
 definednessUnclear =

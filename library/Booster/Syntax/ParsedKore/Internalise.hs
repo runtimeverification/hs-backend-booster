@@ -46,7 +46,7 @@ import Booster.Definition.Attributes.Reader as Attributes (
  )
 import Booster.Definition.Base as Def
 import Booster.Definition.Util (HasSourceRef (..), SourceRef)
-import Booster.Pattern.Base (Variable (..))
+import Booster.Pattern.Base (Variable (..), VarType (..))
 import Booster.Pattern.Base qualified as Def
 import Booster.Pattern.Base qualified as Def.Symbol (Symbol (..))
 
@@ -308,10 +308,10 @@ addModule
                     internalResSort <-
                         withExcept DefinitionSortError $
                             internaliseSort (Set.fromList paramNames) sorts' sort
-                    let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
+                    let internalArgs = (\(s,v) -> Def.Variable s v FromRule) <$> zip internalArgSorts argNames
                     internalRhs <-
                         withExcept (DefinitionAliasError name.getId . InconsistentAliasPattern) $
-                            internaliseTermOrPredicate True (Just sortVars) defWithNewSortsAndSymbols.partial rhs
+                            internaliseTermOrPredicate True FromRule (Just sortVars) defWithNewSortsAndSymbols.partial rhs
                     let rhsSort = Util.sortOfTermOrPredicate internalRhs
                     unless
                         (fromMaybe internalResSort rhsSort == internalResSort)
@@ -713,17 +713,17 @@ internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
     -- name clashes with patterns from the user
     -- filter out literal `Top` constraints
     lhs <-
-        fmap (removeTops . Util.modifyVariables (Util.modifyVarName ("Rule#" <>))) $
+        fmap removeTops $
             withExcept (DefinitionPatternError ref) $
-                internalisePattern True Nothing partialDefinition left
+                internalisePattern True FromRule Nothing partialDefinition left
     existentials' <- fmap Set.fromList $ withExcept (DefinitionPatternError ref) $ mapM mkVar exs
     let renameVariable v
-            | v `Set.member` existentials' = Util.modifyVarName ("Ex#" <>) v
-            | otherwise = Util.modifyVarName ("Rule#" <>) v
+            | v `Set.member` existentials' = v{variableInternalType = FromExists}
+            | otherwise = v
     rhs <-
         fmap (removeTops . Util.modifyVariables renameVariable) $
             withExcept (DefinitionPatternError ref) $
-                internalisePattern True Nothing partialDefinition right
+                internalisePattern True FromRule Nothing partialDefinition right
     let notPreservesDefinednessReasons =
             -- users can override the definedness computation by an explicit attribute
             if coerce axAttributes.preserving
@@ -736,7 +736,7 @@ internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
             Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
         computedAttributes =
             ComputedAxiomAttributes{notPreservesDefinednessReasons, containsAcSymbols}
-        existentials = Set.map (Util.modifyVarName ("Ex#" <>)) existentials'
+        existentials = Set.map (\v -> v{variableInternalType = FromExists}) existentials'
     return
         RewriteRule
             { lhs = lhs.term
@@ -751,7 +751,7 @@ internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
     mkVar (name, sort) = do
         variableSort <- lookupInternalSort Nothing partialDefinition.sorts right sort
         let variableName = textToBS name.getId
-        pure $ Variable{variableSort, variableName}
+        pure $ Variable{variableSort, variableName, variableInternalType = FromRule}
 
 internaliseRewriteRule ::
     KoreDefinition ->
@@ -770,7 +770,7 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
     args <-
         traverse
             ( withExcept (DefinitionPatternError ref)
-                . internaliseTerm True Nothing partialDefinition
+                . internaliseTerm True FromRule Nothing partialDefinition
             )
             aliasArgs
     result <- expandAlias alias args
@@ -779,17 +779,17 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
     -- name clashes with patterns from the user
     -- filter out literal `Top` constraints
     lhs <-
-        fmap (removeTops . Util.modifyVariables (Util.modifyVarName ("Rule#" <>))) $
+        fmap removeTops $
             Util.retractPattern result
                 `orFailWith` DefinitionTermOrPredicateError ref (PatternExpected result)
     existentials' <- fmap Set.fromList $ withExcept (DefinitionPatternError ref) $ mapM mkVar exs
     let renameVariable v
-            | v `Set.member` existentials' = Util.modifyVarName ("Ex#" <>) v
-            | otherwise = Util.modifyVarName ("Rule#" <>) v
+            | v `Set.member` existentials' = v{variableInternalType = FromExists}
+            | otherwise = v
     rhs <-
         fmap (removeTops . Util.modifyVariables renameVariable) $
             withExcept (DefinitionPatternError ref) $
-                internalisePattern True Nothing partialDefinition right
+                internalisePattern True FromRule Nothing partialDefinition right
 
     let notPreservesDefinednessReasons =
             -- users can override the definedness computation by an explicit attribute
@@ -803,9 +803,9 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
             Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
         computedAttributes =
             ComputedAxiomAttributes{notPreservesDefinednessReasons, containsAcSymbols}
-        existentials = Set.map (Util.modifyVarName ("Ex#" <>)) existentials'
+        existentials = Set.map (\v -> v{variableInternalType = FromExists}) existentials'
         attributes =
-            axAttributes{concreteness = Util.modifyVarNameConcreteness ("Rule#" <>) axAttributes.concreteness}
+            axAttributes{concreteness = axAttributes.concreteness}
     return
         RewriteRule
             { lhs = lhs.term
@@ -820,7 +820,7 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
     mkVar (name, sort) = do
         variableSort <- lookupInternalSort Nothing partialDefinition.sorts right sort
         let variableName = textToBS name.getId
-        pure $ Variable{variableSort, variableName}
+        pure $ Variable{variableSort, variableName, variableInternalType = FromRule}
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
@@ -887,7 +887,7 @@ internaliseSimpleEquation partialDef precond left right sortVars attrs
                                     then []
                                     else map (UndefinedSymbol . (.name)) undefinedSymbols
                             }
-                    attributes = attrs{concreteness = Util.modifyVarNameConcreteness ("Eq#" <>) attrs.concreteness}
+                    attributes = attrs{concreteness = attrs.concreteness}
                 pure $
                     SimplificationAxiom
                         RewriteRule
@@ -918,11 +918,11 @@ internaliseSimpleEquation partialDef precond left right sortVars attrs
   where
     internalisePattern' =
         withExcept (DefinitionPatternError (sourceRef attrs))
-            . fmap (removeTops . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))
-            . internalisePattern True (Just sortVars) partialDef
+            . fmap removeTops
+            . internalisePattern True FromRule (Just sortVars) partialDef
     internalisePredicate' =
         withExcept (DefinitionPatternError (sourceRef attrs))
-            . internalisePredicate True (Just sortVars) partialDef
+            . internalisePredicate True FromRule (Just sortVars) partialDef
 
 {- | Internalises a function rule from its components that were matched
   before.
@@ -950,12 +950,12 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
     -- internalise the LHS (LHS term and requires)
     left <- -- expected to be a simple term, f(X_1, X_2,..)
         withExcept (DefinitionPatternError (sourceRef attrs)) $
-            internalisePattern True (Just sortVars) partialDef $
+            internalisePattern True FromRule (Just sortVars) partialDef $
                 Syntax.KJAnd leftTerm.sort leftTerm requires
     -- extract argument binders from predicates and inline in to LHS term
     argPairs <- mapM internaliseArg args
     let lhs =
-            removeTops . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)) $
+            removeTops $
                 left{Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
     rhs <- internaliseSide right
     let argsUndefined =
@@ -994,12 +994,12 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
 
     internaliseSide =
         withExcept (DefinitionPatternError (sourceRef attrs))
-            . fmap (removeTops . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))
-            . internalisePattern True (Just sortVars) partialDef
+            . fmap removeTops
+            . internalisePattern True FromRule (Just sortVars) partialDef
 
     internaliseTerm' =
         withExcept (DefinitionPatternError (sourceRef attrs))
-            . internaliseTerm True (Just sortVars) partialDef
+            . internaliseTerm True FromRule (Just sortVars) partialDef
 
     internaliseArg ::
         (Syntax.Id, Syntax.Sort, Syntax.KorePattern) ->
@@ -1008,7 +1008,7 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
         variableSort <-
             withExcept DefinitionSortError $
                 internaliseSort (Set.fromList $ map (.getId) sortVars) partialDef.sorts sort
-        (Def.Variable{variableSort, variableName = textToBS name},) <$> internaliseTerm' term
+        (Def.Variable{variableSort, variableName = textToBS name, variableInternalType = FromRule},) <$> internaliseTerm' term
 
 addToTheoryWith ::
     HasField "attributes" axiom AxiomAttributes =>

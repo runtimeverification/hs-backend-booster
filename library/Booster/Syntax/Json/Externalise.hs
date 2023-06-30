@@ -12,7 +12,7 @@ module Booster.Syntax.Json.Externalise (
 import Data.Foldable ()
 import Data.Text.Encoding qualified as Text
 
-import Booster.Pattern.Base (externaliseKmapUnsafe)
+import Booster.Pattern.Base (externaliseKmapUnsafe, VarType (..))
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
 import Kore.Syntax.Json.Types qualified as Syntax
@@ -52,8 +52,8 @@ externaliseTerm = \case
             (map externaliseTerm args)
     Internal.DomainValue sort bs ->
         Syntax.KJDV (externaliseSort sort) $ Text.decodeLatin1 bs
-    Internal.Var Internal.Variable{variableSort = iSort, variableName = iName} ->
-        Syntax.KJEVar (varNameToId iName) (externaliseSort iSort)
+    Internal.Var Internal.Variable{variableSort = iSort, variableName = iName, variableInternalType} ->
+        Syntax.KJEVar (varNameToId $ (if variableInternalType == FromExists then ("EX" <>) else id) iName) (externaliseSort iSort)
     Internal.Injection source target trm ->
         Syntax.KJApp
             (symbolNameToId Internal.injectionSymbol.name)
