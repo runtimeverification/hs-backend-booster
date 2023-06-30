@@ -211,7 +211,7 @@ definednessUnclear =
 rewriteStuck =
     testCase "con3 app is stuck (no rules apply)" $ do
         let con3App = termInKCell "ConfigVar" $ app con3 [d, d]
-        runRewriteM def Nothing (rewriteStep [] [] con3App) @?= Left (NoApplicableRules con3App)
+        runRewriteM def Nothing (rewriteStep 0 [] [] con3App) @?= Left (NoApplicableRules con3App)
 rulePriority =
     testCase "con1 rewrites to a branch when higher priority does not apply" $ do
         let d2 = dv someSort "otherThing"
@@ -222,16 +222,16 @@ rulePriority =
 
 rewritesTo :: Pattern -> (Text, Pattern) -> IO ()
 p1 `rewritesTo` (lbl, p2) =
-    runRewriteM def Nothing (rewriteStep [] [] p1) @?= Right (RewriteFinished (Just lbl) Nothing p2)
+    runRewriteM def Nothing (rewriteStep 0 [] [] p1) @?= Right (RewriteFinished (Just lbl) Nothing p2)
 
 branchesTo :: Pattern -> [(Text, Pattern)] -> IO ()
 p `branchesTo` ps =
-    runRewriteM def Nothing (rewriteStep [] [] p)
+    runRewriteM def Nothing (rewriteStep 0 [] [] p)
         @?= Right (RewriteBranch p $ NE.fromList $ map (\(lbl, p') -> (lbl, Nothing, p')) ps)
 
 failsWith :: Pattern -> RewriteFailed "Rewrite" -> IO ()
 failsWith p err =
-    runRewriteM def Nothing (rewriteStep [] [] p) @?= Left err
+    runRewriteM def Nothing (rewriteStep 0 [] [] p) @?= Left err
 
 ----------------------------------------
 -- tests for performRewrite (iterated rewrite in IO with logging)

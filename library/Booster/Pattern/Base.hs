@@ -37,6 +37,7 @@ import Data.Set qualified as Set
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics (Generic)
+import GHC.Natural (Natural)
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
 
@@ -58,7 +59,7 @@ data Sort
 pattern SortBool :: Sort
 pattern SortBool = SortApp "SortBool" []
 
-data VarType = FromConfig | FromRule | FromExists
+data VarType = FromConfig | FromRule | FromExists (Maybe Natural)
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData, Hashable)
 

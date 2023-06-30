@@ -718,7 +718,7 @@ internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
                 internalisePattern True FromRule Nothing partialDefinition left
     existentials' <- fmap Set.fromList $ withExcept (DefinitionPatternError ref) $ mapM mkVar exs
     let renameVariable v
-            | v `Set.member` existentials' = v{variableInternalType = FromExists}
+            | v `Set.member` existentials' = v{variableInternalType = FromExists Nothing}
             | otherwise = v
     rhs <-
         fmap (removeTops . Util.modifyVariables renameVariable) $
@@ -736,7 +736,7 @@ internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
             Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
         computedAttributes =
             ComputedAxiomAttributes{notPreservesDefinednessReasons, containsAcSymbols}
-        existentials = Set.map (\v -> v{variableInternalType = FromExists}) existentials'
+        existentials = Set.map (\v -> v{variableInternalType = FromExists Nothing}) existentials'
     return
         RewriteRule
             { lhs = lhs.term
@@ -784,7 +784,7 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
                 `orFailWith` DefinitionTermOrPredicateError ref (PatternExpected result)
     existentials' <- fmap Set.fromList $ withExcept (DefinitionPatternError ref) $ mapM mkVar exs
     let renameVariable v
-            | v `Set.member` existentials' = v{variableInternalType = FromExists}
+            | v `Set.member` existentials' = v{variableInternalType = FromExists Nothing}
             | otherwise = v
     rhs <-
         fmap (removeTops . Util.modifyVariables renameVariable) $
@@ -803,7 +803,7 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
             Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
         computedAttributes =
             ComputedAxiomAttributes{notPreservesDefinednessReasons, containsAcSymbols}
-        existentials = Set.map (\v -> v{variableInternalType = FromExists}) existentials'
+        existentials = Set.map (\v -> v{variableInternalType = FromExists Nothing}) existentials'
         attributes =
             axAttributes{concreteness = axAttributes.concreteness}
     return

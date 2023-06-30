@@ -27,7 +27,6 @@ import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Sequence (Seq, (|>))
-import Data.Set qualified as Set
 import Data.Text as Text (Text, pack, unlines)
 import Numeric.Natural
 import Prettyprinter
@@ -49,6 +48,7 @@ import Booster.Pattern.Index (TermIndex (..), kCellTermIndex)
 import Booster.Pattern.Simplify
 import Booster.Pattern.Unify
 import Booster.Pattern.Util
+import Booster.Pattern.Util qualified as Util
 import Booster.Prettyprinter
 
 newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe LLVM.API) (Except err) a}
@@ -71,8 +71,8 @@ getDefinition = RewriteM $ fst <$> ask
   additional constraints.
 -}
 rewriteStep ::
-    [Text] -> [Text] -> Pattern -> RewriteM (RewriteFailed "Rewrite") (RewriteResult Pattern)
-rewriteStep cutLabels terminalLabels pat = do
+    Natural -> [Text] -> [Text] -> Pattern -> RewriteM (RewriteFailed "Rewrite") (RewriteResult Pattern)
+rewriteStep counter cutLabels terminalLabels pat = do
     let termIdx = kCellTermIndex pat.term
     when (termIdx == None) $ throw (TermIndexIsNone pat.term)
     def <- getDefinition
@@ -97,7 +97,7 @@ rewriteStep cutLabels terminalLabels pat = do
         -- try all rules of the priority group. This will immediately
         -- fail the rewrite if anything is uncertain (unification,
         -- definedness, rule conditions)
-        results <- catMaybes <$> mapM (applyRule pat) rules
+        results <- catMaybes <$> mapM (applyRule counter pat) rules
 
         -- simplify and filter out bottom states
 
@@ -140,10 +140,11 @@ abort the entire rewrite).
 -}
 applyRule ::
     forall k.
+    Natural ->
     Pattern ->
     RewriteRule k ->
     RewriteM (RewriteFailed k) (Maybe (RewriteRule k, Pattern))
-applyRule pat rule = runMaybeT $ do
+applyRule counter pat rule = runMaybeT $ do
     def <- lift getDefinition
     -- unify terms
     let unified = unifyTerms def rule.lhs pat.term
@@ -188,23 +189,18 @@ applyRule pat rule = runMaybeT $ do
         catMaybes <$> mapM (checkConstraint id) ruleEnsures
 
     let rewritten =
-            Pattern
-                (substituteInTerm (refreshExistentials subst) rule.rhs)
-                -- adding new constraints that have not been trivially `Top`
-                (newConstraints <> map (substituteInPredicate subst) pat.constraints)
+            Util.modifyVariables
+                ( \v@Variable{variableInternalType} -> case variableInternalType of
+                    FromExists Nothing -> v{variableInternalType = FromExists (Just counter)}
+                    _ -> v
+                )
+                $ Pattern
+                    (substituteInTerm subst rule.rhs)
+                    -- adding new constraints that have not been trivially `Top`
+                    (newConstraints <> map (substituteInPredicate subst) pat.constraints)
     return (rule, rewritten)
   where
     failRewrite = lift . throw
-
-    refreshExistentials subst
-        | Set.null (rule.existentials `Set.intersection` Map.keysSet subst) = subst
-        | otherwise =
-            let substVars = Map.keysSet subst
-             in subst `Map.union` Map.fromSet (\v -> Var $ freshen v substVars) rule.existentials
-
-    freshen v@Variable{variableName = vn} vs
-        | v `Set.member` vs = freshen v{variableName = vn <> "'"} vs
-        | otherwise = v
 
     checkConstraint ::
         (Predicate -> a) ->
@@ -470,7 +466,7 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
             else do
                 let res =
                         runRewriteM def mLlvmLibrary $
-                            rewriteStep cutLabels terminalLabels pat'
+                            rewriteStep counter cutLabels terminalLabels pat'
                 case res of
                     Right (RewriteFinished mlbl uniqueId single) -> do
                         case mlbl of

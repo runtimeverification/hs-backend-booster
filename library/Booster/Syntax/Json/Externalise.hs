@@ -15,6 +15,7 @@ import Data.Text.Encoding qualified as Text
 import Booster.Pattern.Base (VarType (..), externaliseKmapUnsafe)
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
+import Data.ByteString.Char8 qualified as BS
 import Kore.Syntax.Json.Types qualified as Syntax
 
 {- | Converts an internal pattern to a pair of term and predicate in
@@ -54,7 +55,10 @@ externaliseTerm = \case
         Syntax.KJDV (externaliseSort sort) $ Text.decodeLatin1 bs
     Internal.Var Internal.Variable{variableSort = iSort, variableName = iName, variableInternalType} ->
         Syntax.KJEVar
-            (varNameToId $ (if variableInternalType == FromExists then ("EX" <>) else id) iName)
+            ( varNameToId $ case variableInternalType of
+                FromExists n -> "EX" <> maybe "" (BS.pack . show) n <> iName
+                _ -> iName
+            )
             (externaliseSort iSort)
     Internal.Injection source target trm ->
         Syntax.KJApp
