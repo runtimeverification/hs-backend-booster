@@ -38,16 +38,16 @@ import Data.Text.Encoding (decodeLatin1)
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base (KoreDefinition (..))
+import Booster.Pattern.Base (VarType)
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
 import Booster.Syntax.Json.Externalise (externaliseSort)
 import Data.Coerce (coerce)
 import Kore.Syntax.Json.Types qualified as Syntax
-import Booster.Pattern.Base (VarType)
 
 internalisePattern ::
     Bool ->
-    VarType -> 
+    VarType ->
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     Syntax.KorePattern ->
@@ -58,9 +58,11 @@ internalisePattern allowAlias variableInternalType sortVars definition p = do
     when (null terms) $ throwE $ NoTermFound p
 
     -- construct an AndTerm from all terms (checking sort consistency)
-    term <- andTerm p =<< mapM (internaliseTerm allowAlias variableInternalType sortVars definition) terms
+    term <-
+        andTerm p =<< mapM (internaliseTerm allowAlias variableInternalType sortVars definition) terms
     -- internalise all predicates
-    constraints <- mapM (internalisePredicate allowAlias variableInternalType sortVars definition) predicates
+    constraints <-
+        mapM (internalisePredicate allowAlias variableInternalType sortVars definition) predicates
     pure Internal.Pattern{term, constraints}
   where
     andTerm :: Syntax.KorePattern -> [Internal.Term] -> Except PatternError Internal.Term
@@ -85,9 +87,13 @@ internaliseTermOrPredicate ::
     Except [PatternError] Internal.TermOrPredicate
 internaliseTermOrPredicate allowAlias variableInternalType sortVars definition syntaxPatt =
     Internal.APredicate
-        <$> (withExcept (: []) $ internalisePredicate allowAlias variableInternalType sortVars definition syntaxPatt)
+        <$> ( withExcept (: []) $
+                internalisePredicate allowAlias variableInternalType sortVars definition syntaxPatt
+            )
         <|> Internal.TermAndPredicate
-            <$> (withExcept (: []) $ internalisePattern allowAlias variableInternalType sortVars definition syntaxPatt)
+            <$> ( withExcept (: []) $
+                    internalisePattern allowAlias variableInternalType sortVars definition syntaxPatt
+                )
 
 lookupInternalSort ::
     Maybe [Syntax.Id] ->
@@ -103,7 +109,7 @@ lookupInternalSort sortVars sorts pat =
 -- should be analysed before, this function produces an 'AndTerm'.
 internaliseTerm ::
     Bool ->
-    VarType -> 
+    VarType ->
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     Syntax.KorePattern ->
@@ -186,7 +192,7 @@ internaliseTerm allowAlias variableInternalType sortVars definition@KoreDefiniti
 -- is analysed before, this function produces an 'AndPredicate'.
 internalisePredicate ::
     Bool ->
-    VarType -> 
+    VarType ->
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     Syntax.KorePattern ->
@@ -222,11 +228,13 @@ internalisePredicate allowAlias variableInternalType sortVars definition@KoreDef
             <*> recursion arg2
     Syntax.KJForall{var, varSort, arg} -> do
         variableSort <- lookupInternalSort' varSort
-        Internal.Forall Internal.Variable{variableSort, variableName = textToBS var.getId, variableInternalType}
+        Internal.Forall
+            Internal.Variable{variableSort, variableName = textToBS var.getId, variableInternalType}
             <$> recursion arg
     Syntax.KJExists{var, varSort, arg} -> do
         variableSort <- lookupInternalSort' varSort
-        Internal.Forall Internal.Variable{variableSort, variableName = textToBS var.getId, variableInternalType}
+        Internal.Forall
+            Internal.Variable{variableSort, variableName = textToBS var.getId, variableInternalType}
             <$> recursion arg
     Syntax.KJMu{} -> notSupported
     Syntax.KJNu{} -> notSupported

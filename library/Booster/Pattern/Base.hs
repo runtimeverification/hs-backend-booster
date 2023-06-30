@@ -58,11 +58,9 @@ data Sort
 pattern SortBool :: Sort
 pattern SortBool = SortApp "SortBool" []
 
-
 data VarType = FromConfig | FromRule | FromExists
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData, Hashable)
-
 
 -- | A variable for symbolic execution or for terms in a rule.
 data Variable = Variable

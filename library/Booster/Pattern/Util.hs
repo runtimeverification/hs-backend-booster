@@ -115,7 +115,6 @@ modifyVariablesInP f = cata $ \case
         Forall (f v) (modifyVariablesInP f pr)
     other -> embed other
 
-
 modifyVarNameConcreteness :: (ByteString -> ByteString) -> Concreteness -> Concreteness
 modifyVarNameConcreteness f = \case
     SomeConstrained m -> SomeConstrained $ Map.mapKeys (first f) m

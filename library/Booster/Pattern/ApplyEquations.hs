@@ -494,7 +494,9 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                 "Variable not found: " <> show (variableName, sortName)
             )
             check
-            $ Map.lookup Variable{variableSort = SortApp sortName [], variableName, variableInternalType = FromConfig} subst
+            $ Map.lookup
+                Variable{variableSort = SortApp sortName [], variableName, variableInternalType = FromConfig}
+                subst
 
 --------------------------------------------------------------------
 

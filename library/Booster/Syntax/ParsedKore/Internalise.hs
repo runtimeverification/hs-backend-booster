@@ -46,7 +46,7 @@ import Booster.Definition.Attributes.Reader as Attributes (
  )
 import Booster.Definition.Base as Def
 import Booster.Definition.Util (HasSourceRef (..), SourceRef)
-import Booster.Pattern.Base (Variable (..), VarType (..))
+import Booster.Pattern.Base (VarType (..), Variable (..))
 import Booster.Pattern.Base qualified as Def
 import Booster.Pattern.Base qualified as Def.Symbol (Symbol (..))
 
@@ -308,7 +308,7 @@ addModule
                     internalResSort <-
                         withExcept DefinitionSortError $
                             internaliseSort (Set.fromList paramNames) sorts' sort
-                    let internalArgs = (\(s,v) -> Def.Variable s v FromRule) <$> zip internalArgSorts argNames
+                    let internalArgs = (\(s, v) -> Def.Variable s v FromRule) <$> zip internalArgSorts argNames
                     internalRhs <-
                         withExcept (DefinitionAliasError name.getId . InconsistentAliasPattern) $
                             internaliseTermOrPredicate True FromRule (Just sortVars) defWithNewSortsAndSymbols.partial rhs
@@ -1008,7 +1008,8 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
         variableSort <-
             withExcept DefinitionSortError $
                 internaliseSort (Set.fromList $ map (.getId) sortVars) partialDef.sorts sort
-        (Def.Variable{variableSort, variableName = textToBS name, variableInternalType = FromRule},) <$> internaliseTerm' term
+        (Def.Variable{variableSort, variableName = textToBS name, variableInternalType = FromRule},)
+            <$> internaliseTerm' term
 
 addToTheoryWith ::
     HasField "attributes" axiom AxiomAttributes =>
