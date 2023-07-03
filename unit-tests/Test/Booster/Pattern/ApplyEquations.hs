@@ -39,10 +39,11 @@ test_evaluateFunction =
           testCase "Nested function applications, one not to be evaluated" $ do
             eval TopDown [trm| f2{}(f1{}(f1{}(A:SomeSort{}))) |] @?= Right [trm| f2{}(A:SomeSort{}) |]
             eval BottomUp [trm| f2{}(f1{}(f1{}(A:SomeSort{}))) |] @?= Right [trm| f2{}(A:SomeSort{}) |]
-        , -- f1(f2(f1(a))) => f2(a). Again f2 partial, so not evaluating
+        , -- f1(f2(f1(a))) => f1(f2(a)). Again f2 partial, so not evaluating,
+          -- therefore f1(x) => x not applied to unevaluated value
           testCase "Nested function applications with partial function inside" $ do
-            eval TopDown [trm| f1{}(f2{}(f1{}(A:SomeSort{}))) |] @?= Right [trm| f2{}(A:SomeSort{}) |]
-            eval BottomUp [trm| f1{}(f2{}(f1{}(A:SomeSort{}))) |] @?= Right [trm| f2{}(A:SomeSort{}) |]
+            eval TopDown [trm| f1{}(f2{}(f1{}(A:SomeSort{}))) |] @?= Right [trm| f1{}(f2{}(A:SomeSort{})) |]
+            eval BottomUp [trm| f1{}(f2{}(f1{}(A:SomeSort{}))) |] @?= Right [trm| f1{}(f2{}(A:SomeSort{})) |]
         , -- f1(con1(con1(..con1(a)..))) => con2(con2(..con2(a)..))
           testCase "Recursive evaluation" $ do
             let subj depth = app f1 [iterate (apply con1) a !! depth]
