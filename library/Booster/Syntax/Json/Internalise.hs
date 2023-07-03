@@ -529,7 +529,7 @@ trm =
                 dataToExpQ (const Nothing `extQ` handleBS `extQ` metaSymb `extQ` metaTerm)
                     . either (error . show) id
                     . runExcept
-                    . internaliseTermRaw True False Nothing (emptyKoreDefinition DefinitionAttributes{})
+                    . internaliseTermRaw True False Internal.FromRule Nothing (emptyKoreDefinition DefinitionAttributes{})
                     . either error id
                     . parsePattern "INLINE"
                     . pack
