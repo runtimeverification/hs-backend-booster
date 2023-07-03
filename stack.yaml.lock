@@ -19,13 +19,6 @@ packages:
   original:
     hackage: co-log-0.5.0.0
 - completed:
-    hackage: compact-0.2.0.0@sha256:75ef98cb51201b4a0d6de95cbbb62be6237c092a3d594737346c70c5d56c2380,2413
-    pantry-tree:
-      sha256: 9514e48c9141b29a5f58b27c2950f17cc1c53eea3d393a6a1ed46ca16e876754
-      size: 546
-  original:
-    hackage: compact-0.2.0.0
-- completed:
     hackage: decision-diagrams-0.2.0.0@sha256:9f82d39f7331f6836784fa89354986e436a4d62d810b8fb2b44dd10c6a0beb85,3415
     pantry-tree:
       sha256: 36696cfd2af10c44fc0b7d8746c57d94c476eef4ba16f6ac98c2d6dae04f4b36
