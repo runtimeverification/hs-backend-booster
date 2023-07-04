@@ -3,10 +3,11 @@
 
   inputs = {
     k-framework.url = "github:runtimeverification/k/v5.6.131";
-    k-framework.inputs.booster-backend.follows = "";
-    nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
-    haskell-nix.url = "github:input-output-hk/haskell.nix";
     haskell-backend.url = "github:runtimeverification/haskell-backend";
+    k-framework.inputs.booster-backend.follows = "";
+    haskell-nix.follows = "haskell-backend/haskell-nix";
+    nixpkgs.follows = "haskell-backend/haskell-nix/nixpkgs-unstable";
+
     flake-compat = {
       url = "github:edolstra/flake-compat";
       flake = false;
@@ -27,7 +28,7 @@
         };
       allNixpkgsFor = perSystem nixpkgsForSystem;
       nixpkgsFor = system: allNixpkgsFor.${system};
-      index-state = "2023-05-17T00:00:00Z";
+      index-state = "2023-06-26T23:55:21Z";
 
       boosterBackendFor = { compiler, pkgs, profiling ? false, k }:
         pkgs.haskell-nix.cabalProject {
@@ -59,7 +60,7 @@
               cabal = "latest";
               haskell-language-server = "latest";
               fourmolu = {
-                index-state = "2023-05-17T00:00:00Z";
+                inherit index-state;
                 version = "0.12.0.0";
               };
               hlint = "latest";
