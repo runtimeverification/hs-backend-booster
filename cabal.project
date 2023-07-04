@@ -1,6 +1,6 @@
 packages: .
 
-index-state: 2023-06-29T00:00:00Z
+index-state: 2023-05-17T00:00:00Z
 allow-newer:
   compact:base,
   compact:bytestring,

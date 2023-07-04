@@ -28,7 +28,7 @@
         };
       allNixpkgsFor = perSystem nixpkgsForSystem;
       nixpkgsFor = system: allNixpkgsFor.${system};
-      index-state = "2023-06-26T23:55:21Z";
+      index-state = "2023-05-17T00:00:00Z";
 
       boosterBackendFor = { compiler, pkgs, profiling ? false, k }:
         pkgs.haskell-nix.cabalProject {
