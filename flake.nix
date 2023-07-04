@@ -59,7 +59,7 @@
               cabal = "latest";
               haskell-language-server = "latest";
               fourmolu = {
-                inherit index-state;
+                index-state = "2023-05-17T00:00:00Z";
                 version = "0.12.0.0";
               };
               hlint = "latest";
