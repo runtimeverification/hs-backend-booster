@@ -3,10 +3,11 @@
 
   inputs = {
     k-framework.url = "github:runtimeverification/k/v5.6.131";
-    k-framework.inputs.booster-backend.follows = "";
-    nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
-    haskell-nix.url = "github:input-output-hk/haskell.nix";
     haskell-backend.url = "github:runtimeverification/haskell-backend";
+    k-framework.inputs.booster-backend.follows = "";
+    haskell-nix.follows = "haskell-backend/haskell-nix";
+    nixpkgs.follows = "haskell-backend/haskell-nix/nixpkgs-unstable";
+
     flake-compat = {
       url = "github:edolstra/flake-compat";
       flake = false;
@@ -27,7 +28,7 @@
         };
       allNixpkgsFor = perSystem nixpkgsForSystem;
       nixpkgsFor = system: allNixpkgsFor.${system};
-      index-state = "2023-05-17T00:00:00Z";
+      index-state = "2023-06-26T23:55:21Z";
 
       boosterBackendFor = { compiler, pkgs, profiling ? false, k }:
         pkgs.haskell-nix.cabalProject {
@@ -96,7 +97,7 @@
           }];
         };
 
-      defaultCompiler = "ghc927";
+      defaultCompiler = "ghc928";
 
       # Get flake outputs for different GHC versions
       flakesFor = pkgs: k:
