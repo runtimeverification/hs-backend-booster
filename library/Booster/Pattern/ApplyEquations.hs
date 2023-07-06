@@ -22,6 +22,7 @@ import Control.Monad.Extra
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State
 import Data.Foldable (toList)
 import Data.Functor.Foldable
@@ -45,11 +46,11 @@ import Booster.Pattern.Match
 import Booster.Pattern.Simplify
 import Booster.Pattern.Util
 
-newtype EquationM a = EquationM (StateT EquationState (Except EquationFailure) a)
+newtype EquationM a = EquationM (StateT EquationState (ReaderT EquationConfig (Except EquationFailure)) a)
     deriving newtype (Functor, Applicative, Monad)
 
 throw :: EquationFailure -> EquationM a
-throw = EquationM . lift . throwE
+throw = EquationM . lift . lift . throwE
 
 data EquationFailure
     = IndexIsNone Term
@@ -58,10 +59,13 @@ data EquationFailure
     | InternalError Text
     deriving stock (Eq, Show)
 
-data EquationState = EquationState
+data EquationConfig = EquationConfig
     { definition :: KoreDefinition
     , llvmApi :: Maybe LLVM.API
-    , termStack :: [Term]
+    }
+
+data EquationState = EquationState
+    { termStack :: [Term]
     , changed :: Bool
     , trace :: Seq EquationTrace
     }
@@ -130,12 +134,15 @@ isMatchFailure _ = False
 isSuccess EquationTrace{result = Success{}} = True
 isSuccess _ = False
 
-startState :: KoreDefinition -> Maybe LLVM.API -> EquationState
-startState definition llvmApi =
-    EquationState{definition, llvmApi, termStack = [], changed = False, trace = mempty}
+startState :: EquationState
+startState =
+    EquationState{termStack = [], changed = False, trace = mempty}
 
 getState :: EquationM EquationState
 getState = EquationM get
+
+getConfig :: EquationM EquationConfig
+getConfig = EquationM (lift ask)
 
 countSteps :: EquationM Int
 countSteps = length . (.termStack) <$> getState
@@ -168,7 +175,7 @@ runEquationM ::
     EquationM a ->
     Either EquationFailure (a, [EquationTrace])
 runEquationM definition llvmApi (EquationM m) =
-    fmap (fmap $ toList . trace) <$> runExcept $ runStateT m $ startState definition llvmApi
+    fmap (fmap $ toList . trace) <$> runExcept . flip runReaderT EquationConfig{definition, llvmApi} . runStateT m $ startState
 
 iterateEquations ::
     Int ->
@@ -239,11 +246,11 @@ applyTerm TopDown pref = \t@(Term attributes _) ->
     if attributes.isEvaluated
         then pure t
         else do
-            s <- getState
+            config <- getConfig
             -- All fully concrete values go to the LLVM backend (top-down only)
-            if isConcrete t && isJust s.llvmApi
+            if isConcrete t && isJust config.llvmApi
                 then do
-                    let result = simplifyTerm (fromJust s.llvmApi) s.definition t (sortOfTerm t)
+                    let result = simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
                     when (result /= t) setChanged
                     pure result
                 else apply t
@@ -286,7 +293,7 @@ applyAtTop ::
     Term ->
     EquationM Term
 applyAtTop pref term = do
-    def <- (.definition) <$> getState
+    def <- (.definition) <$> getConfig
     case pref of
         PreferFunctions -> do
             -- when applying equations, we want to catch DoesNotPreserveDefinedness/incosistentmatch/etc
@@ -410,7 +417,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     when (allMustBeConcrete rule.attributes.concreteness && not (Set.null (freeVariables term))) $
         throwE (MatchConstraintViolated Concrete "* (term has variables)")
     -- match lhs
-    koreDef <- (.definition) <$> lift getState
+    koreDef <- (.definition) <$> lift getConfig
     case matchTerm koreDef rule.lhs term of
         MatchFailed failReason -> throwE $ FailedMatch failReason
         MatchIndeterminate _pat _subj -> throwE IndeterminateMatch
@@ -446,7 +453,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
         Predicate ->
         MaybeT (ExceptT ApplyEquationResult EquationM) (Maybe Predicate)
     checkConstraint p = do
-        mApi <- (.llvmApi) <$> lift (lift getState)
+        mApi <- (.llvmApi) <$> lift (lift getConfig)
         case simplifyPredicate mApi p of
             Bottom -> fail "side condition was false"
             Top -> pure Nothing
@@ -540,7 +547,7 @@ simplifyConstraint' :: Predicate -> EquationM Predicate
 simplifyConstraint' = \case
     EqualsTerm t TrueBool
         | isConcrete t -> do
-            mbApi <- (.llvmApi) <$> getState
+            mbApi <- (.llvmApi) <$> getConfig
             case mbApi of
                 Just api ->
                     if simplifyBool api t
