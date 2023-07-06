@@ -62,6 +62,7 @@ data EquationFailure
 data EquationConfig = EquationConfig
     { definition :: KoreDefinition
     , llvmApi :: Maybe LLVM.API
+    , doTracing :: Bool
     }
 
 data EquationState = EquationState
@@ -172,10 +173,11 @@ data EquationPreference = PreferFunctions | PreferSimplifications
 runEquationM ::
     KoreDefinition ->
     Maybe LLVM.API ->
+    Bool ->
     EquationM a ->
     Either EquationFailure (a, [EquationTrace])
-runEquationM definition llvmApi (EquationM m) =
-    fmap (fmap $ toList . trace) <$> runExcept . flip runReaderT EquationConfig{definition, llvmApi} . runStateT m $ startState
+runEquationM definition llvmApi doTracing (EquationM m) =
+    fmap (fmap $ toList . trace) <$> runExcept . flip runReaderT EquationConfig{definition, llvmApi, doTracing} . runStateT m $ startState
 
 iterateEquations ::
     Int ->
@@ -205,13 +207,14 @@ iterateEquations maxIterations direction preference startTerm =
 ----------------------------------------
 -- Interface function
 evaluateTerm ::
+    Bool ->
     Direction ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Term ->
     Either EquationFailure (Term, [EquationTrace])
-evaluateTerm direction def llvmApi =
-    runEquationM def llvmApi
+evaluateTerm doTracing direction def llvmApi =
+    runEquationM def llvmApi doTracing
         . iterateEquations 100 direction PreferFunctions
 
 ----------------------------------------
@@ -523,21 +526,23 @@ pattern FalseBool = DomainValue SortBool "false"
     so we can detect simplification loops and avoid monad nesting.
 -}
 simplifyConstraint ::
+    Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Predicate ->
     Predicate
-simplifyConstraint def mbApi p =
-    either (const p) fst $ traceSimplifyConstraint def mbApi p
+simplifyConstraint doTracing def mbApi p =
+    either (const p) fst $ traceSimplifyConstraint doTracing def mbApi p
 
 -- | Constraint simplification that collects a simplification trace
 traceSimplifyConstraint ::
+    Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Predicate ->
     Either EquationFailure (Predicate, [EquationTrace])
-traceSimplifyConstraint def mbApi p =
-    runEquationM def mbApi $ simplifyConstraint' p
+traceSimplifyConstraint doTracing def mbApi p =
+    runEquationM def mbApi doTracing $ simplifyConstraint' p
 
 -- version for internal nested evaluation
 simplifyConstraint' :: Predicate -> EquationM Predicate

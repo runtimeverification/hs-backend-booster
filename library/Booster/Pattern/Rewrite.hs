@@ -51,17 +51,23 @@ import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
 
-newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT (KoreDefinition, Maybe LLVM.API) (Except err) a}
+newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT RewriteConfig (Except err) a}
     deriving newtype (Functor, Applicative, Monad)
 
-runRewriteM :: KoreDefinition -> Maybe LLVM.API -> RewriteM err a -> Either err a
-runRewriteM def mLlvmLibrary = runExcept . flip runReaderT (def, mLlvmLibrary) . unRewriteM
+data RewriteConfig = RewriteConfig
+    { definition :: KoreDefinition
+    , llvmApi :: Maybe LLVM.API
+    , doTracing :: Bool
+    }
+
+runRewriteM :: Bool -> KoreDefinition -> Maybe LLVM.API -> RewriteM err a -> Either err a
+runRewriteM doTracing def mLlvmLibrary = runExcept . flip runReaderT RewriteConfig{definition = def, llvmApi = mLlvmLibrary, doTracing} . unRewriteM
 
 throw :: err -> RewriteM err a
 throw = RewriteM . lift . throwE
 
 getDefinition :: RewriteM err KoreDefinition
-getDefinition = RewriteM $ fst <$> ask
+getDefinition = RewriteM $ definition <$> ask
 
 {- | Performs a rewrite step (using suitable rewrite rules from the
    definition).
@@ -211,8 +217,8 @@ applyRule pat rule = runMaybeT $ do
         Predicate ->
         MaybeT (RewriteM (RewriteFailed k)) (Maybe a)
     checkConstraint onUnclear p = do
-        (def, mApi) <- lift $ RewriteM ask
-        case simplifyConstraint def mApi p of
+        RewriteConfig{definition, llvmApi, doTracing} <- lift $ RewriteM ask
+        case simplifyConstraint doTracing definition llvmApi p of
             Bottom -> fail "Rule condition was False"
             Top -> pure Nothing
             other -> pure $ Just $ onUnclear other
@@ -399,6 +405,8 @@ showPattern title pat = hang 4 $ vsep [title, pretty pat.term]
 performRewrite ::
     forall io.
     MonadLoggerIO io =>
+    -- | whether to accumulate rewrite traces
+    Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
     -- | maximum depth
@@ -409,7 +417,7 @@ performRewrite ::
     [Text] ->
     Pattern ->
     io (Natural, Seq (RewriteTrace Pattern), RewriteResult Pattern)
-performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
+performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
     (rr, (counter, traces)) <- flip runStateT (0, mempty) $ doSteps False pat
     pure (counter, traces, rr)
   where
@@ -425,12 +433,12 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
 
     rewriteTrace t = do
         logRewrite $ pack $ renderDefault $ pretty t
-        modify $ \(counter, traces) -> (counter, traces |> t)
+        when doTracing $ modify $ \(counter, traces) -> (counter, traces |> t)
     incrementCounter = modify $ \(counter, traces) -> (counter + 1, traces)
 
     simplifyP :: Pattern -> StateT (Natural, Seq (RewriteTrace Pattern)) io Pattern
     simplifyP p = do
-        let result = evaluateTerm TopDown def mLlvmLibrary p.term
+        let result = evaluateTerm doTracing TopDown def mLlvmLibrary p.term
         case result of
             Left r@(TooManyIterations n _ t) -> do
                 logWarn $ "Simplification unable to finish in " <> prettyText n <> " steps."
@@ -469,7 +477,7 @@ performRewrite def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
                 (if wasSimplified then pure else mapM simplifyP) $ RewriteFinished Nothing Nothing pat'
             else do
                 let res =
-                        runRewriteM def mLlvmLibrary $
+                        runRewriteM doTracing def mLlvmLibrary $
                             rewriteStep cutLabels terminalLabels pat'
                 case res of
                     Right (RewriteFinished mlbl uniqueId single) -> do

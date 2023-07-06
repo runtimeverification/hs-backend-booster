@@ -83,7 +83,15 @@ respond stateVar =
                     let cutPoints = fromMaybe [] req.cutPointRules
                         terminals = fromMaybe [] req.terminalRules
                         mbDepth = fmap getNat req.maxDepth
-                    execResponse req <$> performRewrite def mLlvmLibrary mbDepth cutPoints terminals pat
+                        doTracing =
+                            any
+                                (fromMaybe False)
+                                [ req.logSuccessfulRewrites
+                                , req.logFailedRewrites
+                                , req.logSuccessfulSimplifications
+                                , req.logFailedSimplifications
+                                ]
+                    execResponse req <$> performRewrite doTracing def mLlvmLibrary mbDepth cutPoints terminals pat
         AddModule req -> do
             -- block other request executions while modifying the server state
             state <- liftIO $ takeMVar stateVar
@@ -126,6 +134,12 @@ respond stateVar =
                             . toList
                 logTraces =
                     mapM_ (Log.logOther (Log.LevelOther "Simplify") . pack . renderDefault . pretty)
+                doTracing =
+                    any
+                        (fromMaybe False)
+                        [ req.logSuccessfulSimplifications
+                        , req.logFailedSimplifications
+                        ]
             case internalised of
                 Left patternErrors -> do
                     Log.logError $ "Error internalising cterm: " <> Text.pack (show patternErrors)
@@ -133,7 +147,7 @@ respond stateVar =
                 -- term and predicate (pattern)
                 Right (TermAndPredicate Pattern{term, constraints}) -> do
                     Log.logInfoNS "booster" "Simplifying term of a pattern"
-                    case ApplyEquations.evaluateTerm ApplyEquations.TopDown def mLlvmLibrary term of
+                    case ApplyEquations.evaluateTerm doTracing ApplyEquations.TopDown def mLlvmLibrary term of
                         Right (newTerm, traces) -> do
                             logTraces $ filter (not . ApplyEquations.isMatchFailure) traces
                             let (t, p) = externalisePattern Pattern{constraints, term = newTerm}
@@ -151,7 +165,7 @@ respond stateVar =
                             -- predicate only
                 Right (APredicate predicate) -> do
                     Log.logInfoNS "booster" "Simplifying a predicate"
-                    case ApplyEquations.traceSimplifyConstraint def mLlvmLibrary predicate of
+                    case ApplyEquations.traceSimplifyConstraint doTracing def mLlvmLibrary predicate of
                         Right (newPred, traces) -> do
                             logTraces $ filter (not . ApplyEquations.isMatchFailure) traces
                             let predicateSort =
