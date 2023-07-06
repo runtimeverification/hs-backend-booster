@@ -165,7 +165,7 @@ respond stateVar =
                             -- predicate only
                 Right (APredicate predicate) -> do
                     Log.logInfoNS "booster" "Simplifying a predicate"
-                    case ApplyEquations.traceSimplifyConstraint doTracing def mLlvmLibrary predicate of
+                    case ApplyEquations.simplifyConstraint doTracing def mLlvmLibrary predicate of
                         Right (newPred, traces) -> do
                             logTraces $ filter (not . ApplyEquations.isMatchFailure) traces
                             let predicateSort =
