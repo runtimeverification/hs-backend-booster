@@ -193,18 +193,18 @@ errorCases =
                     [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con2{}( \dv{SomeSort{}}("thing") ) ), Thing:SortK{}) ) |]
         , testCase "Index is None" $ do
             let t =
-                    [trm| 
-                        kCell{}( 
-                            kseq{}( 
-                                inj{SomeSort{}, SortKItem{}}( 
-                                    \and{SomeSort{}}( 
-                                        con1{}( \dv{SomeSort{}}("thing") ), 
+                    [trm|
+                        kCell{}(
+                            kseq{}(
+                                inj{SomeSort{}, SortKItem{}}(
+                                    \and{SomeSort{}}(
+                                        con1{}( \dv{SomeSort{}}("thing") ),
                                         con2{}( \dv{SomeSort{}}("thing") )
                                     )
-                                ), 
+                                ),
                                 Thing:SortK{}
                             )
-                        ) 
+                        )
                     |]
             t `failsWith` TermIndexIsNone t
         ]
@@ -252,25 +252,25 @@ rulePriority =
 
 rewritesTo :: Term -> (Text, Term) -> IO ()
 t1 `rewritesTo` (lbl, t2) =
-    runRewriteM def Nothing (rewriteStep [] [] $ Pattern t1 [])
+    runRewriteM False def Nothing (rewriteStep [] [] $ Pattern t1 [])
         @?= Right (RewriteFinished (Just lbl) Nothing $ Pattern t2 [])
 
 branchesTo :: Term -> [(Text, Term)] -> IO ()
 t `branchesTo` ts =
-    runRewriteM def Nothing (rewriteStep [] [] $ Pattern t [])
+    runRewriteM False def Nothing (rewriteStep [] [] $ Pattern t [])
         @?= Right
             (RewriteBranch (Pattern t []) $ NE.fromList $ map (\(lbl, t') -> (lbl, Nothing, Pattern t' [])) ts)
 
 failsWith :: Term -> RewriteFailed "Rewrite" -> IO ()
 failsWith t err =
-    runRewriteM def Nothing (rewriteStep [] [] $ Pattern t []) @?= Left err
+    runRewriteM False def Nothing (rewriteStep [] [] $ Pattern t []) @?= Left err
 
 ----------------------------------------
 -- tests for performRewrite (iterated rewrite in IO with logging)
 
 runRewrite :: Term -> IO (Natural, RewriteResult Term)
 runRewrite t = do
-    (counter, _, res) <- runNoLoggingT $ performRewrite def Nothing Nothing [] [] $ Pattern t []
+    (counter, _, res) <- runNoLoggingT $ performRewrite False def Nothing Nothing [] [] $ Pattern t []
     pure (counter, fmap (.term) res)
 
 aborts :: Term -> IO ()
@@ -398,7 +398,7 @@ supportsDepthControl =
   where
     rewritesToDepth :: MaxDepth -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
     rewritesToDepth (MaxDepth depth) (Steps n) t t' f = do
-        (counter, _, res) <- runNoLoggingT $ performRewrite def Nothing (Just depth) [] [] $ Pattern t []
+        (counter, _, res) <- runNoLoggingT $ performRewrite False def Nothing (Just depth) [] [] $ Pattern t []
         (counter, fmap (.term) res) @?= (n, f t')
 
 supportsCutPoints :: TestTree
@@ -445,7 +445,7 @@ supportsCutPoints =
   where
     rewritesToCutPoint :: Text -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
     rewritesToCutPoint lbl (Steps n) t t' f = do
-        (counter, _, res) <- runNoLoggingT $ performRewrite def Nothing Nothing [lbl] [] $ Pattern t []
+        (counter, _, res) <- runNoLoggingT $ performRewrite False def Nothing Nothing [lbl] [] $ Pattern t []
         (counter, fmap (.term) res) @?= (n, f t')
 
 supportsTerminalRules :: TestTree
@@ -470,5 +470,5 @@ supportsTerminalRules =
   where
     rewritesToTerminal :: Text -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
     rewritesToTerminal lbl (Steps n) t t' f = do
-        (counter, _, res) <- runNoLoggingT $ performRewrite def Nothing Nothing [] [lbl] $ Pattern t []
+        (counter, _, res) <- runNoLoggingT $ performRewrite False def Nothing Nothing [] [lbl] $ Pattern t []
         (counter, fmap (.term) res) @?= (n, f t')
