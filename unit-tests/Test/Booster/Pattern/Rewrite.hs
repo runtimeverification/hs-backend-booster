@@ -398,7 +398,8 @@ supportsDepthControl =
   where
     rewritesToDepth :: MaxDepth -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
     rewritesToDepth (MaxDepth depth) (Steps n) t t' f = do
-        (counter, _, res) <- runNoLoggingT $ performRewrite False def Nothing (Just depth) [] [] $ Pattern t []
+        (counter, _, res) <-
+            runNoLoggingT $ performRewrite False def Nothing (Just depth) [] [] $ Pattern t []
         (counter, fmap (.term) res) @?= (n, f t')
 
 supportsCutPoints :: TestTree
@@ -445,7 +446,8 @@ supportsCutPoints =
   where
     rewritesToCutPoint :: Text -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
     rewritesToCutPoint lbl (Steps n) t t' f = do
-        (counter, _, res) <- runNoLoggingT $ performRewrite False def Nothing Nothing [lbl] [] $ Pattern t []
+        (counter, _, res) <-
+            runNoLoggingT $ performRewrite False def Nothing Nothing [lbl] [] $ Pattern t []
         (counter, fmap (.term) res) @?= (n, f t')
 
 supportsTerminalRules :: TestTree
@@ -470,5 +472,6 @@ supportsTerminalRules =
   where
     rewritesToTerminal :: Text -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
     rewritesToTerminal lbl (Steps n) t t' f = do
-        (counter, _, res) <- runNoLoggingT $ performRewrite False def Nothing Nothing [] [lbl] $ Pattern t []
+        (counter, _, res) <-
+            runNoLoggingT $ performRewrite False def Nothing Nothing [] [lbl] $ Pattern t []
         (counter, fmap (.term) res) @?= (n, f t')
