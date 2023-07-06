@@ -170,13 +170,15 @@ data EquationPreference = PreferFunctions | PreferSimplifications
     deriving stock (Eq, Show)
 
 runEquationM ::
+    Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
-    Bool ->
     EquationM a ->
     Either EquationFailure (a, [EquationTrace])
-runEquationM definition llvmApi doTracing (EquationM m) =
-    fmap (fmap $ toList . trace) <$> runExcept . flip runReaderT EquationConfig{definition, llvmApi, doTracing} . runStateT m $ startState
+runEquationM doTracing definition llvmApi (EquationM m) =
+    fmap (fmap $ toList . trace)
+        <$> runExcept . flip runReaderT EquationConfig{definition, llvmApi, doTracing} . runStateT m
+        $ startState
 
 iterateEquations ::
     Int ->
@@ -213,7 +215,7 @@ evaluateTerm ::
     Term ->
     Either EquationFailure (Term, [EquationTrace])
 evaluateTerm doTracing direction def llvmApi =
-    runEquationM def llvmApi doTracing
+    runEquationM doTracing def llvmApi
         . iterateEquations 100 direction PreferFunctions
 
 ----------------------------------------
@@ -531,7 +533,7 @@ simplifyConstraint ::
     Predicate ->
     Either EquationFailure (Predicate, [EquationTrace])
 simplifyConstraint doTracing def mbApi p =
-    runEquationM def mbApi doTracing $ simplifyConstraint' p
+    runEquationM doTracing def mbApi $ simplifyConstraint' p
 
 -- version for internal nested evaluation
 simplifyConstraint' :: Predicate -> EquationM Predicate

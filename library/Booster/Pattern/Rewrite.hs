@@ -61,7 +61,10 @@ data RewriteConfig = RewriteConfig
     }
 
 runRewriteM :: Bool -> KoreDefinition -> Maybe LLVM.API -> RewriteM err a -> Either err a
-runRewriteM doTracing def mLlvmLibrary = runExcept . flip runReaderT RewriteConfig{definition = def, llvmApi = mLlvmLibrary, doTracing} . unRewriteM
+runRewriteM doTracing def mLlvmLibrary =
+    runExcept
+        . flip runReaderT RewriteConfig{definition = def, llvmApi = mLlvmLibrary, doTracing}
+        . unRewriteM
 
 throw :: err -> RewriteM err a
 throw = RewriteM . lift . throwE
