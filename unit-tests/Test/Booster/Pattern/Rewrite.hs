@@ -15,6 +15,7 @@ import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
+import GHC.IO.Unsafe (unsafePerformIO)
 import Numeric.Natural
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -252,18 +253,18 @@ rulePriority =
 
 rewritesTo :: Term -> (Text, Term) -> IO ()
 t1 `rewritesTo` (lbl, t2) =
-    runRewriteM False def Nothing (rewriteStep [] [] $ Pattern t1 [])
+    unsafePerformIO (runRewriteM False def Nothing (rewriteStep [] [] $ Pattern t1 []))
         @?= Right (RewriteFinished (Just lbl) Nothing $ Pattern t2 [])
 
 branchesTo :: Term -> [(Text, Term)] -> IO ()
 t `branchesTo` ts =
-    runRewriteM False def Nothing (rewriteStep [] [] $ Pattern t [])
+    unsafePerformIO (runRewriteM False def Nothing (rewriteStep [] [] $ Pattern t []))
         @?= Right
             (RewriteBranch (Pattern t []) $ NE.fromList $ map (\(lbl, t') -> (lbl, Nothing, Pattern t' [])) ts)
 
 failsWith :: Term -> RewriteFailed "Rewrite" -> IO ()
 failsWith t err =
-    runRewriteM False def Nothing (rewriteStep [] [] $ Pattern t []) @?= Left err
+    unsafePerformIO (runRewriteM False def Nothing (rewriteStep [] [] $ Pattern t [])) @?= Left err
 
 ----------------------------------------
 -- tests for performRewrite (iterated rewrite in IO with logging)

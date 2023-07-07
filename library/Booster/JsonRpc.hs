@@ -29,7 +29,6 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Records
 import Numeric.Natural
-import Prettyprinter
 
 import Booster.Definition.Attributes.Base (getUniqueId, uniqueId)
 import Booster.Definition.Base (KoreDefinition (..))
@@ -44,7 +43,6 @@ import Booster.Pattern.Rewrite (
     performRewrite,
  )
 import Booster.Pattern.Util (sortOfTerm)
-import Booster.Prettyprinter (renderDefault)
 import Booster.Syntax.Json (KoreJson (..), addHeader, sortOfJson)
 import Booster.Syntax.Json.Externalise
 import Booster.Syntax.Json.Internalise (internalisePattern, internaliseTermOrPredicate)
@@ -132,8 +130,6 @@ respond stateVar =
                         Just
                             . mapMaybe (mkLogEquationTrace (req.logSuccessfulSimplifications, req.logFailedSimplifications))
                             . toList
-                logTraces =
-                    mapM_ (Log.logOther (Log.LevelOther "Simplify") . pack . renderDefault . pretty)
                 doTracing =
                     any
                         (fromMaybe False)
@@ -147,38 +143,38 @@ respond stateVar =
                 -- term and predicate (pattern)
                 Right (TermAndPredicate Pattern{term, constraints}) -> do
                     Log.logInfoNS "booster" "Simplifying term of a pattern"
-                    case ApplyEquations.evaluateTerm doTracing ApplyEquations.TopDown def mLlvmLibrary term of
-                        Right (newTerm, traces) -> do
-                            logTraces $ filter (not . ApplyEquations.isMatchFailure) traces
-                            let (t, p) = externalisePattern Pattern{constraints, term = newTerm}
-                                tSort = externaliseSort (sortOfTerm newTerm)
-                                result = maybe t (KoreJson.KJAnd tSort t) p
-                            pure . Right . Simplify $
-                                SimplifyResult
-                                    { state = addHeader result
-                                    , logs = mkTraces traces
-                                    }
-                        Left (ApplyEquations.EquationLoop _traces terms) ->
-                            pure . Left . backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
-                        Left other ->
-                            pure . Left . backendError RpcError.Aborted $ show other -- FIXME
-                            -- predicate only
+                    liftIO $
+                        ApplyEquations.evaluateTerm doTracing ApplyEquations.TopDown def mLlvmLibrary term >>= \case
+                            Right (newTerm, traces) -> do
+                                let (t, p) = externalisePattern Pattern{constraints, term = newTerm}
+                                    tSort = externaliseSort (sortOfTerm newTerm)
+                                    result = maybe t (KoreJson.KJAnd tSort t) p
+                                pure . Right . Simplify $
+                                    SimplifyResult
+                                        { state = addHeader result
+                                        , logs = mkTraces traces
+                                        }
+                            Left (ApplyEquations.EquationLoop _traces terms) ->
+                                pure . Left . backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
+                            Left other ->
+                                pure . Left . backendError RpcError.Aborted $ show other -- FIXME
+                                -- predicate only
                 Right (APredicate predicate) -> do
                     Log.logInfoNS "booster" "Simplifying a predicate"
-                    case ApplyEquations.simplifyConstraint doTracing def mLlvmLibrary predicate of
-                        Right (newPred, traces) -> do
-                            logTraces $ filter (not . ApplyEquations.isMatchFailure) traces
-                            let predicateSort =
-                                    fromMaybe (error "not a predicate") $
-                                        sortOfJson req.state.term
-                                result = externalisePredicate predicateSort newPred
-                            pure . Right . Simplify $
-                                SimplifyResult
-                                    { state = addHeader result
-                                    , logs = mkTraces traces
-                                    }
-                        Left something ->
-                            pure . Left . backendError RpcError.Aborted $ show something -- FIXME
+                    liftIO $
+                        ApplyEquations.simplifyConstraint doTracing def mLlvmLibrary predicate >>= \case
+                            Right (newPred, traces) -> do
+                                let predicateSort =
+                                        fromMaybe (error "not a predicate") $
+                                            sortOfJson req.state.term
+                                    result = externalisePredicate predicateSort newPred
+                                pure . Right . Simplify $
+                                    SimplifyResult
+                                        { state = addHeader result
+                                        , logs = mkTraces traces
+                                        }
+                            Left something ->
+                                pure . Left . backendError RpcError.Aborted $ show something -- FIXME
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left cancelUnsupportedInBatchMode

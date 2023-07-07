@@ -18,6 +18,15 @@ module Booster.Pattern.ApplyEquations (
 
 import Control.Monad
 import Control.Monad.Extra
+import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Logger.CallStack (
+    LogLevel (..),
+    LoggingT,
+    MonadLogger,
+    MonadLoggerIO,
+    logOther,
+    runStdoutLoggingT,
+ )
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
@@ -31,7 +40,7 @@ import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust)
 import Data.Sequence (Seq (..))
 import Data.Set qualified as Set
-import Data.Text (Text)
+import Data.Text (Text, pack)
 import Data.Text qualified as Text
 import Prettyprinter
 
@@ -44,9 +53,11 @@ import Booster.Pattern.Index
 import Booster.Pattern.Match
 import Booster.Pattern.Simplify
 import Booster.Pattern.Util
+import Booster.Prettyprinter (renderDefault)
 
-newtype EquationM a = EquationM (StateT EquationState (ReaderT EquationConfig (Except EquationFailure)) a)
-    deriving newtype (Functor, Applicative, Monad)
+newtype EquationM a
+    = EquationM (StateT EquationState (ReaderT EquationConfig (ExceptT EquationFailure (LoggingT IO))) a)
+    deriving newtype (Functor, Applicative, Monad, MonadLogger, MonadIO, MonadLoggerIO)
 
 throw :: EquationFailure -> EquationM a
 throw = EquationM . lift . lift . throwE
@@ -174,11 +185,15 @@ runEquationM ::
     KoreDefinition ->
     Maybe LLVM.API ->
     EquationM a ->
-    Either EquationFailure (a, [EquationTrace])
-runEquationM doTracing definition llvmApi (EquationM m) =
-    fmap (fmap $ toList . trace)
-        <$> runExcept . flip runReaderT EquationConfig{definition, llvmApi, doTracing} . runStateT m
-        $ startState
+    IO (Either EquationFailure (a, [EquationTrace]))
+runEquationM doTracing definition llvmApi (EquationM m) = do
+    endState <-
+        runStdoutLoggingT
+            . runExceptT
+            . flip runReaderT EquationConfig{definition, llvmApi, doTracing}
+            . runStateT m
+            $ startState
+    pure (fmap (toList . trace) <$> endState)
 
 iterateEquations ::
     Int ->
@@ -213,7 +228,7 @@ evaluateTerm ::
     KoreDefinition ->
     Maybe LLVM.API ->
     Term ->
-    Either EquationFailure (Term, [EquationTrace])
+    IO (Either EquationFailure (Term, [EquationTrace]))
 evaluateTerm doTracing direction def llvmApi =
     runEquationM doTracing def llvmApi
         . iterateEquations 100 direction PreferFunctions
@@ -400,9 +415,13 @@ traceRuleApplication ::
     Maybe UniqueId ->
     ApplyEquationResult ->
     EquationM ()
-traceRuleApplication t loc lbl uid res =
-    EquationM . modify $
-        \s -> s{trace = s.trace :|> EquationTrace t loc lbl uid res}
+traceRuleApplication t loc lbl uid res = do
+    let newTraceItem = EquationTrace t loc lbl uid res
+    logOther (LevelOther "Simplify") (pack . renderDefault . pretty $ newTraceItem)
+    config <- getConfig
+    when (config.doTracing) $
+        EquationM . modify $
+            \s -> s{trace = s.trace :|> newTraceItem}
 
 applyEquation ::
     forall tag.
@@ -531,7 +550,7 @@ simplifyConstraint ::
     KoreDefinition ->
     Maybe LLVM.API ->
     Predicate ->
-    Either EquationFailure (Predicate, [EquationTrace])
+    IO (Either EquationFailure (Predicate, [EquationTrace]))
 simplifyConstraint doTracing def mbApi p =
     runEquationM doTracing def mbApi $ simplifyConstraint' p
 

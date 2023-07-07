@@ -15,6 +15,7 @@ module Booster.Pattern.Rewrite (
 
 import Control.Applicative ((<|>))
 import Control.Monad
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger.CallStack
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
@@ -51,8 +52,8 @@ import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
 
-newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT RewriteConfig (Except err) a}
-    deriving newtype (Functor, Applicative, Monad)
+newtype RewriteM err a = RewriteM {unRewriteM :: ReaderT RewriteConfig (ExceptT err IO) a}
+    deriving newtype (Functor, Applicative, Monad, MonadIO)
 
 data RewriteConfig = RewriteConfig
     { definition :: KoreDefinition
@@ -60,9 +61,9 @@ data RewriteConfig = RewriteConfig
     , doTracing :: Bool
     }
 
-runRewriteM :: Bool -> KoreDefinition -> Maybe LLVM.API -> RewriteM err a -> Either err a
+runRewriteM :: Bool -> KoreDefinition -> Maybe LLVM.API -> RewriteM err a -> IO (Either err a)
 runRewriteM doTracing def mLlvmLibrary =
-    runExcept
+    runExceptT
         . flip runReaderT RewriteConfig{definition = def, llvmApi = mLlvmLibrary, doTracing}
         . unRewriteM
 
@@ -221,11 +222,12 @@ applyRule pat rule = runMaybeT $ do
         MaybeT (RewriteM (RewriteFailed k)) (Maybe a)
     checkConstraint onUnclear p = do
         RewriteConfig{definition, llvmApi, doTracing} <- lift $ RewriteM ask
-        case simplifyConstraint doTracing definition llvmApi p of
-            Right (Bottom, _) -> fail "Rule condition was False"
-            Right (Top, _) -> pure Nothing
-            Right (other, _) -> pure $ Just $ onUnclear other
-            Left _ -> pure $ Just $ onUnclear p
+        liftIO $
+            simplifyConstraint doTracing definition llvmApi p >>= \case
+                Right (Bottom, _) -> fail "Rule condition was False"
+                Right (Top, _) -> pure Nothing
+                Right (other, _) -> pure $ Just $ onUnclear other
+                Left _ -> pure $ Just $ onUnclear p
 
 {- | Reason why a rewrite did not produce a result. Contains additional
    information for logging what happened during the rewrite.
@@ -443,7 +445,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
     simplifyP :: Pattern -> StateT (Natural, Seq (RewriteTrace Pattern)) io Pattern
     simplifyP p = do
         let result = evaluateTerm doTracing TopDown def mLlvmLibrary p.term
-        case result of
+        liftIO result >>= \case
             Left r@(TooManyIterations n _ t) -> do
                 logWarn $ "Simplification unable to finish in " <> prettyText n <> " steps."
                 -- could output term before and after at debug or custom log level
@@ -483,7 +485,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                 let res =
                         runRewriteM doTracing def mLlvmLibrary $
                             rewriteStep cutLabels terminalLabels pat'
-                case res of
+                liftIO res >>= \case
                     Right (RewriteFinished mlbl uniqueId single) -> do
                         case mlbl of
                             Just lbl -> rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
