@@ -222,12 +222,12 @@ applyRule pat rule = runMaybeT $ do
         MaybeT (RewriteM (RewriteFailed k)) (Maybe a)
     checkConstraint onUnclear p = do
         RewriteConfig{definition, llvmApi, doTracing} <- lift $ RewriteM ask
-        liftIO $
-            simplifyConstraint doTracing definition llvmApi p >>= \case
-                Right (Bottom, _) -> fail "Rule condition was False"
-                Right (Top, _) -> pure Nothing
-                Right (other, _) -> pure $ Just $ onUnclear other
-                Left _ -> pure $ Just $ onUnclear p
+        simplified <- liftIO $ simplifyConstraint doTracing definition llvmApi p
+        case simplified of
+            Right (Bottom, _) -> fail "Rule condition was False"
+            Right (Top, _) -> pure Nothing
+            Right (other, _) -> pure $ Just $ onUnclear other
+            Left _ -> pure $ Just $ onUnclear p
 
 {- | Reason why a rewrite did not produce a result. Contains additional
    information for logging what happened during the rewrite.
