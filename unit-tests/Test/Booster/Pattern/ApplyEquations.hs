@@ -124,8 +124,10 @@ test_simplifyPattern =
         , -- con1(con2(f2(a))) => con2(f2(a))
           testCase "Simplification of constructors" $ do
             let subj = app con1 [app con2 [app f2 [a]]]
-            simpl Pattern{term = subj, constraints = []} @?= Right Pattern{term = app con2 [app f2 [a]], constraints = []}
-            simpl Pattern{term = subj, constraints = []} @?= Right Pattern{term = app con2 [app f2 [a]], constraints = []}
+            simpl Pattern{term = subj, constraints = []}
+                @?= Right Pattern{term = app con2 [app f2 [a]], constraints = []}
+            simpl Pattern{term = subj, constraints = []}
+                @?= Right Pattern{term = app con2 [app f2 [a]], constraints = []}
         , -- con3(f2(a), f2(a)) => inj{sub,some}(con4(f2(a), f2(a)))
           testCase "Simplification with argument match" $ do
             let subj = Pattern{term = [trm| con3{}(f2{}(A:SomeSort{}), f2{}(A:SomeSort{})) |], constraints = []}
