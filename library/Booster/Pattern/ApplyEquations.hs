@@ -6,6 +6,7 @@ License     : BSD-3-Clause
 -}
 module Booster.Pattern.ApplyEquations (
     evaluateTerm,
+    evaluatePattern,
     Direction (..),
     EquationPreference (..),
     EquationFailure (..),
@@ -30,6 +31,7 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust)
 import Data.Sequence (Seq (..))
+import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -63,6 +65,7 @@ data EquationState = EquationState
     , llvmApi :: Maybe LLVM.API
     , termStack :: [Term]
     , changed :: Bool
+    , predicates :: Set Predicate
     , trace :: Seq EquationTrace
     }
 
@@ -130,9 +133,16 @@ isMatchFailure _ = False
 isSuccess EquationTrace{result = Success{}} = True
 isSuccess _ = False
 
-startState :: KoreDefinition -> Maybe LLVM.API -> EquationState
-startState definition llvmApi =
-    EquationState{definition, llvmApi, termStack = [], changed = False, trace = mempty}
+startState :: KoreDefinition -> Maybe LLVM.API -> [Predicate] -> EquationState
+startState definition llvmApi ps =
+    EquationState
+        { definition
+        , llvmApi
+        , termStack = []
+        , changed = False
+        , predicates = Set.fromList ps
+        , trace = mempty
+        }
 
 getState :: EquationM EquationState
 getState = EquationM get
@@ -142,6 +152,9 @@ countSteps = length . (.termStack) <$> getState
 
 pushTerm :: Term -> EquationM ()
 pushTerm t = EquationM . modify $ \s -> s{termStack = t : s.termStack}
+
+pushConstraints :: [Predicate] -> EquationM ()
+pushConstraints ps = EquationM . modify $ \s -> s{predicates = s.predicates <> Set.fromList ps}
 
 setChanged, resetChanged :: EquationM ()
 setChanged = EquationM . modify $ \s -> s{changed = True}
@@ -168,7 +181,7 @@ runEquationM ::
     EquationM a ->
     Either EquationFailure (a, [EquationTrace])
 runEquationM definition llvmApi (EquationM m) =
-    fmap (fmap $ toList . trace) <$> runExcept $ runStateT m $ startState definition llvmApi
+    fmap (fmap $ toList . trace) <$> runExcept $ runStateT m $ startState definition llvmApi []
 
 iterateEquations ::
     Int ->
@@ -206,6 +219,19 @@ evaluateTerm ::
 evaluateTerm direction def llvmApi =
     runEquationM def llvmApi
         . iterateEquations 100 direction PreferFunctions
+
+evaluatePattern ::
+    Direction ->
+    KoreDefinition ->
+    Maybe LLVM.API ->
+    Pattern ->
+    Either EquationFailure (Pattern, [EquationTrace])
+evaluatePattern direction def llvmApi pat =
+    runEquationM def llvmApi $ do
+        pushConstraints pat.constraints
+        term <- iterateEquations 100 direction PreferFunctions pat.term
+        constraints <- Set.toList . predicates <$> getState
+        pure Pattern{term, constraints}
 
 ----------------------------------------
 
