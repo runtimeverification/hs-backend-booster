@@ -3,10 +3,11 @@
 
   inputs = {
     k-framework.url = "github:runtimeverification/k/v5.6.131";
-    k-framework.inputs.booster-backend.follows = "";
-    nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
-    haskell-nix.url = "github:input-output-hk/haskell.nix";
     haskell-backend.url = "github:runtimeverification/haskell-backend";
+    k-framework.inputs.booster-backend.follows = "";
+    haskell-nix.follows = "haskell-backend/haskell-nix";
+    nixpkgs.follows = "haskell-backend/haskell-nix/nixpkgs-unstable";
+
     flake-compat = {
       url = "github:edolstra/flake-compat";
       flake = false;
@@ -27,7 +28,7 @@
         };
       allNixpkgsFor = perSystem nixpkgsForSystem;
       nixpkgsFor = system: allNixpkgsFor.${system};
-      index-state = "2023-04-24T00:00:00Z";
+      index-state = "2023-06-26T23:55:21Z";
 
       boosterBackendFor = { compiler, pkgs, profiling ? false, k }:
         pkgs.haskell-nix.cabalProject {
@@ -56,8 +57,8 @@
           shell = {
             withHoogle = true;
             tools = {
-              cabal = { inherit index-state; };
-              haskell-language-server = { inherit index-state; };
+              cabal = "latest";
+              haskell-language-server = "latest";
               fourmolu = {
                 inherit index-state;
                 version = "0.12.0.0";
@@ -96,7 +97,7 @@
           }];
         };
 
-      defaultCompiler = "ghc927";
+      defaultCompiler = "ghc928";
 
       # Get flake outputs for different GHC versions
       flakesFor = pkgs: k:
@@ -246,13 +247,4 @@
         '');
 
     };
-
-  nixConfig = {
-    extra-substituters =
-      [ "https://cache.iog.io" "https://runtimeverification.cachix.org" ];
-    extra-trusted-public-keys = [
-      "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
-      "runtimeverification.cachix.org-1:wSde8xKWzRNC2buFu4vRRwI+FiZtkI57wS1EDIhMRc4="
-    ];
-  };
 }
