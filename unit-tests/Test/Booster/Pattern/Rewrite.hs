@@ -253,18 +253,19 @@ rulePriority =
 
 rewritesTo :: Term -> (Text, Term) -> IO ()
 t1 `rewritesTo` (lbl, t2) =
-    unsafePerformIO (runRewriteM False def Nothing (rewriteStep [] [] $ Pattern t1 []))
+    unsafePerformIO (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern t1 []))
         @?= Right (RewriteFinished (Just lbl) Nothing $ Pattern t2 [])
 
 branchesTo :: Term -> [(Text, Term)] -> IO ()
 t `branchesTo` ts =
-    unsafePerformIO (runRewriteM False def Nothing (rewriteStep [] [] $ Pattern t []))
+    unsafePerformIO (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern t []))
         @?= Right
             (RewriteBranch (Pattern t []) $ NE.fromList $ map (\(lbl, t') -> (lbl, Nothing, Pattern t' [])) ts)
 
 failsWith :: Term -> RewriteFailed "Rewrite" -> IO ()
 failsWith t err =
-    unsafePerformIO (runRewriteM False def Nothing (rewriteStep [] [] $ Pattern t [])) @?= Left err
+    unsafePerformIO (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern t []))
+        @?= Left err
 
 ----------------------------------------
 -- tests for performRewrite (iterated rewrite in IO with logging)

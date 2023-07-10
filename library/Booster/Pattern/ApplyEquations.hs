@@ -21,11 +21,9 @@ import Control.Monad.Extra
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger.CallStack (
     LogLevel (..),
-    LoggingT,
     MonadLogger,
     MonadLoggerIO,
     logOther,
-    runStdoutLoggingT,
  )
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
@@ -55,12 +53,12 @@ import Booster.Pattern.Simplify
 import Booster.Pattern.Util
 import Booster.Prettyprinter (renderDefault)
 
-newtype EquationM a
-    = EquationM (StateT EquationState (ReaderT EquationConfig (ExceptT EquationFailure (LoggingT IO))) a)
-    deriving newtype (Functor, Applicative, Monad, MonadLogger, MonadIO, MonadLoggerIO)
+newtype EquationT io a
+    = EquationT (StateT EquationState (ReaderT EquationConfig (ExceptT EquationFailure io)) a)
+    deriving newtype (Functor, Applicative, Monad, MonadIO, MonadLogger, MonadLoggerIO)
 
-throw :: EquationFailure -> EquationM a
-throw = EquationM . lift . lift . throwE
+throw :: MonadLoggerIO io => EquationFailure -> EquationT io a
+throw = EquationT . lift . lift . throwE
 
 data EquationFailure
     = IndexIsNone Term
@@ -149,26 +147,26 @@ startState :: EquationState
 startState =
     EquationState{termStack = [], changed = False, trace = mempty}
 
-getState :: EquationM EquationState
-getState = EquationM get
+getState :: MonadLoggerIO io => EquationT io EquationState
+getState = EquationT get
 
-getConfig :: EquationM EquationConfig
-getConfig = EquationM (lift ask)
+getConfig :: MonadLoggerIO io => EquationT io EquationConfig
+getConfig = EquationT (lift ask)
 
-countSteps :: EquationM Int
+countSteps :: MonadLoggerIO io => EquationT io Int
 countSteps = length . (.termStack) <$> getState
 
-pushTerm :: Term -> EquationM ()
-pushTerm t = EquationM . modify $ \s -> s{termStack = t : s.termStack}
+pushTerm :: MonadLoggerIO io => Term -> EquationT io ()
+pushTerm t = EquationT . modify $ \s -> s{termStack = t : s.termStack}
 
-setChanged, resetChanged :: EquationM ()
-setChanged = EquationM . modify $ \s -> s{changed = True}
-resetChanged = EquationM . modify $ \s -> s{changed = False}
+setChanged, resetChanged :: MonadLoggerIO io => EquationT io ()
+setChanged = EquationT . modify $ \s -> s{changed = True}
+resetChanged = EquationT . modify $ \s -> s{changed = False}
 
-getChanged :: EquationM Bool
-getChanged = EquationM $ gets (.changed)
+getChanged :: MonadLoggerIO io => EquationT io Bool
+getChanged = EquationT $ gets (.changed)
 
-checkForLoop :: Term -> EquationM ()
+checkForLoop :: MonadLoggerIO io => Term -> EquationT io ()
 checkForLoop t = do
     EquationState{termStack, trace} <- getState
     whenJust (elemIndex t termStack) $ \i -> do
@@ -180,31 +178,32 @@ data Direction = TopDown | BottomUp
 data EquationPreference = PreferFunctions | PreferSimplifications
     deriving stock (Eq, Show)
 
-runEquationM ::
+runEquationT ::
+    MonadLoggerIO io =>
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
-    EquationM a ->
-    IO (Either EquationFailure (a, [EquationTrace]))
-runEquationM doTracing definition llvmApi (EquationM m) = do
+    EquationT io a ->
+    io (Either EquationFailure (a, [EquationTrace]))
+runEquationT doTracing definition llvmApi (EquationT m) = do
     endState <-
-        runStdoutLoggingT
-            . runExceptT
+        runExceptT
             . flip runReaderT EquationConfig{definition, llvmApi, doTracing}
             . runStateT m
             $ startState
     pure (fmap (toList . trace) <$> endState)
 
 iterateEquations ::
+    MonadLoggerIO io =>
     Int ->
     Direction ->
     EquationPreference ->
     Term ->
-    EquationM Term
+    EquationT io Term
 iterateEquations maxIterations direction preference startTerm =
     go startTerm
   where
-    go :: Term -> EquationM Term
+    go :: MonadLoggerIO io => Term -> EquationT io Term
     go currentTerm
         | (getAttributes currentTerm).isEvaluated = pure currentTerm
         | otherwise = do
@@ -223,14 +222,15 @@ iterateEquations maxIterations direction preference startTerm =
 ----------------------------------------
 -- Interface function
 evaluateTerm ::
+    MonadLoggerIO io =>
     Bool ->
     Direction ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Term ->
-    IO (Either EquationFailure (Term, [EquationTrace]))
+    io (Either EquationFailure (Term, [EquationTrace]))
 evaluateTerm doTracing direction def llvmApi =
-    runEquationM doTracing def llvmApi
+    runEquationT doTracing def llvmApi
         . iterateEquations 100 direction PreferFunctions
 
 ----------------------------------------
@@ -242,10 +242,11 @@ evaluateTerm doTracing direction def llvmApi =
   one equation will be applied per level (if any).
 -}
 applyTerm ::
+    MonadLoggerIO io =>
     Direction ->
     EquationPreference ->
     Term ->
-    EquationM Term
+    EquationT io Term
 applyTerm BottomUp pref =
     cataA $ \case
         DomainValueF s val ->
@@ -308,9 +309,10 @@ applyTerm TopDown pref = \t@(Term attributes _) ->
    top-level term, in priority order and per group.
 -}
 applyAtTop ::
+    MonadLoggerIO io =>
     EquationPreference ->
     Term ->
-    EquationM Term
+    EquationT io Term
 applyAtTop pref term = do
     def <- (.definition) <$> getConfig
     case pref of
@@ -337,17 +339,17 @@ data ApplyEquationResult
     | MatchConstraintViolated Constrained VarName
     deriving stock (Eq, Show)
 
-type ResultHandler =
+type ResultHandler io =
     -- | action on successful equation application
-    (Term -> EquationM Term) ->
+    (Term -> EquationT io Term) ->
     -- | action on failed match
-    EquationM Term ->
+    EquationT io Term ->
     -- | action on aborted equation application
-    EquationM Term ->
+    EquationT io Term ->
     ApplyEquationResult ->
-    EquationM Term
+    EquationT io Term
 
-handleFunctionEquation :: ResultHandler
+handleFunctionEquation :: ResultHandler io
 handleFunctionEquation success continue abort = \case
     Success rewritten -> success rewritten
     FailedMatch _ -> continue
@@ -357,7 +359,7 @@ handleFunctionEquation success continue abort = \case
     RuleNotPreservingDefinedness -> abort
     MatchConstraintViolated{} -> continue
 
-handleSimplificationEquation :: ResultHandler
+handleSimplificationEquation :: ResultHandler io
 handleSimplificationEquation success continue _abort = \case
     Success rewritten -> success rewritten
     FailedMatch _ -> continue
@@ -368,11 +370,12 @@ handleSimplificationEquation success continue _abort = \case
     MatchConstraintViolated{} -> continue
 
 applyEquations ::
-    forall tag.
+    forall io tag.
+    MonadLoggerIO io =>
     Theory (RewriteRule tag) ->
-    ResultHandler ->
+    ResultHandler io ->
     Term ->
-    EquationM Term
+    EquationT io Term
 applyEquations theory handler term = do
     let index = termTopIndex term
     when (index == None) $
@@ -400,7 +403,7 @@ applyEquations theory handler term = do
     -- process one equation at a time, until something has happened
     processEquations ::
         [RewriteRule tag] ->
-        EquationM Term
+        EquationT io Term
     processEquations [] =
         pure term -- nothing to do, term stays the same
     processEquations (eq : rest) = do
@@ -409,25 +412,27 @@ applyEquations theory handler term = do
         handler (\t -> setChanged >> pure t) (processEquations rest) (pure term) res
 
 traceRuleApplication ::
+    MonadLoggerIO io =>
     Term ->
     Maybe Location ->
     Maybe Label ->
     Maybe UniqueId ->
     ApplyEquationResult ->
-    EquationM ()
+    EquationT io ()
 traceRuleApplication t loc lbl uid res = do
     let newTraceItem = EquationTrace t loc lbl uid res
     logOther (LevelOther "Simplify") (pack . renderDefault . pretty $ newTraceItem)
     config <- getConfig
     when (config.doTracing) $
-        EquationM . modify $
+        EquationT . modify $
             \s -> s{trace = s.trace :|> newTraceItem}
 
 applyEquation ::
-    forall tag.
+    forall io tag.
+    MonadLoggerIO io =>
     Term ->
     RewriteRule tag ->
-    EquationM ApplyEquationResult
+    EquationT io ApplyEquationResult
 applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     -- ensured by internalisation: no existentials in equations
     unless (null rule.existentials) $
@@ -474,7 +479,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     -- is Bottom.
     checkConstraint ::
         Predicate ->
-        MaybeT (ExceptT ApplyEquationResult EquationM) (Maybe Predicate)
+        MaybeT (ExceptT ApplyEquationResult (EquationT io)) (Maybe Predicate)
     checkConstraint p = do
         mApi <- (.llvmApi) <$> lift (lift getConfig)
         case simplifyPredicate mApi p of
@@ -488,7 +493,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     checkConcreteness ::
         Concreteness ->
         Map Variable Term ->
-        ExceptT ApplyEquationResult EquationM ()
+        ExceptT ApplyEquationResult (EquationT io) ()
     checkConcreteness Unconstrained _ = pure ()
     checkConcreteness (AllConstrained constrained) subst =
         mapM_ (\(var, t) -> mkCheck (toPair var) constrained t) $ Map.assocs subst
@@ -504,7 +509,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
         (VarName, SortName) ->
         Constrained ->
         Term ->
-        ExceptT ApplyEquationResult EquationM ()
+        ExceptT ApplyEquationResult (EquationT io) ()
     mkCheck (varName, _) constrained (Term attributes _)
         | not test = throwE $ MatchConstraintViolated constrained varName
         | otherwise = pure ()
@@ -516,8 +521,8 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     verifyVar ::
         Map Variable Term ->
         (VarName, SortName) ->
-        (Term -> ExceptT ApplyEquationResult EquationM ()) ->
-        ExceptT ApplyEquationResult EquationM ()
+        (Term -> ExceptT ApplyEquationResult (EquationT io) ()) ->
+        ExceptT ApplyEquationResult (EquationT io) ()
     verifyVar subst (variableName, sortName) check =
         maybe
             ( lift . throw . InternalError . Text.pack $
@@ -542,20 +547,21 @@ pattern FalseBool = DomainValue SortBool "false"
     ensured conditions).
 
     If and as soon as this function is used inside equation
-    application, it needs to run within the same 'EquationM' context
+    application, it needs to run within the same 'EquationT' context
     so we can detect simplification loops and avoid monad nesting.
 -}
 simplifyConstraint ::
+    MonadLoggerIO io =>
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Predicate ->
-    IO (Either EquationFailure (Predicate, [EquationTrace]))
+    io (Either EquationFailure (Predicate, [EquationTrace]))
 simplifyConstraint doTracing def mbApi p =
-    runEquationM doTracing def mbApi $ simplifyConstraint' p
+    runEquationT doTracing def mbApi $ simplifyConstraint' p
 
 -- version for internal nested evaluation
-simplifyConstraint' :: Predicate -> EquationM Predicate
+simplifyConstraint' :: MonadLoggerIO io => Predicate -> EquationT io Predicate
 -- We are assuming all predicates are of the form 'P ==Bool true' and
 -- evaluating them using simplifyBool if they are concrete.
 -- Non-concrete \equals predicates are simplified using evaluateTerm.
@@ -584,9 +590,9 @@ simplifyConstraint' = \case
             FalseBool -> Bottom
             other -> EqualsTerm other TrueBool
 
-    evalBool :: Term -> EquationM Term
+    evalBool :: MonadLoggerIO io => Term -> EquationT io Term
     evalBool t = do
         prior <- getState -- save prior state so we can revert
         result <- iterateEquations 100 TopDown PreferFunctions t
-        EquationM $ put prior
+        EquationT $ put prior
         pure result

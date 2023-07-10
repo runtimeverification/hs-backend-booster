@@ -143,38 +143,36 @@ respond stateVar =
                 -- term and predicate (pattern)
                 Right (TermAndPredicate Pattern{term, constraints}) -> do
                     Log.logInfoNS "booster" "Simplifying term of a pattern"
-                    liftIO $
-                        ApplyEquations.evaluateTerm doTracing ApplyEquations.TopDown def mLlvmLibrary term >>= \case
-                            Right (newTerm, traces) -> do
-                                let (t, p) = externalisePattern Pattern{constraints, term = newTerm}
-                                    tSort = externaliseSort (sortOfTerm newTerm)
-                                    result = maybe t (KoreJson.KJAnd tSort t) p
-                                pure . Right . Simplify $
-                                    SimplifyResult
-                                        { state = addHeader result
-                                        , logs = mkTraces traces
-                                        }
-                            Left (ApplyEquations.EquationLoop _traces terms) ->
-                                pure . Left . backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
-                            Left other ->
-                                pure . Left . backendError RpcError.Aborted $ show other -- FIXME
-                                -- predicate only
+                    ApplyEquations.evaluateTerm doTracing ApplyEquations.TopDown def mLlvmLibrary term >>= \case
+                        Right (newTerm, traces) -> do
+                            let (t, p) = externalisePattern Pattern{constraints, term = newTerm}
+                                tSort = externaliseSort (sortOfTerm newTerm)
+                                result = maybe t (KoreJson.KJAnd tSort t) p
+                            pure . Right . Simplify $
+                                SimplifyResult
+                                    { state = addHeader result
+                                    , logs = mkTraces traces
+                                    }
+                        Left (ApplyEquations.EquationLoop _traces terms) ->
+                            pure . Left . backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
+                        Left other ->
+                            pure . Left . backendError RpcError.Aborted $ show other -- FIXME
+                            -- predicate only
                 Right (APredicate predicate) -> do
                     Log.logInfoNS "booster" "Simplifying a predicate"
-                    liftIO $
-                        ApplyEquations.simplifyConstraint doTracing def mLlvmLibrary predicate >>= \case
-                            Right (newPred, traces) -> do
-                                let predicateSort =
-                                        fromMaybe (error "not a predicate") $
-                                            sortOfJson req.state.term
-                                    result = externalisePredicate predicateSort newPred
-                                pure . Right . Simplify $
-                                    SimplifyResult
-                                        { state = addHeader result
-                                        , logs = mkTraces traces
-                                        }
-                            Left something ->
-                                pure . Left . backendError RpcError.Aborted $ show something -- FIXME
+                    ApplyEquations.simplifyConstraint doTracing def mLlvmLibrary predicate >>= \case
+                        Right (newPred, traces) -> do
+                            let predicateSort =
+                                    fromMaybe (error "not a predicate") $
+                                        sortOfJson req.state.term
+                                result = externalisePredicate predicateSort newPred
+                            pure . Right . Simplify $
+                                SimplifyResult
+                                    { state = addHeader result
+                                    , logs = mkTraces traces
+                                    }
+                        Left something ->
+                            pure . Left . backendError RpcError.Aborted $ show something -- FIXME
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left cancelUnsupportedInBatchMode
