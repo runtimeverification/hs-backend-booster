@@ -15,6 +15,7 @@ module Booster.Pattern.Rewrite (
 
 import Control.Applicative ((<|>))
 import Control.Monad
+import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger.CallStack
 import Control.Monad.Trans.Class
@@ -328,16 +329,6 @@ data RewriteResult pat
     deriving stock (Eq, Show)
     deriving (Functor, Foldable, Traversable)
 
-apliedRuleAndResultFromRewriteResult :: RewriteResult pat -> Maybe (Text, Maybe UniqueId, pat)
-apliedRuleAndResultFromRewriteResult = \case
-    RewriteBranch{} -> Nothing
-    RewriteStuck{} -> Nothing
-    RewriteCutPoint lbl uid _ next -> Just (lbl, uid, next)
-    RewriteTerminal lbl uid next -> Just (lbl, uid, next)
-    RewriteFinished (Just lbl) uid next -> Just (lbl, uid, next)
-    RewriteFinished{} -> Nothing
-    RewriteAborted{} -> Nothing
-
 data RewriteTrace pat
     = -- | single step of execution
       RewriteSingleStep Text (Maybe UniqueId) pat pat
@@ -447,9 +438,17 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
         when doTracing $ modify $ \(counter, traces) -> (counter, traces |> t)
     incrementCounter = modify $ \(counter, traces) -> (counter + 1, traces)
 
-    simplifyP :: Pattern -> StateT (Natural, Seq (RewriteTrace Pattern)) io Pattern
+    simplifyP :: Pattern -> StateT (Natural, Seq (RewriteTrace Pattern)) io (Maybe Pattern)
     simplifyP p =
         evaluatePattern doTracing def mLlvmLibrary p >>= \case
+            Right (newPattern, traces) -> do
+                logTraces $ filter (not . isMatchFailure) traces
+                rewriteTrace $ RewriteSimplified $ Right traces
+                pure $ Just newPattern
+            Left r@(SideConditionsFalse ps) -> do
+                logSimplify "Side conditions were found to be false, pruning"
+                -- FIXME retain and rewriteTrace simplification traces here
+                pure Nothing
             -- NB any errors here might be caused by simplifying one
             -- of the constraints, so we cannot use partial results
             -- and have to return the original on errors.
@@ -457,7 +456,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                 logWarn $ "Simplification unable to finish in " <> prettyText n <> " steps."
                 -- could output term before and after at debug or custom log level
                 rewriteTrace $ RewriteSimplified $ Left r
-                pure p
+                pure $ Just p
             Left r@(EquationLoop traces (t : ts)) -> do
                 let termDiffs = zipWith (curry mkDiffTerms) (t : ts) ts
                 logError "Equation evaluation loop"
@@ -465,15 +464,42 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                 logSimplify $
                     "produced the evaluation loop: " <> Text.unlines (map (prettyText . fst) termDiffs)
                 rewriteTrace $ RewriteSimplified $ Left r
-                pure p
+                pure $ Just p
             Left other -> do
                 logError . pack $ "Simplification error during rewrite: " <> show other
                 rewriteTrace $ RewriteSimplified $ Left other
-                pure p
-            Right (newPattern, traces) -> do
-                logTraces $ filter (not . isMatchFailure) traces
-                rewriteTrace $ RewriteSimplified $ Right traces
-                pure newPattern
+                pure $ Just p
+
+    -- Results may change when simplification prunes a false side
+    -- condition, otherwise this would mainly be fmap simplifyP
+    simplifyResult ::
+        RewriteResult Pattern ->
+        StateT (Natural, Seq (RewriteTrace Pattern)) io (RewriteResult Pattern)
+    simplifyResult = \case
+        RewriteBranch p nexts -> do
+            p' <- simplifyP p
+            let simplifyP3rd (a, b, c) =
+                    maybe Nothing (Just . (a, b,)) <$> simplifyP c
+            nexts' <- catMaybes <$> mapM simplifyP3rd (toList nexts)
+            pure $ case (p', nexts') of
+                (Nothing, _) -> RewriteStuck pat
+                (Just x, []) -> RewriteStuck x
+                (Just _, [(lbl, uId, n)]) -> RewriteFinished (Just lbl) uId n
+                (Just x, ns) -> RewriteBranch x $ NE.fromList ns
+        r@RewriteStuck{} -> pure r
+        RewriteCutPoint lbl uId p next -> do
+            p' <- simplifyP p
+            next' <- simplifyP next
+            pure $ case (p', next') of
+                (Nothing, _) -> RewriteStuck pat
+                (Just x, Nothing) -> RewriteStuck x
+                (Just x, Just n) -> RewriteCutPoint lbl uId x n
+        RewriteTerminal lbl uId p ->
+            maybe (RewriteStuck p) (RewriteTerminal lbl uId) <$> simplifyP p
+        RewriteFinished lbl uId p ->
+            maybe (RewriteStuck p) (RewriteFinished lbl uId) <$> simplifyP p
+        RewriteAborted p ->
+            maybe (RewriteStuck p) RewriteAborted <$> simplifyP p
 
     logTraces =
         mapM_ (logSimplify . pack . renderDefault . pretty)
@@ -487,56 +513,77 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                 let title =
                         pretty $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
                 logRewrite $ pack $ renderDefault $ showPattern title pat'
-                (if wasSimplified then pure else mapM simplifyP) $ RewriteFinished Nothing Nothing pat'
-            else do
-                let res =
-                        runRewriteT doTracing def mLlvmLibrary $
-                            rewriteStep cutLabels terminalLabels pat'
-                res >>= \case
+                (if wasSimplified then pure else simplifyResult) $ RewriteFinished Nothing Nothing pat'
+            else runRewriteT doTracing def mLlvmLibrary (rewriteStep cutLabels terminalLabels pat') >>= \case
                     Right (RewriteFinished mlbl uniqueId single) -> do
-                        case mlbl of
-                            Just lbl -> rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
-                            Nothing -> pure ()
+                        whenJust mlbl $ \lbl ->
+                            rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
                         incrementCounter
                         doSteps False single
                     Right terminal@(RewriteTerminal lbl uniqueId single) -> do
                         rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
                         logRewrite $
                             "Terminal rule after " <> showCounter (counter + 1)
-                        simplified <- mapM simplifyP terminal
                         incrementCounter
+                        simplified <- simplifyResult terminal
                         pure simplified
-                    Right branching@(RewriteBranch pat'' branches) -> do
-                        rewriteTrace $ RewriteBranchingStep pat'' $ fmap (\(lbl, uid, _) -> (lbl, uid)) branches
-                        simplifiedBranching <- mapM simplifyP branching
+                    Right branching@RewriteBranch{} -> do
                         logRewrite $ "Stopped due to branching after " <> showCounter counter
-                        pure simplifiedBranching
-                    Right other -> do
-                        case apliedRuleAndResultFromRewriteResult other of
-                            Just (lbl, uniqueId, single) -> rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
-                            Nothing -> pure ()
-                        simplifiedOther <- mapM simplifyP other
+                        simplified <- simplifyResult branching
+                        case simplified of
+                            RewriteStuck{} -> do
+                                logRewrite "Rewrite stuck after pruning branches"
+                                pure simplified
+                            RewriteFinished mlbl uniqueId single -> do
+                                logRewrite "All but one branch pruned, continuing"
+                                whenJust mlbl $ \lbl ->
+                                    rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
+                                incrementCounter
+                                doSteps False single
+                            RewriteBranch pat'' branches -> do
+                                rewriteTrace $ RewriteBranchingStep pat'' $ fmap (\(lbl, uid, _) -> (lbl, uid)) branches
+                                pure simplified
+                            _other -> error "simplifyResult: Unexpected return value"
+                    Right cutPoint@(RewriteCutPoint lbl _ _ _) -> do
+                        simplified <- simplifyResult cutPoint
+                        case simplified of
+                            RewriteCutPoint{} ->
+                                logRewrite $ "Cut point " <> lbl <> " after " <> showCounter counter
+                            RewriteStuck{} ->
+                                logRewrite $ "Stuck after " <> showCounter counter
+                            _other -> error "simplifyResult: Unexpected return value"
+                        pure simplified
+                    Right stuck@RewriteStuck{} -> do
                         logRewrite $ "Stopped after " <> showCounter counter
-                        pure simplifiedOther
+                        simplifyResult stuck
+                    Right aborted@RewriteAborted{} -> do
+                        logRewrite $ "Aborted after " <> showCounter counter
+                        simplifyResult aborted
                     -- if unification was unclear and the pattern was
                     -- unsimplified, simplify and retry rewriting once
                     Left failure@RuleApplicationUnclear{}
                         | not wasSimplified -> do
                             rewriteTrace $ RewriteStepFailed failure
-                            simplifiedPat <- simplifyP pat'
-                            logRewrite "Retrying with simplified pattern"
-                            doSteps True simplifiedPat
+                            withSimplified pat' "Retrying with simplified pattern" (doSteps True)
                     -- if there were no applicable rules and the pattern
                     -- was unsimplified, simplify and re-try once
                     Left failure@NoApplicableRules{} -> do
                         rewriteTrace $ RewriteStepFailed failure
                         if wasSimplified
                             then pure $ RewriteStuck pat'
-                            else do
-                                simplifiedPat <- simplifyP pat'
-                                logRewrite "Retrying with simplified pattern"
-                                doSteps True simplifiedPat
+                            else withSimplified pat' "Retrying with simplified pattern" (doSteps True)
                     Left failure -> do
-                        logRewrite $ "Aborted after " <> showCounter counter
                         rewriteTrace $ RewriteStepFailed failure
-                        (if wasSimplified then pure else mapM simplifyP) $ RewriteAborted pat'
+                        let msg = "Aborted after " <> showCounter counter
+                        if wasSimplified
+                            then logRewrite msg >> pure (RewriteAborted pat')
+                            else withSimplified pat' msg (pure . RewriteAborted)
+      where
+          withSimplified p msg cont = do
+              simplifyP p >>= \case
+                  Nothing -> do
+                      logRewrite "Rewrite stuck after simplification."
+                      pure $ RewriteStuck p
+                  Just simplifiedPat -> do
+                      logRewrite msg
+                      cont simplifiedPat
