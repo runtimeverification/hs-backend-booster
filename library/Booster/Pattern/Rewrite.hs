@@ -445,7 +445,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                 logTraces $ filter (not . isMatchFailure) traces
                 rewriteTrace $ RewriteSimplified $ Right traces
                 pure $ Just newPattern
-            Left r@(SideConditionsFalse ps) -> do
+            Left (SideConditionsFalse _ps) -> do
                 logSimplify "Side conditions were found to be false, pruning"
                 -- FIXME retain and rewriteTrace simplification traces here
                 pure Nothing
@@ -479,7 +479,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
         RewriteBranch p nexts -> do
             p' <- simplifyP p
             let simplifyP3rd (a, b, c) =
-                    maybe Nothing (Just . (a, b,)) <$> simplifyP c
+                    fmap (a,b,) <$> simplifyP c
             nexts' <- catMaybes <$> mapM simplifyP3rd (toList nexts)
             pure $ case (p', nexts') of
                 (Nothing, _) -> RewriteStuck pat
@@ -514,7 +514,8 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                         pretty $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
                 logRewrite $ pack $ renderDefault $ showPattern title pat'
                 (if wasSimplified then pure else simplifyResult) $ RewriteFinished Nothing Nothing pat'
-            else runRewriteT doTracing def mLlvmLibrary (rewriteStep cutLabels terminalLabels pat') >>= \case
+            else
+                runRewriteT doTracing def mLlvmLibrary (rewriteStep cutLabels terminalLabels pat') >>= \case
                     Right (RewriteFinished mlbl uniqueId single) -> do
                         whenJust mlbl $ \lbl ->
                             rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
@@ -525,8 +526,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                         logRewrite $
                             "Terminal rule after " <> showCounter (counter + 1)
                         incrementCounter
-                        simplified <- simplifyResult terminal
-                        pure simplified
+                        simplifyResult terminal
                     Right branching@RewriteBranch{} -> do
                         logRewrite $ "Stopped due to branching after " <> showCounter counter
                         simplified <- simplifyResult branching
@@ -579,11 +579,11 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                             then logRewrite msg >> pure (RewriteAborted pat')
                             else withSimplified pat' msg (pure . RewriteAborted)
       where
-          withSimplified p msg cont = do
-              simplifyP p >>= \case
-                  Nothing -> do
-                      logRewrite "Rewrite stuck after simplification."
-                      pure $ RewriteStuck p
-                  Just simplifiedPat -> do
-                      logRewrite msg
-                      cont simplifiedPat
+        withSimplified p msg cont = do
+            simplifyP p >>= \case
+                Nothing -> do
+                    logRewrite "Rewrite stuck after simplification."
+                    pure $ RewriteStuck p
+                Just simplifiedPat -> do
+                    logRewrite msg
+                    cont simplifiedPat
