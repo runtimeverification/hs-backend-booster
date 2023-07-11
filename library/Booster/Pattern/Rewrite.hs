@@ -37,10 +37,9 @@ import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.ApplyEquations (
-    Direction (..),
     EquationFailure (..),
     EquationTrace,
-    evaluateTerm,
+    evaluatePattern,
     isMatchFailure,
     isSuccess,
     simplifyConstraint,
@@ -449,14 +448,16 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
     incrementCounter = modify $ \(counter, traces) -> (counter + 1, traces)
 
     simplifyP :: Pattern -> StateT (Natural, Seq (RewriteTrace Pattern)) io Pattern
-    simplifyP p = do
-        let result = evaluateTerm doTracing TopDown def mLlvmLibrary p.term
-        result >>= \case
-            Left r@(TooManyIterations n _ t) -> do
+    simplifyP p =
+        evaluatePattern doTracing def mLlvmLibrary p >>= \case
+            -- NB any errors here might be caused by simplifying one
+            -- of the constraints, so we cannot use partial results
+            -- and have to return the original on errors.
+            Left r@(TooManyIterations n _start _result) -> do
                 logWarn $ "Simplification unable to finish in " <> prettyText n <> " steps."
                 -- could output term before and after at debug or custom log level
                 rewriteTrace $ RewriteSimplified $ Left r
-                pure p{term = t}
+                pure p
             Left r@(EquationLoop traces (t : ts)) -> do
                 let termDiffs = zipWith (curry mkDiffTerms) (t : ts) ts
                 logError "Equation evaluation loop"
@@ -464,15 +465,15 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                 logSimplify $
                     "produced the evaluation loop: " <> Text.unlines (map (prettyText . fst) termDiffs)
                 rewriteTrace $ RewriteSimplified $ Left r
-                pure p{term = t} -- use result from before the loop
+                pure p
             Left other -> do
                 logError . pack $ "Simplification error during rewrite: " <> show other
                 rewriteTrace $ RewriteSimplified $ Left other
                 pure p
-            Right (newTerm, traces) -> do
+            Right (newPattern, traces) -> do
                 logTraces $ filter (not . isMatchFailure) traces
                 rewriteTrace $ RewriteSimplified $ Right traces
-                pure p{term = newTerm}
+                pure newPattern
 
     logTraces =
         mapM_ (logSimplify . pack . renderDefault . pretty)
