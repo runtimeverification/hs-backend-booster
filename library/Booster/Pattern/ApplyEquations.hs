@@ -15,7 +15,6 @@ module Booster.Pattern.ApplyEquations (
     isMatchFailure,
     isSuccess,
     simplifyConstraint,
-    simplifyPattern,
 ) where
 
 import Control.Monad
@@ -32,7 +31,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State
-import Data.Foldable (toList)
+import Data.Foldable (toList, traverse_)
 import Data.Functor.Foldable
 import Data.List (elemIndex)
 import Data.Map (Map)
@@ -227,7 +226,9 @@ iterateEquations maxIterations direction preference startTerm =
                 else pure currentTerm
 
 ----------------------------------------
--- Interface function
+-- Interface functions
+
+-- | Evaluate and simplify a term.
 evaluateTerm ::
     MonadLoggerIO io =>
     Bool ->
@@ -248,20 +249,42 @@ evaluateTerm' ::
     EquationT io Term
 evaluateTerm' direction = iterateEquations 100 direction PreferFunctions
 
+{- | Simplify a Pattern, processing its constraints independently.
+     Returns either the first failure or the new pattern if no failure was encountered
+-}
 evaluatePattern ::
     MonadLoggerIO io =>
     Bool ->
-    Direction ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Pattern ->
     io (Either EquationFailure (Pattern, [EquationTrace]))
-evaluatePattern doTracing direction def llvmApi pat =
-    runEquationT doTracing def llvmApi $ do
-        pushConstraints pat.constraints
-        term <- iterateEquations 100 direction PreferFunctions pat.term
-        constraints <- Set.toList . predicates <$> getState
-        pure Pattern{term, constraints}
+evaluatePattern doTracing def mLlvmLibrary =
+    runEquationT doTracing def mLlvmLibrary . evaluatePattern'
+
+-- version for internal nested evaluation
+evaluatePattern' ::
+    MonadLoggerIO io =>
+    Pattern ->
+    EquationT io Pattern
+evaluatePattern' Pattern{term, constraints} = do
+    pushConstraints constraints
+    newTerm <- evaluateTerm' TopDown term
+    -- after evaluating the term, evaluate all (existing and
+    -- newly-acquired) constraints, once
+    currentPredicates <- Set.toList . predicates <$> getState
+    traverse_ simplifyAssumedPredicate currentPredicates
+    -- this may yield additional new constraints, left unevaluated
+    evaluatedConstraints <- predicates <$> getState
+    pure Pattern{constraints = Set.toList evaluatedConstraints, term = newTerm}
+  where
+    -- evaluate the given predicate assuming all others
+    simplifyAssumedPredicate p = do
+        allPs <- predicates <$> getState
+        let otherPs = Set.delete p allPs
+        EquationT $ modify $ \s -> s{predicates = otherPs}
+        newP <- simplifyConstraint' p
+        pushConstraints [newP]
 
 ----------------------------------------
 
@@ -626,27 +649,3 @@ simplifyConstraint' = \case
         result <- iterateEquations 100 TopDown PreferFunctions t
         EquationT $ put prior
         pure result
-
---------------------------------------------------------------------
-
-{- | Simplify a Pattern, processing its constraints independently.
-     Returns either the first failure or the new pattern if no failure was encountered
--}
-simplifyPattern ::
-    MonadLoggerIO io =>
-    Bool ->
-    KoreDefinition ->
-    Maybe LLVM.API ->
-    Pattern ->
-    io (Either EquationFailure (Pattern, [EquationTrace]))
-simplifyPattern doTracing def mLlvmLibrary = runEquationT doTracing def mLlvmLibrary . simplifyPattern'
-
--- version for internal nested evaluation
-simplifyPattern' ::
-    MonadLoggerIO io =>
-    Pattern ->
-    EquationT io Pattern
-simplifyPattern' Pattern{term, constraints} = do
-    newTerm <- evaluateTerm' TopDown term
-    simplifiedConstraints <- traverse simplifyConstraint' constraints
-    pure Pattern{constraints = simplifiedConstraints, term = newTerm}

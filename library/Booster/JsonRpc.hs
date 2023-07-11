@@ -143,7 +143,7 @@ respond stateVar =
                 -- term and predicate (pattern)
                 Right (TermAndPredicate pat) -> do
                     Log.logInfoNS "booster" "Simplifying a pattern"
-                    ApplyEquations.simplifyPattern doTracing def mLlvmLibrary pat >>= \case
+                    ApplyEquations.evaluatePattern doTracing def mLlvmLibrary pat >>= \case
                         Right (newPattern, patternTraces) -> do
                             let (t, p) = externalisePattern newPattern
                                 tSort = externaliseSort (sortOfPattern newPattern)
