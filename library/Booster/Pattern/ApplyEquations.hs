@@ -66,6 +66,7 @@ data EquationFailure
     = IndexIsNone Term
     | TooManyIterations Int Term Term
     | EquationLoop [EquationTrace] [Term]
+    | SideConditionsFalse [Predicate]
     | InternalError Text
     deriving stock (Eq, Show)
 
@@ -127,6 +128,14 @@ instance Pretty EquationTrace where
                 , "failed with false condition"
                 , "using " <> locationInfo
                 ]
+        EnsuresFalse ps ->
+            vsep $
+                [ "Simplifying term"
+                , prettyTerm
+                , "using " <> locationInfo
+                , "resulted in ensuring false conditions"
+                ]
+                    <> map pretty ps
         MatchConstraintViolated constrained varName ->
             vsep
                 [ "Concreteness constraint violated: "
@@ -388,6 +397,7 @@ data ApplyEquationResult
     | IndeterminateMatch
     | IndeterminateCondition
     | ConditionFalse
+    | EnsuresFalse [Predicate]
     | RuleNotPreservingDefinedness
     | MatchConstraintViolated Constrained VarName
     deriving stock (Eq, Show)
@@ -402,23 +412,25 @@ type ResultHandler io =
     ApplyEquationResult ->
     EquationT io Term
 
-handleFunctionEquation :: ResultHandler io
+handleFunctionEquation :: MonadLoggerIO io => ResultHandler io
 handleFunctionEquation success continue abort = \case
     Success rewritten -> success rewritten
     FailedMatch _ -> continue
     IndeterminateMatch -> abort
     IndeterminateCondition -> abort
     ConditionFalse -> continue
+    EnsuresFalse ps -> throw $ SideConditionsFalse ps
     RuleNotPreservingDefinedness -> abort
     MatchConstraintViolated{} -> continue
 
-handleSimplificationEquation :: ResultHandler io
+handleSimplificationEquation :: MonadLoggerIO io => ResultHandler io
 handleSimplificationEquation success continue _abort = \case
     Success rewritten -> success rewritten
     FailedMatch _ -> continue
     IndeterminateMatch -> continue
     IndeterminateCondition -> continue
     ConditionFalse -> continue
+    EnsuresFalse ps -> throw $ SideConditionsFalse ps
     RuleNotPreservingDefinedness -> continue
     MatchConstraintViolated{} -> continue
 
@@ -509,12 +521,11 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
             -- is violated
             checkConcreteness rule.attributes.concreteness subst
 
-            -- check conditions, using substitution (will call back
-            -- into the simplifier! -> import loop)
-            let newConstraints =
+            -- check required conditions, using substitution
+            let required =
                     concatMap (splitBoolPredicates . substituteInPredicate subst) $
                         rule.requires
-            unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint newConstraints
+            unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint required
 
             case unclearConditions' of
                 Nothing -> throwE ConditionFalse
@@ -522,11 +533,20 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                     if not $ null unclearConditions
                         then throwE IndeterminateCondition
                         else do
-                            let rewritten =
-                                    substituteInTerm subst rule.rhs
-                            -- NB no new constraints, as they have been checked to be `Top`
-                            -- FIXME what about symbolic constraints here?
-                            pure rewritten
+                            -- check ensured conditions, filter any
+                            -- true ones, prune if any is false
+                            let ensured =
+                                    concatMap (splitBoolPredicates . substituteInPredicate subst) $
+                                        rule.ensures
+                            mbEnsuredConditions <-
+                                runMaybeT $ catMaybes <$> mapM checkConstraint ensured
+                            maybe
+                                (throwE $ EnsuresFalse ensured)
+                                -- throws if an ensured condition found to be false
+                                (lift . pushConstraints)
+                                -- pushes new ensured conditions and return result
+                                mbEnsuredConditions
+                            pure $ substituteInTerm subst rule.rhs
   where
     -- evaluate/simplify a predicate, cut the operation short when it
     -- is Bottom.
