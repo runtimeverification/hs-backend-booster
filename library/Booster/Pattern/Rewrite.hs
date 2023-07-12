@@ -482,7 +482,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                     fmap (a,b,) <$> simplifyP c
             nexts' <- catMaybes <$> mapM simplifyP3rd (toList nexts)
             pure $ case (p', nexts') of
-                (Nothing, _) -> RewriteStuck pat
+                (Nothing, _) -> RewriteStuck p
                 (Just x, []) -> RewriteStuck x
                 (Just _, [(lbl, uId, n)]) -> RewriteFinished (Just lbl) uId n
                 (Just x, ns) -> RewriteBranch x $ NE.fromList ns
