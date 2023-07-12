@@ -43,7 +43,7 @@ jobs:
         run: |
           set -euxo pipefail
           haskell_backend_version=$(cat deps/haskell-backend_release)
-          sed -i 's!    haskell-backend.url = "github:runtimeverification/haskell-backend/[0-9a-f]*";!    haskell-backend.url = "github:runtimeverification/haskell-backend/'${haskell_backend_version}'";' flake.nix
+          sed -i 's!    haskell-backend.url = "github:runtimeverification/haskell-backend/[0-9a-f]*";!    haskell-backend.url = "github:runtimeverification/haskell-backend/'${haskell_backend_version}'";!' flake.nix
           nix flake update
           if git add flake.nix flake.lock && git commit -m 'Sync flake inputs to submodules'; then
             git push
