@@ -177,10 +177,10 @@ andTerms =
               fa = app f1 [d]
               fb = app f1 [dv someSort "b"]
            in test
-                "And-term on the right, fails"
+                "And-term on the right, indeterminate"
                 d
                 (AndTerm fa fb)
-                (failed $ DifferentValues d (AndTerm fa fb))
+                (MatchIndeterminate d (AndTerm fa fb))
         ]
 
 cornerCases :: TestTree

@@ -140,12 +140,12 @@ match1
     pat
     var@Var{} =
         indeterminate pat var
--- and-terms in subject term are considered indeterminate 
+-- and-terms in subject term are considered indeterminate
 -- (what would they mean?)
 match1
     pat
-    and@And{} =
-        indeterminate pat and
+    andTerm@AndTerm{} =
+        indeterminate pat andTerm
 ----- Domain values
 match1
     d1@(DomainValue s1 t1)
