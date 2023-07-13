@@ -184,6 +184,17 @@ executables:
       - unordered-containers
     ghc-options:
     - -rtsopts
+  kore-json-differ:
+    source-dirs: tools/kore-json-differ
+    main: Main.hs
+    dependencies:
+      - aeson
+      - aeson-diff
+      - aeson-pretty
+      - base
+      - bytestring
+      - containers
+      - kore-rpc-types
 
   kore-rpc-booster:
     source-dirs: tools/booster
