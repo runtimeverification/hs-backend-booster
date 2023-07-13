@@ -281,8 +281,7 @@ evaluatePattern' Pattern{term, constraints} = do
     newTerm <- evaluateTerm' TopDown term
     -- after evaluating the term, evaluate all (existing and
     -- newly-acquired) constraints, once
-    currentPredicates <- Set.toList . predicates <$> getState
-    traverse_ simplifyAssumedPredicate currentPredicates
+    traverse_ simplifyAssumedPredicate . predicates =<< getState
     -- this may yield additional new constraints, left unevaluated
     evaluatedConstraints <- predicates <$> getState
     pure Pattern{constraints = Set.toList evaluatedConstraints, term = newTerm}
