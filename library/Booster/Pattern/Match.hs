@@ -116,6 +116,38 @@ match1 ::
     StateT MatchState (Except MatchResult) ()
 ----- Variables
 -- pattern term is a (target) variable: check sorts, introduce a new binding
+
+-- Matching term2 with term1, when term2 is a variable is safe here,
+-- because functional equations are ordered.
+-- Consider a function f:
+--
+--   rule f(foo(A)) => baz() [priority(40)]
+--   rule f(A) => A
+-- where foo() is a constructor and A is a variable.
+--
+-- We can safely match f(foo(X)) and rewrite to baz(), because there
+-- are no preceding equations involving the constructor foo.
+--
+-- If instead there was a higher-priority rule
+--
+--   rule f(foo(bar())) => flob() [priority(30)]
+--
+-- the preceding match would be indeterminate and the function
+-- application would be aborted before reaching the
+--   f(foo(A)) => baz()
+-- case.
+--
+-- Finally, if the rules had the opposite priorities
+--
+--   rule f(foo(A)) => baz()      [priority(30)]
+--   rule f(foo(bar())) => flob() [priority(40)]
+--   rule f(A) => A
+--
+-- Since function equations are ordered, the pattern
+--    f(foo(bar())) => flob()
+-- would be unreachable anyway, hence
+--   f(foo(A)) => baz()
+-- must always apply to f(foo(X))
 match1
     term1@(Var var@Variable{variableSort})
     term2 =
