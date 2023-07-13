@@ -540,12 +540,12 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                                         rule.ensures
                             mbEnsuredConditions <-
                                 runMaybeT $ catMaybes <$> mapM checkConstraint ensured
-                            maybe
-                                (throwE $ EnsuresFalse ensured)
+                            case mbEnsuredConditions of
                                 -- throws if an ensured condition found to be false
-                                (lift . pushConstraints)
+                                Nothing -> throwE $ EnsuresFalse ensured
                                 -- pushes new ensured conditions and return result
-                                mbEnsuredConditions
+                                Just conditions ->
+                                    lift $ pushConstraints conditions
                             pure $ substituteInTerm subst rule.rhs
   where
     -- evaluate/simplify a predicate, cut the operation short when it
