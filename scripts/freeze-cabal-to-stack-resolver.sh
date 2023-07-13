@@ -11,6 +11,6 @@ stack --test ls dependencies \
 
 # ghc-bignum is removed from the freeze file because it is wired into
 # GHC and creates problems when nix builds tools with different GHCs
-sed -i -e '/any\.ghc-bignum/d' cabal.project.freeze
+sed -i -e '/any\.ghc-bignum/d' -e '/any\.happy/d' -e '/any\.alex/d' cabal.project.freeze
 
 git diff cabal.project.freeze
