@@ -153,12 +153,12 @@ respond stateVar =
                                     { state = addHeader result
                                     , logs = mkTraces patternTraces
                                     }
-                        Left (ApplyEquations.SideConditionsFalse _) -> do
+                        Left (ApplyEquations.SideConditionsFalse _ traces) -> do
                             let tSort = fromMaybe (error "unknown sort") $ sortOfJson req.state.term
                             pure . Right . Simplify $
                                 SimplifyResult
                                     { state = addHeader $ KoreJson.KJBottom tSort
-                                    , logs = mkTraces [] -- FIXME add traces
+                                    , logs = mkTraces traces
                                     }
                         Left (ApplyEquations.EquationLoop _traces terms) ->
                             pure . Left . backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME

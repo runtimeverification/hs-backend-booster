@@ -66,7 +66,7 @@ data EquationFailure
     = IndexIsNone Term
     | TooManyIterations Int Term Term
     | EquationLoop [EquationTrace] [Term]
-    | SideConditionsFalse [Predicate]
+    | SideConditionsFalse [Predicate] [EquationTrace]
     | InternalError Text
     deriving stock (Eq, Show)
 
@@ -418,7 +418,7 @@ handleFunctionEquation success continue abort = \case
     IndeterminateMatch -> abort
     IndeterminateCondition -> abort
     ConditionFalse -> continue
-    EnsuresFalse ps -> throw $ SideConditionsFalse ps
+    EnsuresFalse ps -> (toList . trace <$> getState) >>= throw . SideConditionsFalse ps
     RuleNotPreservingDefinedness -> abort
     MatchConstraintViolated{} -> continue
 
@@ -429,7 +429,7 @@ handleSimplificationEquation success continue _abort = \case
     IndeterminateMatch -> continue
     IndeterminateCondition -> continue
     ConditionFalse -> continue
-    EnsuresFalse ps -> throw $ SideConditionsFalse ps
+    EnsuresFalse ps -> (toList . trace <$> getState) >>= throw . SideConditionsFalse ps
     RuleNotPreservingDefinedness -> continue
     MatchConstraintViolated{} -> continue
 

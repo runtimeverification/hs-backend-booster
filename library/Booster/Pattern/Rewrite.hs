@@ -445,9 +445,10 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                 logTraces $ filter (not . isMatchFailure) traces
                 rewriteTrace $ RewriteSimplified $ Right traces
                 pure $ Just newPattern
-            Left (SideConditionsFalse _ps) -> do
+            Left r@(SideConditionsFalse _ps traces) -> do
                 logSimplify "Side conditions were found to be false, pruning"
-                -- FIXME retain and rewriteTrace simplification traces here
+                logTraces $ filter (not . isMatchFailure) traces
+                rewriteTrace $ RewriteSimplified $ Left r
                 pure Nothing
             -- NB any errors here might be caused by simplifying one
             -- of the constraints, so we cannot use partial results
