@@ -49,6 +49,8 @@ jobs:
           ghc-version: ${{ env.ghc_version }}
           stack-version: ${{ env.stack_version }}
           enable-stack: true
+          stack-setup-ghc: true
+          cabal-update: true
 
       - name: 'Update Nix flake from haskell backend release tag'
         run: |
