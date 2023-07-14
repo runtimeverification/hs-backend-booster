@@ -418,7 +418,7 @@ handleFunctionEquation success continue abort = \case
     IndeterminateMatch -> abort
     IndeterminateCondition -> abort
     ConditionFalse -> continue
-    EnsuresFalse ps -> (toList . trace <$> getState) >>= throw . SideConditionsFalse ps
+    EnsuresFalse ps -> getState >>= throw . SideConditionsFalse ps . toList . trace
     RuleNotPreservingDefinedness -> abort
     MatchConstraintViolated{} -> continue
 
@@ -429,7 +429,7 @@ handleSimplificationEquation success continue _abort = \case
     IndeterminateMatch -> continue
     IndeterminateCondition -> continue
     ConditionFalse -> continue
-    EnsuresFalse ps -> (toList . trace <$> getState) >>= throw . SideConditionsFalse ps
+    EnsuresFalse ps -> getState >>= throw . SideConditionsFalse ps . toList . trace
     RuleNotPreservingDefinedness -> continue
     MatchConstraintViolated{} -> continue
 
