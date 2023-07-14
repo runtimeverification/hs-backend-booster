@@ -516,8 +516,8 @@ mkLogRewriteTrace
                                     , origin = Booster
                                     , result = Failure{reason = "Internal error: " <> err, _ruleId = Nothing}
                                     }
-                            ApplyEquations.SideConditionsFalse{} ->
-                                Simplification -- FIXME
+                            ApplyEquations.SideConditionsFalse _predicates _traces ->
+                                Simplification
                                     { originalTerm = Nothing
                                     , originalTermIndex = Nothing
                                     , origin = Booster
