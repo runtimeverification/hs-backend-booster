@@ -194,6 +194,7 @@ executables:
       - base
       - bytestring
       - containers
+      - json-rpc
       - kore-rpc-types
 
   kore-rpc-booster:
