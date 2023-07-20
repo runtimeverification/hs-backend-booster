@@ -189,11 +189,11 @@ executables:
     main: Main.hs
     dependencies:
       - aeson
-      - aeson-diff
       - aeson-pretty
       - base
       - bytestring
       - containers
+      - Diff
       - json-rpc
       - kore-rpc-types
 

@@ -3,9 +3,10 @@ module Main where
 
 import Control.Applicative ((<|>))
 import Data.Aeson as Json
-import Data.Aeson.Diff as Json
 import Data.Aeson.Encode.Pretty as Json
 import Data.Aeson.Types as Json
+import Data.Algorithm.Diff as Diff
+import Data.Algorithm.DiffOutput as Diff
 import Data.ByteString.Lazy.Char8 qualified as BS
 import Data.Function (on)
 import Data.Maybe (fromMaybe)
@@ -32,10 +33,10 @@ main = do
     args <- getArgs
     case args of
         [] -> putStrLn usage
-        [x, y] -> diffJson x y
+        [x, y] -> diffJson x y >>= BS.putStrLn
         other -> putStrLn $ "ERROR: program requires exactly two arguments.\n\n" <> usage
 
-diffJson :: FilePath -> FilePath -> IO ()
+diffJson :: FilePath -> FilePath -> IO BS.ByteString
 diffJson korefile1 korefile2 = do
     contents1 <-
         decodeKoreRpc <$> BS.readFile korefile1
@@ -43,27 +44,26 @@ diffJson korefile1 korefile2 = do
         decodeKoreRpc <$> BS.readFile korefile2
 
     case (contents1, contents2) of
-        (_, _) | contents1 == contents2 ->
-            putStrLn "The files are identical"
+        (_, _)
+            | contents1 == contents2 ->
+                pure . BS.unwords $
+                    ["Files", BS.pack korefile1, "and", BS.pack korefile2, "are identical."]
         (Garbled lines1, Garbled lines2) -> do
-            let result = getDiff lines1 lines2
-            BS.putStrLn $ 
-                "Both files contain garbled json." <> renderDiff result
-        (other1, other2) 
-            | typeString other1 /= typeString other2 -> 
-            putStrLn . unlines $
-                [ "Json data in files is of different type"
-                , "File " <> korefile1 <> ": " <> typeString other1
-                , "File " <> korefile2 <> ": " <> typeString other2
-                ]
+            let result = getGroupedDiff lines1 lines2
+            pure $ "Both files contain garbled json." <> renderDiff result
+        (other1, other2)
+            | typeString other1 /= typeString other2 ->
+                pure . BS.unlines $
+                    [ "Json data in files is of different type"
+                    , "  * File " <> BS.pack korefile1 <> ": " <> typeString other1
+                    , "  * File " <> BS.pack korefile2 <> ": " <> typeString other2
+                    ]
             | otherwise -> do
-                let result = diffJson other1 other2
-                BS.putStrLn $ renderDiff result
+                let result = computeJsonDiff other1 other2
+                pure $ renderDiff result
   where
-    diffJson =
-        getDiff `on` (BS.lines . Json.encodePretty' rpcJsonConfig)
-
-
+    computeJsonDiff =
+        getGroupedDiff `on` (BS.lines . Json.encodePretty' rpcJsonConfig)
 
 decodeKoreRpc :: BS.ByteString -> KoreRpcJson
 decodeKoreRpc input =
@@ -86,16 +86,18 @@ decodeKoreRpc input =
             , GetModel <$> Json.parseMaybe (Json.parseJSON @GetModelResult) resp.getResult
             ]
     rpcError =
-        Json.decode @ErrorObj input >>= \err ->
-            pure $ RpcError err.getErrMsg err.getErrCode err.getErrData
+        Json.decode @ErrorObj input
+            >>= \case
+                ErrorObj msg code mbData ->
+                    pure $ RpcError msg code mbData
+                ErrorVal{} -> fail "arbitrary json can be an ErrorVal"
     koreJson =
         RpcKoreJson <$> Json.decode @KoreJson input
     unknown =
         RpcUnknown <$> Json.decode @Object input
-    -- last resort: break the bytestring into lines at json-relevant 
+    -- last resort: break the bytestring into lines at json-relevant
     -- characters (ignoring quoting)
     splitInput = BS.splitWith (`elem` [':', ',', '{', '}']) input
-
 
 -- | helper type enumerating all Kore-RPC json requests and responses
 data KoreRpcJson
@@ -109,32 +111,41 @@ data KoreRpcJson
 
 instance ToJSON KoreRpcJson where
     toJSON = \case
-        RpcRequest req -> 
+        RpcRequest req ->
             case req of -- missing instance ToJSON (API 'Req), inlined
                 Execute r -> toJSON r
                 Implies r -> toJSON r
                 Simplify r -> toJSON r
                 AddModule r -> toJSON r
                 GetModel r -> toJSON r
-                Cancel -> toJSON ()        
+                Cancel -> toJSON ()
         RpcResponse r -> toJSON r
         RpcError msg code v -> toJSON (msg, code, v)
         RpcKoreJson t -> toJSON t
         RpcUnknown v -> toJSON v
         Garbled bs -> toJSON $ map BS.unpack bs
 
-typeString :: KoreRpcJson -> String
+typeString :: KoreRpcJson -> BS.ByteString
 typeString = \case
     RpcRequest _ -> "request"
     RpcResponse _ -> "response"
-    RpcError{}  -> "error response"
+    RpcError{} -> "error response"
     RpcKoreJson _ -> "Kore term"
     RpcUnknown _ -> "unknown object"
     Garbled _ -> "garbled json"
 
-getDiff :: Eq a => [a] -> [a] -> Diff a
-getDiff = undefined -- FIXME library
-data Diff a -- FIXME library
+-------------------------------------------------------------------
+-- pretty diff output
+-- Currently using a String-based module from the Diff package but
+-- which should be rewritten to handle Text and Char8.ByteString
 
-renderDiff :: Show a => Diff a -> BS.ByteString
-renderDiff _ = "renderDiff: IMPLEMENT ME"
+renderDiff :: [Diff [BS.ByteString]] -> BS.ByteString
+renderDiff = BS.pack . ppDiff . map (convert (map BS.unpack))
+
+-- Should we defined `Functor Diff`? But then again `type Diff a = PolyDiff a a`
+-- and we should define `Bifunctor PolyDiff` and assimilate the `Diff` package.
+convert :: (a -> b) -> Diff a -> Diff b
+convert f = \case
+    First a -> First $ f a
+    Second b -> Second $ f b
+    Both a b -> Both (f a) (f b)
