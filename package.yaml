@@ -70,6 +70,7 @@ library:
   - containers
   - deepseq
   - deriving-aeson
+  - Diff
   - exceptions
   - extra
   - filepath
@@ -188,14 +189,10 @@ executables:
     source-dirs: tools/kore-json-differ
     main: Main.hs
     dependencies:
-      - aeson
-      - aeson-pretty
       - base
       - bytestring
       - containers
-      - Diff
-      - json-rpc
-      - kore-rpc-types
+      - hs-backend-booster
 
   kore-rpc-booster:
     source-dirs: tools/booster
