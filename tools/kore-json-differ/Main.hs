@@ -57,8 +57,13 @@ diffJson korefile1 korefile2 = do
                 , "File " <> korefile2 <> ": " <> typeString other2
                 ]
             | otherwise -> do
-                let result = getDiff (BS.lines $ Json.encodePretty other1) (BS.lines $ Json.encodePretty other2)
+                let result = diffJson other1 other2
                 BS.putStrLn $ renderDiff result
+  where
+    diffJson =
+        getDiff `on` (BS.lines . Json.encodePretty' rpcJsonConfig)
+
+
 
 decodeKoreRpc :: BS.ByteString -> KoreRpcJson
 decodeKoreRpc input =
@@ -104,21 +109,19 @@ data KoreRpcJson
 
 instance ToJSON KoreRpcJson where
     toJSON = \case
-        RpcRequest r -> toJSON r
+        RpcRequest req -> 
+            case req of -- missing instance ToJSON (API 'Req), inlined
+                Execute r -> toJSON r
+                Implies r -> toJSON r
+                Simplify r -> toJSON r
+                AddModule r -> toJSON r
+                GetModel r -> toJSON r
+                Cancel -> toJSON ()        
         RpcResponse r -> toJSON r
         RpcError msg code v -> toJSON (msg, code, v)
         RpcKoreJson t -> toJSON t
         RpcUnknown v -> toJSON v
         Garbled bs -> toJSON $ map BS.unpack bs
-
-instance ToJSON (API 'Req) where
-    toJSON = \case
-        Execute r -> toJSON r
-        Implies r -> toJSON r
-        Simplify r -> toJSON r
-        AddModule r -> toJSON r
-        GetModel r -> toJSON r
-        Cancel -> toJSON ()        
 
 typeString :: KoreRpcJson -> String
 typeString = \case
@@ -128,9 +131,6 @@ typeString = \case
     RpcKoreJson _ -> "Kore term"
     RpcUnknown _ -> "unknown object"
     Garbled _ -> "garbled json"
-
-lineDiff :: BS.ByteString -> BS.ByteString -> Diff BS.ByteString
-lineDiff = getDiff `on` BS.lines
 
 getDiff :: Eq a => [a] -> [a] -> Diff a
 getDiff = undefined -- FIXME library
