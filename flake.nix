@@ -3,7 +3,7 @@
 
   inputs = {
     k-framework.url = "github:runtimeverification/k/v5.6.131";
-    haskell-backend.url = "github:runtimeverification/haskell-backend/a6230144a37ee9ebf0f6dffc849faf5ce10df380";
+    haskell-backend.url = "github:runtimeverification/haskell-backend/3ac2c87da44ed9e8fe4ba4583fb5860a4680d821";
     k-framework.inputs.booster-backend.follows = "";
     haskell-nix.follows = "haskell-backend/haskell-nix";
     nixpkgs.follows = "haskell-backend/haskell-nix/nixpkgs-unstable";
@@ -150,7 +150,6 @@
           booster-dev = packages."hs-backend-booster:exe:booster-dev";
           rpc-client = packages."hs-backend-booster:exe:rpc-client";
           parsetest = packages."hs-backend-booster:exe:parsetest";
-          dltest = packages."hs-backend-booster:exe:dltest";
         } // packages // collectOutputs "packages" flakes);
 
       apps = perSystem (system:
@@ -178,7 +177,6 @@
           rpc-client = apps."hs-backend-booster:exe:rpc-client";
           parsetest = apps."hs-backend-booster:exe:parsetest";
           parsetest-binary = apps."hs-backend-booster:exe:parsetest-binary";
-          dltest = apps."hs-backend-booster:exe:dltest";
           update-haskell-backend = {
             type = "app";
             program = "${scripts}/update-haskell-backend.sh";
