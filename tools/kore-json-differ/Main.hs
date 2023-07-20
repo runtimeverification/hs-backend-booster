@@ -1,5 +1,5 @@
 -- | (c) FIXME
-module Main where
+module Main (main) where
 
 import Control.Applicative ((<|>))
 import Data.Aeson as Json
@@ -22,10 +22,10 @@ usage =
         [ "Display differences between two json files containing kore-rpc data"
         , ""
         , "Usage:"
-        , "       <program-name> KOREJSON1 KOREJSON2"
+        , "       <program-name> [--help | KOREJSON1 KOREJSON2]"
         , ""
         , "where KOREJSON<N> are paths to files containing a kore-rpc JSON request"
-        , "a kore-rpc JSON response, or a kore term in JSON format."
+        , "a kore-rpc JSON response, a kore term in JSON format, or other JSON."
         ]
 
 main :: IO ()
@@ -33,8 +33,9 @@ main = do
     args <- getArgs
     case args of
         [] -> putStrLn usage
+        _ | "--help" `elem` args -> putStrLn usage
         [x, y] -> diffJson x y >>= BS.putStrLn
-        other -> putStrLn $ "ERROR: program requires exactly two arguments.\n\n" <> usage
+        _other -> putStrLn $ "ERROR: program requires exactly two arguments.\n\n" <> usage
 
 diffJson :: FilePath -> FilePath -> IO BS.ByteString
 diffJson korefile1 korefile2 = do
@@ -47,7 +48,7 @@ diffJson korefile1 korefile2 = do
         (_, _)
             | contents1 == contents2 ->
                 pure . BS.unwords $
-                    ["Files", BS.pack korefile1, "and", BS.pack korefile2, "are identical."]
+                    ["Files", BS.pack korefile1, "and", BS.pack korefile2, "are identical", typeString contents1 <> "s"]
         (Garbled lines1, Garbled lines2) -> do
             let result = getGroupedDiff lines1 lines2
             pure $ "Both files contain garbled json." <> renderDiff result
