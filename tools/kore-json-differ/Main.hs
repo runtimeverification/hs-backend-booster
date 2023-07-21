@@ -2,7 +2,6 @@
 Copyright   : (c) Runtime Verification, 2023
 License     : BSD-3-Clause
 -}
-
 module Main (main) where
 
 import Data.ByteString.Lazy.Char8 qualified as BS
