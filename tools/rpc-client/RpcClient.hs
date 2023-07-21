@@ -56,7 +56,7 @@ main = do
                 | otherwise = BS.putStrLn
             reformat = Json.encodePretty' rpcJsonConfig . Json.decode @Json.Value
         write $ if not prettify then request else reformat request
-        exitWith ExitSuccess
+        exitSuccess
     runTCPClient host (show port) $ \s -> do
         start <- getTime Monotonic
         trace "[Info] Sending request..." $
