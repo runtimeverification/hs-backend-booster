@@ -68,7 +68,7 @@ test_jsonDiff = do
                 map classifyTest testFiles
         comparisons =
             testGroup "Pairwise comparison, expected results in files" $
-                [ compareTest f1 f2 | f1 <- testFiles, f2 <- testFiles ]
+                [ compareTest f1 f2 | f1 <- testFiles, f2 <- testFiles, f1 /= f2 ]
     pure $ testGroup "JSON diff tool tests" [ classifications, comparisons]
   where
     classifyTest f = testCase ("Classify " <> takeFileName f) $ do
