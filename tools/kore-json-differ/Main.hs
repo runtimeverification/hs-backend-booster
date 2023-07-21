@@ -9,7 +9,7 @@ import Data.ByteString.Lazy.Char8 qualified as BS
 import System.Environment (getArgs)
 import System.Exit
 
-import Booster.Syntax.Json.Utils
+import Booster.JsonRpc.Utils
 
 usage :: String
 usage =

@@ -3,10 +3,16 @@ Copyright   : (c) Runtime Verification, 2023
 License     : BSD-3-Clause
 -}
 
-module Booster.Syntax.Json.Utils (
+module Booster.JsonRpc.Utils (
     diffJson,
+    DiffResult (..),
     isIdentical,
     renderResult,
+    KoreRpcJson (..),
+    decodeKoreRpc,
+    KoreRpcType (..),
+    rpcTypeOf,
+    typeString,
 ) where
 
 import Control.Applicative ((<|>))
@@ -44,23 +50,6 @@ diffJson korefile1 korefile2 = do
   where
     computeJsonDiff =
         getGroupedDiff `on` (BS.lines . encodePretty' rpcJsonConfig)
-
-{-
-    pure $ case (contents1, contents2) of
-        (_, _)
-            | contents1 == contents2 ->
-                Identic
-
-                pure . BS.unwords $
-                    ["Files", BS.pack korefile1, "and", BS.pack korefile2, "are identical", typeString contents1 <> "s"]
-        (NotRpcJson lines1, NotRpcJson lines2) -> do
-            let result = getGroupedDiff lines1 lines2
-            pure $ "Both files do not contain json." <> renderDiff result
-        (other1, other2)
-            | otherwise -> do
-                let result = computeJsonDiff other1 other2
-                pure $ renderDiff result
--}
 
 data DiffResult
     = Identical KoreRpcType
@@ -158,7 +147,7 @@ instance ToJSON KoreRpcJson where
         RpcJson v -> toJSON v
         NotRpcJson bs -> toJSON $ map BS.unpack bs
 
--- | Information about the kind of object in 'KoreRpcJson' ()without payload)
+-- | Information about the kind of object in 'KoreRpcJson' (without payload)
 data KoreRpcType
     = RpcReq APIMethod
     | RpcResp APIMethod
