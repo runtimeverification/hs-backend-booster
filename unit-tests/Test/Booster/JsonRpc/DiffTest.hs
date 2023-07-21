@@ -9,8 +9,8 @@ module Test.Booster.JsonRpc.DiffTest (
 import Data.ByteString.Lazy.Char8 qualified as BS
 import System.FilePath
 import Test.Tasty
-import Test.Tasty.HUnit
 import Test.Tasty.Golden (findByExtension)
+import Test.Tasty.HUnit
 
 import Booster.JsonRpc.Utils
 import Kore.JsonRpc.Types (APIMethod (..))
@@ -34,8 +34,8 @@ isTestFile :: FilePath -> Bool
 isTestFile f =
     let f' = BS.pack f
         expectedDir = BS.pack $ testDataDir </> "expected"
-     in not (expectedDir `BS.isPrefixOf` f') &&
-        any (`BS.isSuffixOf` f') typeExtensions
+     in not (expectedDir `BS.isPrefixOf` f')
+            && any (`BS.isSuffixOf` f') typeExtensions
 
 typeFromExtension :: FilePath -> KoreRpcType
 typeFromExtension name
@@ -61,15 +61,15 @@ typeFromExtension name
 test_jsonDiff :: IO TestTree
 test_jsonDiff = do
     testFiles <-
-        filter isTestFile <$>
-            findByExtension [".error", ".json", ".request", ".response"] testDataDir
+        filter isTestFile
+            <$> findByExtension [".error", ".json", ".request", ".response"] testDataDir
     let classifications =
             testGroup "Classify JSON files by their type in kore-rpc-types" $
                 map classifyTest testFiles
         comparisons =
             testGroup "Pairwise comparison, expected results in files" $
-                [ compareTest f1 f2 | f1 <- testFiles, f2 <- testFiles, f1 /= f2 ]
-    pure $ testGroup "JSON diff tool tests" [ classifications, comparisons]
+                [compareTest f1 f2 | f1 <- testFiles, f2 <- testFiles, f1 /= f2]
+    pure $ testGroup "JSON diff tool tests" [classifications, comparisons]
   where
     classifyTest f = testCase ("Classify " <> takeFileName f) $ do
         fileType <- rpcTypeOf . decodeKoreRpc <$> BS.readFile f
