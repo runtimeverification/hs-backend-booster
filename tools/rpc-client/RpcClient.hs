@@ -145,7 +145,7 @@ runTarball :: String -> Int -> FilePath -> Bool -> IO ()
 runTarball host port tarFile keepGoing = do
     -- check tar files
     containedFiles <- Tar.read <$> BS.readFile tarFile
-    let checked = Tar.checkPortability $ Tar.checkSecurity containedFiles
+    let checked = Tar.checkSecurity containedFiles
     Tar.foldEntries (flip const) (pure ()) throwAnyError checked
     -- probe server connection before doing anything, display
     -- instructions unless server was found.
@@ -158,16 +158,20 @@ runTarball host port tarFile keepGoing = do
             traceM $ "[Info] RPC data:" <> show jsonFiles
 
             let requests = mapMaybe (stripSuffix "_request.json") jsonFiles
-            forM_ requests $ \r -> do
-                mbError <- runRequest skt tmp jsonFiles r
-                whenJust mbError $ \err ->
-                    trace ("[Error] Request " <> r <> " failed: " <> BS.unpack err) $
-                    unless keepGoing $ exitWith (ExitFailure 2)
-        exitSuccess
+            results <-
+                forM requests $ \r -> do
+                    mbError <- runRequest skt tmp jsonFiles r
+                    case mbError of
+                        Just err ->
+                            trace ("[Error] Request " <> r <> " failed: " <> BS.unpack err) $
+                                unless keepGoing $ exitWith (ExitFailure 2)
+                        Nothing -> traceM "[Info] Response matched with expected"
+                    pure mbError
+            exitWith (if all isNothing results then ExitSuccess else ExitFailure 2)
   where
     -- complain on any errors in the tarball
-    throwAnyError :: Either (Either Tar.FormatError Tar.FileNameError) Tar.PortabilityError -> IO a
-    throwAnyError = either (either throwIO throwIO) throwIO
+    throwAnyError :: Either Tar.FormatError Tar.FileNameError -> IO a
+    throwAnyError = either throwIO throwIO
 
     -- unpack all rpc_*/*.json files into dir and return their names
     unpackIfRpc :: FilePath -> Tar.Entry -> IO [FilePath] -> IO [FilePath]
