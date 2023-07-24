@@ -14,7 +14,11 @@ module RpcClient (
     main,
 ) where
 
+import Control.Exception
 import Control.Monad
+import Control.Monad.Extra (whenJust)
+import Codec.Archive.Tar qualified as Tar
+import Codec.Archive.Tar.Check qualified as Tar
 import Data.Aeson qualified as Json
 import Data.Aeson.Encode.Pretty qualified as Json
 import Data.Aeson.Key qualified as JsonKey
@@ -24,7 +28,7 @@ import Data.ByteString.Lazy.Char8 qualified as BS
 import Data.Char (isDigit)
 import Data.Int (Int64)
 import Data.List.Extra
-import Data.Maybe (isNothing)
+import Data.Maybe (isNothing, mapMaybe)
 import Data.Text qualified as Text
 import Data.Vector as Array (fromList)
 import Network.Run.TCP
@@ -34,11 +38,14 @@ import Options.Applicative
 import System.Clock
 import System.Directory
 import System.Exit
+import System.FilePath
 import System.IO
+import System.IO.Extra
 import System.Process
 
 import Booster.JsonRpc (rpcJsonConfig)
 import Booster.Syntax.Json qualified as Syntax
+import Booster.JsonRpc.Utils (diffJson, isIdentical, renderResult)
 
 import Debug.Trace
 
@@ -46,6 +53,9 @@ main :: IO ()
 main = do
     Options{host, port, mode, optionFile, options, postProcessing, prettify, time, dryRun} <-
         execParser parseOptions
+    -- FIXME separate function for single-request mode
+    whenJust (readTarballMode mode) $ uncurry (runTarball host port)
+    -- FIXME end of tarball mode here
     request <-
         trace "[Info] Preparing request data" $
             prepareRequestData mode optionFile options
@@ -66,7 +76,7 @@ makeRequest ::
     Bool -> String -> Socket -> Int64 -> BS.ByteString -> (BS.ByteString -> IO a) -> IO a
 makeRequest time name s bufSize request handleResponse = do
     start <- getTime Monotonic
-    trace "[Info] Sending request..." $
+    trace ("[Info] Sending request " <> name <> "...") $
         sendAll s request
     response <- readResponse
     end <- getTime Monotonic
@@ -98,19 +108,22 @@ data Options = Options
     , prettify :: Bool
     , time :: Bool
     , dryRun :: Bool
-    }
+    } -- FIXME separate parameters for single mode and tarball mode
     deriving stock (Show)
 
 {- | Defines what to do. Either one of the endpoints (with state in a
  file), or raw data (entire input in a file).
 -}
-data Mode
+data Mode -- FIXME add common parameters to single-request modes
     = Exec FilePath
     | Simpl FilePath
     | AddModule FilePath
     | GetModel FilePath
     | Check FilePath FilePath
     | SendRaw FilePath
+    | RunTarball
+        FilePath -- tarball
+        Bool -- keep-going (do not stop on first difference)
     deriving stock (Show)
 
 getModeFile :: Mode -> FilePath
@@ -121,7 +134,80 @@ getModeFile = \case
     GetModel f -> f
     Check f1 _ -> f1
     SendRaw f -> f
+    RunTarball f _ -> f
 
+----------------------------------------
+readTarballMode :: Mode -> Maybe (FilePath, Bool)
+readTarballMode (RunTarball file keepGoing) = Just (file, keepGoing)
+readTarballMode _other = Nothing
+
+runTarball :: String -> Int -> FilePath -> Bool -> IO ()
+runTarball host port tarFile keepGoing = do
+    -- check tar files
+    containedFiles <- Tar.read <$> BS.readFile tarFile
+    let checked = Tar.checkPortability $ Tar.checkSecurity containedFiles
+    Tar.foldEntries (flip const) (pure ()) throwAnyError checked
+    -- probe server connection before doing anything, display
+    -- instructions unless server was found.
+    runTCPClient host (show port) $ \skt -> do
+        -- unpack relevant tar files (rpc_* directory only)
+        withTempDir $ \tmp -> do
+            jsonFiles <-
+                trace (unwords ["[Info] unpacking json files from tarball", tarFile, "into", tmp]) $
+                    Tar.foldEntries (unpackIfRpc tmp) (pure []) throwAnyError checked
+            traceM $ "[Info] RPC data:" <> show jsonFiles
+
+            let requests = mapMaybe (stripSuffix "_request.json") jsonFiles
+            forM_ requests $ \r -> do
+                mbError <- runRequest skt tmp jsonFiles r
+                whenJust mbError $ \err ->
+                    trace ("[Error] Request " <> r <> " failed: " <> BS.unpack err) $
+                    unless keepGoing $ exitWith (ExitFailure 2)
+        exitSuccess
+  where
+    -- complain on any errors in the tarball
+    throwAnyError :: Either (Either Tar.FormatError Tar.FileNameError) Tar.PortabilityError -> IO a
+    throwAnyError = either (either throwIO throwIO) throwIO
+
+    -- unpack all rpc_*/*.json files into dir and return their names
+    unpackIfRpc :: FilePath -> Tar.Entry -> IO [FilePath] -> IO [FilePath]
+    unpackIfRpc tmpDir entry acc = do
+        case splitFileName (Tar.entryPath entry) of
+            -- assume single directory "rpc_<something>" containing "*.json" files
+            (_, "") -- skip all directories
+                | Tar.Directory <- Tar.entryContent entry ->
+                      acc
+            (dir, file) -- unpack json files into tmp directory
+                | "rpc_" `isPrefixOf` dir
+                , ".json" `isSuffixOf` file
+                , Tar.NormalFile bs _size <- Tar.entryContent entry -> do
+                      BS.writeFile (tmpDir </> file) bs
+                      (file :) <$> acc
+            _other -> -- skip anything else
+                acc
+
+    -- Runs one request, checking that a response is available for
+    -- comparison. Returns Nothing if successful (identical
+    -- response), or rendered diff or error message if failing
+    runRequest :: Socket -> FilePath -> [FilePath] -> String -> IO (Maybe BS.ByteString)
+    runRequest skt tmpDir jsonFiles basename
+         | not . (`elem` jsonFiles) $ basename <> "_response.json" =
+            pure . Just . BS.pack $ "Response file " <> basename <> "_response.json is missing."
+         | not . (`elem` jsonFiles) $ basename <> "_request.json" =
+            pure . Just . BS.pack $ "Request file " <> basename <> "_request.json is missing."
+         | otherwise = do
+            request <- BS.readFile $ tmpDir </> basename <> "_request.json"
+            expected <- BS.readFile $ tmpDir </> basename <> "_response.json"
+
+            actual <- makeRequest False basename skt 8192 request pure
+
+            let diff = diffJson expected actual
+            if isIdentical diff
+                then pure Nothing
+                else pure . Just $ renderResult "expected response" "actual response" diff
+
+
+----------------------------------------
 {- | Optional output post-processing:
   * 'Expect' checks formatted output against a given golden file.
   * If `regenerate` is set to true, will create/overrie the expected file with received output
@@ -271,6 +357,8 @@ prepareRequestData (GetModel file) mbOptFile opts =
     prepareOneTermRequest "get-model" file mbOptFile opts
 prepareRequestData (Check _file1 _file2) _mbOptFile _opts = do
     error "not implemented yet"
+prepareRequestData RunTarball{} _ _ =
+    error "Tarball mode should never call prepareRequestData"
 
 prepareOneTermRequest ::
     String -> FilePath -> Maybe FilePath -> [(String, String)] -> IO BS.ByteString
