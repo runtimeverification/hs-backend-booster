@@ -128,11 +128,13 @@ executables:
       - clock
       - directory
       - extra
+      - filepath
       - hs-backend-booster
       - network
       - network-run
       - optparse-applicative
       - process
+      - tar
       - text
       - vector
     ghc-options:

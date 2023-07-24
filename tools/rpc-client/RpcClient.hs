@@ -22,6 +22,7 @@ import Data.Aeson.KeyMap qualified as JsonKeyMap
 import Data.Bifunctor
 import Data.ByteString.Lazy.Char8 qualified as BS
 import Data.Char (isDigit)
+import Data.Int (Int64)
 import Data.List.Extra
 import Data.Maybe (isNothing)
 import Data.Text qualified as Text
@@ -58,28 +59,33 @@ main = do
         write $ if not prettify then request else reformat request
         exitSuccess
     runTCPClient host (show port) $ \s -> do
-        start <- getTime Monotonic
-        trace "[Info] Sending request..." $
-            sendAll s request
-        response <- readResponse s 8192
-        end <- getTime Monotonic
-        let modeFile = getModeFile mode
-            timeStr = timeSpecs start end
-        hPutStrLn stderr $ "[info] Round trip time for request '" <> modeFile <> "' was " <> timeStr
-        when time $ do
-            hPutStrLn stderr $ "[Info] Saving timing for " <> modeFile
-            writeFile (modeFile <> ".time") timeStr
-
-        trace "[Info] Response received." $
-            postProcess prettify postProcessing response
+        makeRequest time (getModeFile mode) s 8192 request (postProcess prettify postProcessing)
         shutdown s ShutdownReceive
+
+makeRequest ::
+    Bool -> String -> Socket -> Int64 -> BS.ByteString -> (BS.ByteString -> IO a) -> IO a
+makeRequest time name s bufSize request handleResponse = do
+    start <- getTime Monotonic
+    trace "[Info] Sending request..." $
+        sendAll s request
+    response <- readResponse
+    end <- getTime Monotonic
+    let timeStr = timeSpecs start end
+    traceM $ "[Info] Round trip time for request '" <> name <> "' was " <> timeStr
+    when time $
+        trace ("[Info] Saving timing for " <> name) $
+            writeFile (name <> ".time") timeStr
+
+    trace "[Info] Response received." $
+        handleResponse response
   where
-    readResponse s bufSize = do
+    readResponse :: IO BS.ByteString
+    readResponse = do
         part <- recv s bufSize
         if BS.length part < bufSize
             then pure part
             else do
-                more <- readResponse s bufSize
+                more <- readResponse
                 pure $ part <> more
 
 data Options = Options
