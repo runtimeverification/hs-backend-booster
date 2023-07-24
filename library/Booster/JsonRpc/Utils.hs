@@ -28,15 +28,10 @@ import Network.JSONRPC
 import Kore.JsonRpc.Types
 import Kore.Syntax.Json.Types hiding (Left, Right)
 
-diffJson :: FilePath -> FilePath -> IO DiffResult
-diffJson korefile1 korefile2 = do
-    contents1 <-
-        decodeKoreRpc <$> BS.readFile korefile1
-    contents2 <-
-        decodeKoreRpc <$> BS.readFile korefile2
-
-    pure $ case (contents1, contents2) of
-        (_, _)
+diffJson :: BS.ByteString -> BS.ByteString -> DiffResult
+diffJson file1 file2 =
+    case (decodeKoreRpc file1, decodeKoreRpc file2) of
+        (contents1, contents2)
             | contents1 == contents2 ->
                 Identical $ rpcTypeOf contents1
         (NotRpcJson lines1, NotRpcJson lines2) -> do
