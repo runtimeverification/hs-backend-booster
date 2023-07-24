@@ -3,10 +3,11 @@
 
   inputs = {
     k-framework.url = "github:runtimeverification/k/v5.6.131";
+    haskell-backend.url = "github:runtimeverification/haskell-backend/3ac2c87da44ed9e8fe4ba4583fb5860a4680d821";
     k-framework.inputs.booster-backend.follows = "";
-    nixpkgs.follows = "haskell-nix/nixpkgs-unstable";
-    haskell-nix.url = "github:input-output-hk/haskell.nix";
-    haskell-backend.url = "github:runtimeverification/haskell-backend";
+    haskell-nix.follows = "haskell-backend/haskell-nix";
+    nixpkgs.follows = "haskell-backend/haskell-nix/nixpkgs-unstable";
+
     flake-compat = {
       url = "github:edolstra/flake-compat";
       flake = false;
@@ -27,7 +28,7 @@
         };
       allNixpkgsFor = perSystem nixpkgsForSystem;
       nixpkgsFor = system: allNixpkgsFor.${system};
-      index-state = "2023-06-29T00:00:00Z";
+      index-state = "2023-06-26T23:55:21Z";
 
       boosterBackendFor = { compiler, pkgs, profiling ? false, k }:
         pkgs.haskell-nix.cabalProject {
@@ -41,6 +42,7 @@
                 /test/parser
                 /test/internalisation
                 /test/rpc-integration
+                /test/jsonrpc-examples
                 /scripts
                 /.github
               ''
@@ -59,7 +61,7 @@
               cabal = "latest";
               haskell-language-server = "latest";
               fourmolu = {
-                inherit index-state;
+                index-state = "2023-05-17T00:00:00Z";
                 version = "0.12.0.0";
               };
               hlint = "latest";
@@ -149,7 +151,6 @@
           booster-dev = packages."hs-backend-booster:exe:booster-dev";
           rpc-client = packages."hs-backend-booster:exe:rpc-client";
           parsetest = packages."hs-backend-booster:exe:parsetest";
-          dltest = packages."hs-backend-booster:exe:dltest";
         } // packages // collectOutputs "packages" flakes);
 
       apps = perSystem (system:
@@ -177,7 +178,6 @@
           rpc-client = apps."hs-backend-booster:exe:rpc-client";
           parsetest = apps."hs-backend-booster:exe:parsetest";
           parsetest-binary = apps."hs-backend-booster:exe:parsetest-binary";
-          dltest = apps."hs-backend-booster:exe:dltest";
           update-haskell-backend = {
             type = "app";
             program = "${scripts}/update-haskell-backend.sh";

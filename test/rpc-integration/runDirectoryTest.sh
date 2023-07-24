@@ -23,6 +23,8 @@
 #                  (default <top>/.build/booster/bin/rpc-client)
 #   SERVER_OPTS: additional options to pass to the SERVER
 #                  (default: none)
+#   CLIENT_OPTS: additional options to pass to the CLIENT
+#                  (default: none)
 
 directory=${1?"Please provide a test directory in a single argument"}
 
@@ -77,10 +79,10 @@ for test in $( ls $dir/state-*.{execute,send,simplify,add-module,get-model} 2>/d
     mode=${test##*.}
     printf "########## Test: %10s %20s\n" "$mode" "$testname #######"
     if [ -f "$dir/params-${testname}.json" ]; then
-        params="--param-file $dir/params-${testname}.json"
-    else
-        params=""
+        CLIENT_OPTS="${CLIENT_OPTS} --param-file $dir/params-${testname}.json"
     fi
+    params=${CLIENT_OPTS:-""}
+
     # call rpc-client
     echo "$client $mode $test $params --expect $dir/response-${testname}.json $*"
     $client $mode $test $params --expect $dir/response-${testname}.json $*

@@ -29,7 +29,6 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Records
 import Numeric.Natural
-import Prettyprinter
 
 import Booster.Definition.Attributes.Base (getUniqueId, uniqueId)
 import Booster.Definition.Base (KoreDefinition (..))
@@ -37,14 +36,14 @@ import Booster.Definition.Base qualified as Definition (RewriteRule (..))
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.ApplyEquations qualified as ApplyEquations
 import Booster.Pattern.Base (Pattern (..), TermOrPredicate (..))
+import Booster.Pattern.Implication (ImplicationCheckResult (..), checkImplication)
 import Booster.Pattern.Rewrite (
     RewriteFailed (..),
     RewriteResult (..),
     RewriteTrace (..),
     performRewrite,
  )
-import Booster.Pattern.Unify (UnificationResult (..), unifyTerms)
-import Booster.Pattern.Util (sortOfPattern)
+import Booster.Pattern.Util (sortOfPattern, substitutionAsPredicate)
 import Booster.Prettyprinter (renderDefault)
 import Booster.Syntax.Json (KoreJson (..), addHeader, sortOfJson)
 import Booster.Syntax.Json.Externalise
@@ -84,7 +83,15 @@ respond stateVar =
                     let cutPoints = fromMaybe [] req.cutPointRules
                         terminals = fromMaybe [] req.terminalRules
                         mbDepth = fmap getNat req.maxDepth
-                    execResponse req <$> performRewrite def mLlvmLibrary mbDepth cutPoints terminals pat
+                        doTracing =
+                            any
+                                (fromMaybe False)
+                                [ req.logSuccessfulRewrites
+                                , req.logFailedRewrites
+                                , req.logSuccessfulSimplifications
+                                , req.logFailedSimplifications
+                                ]
+                    execResponse req <$> performRewrite doTracing def mLlvmLibrary mbDepth cutPoints terminals pat
         AddModule req -> do
             -- block other request executions while modifying the server state
             state <- liftIO $ takeMVar stateVar
@@ -125,8 +132,12 @@ respond stateVar =
                         Just
                             . mapMaybe (mkLogEquationTrace (req.logSuccessfulSimplifications, req.logFailedSimplifications))
                             . toList
-                logTraces =
-                    mapM_ (Log.logOther (Log.LevelOther "Simplify") . pack . renderDefault . pretty)
+                doTracing =
+                    any
+                        (fromMaybe False)
+                        [ req.logSuccessfulSimplifications
+                        , req.logFailedSimplifications
+                        ]
             case internalised of
                 Left patternErrors -> do
                     Log.logError $ "Error internalising cterm: " <> Text.pack (show patternErrors)
@@ -134,9 +145,8 @@ respond stateVar =
                 -- term and predicate (pattern)
                 Right (TermAndPredicate pat) -> do
                     Log.logInfoNS "booster" "Simplifying a pattern"
-                    case ApplyEquations.traceSimplifyPattern def mLlvmLibrary pat of
+                    ApplyEquations.evaluatePattern doTracing def mLlvmLibrary pat >>= \case
                         Right (newPattern, patternTraces) -> do
-                            logTraces $ filter (not . ApplyEquations.isMatchFailure) patternTraces
                             let (t, p) = externalisePattern newPattern
                                 tSort = externaliseSort (sortOfPattern newPattern)
                                 result = maybe t (KoreJson.KJAnd tSort t) p
@@ -145,6 +155,13 @@ respond stateVar =
                                     { state = addHeader result
                                     , logs = mkTraces patternTraces
                                     }
+                        Left (ApplyEquations.SideConditionsFalse _ traces) -> do
+                            let tSort = fromMaybe (error "unknown sort") $ sortOfJson req.state.term
+                            pure . Right . Simplify $
+                                SimplifyResult
+                                    { state = addHeader $ KoreJson.KJBottom tSort
+                                    , logs = mkTraces traces
+                                    }
                         Left (ApplyEquations.EquationLoop _traces terms) ->
                             pure . Left . backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
                         Left other ->
@@ -152,9 +169,8 @@ respond stateVar =
                             -- predicate only
                 Right (APredicate predicate) -> do
                     Log.logInfoNS "booster" "Simplifying a predicate"
-                    case ApplyEquations.traceSimplifyConstraint def mLlvmLibrary predicate of
+                    ApplyEquations.simplifyConstraint doTracing def mLlvmLibrary predicate >>= \case
                         Right (newPred, traces) -> do
-                            logTraces $ filter (not . ApplyEquations.isMatchFailure) traces
                             let predicateSort =
                                     fromMaybe (error "not a predicate") $
                                         sortOfJson req.state.term
@@ -170,17 +186,17 @@ respond stateVar =
             let logTraces =
                     mapM_ (Log.logOther (Log.LevelOther "Simplify") . pack . renderDefault . pretty)
             let internalisedAntecedent =
-                    runExcept $ internaliseTermOrPredicate False Nothing def req.antecedent.term
+                    runExcept $ internalisePattern False Nothing def req.antecedent.term
                 internalisedConsequent =
-                    runExcept $ internaliseTermOrPredicate False Nothing def req.consequent.term
+                    runExcept $ internalisePattern False Nothing def req.consequent.term
             case (internalisedAntecedent, internalisedConsequent) of
                 (Left patternErrorsAntecedent, _) -> do
-                    Log.logError $ "Error internalising cterm: " <> Text.pack (show patternErrorsAntecedent)
+                    Log.logError $ "Error internalising antecedent cterm: " <> Text.pack (show patternErrorsAntecedent)
                     pure $ Left $ backendError CouldNotVerifyPattern patternErrorsAntecedent
                 (_, Left patternErrorsConsequent) -> do
-                    Log.logError $ "Error internalising cterm: " <> Text.pack (show patternErrorsConsequent)
+                    Log.logError $ "Error internalising consequent cterm: " <> Text.pack (show patternErrorsConsequent)
                     pure $ Left $ backendError CouldNotVerifyPattern patternErrorsConsequent
-                (Right (TermAndPredicate antecedentPattern), Right (TermAndPredicate consequentPattern)) -> do
+                (Right antecedentPattern, Right consequentPattern) -> do
                     Log.logInfoNS "booster" "Simplifying antecedent"
                     case ApplyEquations.traceSimplifyPattern def mLlvmLibrary antecedentPattern of
                         Right (newAntecedentPattern, antecedentTraces) -> do
@@ -189,18 +205,25 @@ respond stateVar =
                             case ApplyEquations.traceSimplifyPattern def mLlvmLibrary consequentPattern of
                                 Right (newConsequentPattern, consequentTraces) -> do
                                     logTraces $ filter (not . ApplyEquations.isMatchFailure) consequentTraces
-                                    -- now, try unify simplified antecedent and consequent
-                                    case unifyTerms def newAntecedentPattern.term newConsequentPattern.term of
-                                        UnificationSuccess subst -> do
-                                            Log.logInfoNS "booster" (Text.pack $ show subst)
-                                            pure $ Left notImplemented
-                                        other -> do
-                                            Log.logInfoNS "booster" "unable to unify antecedent with consequent"
-                                            pure . Left . backendError RpcError.Aborted $ show other -- FIXME
-                                Left other -> pure . Left . backendError RpcError.Aborted $ show other -- FIXME
+                                    Log.logInfoNS "booster" "Matching antecedent with consequent"
+                                    case checkImplication def newAntecedentPattern newConsequentPattern of
+                                        ImplicationValid subst ->
+                                            pure . Right . SimplifyImplies $
+                                                SimplifyImpliesResult
+                                                    { satisfiable = Sat
+                                                    , substitution =
+                                                        Just . addHeader $
+                                                            externalisePredicate
+                                                                (externaliseSort $ sortOfPattern antecedentPattern)
+                                                                (substitutionAsPredicate subst)
+                                                    , logs = mempty
+                                                    }
+                                        ImplicationUnknown matchFailureReason _constraints -> do
+                                            Log.logErrorNS "booster" (Text.pack . show $ matchFailureReason)
+                                            pure . Left . backendError RpcError.Aborted $ show matchFailureReason
+                                Left other -> pure . Left . backendError RpcError.Aborted $ show other
                         Left other ->
                             pure . Left . backendError RpcError.Aborted $ show other -- FIXME
-                (_, _) -> pure $ Left notImplemented
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left cancelUnsupportedInBatchMode
@@ -536,5 +559,12 @@ mkLogRewriteTrace
                                     , originalTermIndex = Nothing
                                     , origin = Booster
                                     , result = Failure{reason = "Internal error: " <> err, _ruleId = Nothing}
+                                    }
+                            ApplyEquations.SideConditionsFalse _predicates _traces ->
+                                Simplification
+                                    { originalTerm = Nothing
+                                    , originalTermIndex = Nothing
+                                    , origin = Booster
+                                    , result = Failure{reason = "Side conditions false", _ruleId = Nothing}
                                     }
             _ -> Nothing
