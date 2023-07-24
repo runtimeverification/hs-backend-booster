@@ -91,22 +91,25 @@ decodeKoreRpc input =
         req <- Json.decode @Request input
         parser <- parseParams req.getReqMethod
         parseMaybe parser req.getReqParams
-    rpcResponse = fmap RpcResponse $ do
+    rpcResponse = do
         resp <- Json.decode @Response input
-        foldl1
-            (<|>)
-            [ Execute <$> parseMaybe (Json.parseJSON @ExecuteResult) resp.getResult
-            , Implies <$> parseMaybe (Json.parseJSON @ImpliesResult) resp.getResult
-            , Simplify <$> parseMaybe (Json.parseJSON @SimplifyResult) resp.getResult
-            , AddModule <$> parseMaybe (Json.parseJSON @()) resp.getResult
-            , GetModel <$> parseMaybe (Json.parseJSON @GetModelResult) resp.getResult
-            ]
+        case resp of
+            ResponseError{} -> extractError resp.getError
+            OrphanError{} -> extractError resp.getError
+            Response{} ->
+                fmap RpcResponse $
+                    try [ Execute <$> parseMaybe (Json.parseJSON @ExecuteResult) resp.getResult
+                        , Implies <$> parseMaybe (Json.parseJSON @ImpliesResult) resp.getResult
+                        , Simplify <$> parseMaybe (Json.parseJSON @SimplifyResult) resp.getResult
+                        , AddModule <$> parseMaybe (Json.parseJSON @()) resp.getResult
+                        , GetModel <$> parseMaybe (Json.parseJSON @GetModelResult) resp.getResult
+                        ]
     rpcError =
-        Json.decode @ErrorObj input
-            >>= \case
-                ErrorObj msg code mbData ->
-                    pure $ RpcError msg code mbData
-                ErrorVal{} -> fail "arbitrary json can be an ErrorVal"
+        Json.decode @ErrorObj input >>= extractError
+    extractError = \case
+        ErrorObj msg code mbData ->
+            pure $ RpcError msg code mbData
+        ErrorVal{} -> fail "arbitrary json can be an ErrorVal"
     koreJson =
         RpcKoreJson <$> Json.decode @KoreJson input
     unknown =

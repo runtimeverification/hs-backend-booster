@@ -325,6 +325,15 @@ parseMode =
                     (GetModel <$> strArgument (metavar "FILENAME"))
                     (progDesc "check satisfiability/provide model for the state in the file")
                 )
+            <> command
+                "run-tarball"
+                ( info
+                    (RunTarball
+                         <$> strArgument (metavar "TAR_FILE")
+                         <*> switch (long "keep-going" <> help "do not stop on errors")
+                    )
+                    (progDesc "run and compare results for all requests in a tarball's rpc_* subdirectory")
+                )
         )
 
 ----------------------------------------
