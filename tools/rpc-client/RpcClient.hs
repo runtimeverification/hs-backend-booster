@@ -164,9 +164,13 @@ runTarball host port tarFile keepGoing = do
                     case mbError of
                         Just err ->
                             trace ("[Error] Request " <> r <> " failed: " <> BS.unpack err) $
-                                unless keepGoing $ exitWith (ExitFailure 2)
-                        Nothing -> traceM "[Info] Response matched with expected"
+                                unless keepGoing $ do
+                                    shutdown skt ShutdownReceive
+                                    exitWith (ExitFailure 2)
+                        Nothing ->
+                            hPutStrLn stderr "[Info] Response matched with expected"
                     pure mbError
+            shutdown skt ShutdownReceive
             exitWith (if all isNothing results then ExitSuccess else ExitFailure 2)
   where
     -- complain on any errors in the tarball
