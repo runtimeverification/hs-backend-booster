@@ -16,6 +16,8 @@ module RpcClient (
 
 import Codec.Archive.Tar qualified as Tar
 import Codec.Archive.Tar.Check qualified as Tar
+import Codec.Compression.BZip qualified as BZ2
+import Codec.Compression.GZip qualified as GZip
 import Control.Exception
 import Control.Monad
 import Data.Aeson qualified as Json
@@ -329,8 +331,15 @@ parseMode =
 
 runTarball :: String -> Int -> FilePath -> Bool -> IO ()
 runTarball host port tarFile keepGoing = do
-    -- check tar files
-    containedFiles <- Tar.read <$> BS.readFile tarFile
+    -- unpack tar files, determining type from extension(s)
+    let unpackTar
+            | ".tar" == takeExtension tarFile = Tar.read
+            | ".tgz" == takeExtension tarFile = Tar.read . GZip.decompress
+            | ".tar.gz" `isSuffixOf` takeExtensions tarFile = Tar.read . GZip.decompress
+            | ".tar.bz2" `isSuffixOf` takeExtensions tarFile = Tar.read . BZ2.decompress
+            | otherwise = Tar.read
+
+    containedFiles <- unpackTar <$> BS.readFile tarFile
     let checked = Tar.checkSecurity containedFiles
     -- probe server connection before doing anything, display
     -- instructions unless server was found.

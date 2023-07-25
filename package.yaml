@@ -125,6 +125,7 @@ executables:
       - aeson-pretty
       - base
       - bytestring
+      - bz2
       - clock
       - directory
       - extra
@@ -137,6 +138,7 @@ executables:
       - tar
       - text
       - vector
+      - zlib
     ghc-options:
       - -rtsopts
   parsetest:
