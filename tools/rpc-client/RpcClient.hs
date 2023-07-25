@@ -255,6 +255,7 @@ parseMode =
                     <*> pure Nothing -- no param file
                     <*> pure [] -- no params
                     <*> parseProcessingOptions
+                    <**> helper
                 )
                 (progDesc "send the raw file contents directly")
             )
@@ -266,6 +267,7 @@ parseMode =
                         <*> paramFileOpt
                         <*> many paramOpt
                         <*> parseProcessingOptions
+                        <**> helper
                     )
                     (progDesc "execute (rewrite) the state in the file")
                 )
@@ -277,6 +279,7 @@ parseMode =
                         <*> paramFileOpt
                         <*> many paramOpt
                         <*> parseProcessingOptions
+                        <**> helper
                     )
                     (progDesc "simplify the state or condition in the file")
                 )
@@ -288,6 +291,7 @@ parseMode =
                         <*> paramFileOpt
                         <*> many paramOpt
                         <*> parseProcessingOptions
+                        <**> helper
                     )
                     (progDesc "add the module in the given kore file")
                 )
@@ -299,6 +303,7 @@ parseMode =
                         <*> paramFileOpt
                         <*> many paramOpt
                         <*> parseProcessingOptions
+                        <**> helper
                     )
                     (progDesc "check satisfiability/provide model for the state in the file")
                 )
@@ -308,6 +313,7 @@ parseMode =
                     ( RunTarball
                         <$> strArgument (metavar "FILENAME")
                         <*> switch (long "keep-going" <> help "do not stop on unexpected output")
+                        <**> helper
                     )
                     (progDesc "check satisfiability/provide model for the state in the file")
                 )
