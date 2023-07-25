@@ -136,86 +136,6 @@ getModeFile = \case
     SendRaw f -> f
     RunTarball f _ -> f
 
-----------------------------------------
-readTarballMode :: Mode -> Maybe (FilePath, Bool)
-readTarballMode (RunTarball file keepGoing) = Just (file, keepGoing)
-readTarballMode _other = Nothing
-
-runTarball :: String -> Int -> FilePath -> Bool -> IO ()
-runTarball host port tarFile keepGoing = do
-    -- check tar files
-    containedFiles <- Tar.read <$> BS.readFile tarFile
-    let checked = Tar.checkSecurity containedFiles
-    Tar.foldEntries (flip const) (pure ()) throwAnyError checked
-    -- probe server connection before doing anything, display
-    -- instructions unless server was found.
-    runTCPClient host (show port) $ \skt -> do
-        -- unpack relevant tar files (rpc_* directory only)
-        withTempDir $ \tmp -> do
-            jsonFiles <-
-                trace (unwords ["[Info] unpacking json files from tarball", tarFile, "into", tmp]) $
-                    Tar.foldEntries (unpackIfRpc tmp) (pure []) throwAnyError checked
-            traceM $ "[Info] RPC data:" <> show jsonFiles
-
-            let requests = mapMaybe (stripSuffix "_request.json") jsonFiles
-            results <-
-                forM requests $ \r -> do
-                    mbError <- runRequest skt tmp jsonFiles r
-                    case mbError of
-                        Just err ->
-                            trace ("[Error] Request " <> r <> " failed: " <> BS.unpack err) $
-                                unless keepGoing $ do
-                                    shutdown skt ShutdownReceive
-                                    exitWith (ExitFailure 2)
-                        Nothing ->
-                            hPutStrLn stderr "[Info] Response matched with expected"
-                    pure mbError
-            shutdown skt ShutdownReceive
-            exitWith (if all isNothing results then ExitSuccess else ExitFailure 2)
-  where
-    -- complain on any errors in the tarball
-    throwAnyError :: Either Tar.FormatError Tar.FileNameError -> IO a
-    throwAnyError = either throwIO throwIO
-
-    -- unpack all rpc_*/*.json files into dir and return their names
-    unpackIfRpc :: FilePath -> Tar.Entry -> IO [FilePath] -> IO [FilePath]
-    unpackIfRpc tmpDir entry acc = do
-        case splitFileName (Tar.entryPath entry) of
-            -- assume single directory "rpc_<something>" containing "*.json" files
-            (_, "") -- skip all directories
-                | Tar.Directory <- Tar.entryContent entry ->
-                      acc
-            (dir, file) -- unpack json files into tmp directory
-                | "rpc_" `isPrefixOf` dir
-                , ".json" `isSuffixOf` file
-                , Tar.NormalFile bs _size <- Tar.entryContent entry -> do
-                      BS.writeFile (tmpDir </> file) bs
-                      (file :) <$> acc
-            _other -> -- skip anything else
-                acc
-
-    -- Runs one request, checking that a response is available for
-    -- comparison. Returns Nothing if successful (identical
-    -- response), or rendered diff or error message if failing
-    runRequest :: Socket -> FilePath -> [FilePath] -> String -> IO (Maybe BS.ByteString)
-    runRequest skt tmpDir jsonFiles basename
-         | not . (`elem` jsonFiles) $ basename <> "_response.json" =
-            pure . Just . BS.pack $ "Response file " <> basename <> "_response.json is missing."
-         | not . (`elem` jsonFiles) $ basename <> "_request.json" =
-            pure . Just . BS.pack $ "Request file " <> basename <> "_request.json is missing."
-         | otherwise = do
-            request <- BS.readFile $ tmpDir </> basename <> "_request.json"
-            expected <- BS.readFile $ tmpDir </> basename <> "_response.json"
-
-            actual <- makeRequest False basename skt 8192 request pure
-
-            let diff = diffJson expected actual
-            if isIdentical diff
-                then pure Nothing
-                else pure . Just $ renderResult "expected response" "actual response" diff
-
-
-----------------------------------------
 {- | Optional output post-processing:
   * 'Expect' checks formatted output against a given golden file.
   * If `regenerate` is set to true, will create/overrie the expected file with received output
@@ -343,6 +263,87 @@ parseMode =
                     (progDesc "run and compare results for all requests in a tarball's rpc_* subdirectory")
                 )
         )
+
+----------------------------------------
+-- Running all requests contained in the `rpc_*` directory of a tarball
+
+readTarballMode :: Mode -> Maybe (FilePath, Bool)
+readTarballMode (RunTarball file keepGoing) = Just (file, keepGoing)
+readTarballMode _other = Nothing
+
+runTarball :: String -> Int -> FilePath -> Bool -> IO ()
+runTarball host port tarFile keepGoing = do
+    -- check tar files
+    containedFiles <- Tar.read <$> BS.readFile tarFile
+    let checked = Tar.checkSecurity containedFiles
+    Tar.foldEntries (flip const) (pure ()) throwAnyError checked
+    -- probe server connection before doing anything, display
+    -- instructions unless server was found.
+    runTCPClient host (show port) $ \skt -> do
+        -- unpack relevant tar files (rpc_* directory only)
+        withTempDir $ \tmp -> do
+            jsonFiles <-
+                trace (unwords ["[Info] unpacking json files from tarball", tarFile, "into", tmp]) $
+                    Tar.foldEntries (unpackIfRpc tmp) (pure []) throwAnyError checked
+            traceM $ "[Info] RPC data:" <> show jsonFiles
+
+            let requests = mapMaybe (stripSuffix "_request.json") jsonFiles
+            results <-
+                forM requests $ \r -> do
+                    mbError <- runRequest skt tmp jsonFiles r
+                    case mbError of
+                        Just err ->
+                            trace ("[Error] Request " <> r <> " failed: " <> BS.unpack err) $
+                                unless keepGoing $ do
+                                    shutdown skt ShutdownReceive
+                                    exitWith (ExitFailure 2)
+                        Nothing ->
+                            hPutStrLn stderr "[Info] Response matched with expected"
+                    pure mbError
+            shutdown skt ShutdownReceive
+            exitWith (if all isNothing results then ExitSuccess else ExitFailure 2)
+  where
+    -- complain on any errors in the tarball
+    throwAnyError :: Either Tar.FormatError Tar.FileNameError -> IO a
+    throwAnyError = either throwIO throwIO
+
+    -- unpack all rpc_*/*.json files into dir and return their names
+    unpackIfRpc :: FilePath -> Tar.Entry -> IO [FilePath] -> IO [FilePath]
+    unpackIfRpc tmpDir entry acc = do
+        case splitFileName (Tar.entryPath entry) of
+            -- assume single directory "rpc_<something>" containing "*.json" files
+            (_, "") -- skip all directories
+                | Tar.Directory <- Tar.entryContent entry ->
+                      acc
+            (dir, file) -- unpack json files into tmp directory
+                | "rpc_" `isPrefixOf` dir
+                , ".json" `isSuffixOf` file
+                , Tar.NormalFile bs _size <- Tar.entryContent entry -> do
+                      BS.writeFile (tmpDir </> file) bs
+                      (file :) <$> acc
+            _other -> -- skip anything else
+                acc
+
+    -- Runs one request, checking that a response is available for
+    -- comparison. Returns Nothing if successful (identical
+    -- response), or rendered diff or error message if failing
+    runRequest :: Socket -> FilePath -> [FilePath] -> String -> IO (Maybe BS.ByteString)
+    runRequest skt tmpDir jsonFiles basename
+         | not . (`elem` jsonFiles) $ basename <> "_response.json" =
+            pure . Just . BS.pack $ "Response file " <> basename <> "_response.json is missing."
+         | not . (`elem` jsonFiles) $ basename <> "_request.json" =
+            pure . Just . BS.pack $ "Request file " <> basename <> "_request.json is missing."
+         | otherwise = do
+            request <- BS.readFile $ tmpDir </> basename <> "_request.json"
+            expected <- BS.readFile $ tmpDir </> basename <> "_response.json"
+
+            actual <- makeRequest False basename skt 8192 request pure
+
+            let diff = diffJson expected actual
+            if isIdentical diff
+                then pure Nothing
+                else pure . Just $ renderResult "expected response" "actual response" diff
+
 
 ----------------------------------------
 prepareRequestData :: Mode -> Maybe FilePath -> [(String, String)] -> IO BS.ByteString
