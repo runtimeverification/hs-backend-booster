@@ -44,7 +44,6 @@ import Booster.Pattern.Rewrite (
     performRewrite,
  )
 import Booster.Pattern.Util (sortOfPattern, substitutionAsPredicate)
-import Booster.Prettyprinter (renderDefault)
 import Booster.Syntax.Json (KoreJson (..), addHeader, sortOfJson)
 import Booster.Syntax.Json.Externalise
 import Booster.Syntax.Json.Internalise (internalisePattern, internaliseTermOrPredicate)
@@ -183,8 +182,20 @@ respond stateVar =
                         (Left something, _traces) ->
                             pure . Left . backendError RpcError.Aborted $ show something -- FIXME
         SimplifyImplies req -> withContext req._module $ \(def, mLlvmLibrary) -> do
-            let logTraces =
-                    mapM_ (Log.logOther (Log.LevelOther "Simplify") . pack . renderDefault . pretty)
+            let doTracing =
+                    any
+                        (fromMaybe False)
+                        [ req.logSuccessfulSimplifications
+                        , req.logFailedSimplifications
+                        ]
+                mkTraces
+                    | all not . catMaybes $
+                        [req.logSuccessfulSimplifications, req.logFailedSimplifications] =
+                        const Nothing
+                    | otherwise =
+                        Just
+                            . mapMaybe (mkLogEquationTrace (req.logSuccessfulSimplifications, req.logFailedSimplifications))
+                            . toList
             let internalisedAntecedent =
                     runExcept $ internalisePattern False Nothing def req.antecedent.term
                 internalisedConsequent =
@@ -198,13 +209,11 @@ respond stateVar =
                     pure $ Left $ backendError CouldNotVerifyPattern patternErrorsConsequent
                 (Right antecedentPattern, Right consequentPattern) -> do
                     Log.logInfoNS "booster" "Simplifying antecedent"
-                    case ApplyEquations.traceSimplifyPattern def mLlvmLibrary antecedentPattern of
-                        Right (newAntecedentPattern, antecedentTraces) -> do
-                            logTraces $ filter (not . ApplyEquations.isMatchFailure) antecedentTraces
+                    ApplyEquations.evaluatePattern doTracing def mLlvmLibrary antecedentPattern >>= \case
+                        (Right newAntecedentPattern, antecedentTraces) -> do
                             Log.logInfoNS "booster" "Simplifying consequent"
-                            case ApplyEquations.traceSimplifyPattern def mLlvmLibrary consequentPattern of
-                                Right (newConsequentPattern, consequentTraces) -> do
-                                    logTraces $ filter (not . ApplyEquations.isMatchFailure) consequentTraces
+                            ApplyEquations.evaluatePattern doTracing def mLlvmLibrary consequentPattern >>= \case
+                                (Right newConsequentPattern, consequentTraces) -> do
                                     Log.logInfoNS "booster" "Matching antecedent with consequent"
                                     case checkImplication def newAntecedentPattern newConsequentPattern of
                                         ImplicationValid subst ->
@@ -216,14 +225,15 @@ respond stateVar =
                                                             externalisePredicate
                                                                 (externaliseSort $ sortOfPattern antecedentPattern)
                                                                 (substitutionAsPredicate subst)
-                                                    , logs = mempty
+                                                    , logs = mkTraces antecedentTraces <> mkTraces consequentTraces
                                                     }
+                                        ImplicationSortError sortError -> do
+                                            pure . Left . backendError RpcError.Aborted $ show sortError
                                         ImplicationUnknown matchFailureReason _constraints -> do
                                             Log.logErrorNS "booster" (Text.pack . show $ matchFailureReason)
                                             pure . Left . backendError RpcError.Aborted $ show matchFailureReason
-                                Left other -> pure . Left . backendError RpcError.Aborted $ show other
-                        Left other ->
-                            pure . Left . backendError RpcError.Aborted $ show other -- FIXME
+                                (Left other, _consequentTraces) -> pure . Left . backendError RpcError.Aborted $ show other
+                        (Left other, _antecedentTraces) -> pure . Left . backendError RpcError.Aborted $ show other -- FIX ME
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left cancelUnsupportedInBatchMode
