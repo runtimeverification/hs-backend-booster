@@ -1,0 +1,17 @@
+NAME=$(basename ${0%.tar.gz.kompile})
+NAMETGZ=$(basename ${0%.kompile})
+
+# unpack definition.kore and llvm_definition from tarball
+# into a directory named after the tarball
+mkdir -p $NAME
+tar xzf ../test-$NAMETGZ -C $NAME definition.kore llvm_definition/
+
+# provide definition
+cp $NAME/definition.kore ${NAMETGZ}.kore
+
+# kompile llvm-definition to interpreter
+llvm-kompile $NAME/llvm_definition/definition.kore $NAME/llvm_definition/dt c -- -o interpreter
+mv interpreter.* $NAMETGZ.dylib
+
+# remove temporary artefacts
+rm -r $NAME
