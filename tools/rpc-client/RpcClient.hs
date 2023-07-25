@@ -32,6 +32,7 @@ import Data.List.Extra
 import Data.Maybe (isNothing, mapMaybe)
 import Data.Text qualified as Text
 import Data.Vector as Array (fromList)
+import GHC.IO.Exception (IOErrorType (..), IOException (..))
 import Network.Run.TCP
 import Network.Socket
 import Network.Socket.ByteString.Lazy
@@ -343,7 +344,10 @@ runTarball host port tarFile keepGoing = do
     let checked = Tar.checkSecurity containedFiles
     -- probe server connection before doing anything, display
     -- instructions unless server was found.
-    runTCPClient host (show port) $ \skt -> do
+    runTCPClient host (show port) (runAllRequests checked)
+        `catch` noServerError
+  where
+    runAllRequests checked skt = do
         -- unpack relevant tar files (rpc_* directory only)
         withTempDir $ \tmp -> do
             jsonFiles <-
@@ -366,7 +370,7 @@ runTarball host port tarFile keepGoing = do
                     pure mbError
             shutdown skt ShutdownReceive
             exitWith (if all isNothing results then ExitSuccess else ExitFailure 2)
-  where
+
     -- complain on any errors in the tarball
     throwAnyError :: Either Tar.FormatError Tar.FileNameError -> IO a
     throwAnyError = either throwIO throwIO
@@ -388,6 +392,32 @@ runTarball host port tarFile keepGoing = do
             _other ->
                 -- skip anything else
                 acc
+
+    noServerError :: IOException -> IO ()
+    noServerError e@IOError{ioe_type = NoSuchThing} = do
+        -- show instructions how to run the server
+        hPutStrLn stderr $ "[Error] Could not connect to RPC server on port " <> show port
+        hPutStrLn stderr $ "[Error] " <> show e
+        hPutStrLn stderr $
+            unlines
+                [ ""
+                , "To run the required RPC server, you need to"
+                , "1) extract `definition.kore` and `server_instance.json` from the tarball;"
+                , "2) look up the module name `<MODULE>` in `server_instance.json`;"
+                , "3) and then run the server using"
+                , "   $ kore-rpc definition.kore --main-module <MODULE> --server-port " <> show port
+                , ""
+                , "If you want to use `kore-rpc-booster, you should als compile an LLVM backend library"
+                , "by 1) extracting the `llvm_definition/` directory from the tarball;"
+                , "   2) running the llvm backend compiler on the unpacked files:"
+                , "      $ llvm-kompile llvm_definition/definition.kore llvm_definition/dt c`"
+                , "This will generate `interpreter.so` and you can run"
+                , "  `kore-rpc-booster definition.kore --main-module <MODULE> --llvm-backend-library interpreter.so`"
+                ]
+        exitWith (ExitFailure 1)
+    noServerError otherError = do
+        hPutStrLn stderr $ "[Error] " <> show otherError
+        exitWith (ExitFailure 1)
 
     -- Runs one request, checking that a response is available for
     -- comparison. Returns Nothing if successful (identical
