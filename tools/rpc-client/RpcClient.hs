@@ -14,11 +14,10 @@ module RpcClient (
     main,
 ) where
 
-import Control.Exception
-import Control.Monad
-import Control.Monad.Extra (whenJust)
 import Codec.Archive.Tar qualified as Tar
 import Codec.Archive.Tar.Check qualified as Tar
+import Control.Exception
+import Control.Monad
 import Data.Aeson qualified as Json
 import Data.Aeson.Encode.Pretty qualified as Json
 import Data.Aeson.Key qualified as JsonKey
@@ -44,33 +43,42 @@ import System.IO.Extra
 import System.Process
 
 import Booster.JsonRpc (rpcJsonConfig)
-import Booster.Syntax.Json qualified as Syntax
 import Booster.JsonRpc.Utils (diffJson, isIdentical, renderResult)
+import Booster.Syntax.Json qualified as Syntax
 
 import Debug.Trace
 
 main :: IO ()
 main = do
-    Options{host, port, mode, optionFile, options, postProcessing, prettify, time, dryRun} <-
-        execParser parseOptions
-    -- FIXME separate function for single-request mode
-    whenJust (readTarballMode mode) $ uncurry (runTarball host port)
-    -- FIXME end of tarball mode here
-    request <-
-        trace "[Info] Preparing request data" $
-            prepareRequestData mode optionFile options
-    when dryRun $ do
-        traceM "[Info] Dry-run mode, just showing request instead of sending"
-        let write
-                | Just (Expect True file) <- postProcessing =
-                    trace ("[Info] Writing request to file " <> file) (BS.writeFile file)
-                | otherwise = BS.putStrLn
-            reformat = Json.encodePretty' rpcJsonConfig . Json.decode @Json.Value
-        write $ if not prettify then request else reformat request
-        exitSuccess
-    runTCPClient host (show port) $ \s -> do
-        makeRequest time (getModeFile mode) s 8192 request (postProcess prettify postProcessing)
-        shutdown s ShutdownReceive
+    Options{common, runOptions} <- execParser parseOptions
+    case runOptions of
+        RunTarball tarFile keepGoing ->
+            runTarball common.host common.port tarFile keepGoing
+        RunSingle mode optionFile options processingOptions -> do
+            let ProcessingOptions{postProcessing, prettify, time, dryRun} = processingOptions
+
+            request <-
+                trace "[Info] Preparing request data" $
+                    prepareRequestData mode optionFile options
+            if dryRun
+                then do
+                    traceM "[Info] Dry-run mode, just showing request instead of sending"
+                    let write
+                            | Just (Expect True file) <- postProcessing =
+                                trace ("[Info] Writing request to file " <> file) (BS.writeFile file)
+                            | otherwise = BS.putStrLn
+                        reformat = Json.encodePretty' rpcJsonConfig . Json.decode @Json.Value
+                    write $ if not prettify then request else reformat request
+                    exitSuccess
+                else runTCPClient common.host (show common.port) $ \s -> do
+                    makeRequest
+                        time
+                        (getModeFile mode)
+                        s
+                        8192
+                        request
+                        (postProcess prettify postProcessing)
+                    shutdown s ShutdownReceive
 
 makeRequest ::
     Bool -> String -> Socket -> Int64 -> BS.ByteString -> (BS.ByteString -> IO a) -> IO a
@@ -99,31 +107,50 @@ makeRequest time name s bufSize request handleResponse = do
                 pure $ part <> more
 
 data Options = Options
+    { common :: CommonOptions
+    , runOptions :: RunOptions
+    }
+    deriving stock (Show)
+
+data CommonOptions = CommonOptions
     { host :: String
     , port :: Int
-    , mode :: Mode -- what to do
-    , optionFile :: Maybe FilePath -- file with options (different for each endpoint
-    , options :: [(String, String)] -- verbatim options (name, value) to add to json
-    , postProcessing :: Maybe PostProcessing
+    }
+    deriving stock (Show)
+
+data RunOptions
+    = -- | run a single request
+      RunSingle
+        Mode -- what kind of request
+        (Maybe FilePath) -- json file with options
+        [(String, String)] -- verbatim options (name, value) to add to json
+        ProcessingOptions
+    | -- | run all requests contained in a tarball (using some conventions)
+      RunTarball
+        FilePath -- tar file
+        Bool -- do not stop on first diff if set to true
+    deriving stock (Show)
+
+data ProcessingOptions = ProcessingOptions
+    { postProcessing :: Maybe PostProcessing
     , prettify :: Bool
     , time :: Bool
     , dryRun :: Bool
-    } -- FIXME separate parameters for single mode and tarball mode
+    }
     deriving stock (Show)
 
-{- | Defines what to do. Either one of the endpoints (with state in a
- file), or raw data (entire input in a file).
+{- | Defines details for a single requests. Either assemble a request
+ from the state in a file and given options in a file or on the
+ command line, or raw data (entire input in a file) without additional
+ options.
 -}
-data Mode -- FIXME add common parameters to single-request modes
+data Mode
     = Exec FilePath
     | Simpl FilePath
     | AddModule FilePath
     | GetModel FilePath
     | Check FilePath FilePath
     | SendRaw FilePath
-    | RunTarball
-        FilePath -- tarball
-        Bool -- keep-going (do not stop on first difference)
     deriving stock (Show)
 
 getModeFile :: Mode -> FilePath
@@ -134,7 +161,6 @@ getModeFile = \case
     GetModel f -> f
     Check f1 _ -> f1
     SendRaw f -> f
-    RunTarball f _ -> f
 
 {- | Optional output post-processing:
   * 'Expect' checks formatted output against a given golden file.
@@ -146,6 +172,27 @@ data PostProcessing = Expect
     }
     deriving stock (Show)
 
+parseCommonOptions :: Parser CommonOptions
+parseCommonOptions =
+    CommonOptions
+        <$> strOption
+            ( long "host"
+                <> short 'h'
+                <> metavar "HOST"
+                <> value "localhost"
+                <> help "server host to connect to"
+                <> showDefault
+            )
+        <*> option
+            auto
+            ( long "port"
+                <> short 'p'
+                <> metavar "PORT"
+                <> value 31337
+                <> help "server port to connect to"
+                <> showDefault
+            )
+
 parseOptions :: ParserInfo Options
 parseOptions =
     info
@@ -156,46 +203,18 @@ parseOptions =
   where
     parseOptions' =
         Options
-            <$> hostOpt
-            <*> portOpt
+            <$> parseCommonOptions
             <*> parseMode
-            <*> paramFileOpt
-            <*> many paramOpt
-            <*> optional parsePostProcessing
-            <*> prettifyOpt
-            <*> timeOpt
-            <*> dryRunOpt
-    hostOpt =
-        strOption $
-            long "host"
-                <> short 'h'
-                <> metavar "HOST"
-                <> value "localhost"
-                <> help "server host to connect to"
-                <> showDefault
-    portOpt =
-        option auto $
-            long "port"
-                <> short 'p'
-                <> metavar "PORT"
-                <> value 31337
-                <> help "server port to connect to"
-                <> showDefault
-    paramFileOpt =
-        optional $
-            strOption $
-                long "param-file"
-                    <> metavar "PARAMFILE"
-                    <> help "file with parameters (json object), optional"
-    paramOpt =
-        option readPair $
-            short 'O'
-                <> metavar "NAME=VALUE"
-                <> help "parameters to use (name=value)"
-    readPair =
-        maybeReader $ \s -> case split (== '=') s of [k, v] -> Just (k, v); _ -> Nothing
 
-    flagOpt name desc = flag False True $ long name <> help desc
+parseProcessingOptions :: Parser ProcessingOptions
+parseProcessingOptions =
+    ProcessingOptions
+        <$> optional parsePostProcessing
+        <*> prettifyOpt
+        <*> timeOpt
+        <*> dryRunOpt
+  where
+    flagOpt name desc = switch $ long name <> help desc
     prettifyOpt = flagOpt "prettify" "format JSON before printing"
     timeOpt = flagOpt "time" "record the timing information between sending a request and receiving a response"
     dryRunOpt = flagOpt "dry-run" "Do not send anything, just output the request"
@@ -222,61 +241,97 @@ parsePostProcessing =
                     )
             )
 
-parseMode :: Parser Mode
+parseMode :: Parser RunOptions
 parseMode =
     subparser
         ( command
             "send"
-            ( info (SendRaw <$> strArgument (metavar "FILENAME")) (progDesc "send the raw file contents directly")
+            ( info
+                ( RunSingle
+                    <$> (SendRaw <$> strArgument (metavar "FILENAME"))
+                    <*> pure Nothing -- no param file
+                    <*> pure [] -- no params
+                    <*> parseProcessingOptions
+                )
+                (progDesc "send the raw file contents directly")
             )
             <> command
                 "execute"
                 ( info
-                    (Exec <$> strArgument (metavar "FILENAME"))
+                    ( RunSingle
+                        <$> (Exec <$> strArgument (metavar "FILENAME"))
+                        <*> paramFileOpt
+                        <*> many paramOpt
+                        <*> parseProcessingOptions
+                    )
                     (progDesc "execute (rewrite) the state in the file")
                 )
             <> command
                 "simplify"
                 ( info
-                    (Simpl <$> strArgument (metavar "FILENAME"))
+                    ( RunSingle
+                        <$> (Simpl <$> strArgument (metavar "FILENAME"))
+                        <*> paramFileOpt
+                        <*> many paramOpt
+                        <*> parseProcessingOptions
+                    )
                     (progDesc "simplify the state or condition in the file")
                 )
             <> command
                 "add-module"
                 ( info
-                    (AddModule <$> strArgument (metavar "FILENAME"))
+                    ( RunSingle
+                        <$> (AddModule <$> strArgument (metavar "FILENAME"))
+                        <*> paramFileOpt
+                        <*> many paramOpt
+                        <*> parseProcessingOptions
+                    )
                     (progDesc "add the module in the given kore file")
                 )
             <> command
                 "get-model"
                 ( info
-                    (GetModel <$> strArgument (metavar "FILENAME"))
+                    ( RunSingle
+                        <$> (GetModel <$> strArgument (metavar "FILENAME"))
+                        <*> paramFileOpt
+                        <*> many paramOpt
+                        <*> parseProcessingOptions
+                    )
                     (progDesc "check satisfiability/provide model for the state in the file")
                 )
             <> command
                 "run-tarball"
                 ( info
-                    (RunTarball
-                         <$> strArgument (metavar "TAR_FILE")
-                         <*> switch (long "keep-going" <> help "do not stop on errors")
+                    ( RunTarball
+                        <$> strArgument (metavar "FILENAME")
+                        <*> switch (long "keep-going" <> help "do not stop on unexpected output")
                     )
-                    (progDesc "run and compare results for all requests in a tarball's rpc_* subdirectory")
+                    (progDesc "check satisfiability/provide model for the state in the file")
                 )
         )
+  where
+    paramFileOpt =
+        optional $
+            strOption $
+                long "param-file"
+                    <> metavar "PARAMFILE"
+                    <> help "file with parameters (json object), optional"
+    paramOpt =
+        option readPair $
+            short 'O'
+                <> metavar "NAME=VALUE"
+                <> help "parameters to use (name=value)"
+    readPair =
+        maybeReader $ \s -> case split (== '=') s of [k, v] -> Just (k, v); _ -> Nothing
 
 ----------------------------------------
 -- Running all requests contained in the `rpc_*` directory of a tarball
-
-readTarballMode :: Mode -> Maybe (FilePath, Bool)
-readTarballMode (RunTarball file keepGoing) = Just (file, keepGoing)
-readTarballMode _other = Nothing
 
 runTarball :: String -> Int -> FilePath -> Bool -> IO ()
 runTarball host port tarFile keepGoing = do
     -- check tar files
     containedFiles <- Tar.read <$> BS.readFile tarFile
     let checked = Tar.checkSecurity containedFiles
-    Tar.foldEntries (flip const) (pure ()) throwAnyError checked
     -- probe server connection before doing anything, display
     -- instructions unless server was found.
     runTCPClient host (show port) $ \skt -> do
@@ -314,14 +369,15 @@ runTarball host port tarFile keepGoing = do
             -- assume single directory "rpc_<something>" containing "*.json" files
             (_, "") -- skip all directories
                 | Tar.Directory <- Tar.entryContent entry ->
-                      acc
+                    acc
             (dir, file) -- unpack json files into tmp directory
                 | "rpc_" `isPrefixOf` dir
                 , ".json" `isSuffixOf` file
                 , Tar.NormalFile bs _size <- Tar.entryContent entry -> do
-                      BS.writeFile (tmpDir </> file) bs
-                      (file :) <$> acc
-            _other -> -- skip anything else
+                    BS.writeFile (tmpDir </> file) bs
+                    (file :) <$> acc
+            _other ->
+                -- skip anything else
                 acc
 
     -- Runs one request, checking that a response is available for
@@ -329,11 +385,11 @@ runTarball host port tarFile keepGoing = do
     -- response), or rendered diff or error message if failing
     runRequest :: Socket -> FilePath -> [FilePath] -> String -> IO (Maybe BS.ByteString)
     runRequest skt tmpDir jsonFiles basename
-         | not . (`elem` jsonFiles) $ basename <> "_response.json" =
+        | not . (`elem` jsonFiles) $ basename <> "_response.json" =
             pure . Just . BS.pack $ "Response file " <> basename <> "_response.json is missing."
-         | not . (`elem` jsonFiles) $ basename <> "_request.json" =
+        | not . (`elem` jsonFiles) $ basename <> "_request.json" =
             pure . Just . BS.pack $ "Request file " <> basename <> "_request.json is missing."
-         | otherwise = do
+        | otherwise = do
             request <- BS.readFile $ tmpDir </> basename <> "_request.json"
             expected <- BS.readFile $ tmpDir </> basename <> "_response.json"
 
@@ -343,7 +399,6 @@ runTarball host port tarFile keepGoing = do
             if isIdentical diff
                 then pure Nothing
                 else pure . Just $ renderResult "expected response" "actual response" diff
-
 
 ----------------------------------------
 prepareRequestData :: Mode -> Maybe FilePath -> [(String, String)] -> IO BS.ByteString
@@ -375,8 +430,6 @@ prepareRequestData (GetModel file) mbOptFile opts =
     prepareOneTermRequest "get-model" file mbOptFile opts
 prepareRequestData (Check _file1 _file2) _mbOptFile _opts = do
     error "not implemented yet"
-prepareRequestData RunTarball{} _ _ =
-    error "Tarball mode should never call prepareRequestData"
 
 prepareOneTermRequest ::
     String -> FilePath -> Maybe FilePath -> [(String, String)] -> IO BS.ByteString
