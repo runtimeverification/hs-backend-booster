@@ -20,13 +20,15 @@ import Codec.Compression.BZip qualified as BZ2
 import Codec.Compression.GZip qualified as GZip
 import Control.Exception
 import Control.Monad
+import Control.Monad.IO.Class
+import Control.Monad.Logger
 import Data.Aeson qualified as Json
 import Data.Aeson.Encode.Pretty qualified as Json
 import Data.Aeson.Key qualified as JsonKey
 import Data.Aeson.KeyMap qualified as JsonKeyMap
 import Data.Bifunctor
 import Data.ByteString.Lazy.Char8 qualified as BS
-import Data.Char (isDigit)
+import Data.Char (isDigit, toLower)
 import Data.Int (Int64)
 import Data.List.Extra
 import Data.Maybe (isNothing, mapMaybe)
@@ -41,7 +43,6 @@ import System.Clock
 import System.Directory
 import System.Exit
 import System.FilePath
-import System.IO
 import System.IO.Extra
 import System.Process
 
@@ -49,31 +50,32 @@ import Booster.JsonRpc (rpcJsonConfig)
 import Booster.JsonRpc.Utils (diffJson, isIdentical, renderResult)
 import Booster.Syntax.Json qualified as Syntax
 
-import Debug.Trace
-
 main :: IO ()
 main = do
     Options{common, runOptions} <- execParser parseOptions
     case runOptions of
         RunTarball tarFile keepGoing ->
-            runTarball common.host common.port tarFile keepGoing
+            runTarball common tarFile keepGoing
         RunSingle mode optionFile options processingOptions -> do
             let ProcessingOptions{postProcessing, prettify, time, dryRun} = processingOptions
-
-            request <-
-                trace "[Info] Preparing request data" $
-                    prepareRequestData mode optionFile options
-            if dryRun
-                then do
-                    traceM "[Info] Dry-run mode, just showing request instead of sending"
-                    let write
-                            | Just (Expect True file) <- postProcessing =
-                                trace ("[Info] Writing request to file " <> file) (BS.writeFile file)
-                            | otherwise = BS.putStrLn
+            request <- withLogLevel common.logLevel $ do
+                logInfo_ "Preparing request data"
+                request <- prepareRequestData mode optionFile options
+                when dryRun $ do
+                    logInfo_ "Dry-run mode, just showing request instead of sending"
+                    let write :: BS.ByteString -> LoggingT IO ()
+                        write
+                            | Just (Expect True file) <- postProcessing = \contents -> do
+                                logInfo_ ("Writing request to file " <> file)
+                                liftIO $ BS.writeFile file contents
+                            | otherwise = liftIO . BS.putStrLn
                         reformat = Json.encodePretty' rpcJsonConfig . Json.decode @Json.Value
                     write $ if not prettify then request else reformat request
-                    exitSuccess
-                else runTCPClient common.host (show common.port) $ \s -> do
+                    liftIO exitSuccess
+                pure request
+            -- runTCPClient operates on IO directly, therefore repeating runStderrLogging
+            runTCPClient common.host (show common.port) $ \s -> do
+                withLogLevel common.logLevel $
                     makeRequest
                         time
                         (getModeFile mode)
@@ -81,24 +83,31 @@ main = do
                         8192
                         request
                         (postProcess prettify postProcessing)
-                    shutdown s ShutdownReceive
+                shutdown s ShutdownReceive
 
 makeRequest ::
-    Bool -> String -> Socket -> Int64 -> BS.ByteString -> (BS.ByteString -> IO a) -> IO a
+    MonadLoggerIO m =>
+    Bool ->
+    String ->
+    Socket ->
+    Int64 ->
+    BS.ByteString ->
+    (BS.ByteString -> m a) ->
+    m a
 makeRequest time name s bufSize request handleResponse = do
-    start <- getTime Monotonic
-    trace ("[Info] Sending request " <> name <> "...") $
-        sendAll s request
-    response <- readResponse
-    end <- getTime Monotonic
+    start <- liftIO $ getTime Monotonic
+    logInfo_ $ "Sending request " <> name <> "..."
+    logDebug_ $ "Request JSON: " <> BS.unpack request
+    liftIO $ sendAll s request
+    response <- liftIO readResponse
+    end <- liftIO $ getTime Monotonic
+    logInfo_ "Response received."
     let timeStr = timeSpecs start end
-    traceM $ "[Info] Round trip time for request '" <> name <> "' was " <> timeStr
-    when time $
-        trace ("[Info] Saving timing for " <> name) $
-            writeFile (name <> ".time") timeStr
-
-    trace "[Info] Response received." $
-        handleResponse response
+    logInfo_ $ "Round trip time for request '" <> name <> "' was " <> timeStr
+    when time $ do
+        logInfo_ $ "Saving timing for " <> name
+        liftIO $ writeFile (name <> ".time") timeStr
+    handleResponse response
   where
     readResponse :: IO BS.ByteString
     readResponse = do
@@ -109,6 +118,22 @@ makeRequest time name s bufSize request handleResponse = do
                 more <- readResponse
                 pure $ part <> more
 
+----------------------------------------
+-- Logging
+
+-- Logging functions without location
+logError_, logWarn_, logInfo_, logDebug_ :: MonadLoggerIO m => String -> m ()
+logError_ = logWithoutLoc "" LevelError
+logWarn_ = logWithoutLoc "" LevelWarn
+logInfo_ = logWithoutLoc "" LevelInfo
+logDebug_ = logWithoutLoc "" LevelDebug
+
+withLogLevel :: LogLevel -> LoggingT IO a -> IO a
+withLogLevel lvl = runStderrLoggingT . filterLogger (const (>= lvl))
+
+----------------------------------------
+-- program options
+
 data Options = Options
     { common :: CommonOptions
     , runOptions :: RunOptions
@@ -118,6 +143,7 @@ data Options = Options
 data CommonOptions = CommonOptions
     { host :: String
     , port :: Int
+    , logLevel :: LogLevel
     }
     deriving stock (Show)
 
@@ -195,6 +221,24 @@ parseCommonOptions =
                 <> help "server port to connect to"
                 <> showDefault
             )
+        <*> option
+            readLogLevel
+            ( long "log-level"
+                <> short 'l'
+                <> metavar "LOG_LEVEL"
+                <> value LevelInfo
+                <> help "Log level, one of [Error, Warn, Info, Debug]"
+                <> showDefault
+            )
+  where
+    readLogLevel :: ReadM LogLevel
+    readLogLevel =
+        eitherReader $ \s -> case map toLower s of
+            "debug" -> Right LevelDebug
+            "info" -> Right LevelInfo
+            "warn" -> Right LevelWarn
+            "error" -> Right LevelError
+            _other -> Left $ s <> ": Unsupported log level"
 
 parseOptions :: ParserInfo Options
 parseOptions =
@@ -336,8 +380,8 @@ parseMode =
 ----------------------------------------
 -- Running all requests contained in the `rpc_*` directory of a tarball
 
-runTarball :: String -> Int -> FilePath -> Bool -> IO ()
-runTarball host port tarFile keepGoing = do
+runTarball :: CommonOptions -> FilePath -> Bool -> IO ()
+runTarball common tarFile keepGoing = do
     -- unpack tar files, determining type from extension(s)
     let unpackTar
             | ".tar" == takeExtension tarFile = Tar.read
@@ -350,32 +394,34 @@ runTarball host port tarFile keepGoing = do
     let checked = Tar.checkSecurity containedFiles
     -- probe server connection before doing anything, display
     -- instructions unless server was found.
-    runTCPClient host (show port) (runAllRequests checked)
-        `catch` noServerError
+    runTCPClient common.host (show common.port) (runAllRequests checked)
+        `catch` (withLogLevel common.logLevel . noServerError)
   where
+    runAllRequests ::
+        Tar.Entries (Either Tar.FormatError Tar.FileNameError) -> Socket -> IO ()
     runAllRequests checked skt = do
-        -- unpack relevant tar files (rpc_* directory only)
-        withTempDir $ \tmp -> do
+        withTempDir $ \tmp -> withLogLevel common.logLevel $ do
+            -- unpack relevant tar files (rpc_* directories only)
+            logInfo_ $ unwords ["unpacking json files from tarball", tarFile, "into", tmp]
             jsonFiles <-
-                trace (unwords ["[Info] unpacking json files from tarball", tarFile, "into", tmp]) $
-                    Tar.foldEntries (unpackIfRpc tmp) (pure []) throwAnyError checked
-            traceM $ "[Info] RPC data:" <> show jsonFiles
+                liftIO $ Tar.foldEntries (unpackIfRpc tmp) (pure []) throwAnyError checked
+            logInfo_ $ "RPC data:" <> show jsonFiles
 
             let requests = mapMaybe (stripSuffix "_request.json") jsonFiles
             results <-
                 forM requests $ \r -> do
                     mbError <- runRequest skt tmp jsonFiles r
                     case mbError of
-                        Just err ->
-                            trace ("[Error] Request " <> r <> " failed: " <> BS.unpack err) $
-                                unless keepGoing $ do
-                                    shutdown skt ShutdownReceive
-                                    exitWith (ExitFailure 2)
+                        Just err -> do
+                            logError_ $ "Request " <> r <> " failed: " <> BS.unpack err
+                            unless keepGoing $
+                                liftIO $
+                                    shutdown skt ShutdownReceive >> exitWith (ExitFailure 2)
                         Nothing ->
-                            hPutStrLn stderr "[Info] Response matched with expected"
+                            logInfo_ $ "Response to " <> r <> " matched with expected"
                     pure mbError
-            shutdown skt ShutdownReceive
-            exitWith (if all isNothing results then ExitSuccess else ExitFailure 2)
+            liftIO $ shutdown skt ShutdownReceive
+            liftIO $ exitWith (if all isNothing results then ExitSuccess else ExitFailure 2)
 
     -- complain on any errors in the tarball
     throwAnyError :: Either Tar.FormatError Tar.FileNameError -> IO a
@@ -399,19 +445,19 @@ runTarball host port tarFile keepGoing = do
                 -- skip anything else
                 acc
 
-    noServerError :: IOException -> IO ()
+    noServerError :: MonadLoggerIO m => IOException -> m ()
     noServerError e@IOError{ioe_type = NoSuchThing} = do
         -- show instructions how to run the server
-        hPutStrLn stderr $ "[Error] Could not connect to RPC server on port " <> show port
-        hPutStrLn stderr $ "[Error] " <> show e
-        hPutStrLn stderr $
+        logError_ $ "Could not connect to RPC server on port " <> show common.port
+        logError_ $ show e
+        logError_ $
             unlines
                 [ ""
                 , "To run the required RPC server, you need to"
                 , "1) extract `definition.kore` and `server_instance.json` from the tarball;"
                 , "2) look up the module name `<MODULE>` in `server_instance.json`;"
                 , "3) and then run the server using"
-                , "   $ kore-rpc definition.kore --module <MODULE> --server-port " <> show port
+                , "   $ kore-rpc definition.kore --module <MODULE> --server-port " <> show common.port
                 , ""
                 , "If you want to use `kore-rpc-booster, you should also compile an LLVM backend library"
                 , "by 1) extracting the `llvm_definition/` directory from the tarball;"
@@ -420,23 +466,24 @@ runTarball host port tarFile keepGoing = do
                 , "This will generate `interpreter.[so|dylib]` and you can run"
                 , "  `kore-rpc-booster definition.kore --main-module <MODULE> --llvm-backend-library interpreter.so`"
                 ]
-        exitWith (ExitFailure 1)
+        liftIO $ exitWith (ExitFailure 1)
     noServerError otherError = do
-        hPutStrLn stderr $ "[Error] " <> show otherError
-        exitWith (ExitFailure 1)
+        logError_ $ show otherError
+        liftIO $ exitWith (ExitFailure 1)
 
     -- Runs one request, checking that a response is available for
     -- comparison. Returns Nothing if successful (identical
     -- response), or rendered diff or error message if failing
-    runRequest :: Socket -> FilePath -> [FilePath] -> String -> IO (Maybe BS.ByteString)
+    runRequest ::
+        MonadLoggerIO m => Socket -> FilePath -> [FilePath] -> String -> m (Maybe BS.ByteString)
     runRequest skt tmpDir jsonFiles basename
         | not . (`elem` jsonFiles) $ basename <> "_response.json" =
             pure . Just . BS.pack $ "Response file " <> basename <> "_response.json is missing."
         | not . (`elem` jsonFiles) $ basename <> "_request.json" =
             pure . Just . BS.pack $ "Request file " <> basename <> "_request.json is missing."
         | otherwise = do
-            request <- BS.readFile $ tmpDir </> basename <> "_request.json"
-            expected <- BS.readFile $ tmpDir </> basename <> "_response.json"
+            request <- liftIO . BS.readFile $ tmpDir </> basename <> "_request.json"
+            expected <- liftIO . BS.readFile $ tmpDir </> basename <> "_response.json"
 
             actual <- makeRequest False basename skt 8192 request pure
 
@@ -446,23 +493,24 @@ runTarball host port tarFile keepGoing = do
                 else pure . Just $ renderResult "expected response" "actual response" diff
 
 ----------------------------------------
-prepareRequestData :: Mode -> Maybe FilePath -> [(String, String)] -> IO BS.ByteString
+prepareRequestData ::
+    MonadLoggerIO m => Mode -> Maybe FilePath -> [(String, String)] -> m BS.ByteString
 prepareRequestData (SendRaw file) mbFile opts = do
     unless (isNothing mbFile) $
-        hPutStrLn stderr "[Warning] Raw mode, ignoring given option file"
+        logWarn_ "Raw mode, ignoring given option file"
     unless (null opts) $
-        hPutStrLn stderr "[Warning] Raw mode, ignoring given request options"
-    BS.readFile file
+        logWarn_ "Raw mode, ignoring given request options"
+    liftIO $ BS.readFile file
 prepareRequestData (Exec file) mbOptFile opts =
-    prepareOneTermRequest "execute" file mbOptFile opts
+    liftIO $ prepareOneTermRequest "execute" file mbOptFile opts
 prepareRequestData (Simpl file) mbOptFile opts =
-    prepareOneTermRequest "simplify" file mbOptFile opts
+    liftIO $ prepareOneTermRequest "simplify" file mbOptFile opts
 prepareRequestData (AddModule file) mbOptFile opts = do
     unless (isNothing mbOptFile) $
-        hPutStrLn stderr "[Warning] Add-module mode, ignoring given option file"
+        logWarn_ "Add-module mode, ignoring given option file"
     unless (null opts) $
-        hPutStrLn stderr "[Warning] Raw mode, ignoring given request options"
-    moduleText <- readFile file
+        logWarn_ "Raw mode, ignoring given request options"
+    moduleText <- liftIO $ readFile file
     pure . Json.encode $
         object
             [ "jsonrpc" ~> "2.0"
@@ -472,7 +520,7 @@ prepareRequestData (AddModule file) mbOptFile opts = do
             +: "params"
             ~> Json.Object (object ["module" ~> moduleText])
 prepareRequestData (GetModel file) mbOptFile opts =
-    prepareOneTermRequest "get-model" file mbOptFile opts
+    liftIO $ prepareOneTermRequest "get-model" file mbOptFile opts
 prepareRequestData (Check _file1 _file2) _mbOptFile _opts = do
     error "not implemented yet"
 
@@ -538,38 +586,43 @@ infixl 4 +:
 (+:) :: Json.Object -> (String, Json.Value) -> Json.Object
 o +: (k, v) = JsonKeyMap.insert (JsonKey.fromString k) v o
 
-postProcess :: Bool -> Maybe PostProcessing -> BS.ByteString -> IO ()
+postProcess ::
+    MonadLoggerIO m => Bool -> Maybe PostProcessing -> BS.ByteString -> m ()
 postProcess prettify postProcessing output =
     case postProcessing of
         Nothing ->
-            BS.putStrLn $ if prettify then prettyOutput else output
+            liftIO $ BS.putStrLn $ if prettify then prettyOutput else output
         Just Expect{expectFile, regenerate} -> do
-            doesFileExist expectFile >>= \case
+            liftIO (doesFileExist expectFile) >>= \case
                 False ->
                     if regenerate
                         then do
-                            hPutStrLn stderr "[Info] Generating expected file for the first time."
-                            BS.writeFile expectFile prettyOutput
+                            logInfo_ $ "Writing file " <> expectFile <> " for the first time."
+                            liftIO $ BS.writeFile expectFile prettyOutput
                         else do
-                            BS.putStrLn "[Error] The expected file does not exist. Use `--regenerate` if you wish to create it."
-                            exitWith $ ExitFailure 1
+                            logError_ $
+                                "The expected file "
+                                    <> expectFile
+                                    <> " does not exist. Use `--regenerate` if you wish to create it."
+                            liftIO . exitWith $ ExitFailure 1
                 True -> do
-                    expected <- BS.readFile expectFile
+                    expected <- liftIO $ BS.readFile expectFile
                     when (prettyOutput /= expected) $ do
-                        BS.writeFile "response" prettyOutput
+                        liftIO $ BS.writeFile "response" prettyOutput
                         (_, result, _) <-
-                            readProcessWithExitCode "git" ["diff", "--no-index", "--color-words=.", expectFile, "response"] ""
-                        putStrLn result
+                            liftIO $
+                                readProcessWithExitCode "git" ["diff", "--no-index", "--color-words=.", expectFile, "response"] ""
+                        liftIO $ putStrLn result
 
                         if regenerate
                             then do
-                                hPutStrLn stderr "[Info] Re-generating expected file."
-                                renameFile "response" expectFile
+                                logInfo_ $ "Re-generating expected file " <> expectFile
+                                liftIO $ renameFile "response" expectFile
                             else do
-                                removeFile "response"
-                                BS.putStrLn "[Error] Not the same, sorry."
-                                exitWith $ ExitFailure 1
-                    hPutStrLn stderr $ "[Info] Output matches " <> expectFile
+                                liftIO $ removeFile "response"
+                                logError_ $ "Response differs from expected " <> expectFile
+                                liftIO . exitWith $ ExitFailure 1
+                    logInfo_ $ "Output matches " <> expectFile
   where
     prettyOutput =
         Json.encodePretty' rpcJsonConfig $
