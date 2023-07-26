@@ -315,7 +315,7 @@ parseMode =
                         <*> switch (long "keep-going" <> help "do not stop on unexpected output")
                         <**> helper
                     )
-                    (progDesc "check satisfiability/provide model for the state in the file")
+                    (progDesc "Run all requests and compare responses from a bug report tarball")
                 )
         )
   where
