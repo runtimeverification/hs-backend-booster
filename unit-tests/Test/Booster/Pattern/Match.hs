@@ -41,9 +41,17 @@ symbols =
             (app f1 [dv someSort "something"])
             (success [("X", someSort, dv someSort "something")])
         , let pat = app con1 [var "X" someSort]
-              subj = app f1 [var "Y" someSort]
+              subj = app con2 [var "Y" someSort]
            in test "different constructors" pat subj $
                 failed (DifferentSymbols pat subj)
+        , let pat = app con1 [var "X" someSort]
+              subj = app f1 [var "Y" someSort]
+           in test "constructor and function" pat subj $
+                MatchIndeterminate pat subj
+        , let pat = app f1 [var "X" someSort]
+              subj = app con1 [var "Y" someSort]
+           in test "function and constructor" pat subj $
+                MatchIndeterminate pat subj
         , let x = var "X" someSort
               d = dv differentSort "something"
               pat = app con1 [x]
@@ -129,6 +137,18 @@ varsAndValues =
               d = dv differentSort ""
            in test "var and domain value (different sort)" v d $
                 failed (DifferentSorts v d)
+        , let v = var "X" someSort
+              d = dv someSort ""
+           in test "dv matching a var (on RHS): indeterminate" d v $
+                MatchIndeterminate d v
+        , let d = dv someSort ""
+              f = app f1 [d]
+           in test "dv matching a function call (on RHS): indeterminate" d f $
+                MatchIndeterminate d f
+        , let d = dv someSort ""
+              c = app con1 [d]
+           in test "dv matching a constructor (on RHS): fail" d c $
+                failed (DifferentValues d c)
         ]
 
 andTerms :: TestTree
@@ -157,10 +177,10 @@ andTerms =
               fa = app f1 [d]
               fb = app f1 [dv someSort "b"]
            in test
-                "And-term on the right, fails"
+                "And-term on the right, indeterminate"
                 d
                 (AndTerm fa fb)
-                (failed $ DifferentValues d (AndTerm fa fb))
+                (MatchIndeterminate d (AndTerm fa fb))
         ]
 
 cornerCases :: TestTree
