@@ -411,7 +411,7 @@ runTarball host port tarFile keepGoing = do
                 , "1) extract `definition.kore` and `server_instance.json` from the tarball;"
                 , "2) look up the module name `<MODULE>` in `server_instance.json`;"
                 , "3) and then run the server using"
-                , "   $ kore-rpc definition.kore --main-module <MODULE> --server-port " <> show port
+                , "   $ kore-rpc definition.kore --module <MODULE> --server-port " <> show port
                 , ""
                 , "If you want to use `kore-rpc-booster, you should als compile an LLVM backend library"
                 , "by 1) extracting the `llvm_definition/` directory from the tarball;"
