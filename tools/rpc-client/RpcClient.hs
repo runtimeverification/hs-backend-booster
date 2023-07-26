@@ -413,11 +413,11 @@ runTarball host port tarFile keepGoing = do
                 , "3) and then run the server using"
                 , "   $ kore-rpc definition.kore --module <MODULE> --server-port " <> show port
                 , ""
-                , "If you want to use `kore-rpc-booster, you should als compile an LLVM backend library"
+                , "If you want to use `kore-rpc-booster, you should also compile an LLVM backend library"
                 , "by 1) extracting the `llvm_definition/` directory from the tarball;"
                 , "   2) running the llvm backend compiler on the unpacked files:"
-                , "      $ llvm-kompile llvm_definition/definition.kore llvm_definition/dt c`"
-                , "This will generate `interpreter.so` and you can run"
+                , "      $ llvm-kompile llvm_definition/definition.kore llvm_definition/dt c -- -o interpreter`"
+                , "This will generate `interpreter.[so|dylib]` and you can run"
                 , "  `kore-rpc-booster definition.kore --main-module <MODULE> --llvm-backend-library interpreter.so`"
                 ]
         exitWith (ExitFailure 1)
