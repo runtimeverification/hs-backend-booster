@@ -74,16 +74,17 @@ main = do
                     liftIO exitSuccess
                 pure request
             -- runTCPClient operates on IO directly, therefore repeating runStderrLogging
-            runTCPClient common.host (show common.port) $ \s -> do
-                withLogLevel common.logLevel $
-                    makeRequest
-                        time
-                        (getModeFile mode)
-                        s
-                        8192
-                        request
-                        (postProcess prettify postProcessing)
-                shutdown s ShutdownReceive
+            runTCPClient common.host (show common.port) $ \s ->
+                cancelIfInterrupted s $ do
+                    withLogLevel common.logLevel $
+                        makeRequest
+                            time
+                            (getModeFile mode)
+                            s
+                            8192
+                            request
+                            (postProcess prettify postProcessing)
+                    shutdown s ShutdownReceive
 
 makeRequest ::
     MonadLoggerIO m =>
@@ -117,6 +118,22 @@ makeRequest time name s bufSize request handleResponse = do
             else do
                 more <- readResponse
                 pure $ part <> more
+
+cancelIfInterrupted :: Socket -> IO () -> IO ()
+cancelIfInterrupted skt operation =
+    catchJust isInterrupt operation $ const sendCancel
+  where
+    isInterrupt :: AsyncException -> Maybe ()
+    isInterrupt UserInterrupt = Just ()
+    isInterrupt _other = Nothing
+
+    sendCancel = do
+        sendAll skt (Json.encode cancel)
+        shutdown skt ShutdownReceive
+        hPutStrLn stderr "Interrupted"
+        exitWith (ExitFailure 130)
+
+    cancel = object ["jsonrpc" ~> "2.0", "id" ~> "1", "method" ~> "cancel"]
 
 ----------------------------------------
 -- Logging
@@ -399,7 +416,7 @@ runTarball common tarFile keepGoing = do
   where
     runAllRequests ::
         Tar.Entries (Either Tar.FormatError Tar.FileNameError) -> Socket -> IO ()
-    runAllRequests checked skt = do
+    runAllRequests checked skt = cancelIfInterrupted skt $ do
         withTempDir $ \tmp -> withLogLevel common.logLevel $ do
             -- unpack relevant tar files (rpc_* directories only)
             logInfo_ $ unwords ["unpacking json files from tarball", tarFile, "into", tmp]
