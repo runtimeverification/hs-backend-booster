@@ -36,14 +36,14 @@ import Booster.Definition.Base qualified as Definition (RewriteRule (..))
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.ApplyEquations qualified as ApplyEquations
 import Booster.Pattern.Base (Pattern (..), TermOrPredicate (..))
-import Booster.Pattern.Implication (ImplicationCheckResult (..), checkImplication)
+import Booster.Pattern.Implication (ImplicationResult (..), simplifyImplication)
 import Booster.Pattern.Rewrite (
     RewriteFailed (..),
     RewriteResult (..),
     RewriteTrace (..),
     performRewrite,
  )
-import Booster.Pattern.Util (sortOfPattern, substitutionAsPredicate)
+import Booster.Pattern.Util (sortOfPattern)
 import Booster.Syntax.Json (KoreJson (..), addHeader, sortOfJson)
 import Booster.Syntax.Json.Externalise
 import Booster.Syntax.Json.Internalise (internalisePattern, internaliseTermOrPredicate)
@@ -182,24 +182,16 @@ respond stateVar =
                         (Left something, _traces) ->
                             pure . Left . backendError RpcError.Aborted $ show something -- FIXME
         SimplifyImplies req -> withContext req._module $ \(def, mLlvmLibrary) -> do
-            let doTracing =
+            let internalisedAntecedent =
+                    runExcept $ internalisePattern False Nothing def req.antecedent.term
+                internalisedConsequent =
+                    runExcept $ internalisePattern False Nothing def req.consequent.term
+                doTracing =
                     any
                         (fromMaybe False)
                         [ req.logSuccessfulSimplifications
                         , req.logFailedSimplifications
                         ]
-                mkTraces
-                    | all not . catMaybes $
-                        [req.logSuccessfulSimplifications, req.logFailedSimplifications] =
-                        const Nothing
-                    | otherwise =
-                        Just
-                            . mapMaybe (mkLogEquationTrace (req.logSuccessfulSimplifications, req.logFailedSimplifications))
-                            . toList
-            let internalisedAntecedent =
-                    runExcept $ internalisePattern False Nothing def req.antecedent.term
-                internalisedConsequent =
-                    runExcept $ internalisePattern False Nothing def req.consequent.term
             case (internalisedAntecedent, internalisedConsequent) of
                 (Left patternErrorsAntecedent, _) -> do
                     Log.logError $ "Error internalising antecedent cterm: " <> Text.pack (show patternErrorsAntecedent)
@@ -208,34 +200,29 @@ respond stateVar =
                     Log.logError $ "Error internalising consequent cterm: " <> Text.pack (show patternErrorsConsequent)
                     pure $ Left $ backendError CouldNotVerifyPattern patternErrorsConsequent
                 (Right antecedentPattern, Right consequentPattern) -> do
-                    Log.logInfoNS "booster" "Simplifying antecedent"
-                    ApplyEquations.evaluatePattern doTracing def mLlvmLibrary antecedentPattern >>= \case
-                        (Right newAntecedentPattern, antecedentTraces) -> do
-                            Log.logInfoNS "booster" "Simplifying consequent"
-                            ApplyEquations.evaluatePattern doTracing def mLlvmLibrary consequentPattern >>= \case
-                                (Right newConsequentPattern, consequentTraces) -> do
-                                    Log.logInfoNS "booster" "Matching antecedent with consequent"
-                                    case checkImplication def newAntecedentPattern newConsequentPattern of
-                                        ImplicationValid subst ->
-                                            pure . Right . SimplifyImplies $
-                                                SimplifyImpliesResult
-                                                    { satisfiable = Sat
-                                                    , substitution =
-                                                        Just . addHeader $
-                                                            externalisePredicate
-                                                                (externaliseSort $ sortOfPattern antecedentPattern)
-                                                                (substitutionAsPredicate subst)
-                                                    , logs = mkTraces antecedentTraces <> mkTraces consequentTraces
-                                                    }
-                                        ImplicationSortError sortError -> do
-                                            pure . Left . backendError RpcError.Aborted $ show sortError
-                                        ImplicationUnknown matchFailureReason _constraints -> do
-                                            Log.logErrorNS "booster" (Text.pack . show $ matchFailureReason)
-                                            pure . Left . backendError RpcError.Aborted $ show matchFailureReason
-                                (Left other, _consequentTraces) -> pure . Left . backendError RpcError.Aborted $ show other
-                        (Left other, _antecedentTraces) -> pure . Left . backendError RpcError.Aborted $ show other -- FIX ME
-
-        -- this case is only reachable if the cancel appeared as part of a batch request
+                    Log.logInfoNS "booster" "Checking implication by simplification"
+                    case simplifyImplication doTracing def mLlvmLibrary antecedentPattern consequentPattern of
+                        ImplicationValid ->
+                            pure . Right . SimplifyImplies $
+                                SimplifyImpliesResult
+                                    { satisfiable = Sat
+                                    , substitution = Nothing
+                                    , logs = mempty
+                                    }
+                        ImplicationInvalid _ ->
+                            pure . Right . SimplifyImplies $
+                                SimplifyImpliesResult
+                                    { satisfiable = Unsat
+                                    , substitution = Nothing
+                                    , logs = mempty
+                                    }
+                        ImplicationUnknown _ ->
+                            pure . Right . SimplifyImplies $
+                                SimplifyImpliesResult
+                                    { satisfiable = Unknown
+                                    , substitution = Nothing
+                                    , logs = mempty
+                                    }
         Cancel -> pure $ Left cancelUnsupportedInBatchMode
         -- using "Method does not exist" error code
         _ -> pure $ Left notImplemented
