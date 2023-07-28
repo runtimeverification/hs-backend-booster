@@ -269,7 +269,12 @@ match1
             -- and, domain values, injections, maps: fail
             _other ->
                 failWith $ DifferentSymbols app subj
--- matching on maps unsupported
+----- KMap
+-- empty maps match trivially with an empty substitution
+match1
+    (KMap _ [] Nothing)
+    (KMap _ [] Nothing) = pure mempty
+-- matching on non-empty maps is not supported
 match1
     t1@KMap{}
     t2 = indeterminate t1 t2
