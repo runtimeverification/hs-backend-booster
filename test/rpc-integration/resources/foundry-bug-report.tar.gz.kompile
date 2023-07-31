@@ -1,8 +1,30 @@
+set -eux
+
+SCRIPT_DIR=$(dirname $0)
+PLUGIN_DIR=${PLUGIN_DIR:-""}
+NIX_LIBS=${NIX_LIBS:-""}
+
+
+if [ -z "$PLUGIN_DIR" ]; then
+    echo "PLUGIN_DIR required to link in a crypto plugin dependency"
+    exit 1
+else
+    for lib in libff libcryptopp libsecp256k1; do
+        LIBFILE=$(find ${PLUGIN_DIR} -name "${lib}.a" | head -1)
+        [ -z "$LIBFILE" ] && (echo "[Error] Unable to locate ${lib}.a"; exit 1)
+        PLUGIN_LIBS+="$LIBFILE "
+        PLUGIN_INCLUDE+="-I$(dirname $LIBFILE)/../include "
+    done
+    #PLUGIN_CPP=$(find ${PLUGIN_DIR}/plugin-c -name "*.cpp")
+    PLUGIN_CPP="${PLUGIN_DIR}/plugin-c/blake2.cpp ${PLUGIN_DIR}/plugin-c/crypto.cpp ${PLUGIN_DIR}/plugin-c/plugin_util.cpp"
+fi
+
 NAME=$(basename ${0%.tar.gz.kompile})
 NAMETGZ=$(basename ${0%.kompile})
 
 # unpack definition.kore and llvm_definition from tarball
 # into a directory named after the tarball
+cd $SCRIPT_DIR
 mkdir -p $NAME
 tar xzf ../test-$NAMETGZ -C $NAME definition.kore llvm_definition/
 
@@ -10,7 +32,10 @@ tar xzf ../test-$NAMETGZ -C $NAME definition.kore llvm_definition/
 cp $NAME/definition.kore ${NAMETGZ}.kore
 
 # kompile llvm-definition to interpreter
-llvm-kompile $NAME/llvm_definition/definition.kore $NAME/llvm_definition/dt c -- -o interpreter
+llvm-kompile $NAME/llvm_definition/definition.kore $NAME/llvm_definition/dt c -- \
+             -fPIC -std=c++17 -o interpreter \
+             $PLUGIN_LIBS $PLUGIN_INCLUDE $PLUGIN_CPP \
+             -lcrypto -lssl -lprocps $NIX_LIBS
 mv interpreter.* $NAMETGZ.dylib
 
 # remove temporary artefacts

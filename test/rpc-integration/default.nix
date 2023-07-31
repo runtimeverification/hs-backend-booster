@@ -1,4 +1,4 @@
-{ stdenv, coreutils, lib, kore-rpc-booster, rpc-client, git, k }:
+{ stdenv, coreutils, lib, kore-rpc-booster, rpc-client, git, k, blockchain-k-plugin }:
 
 let
   mkIntegrationTest =
@@ -17,6 +17,7 @@ let
         '') buildFlags}
         export SERVER=${kore-rpc-booster}/bin/kore-rpc-booster
         export CLIENT=${rpc-client}/bin/rpc-client
+        export PLUGIN_DIR=${blockchain-k-plugin}
 
         patchShebangs runDirectoryTest.sh
         ./runDirectoryTest.sh test-${name} --time ${
