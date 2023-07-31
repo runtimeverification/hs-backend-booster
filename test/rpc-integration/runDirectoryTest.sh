@@ -44,7 +44,7 @@ dylib=resources/${dir#test-}.dylib
 echo "Running tests from $dir with definition $kore"
 
 # make sure directory and kore file exist
-[ ! -f "./$dir" ] && exit 1
+[ ! -e "./$dir" ] && exit 1
 if [ ! -f "./$kore" ]; then
   [ ! -f "./$kompile" ] && exit 2
   cd resources
