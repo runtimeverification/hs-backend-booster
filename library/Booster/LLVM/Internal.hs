@@ -1,3 +1,4 @@
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
@@ -38,6 +39,8 @@ import Data.ByteString.Char8 qualified as BS
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
+import Data.Text qualified as Text (intercalate, singleton)
+import Data.Text.Encoding qualified as Text (decodeUtf8)
 import Foreign (ForeignPtr, finalizeForeignPtr, newForeignPtr, withForeignPtr)
 import Foreign qualified
 import Foreign.C qualified as C
@@ -115,6 +118,25 @@ instance CustomUserEvent LlvmCall where
     decodeUserEvent = LlvmCall <$> get <*> get <*> get
     userEventTag _ = "LLVM "
     eventType _ = LlvmCalls
+    userEventTag :: proxy LlvmCall -> ByteString
+
+    prettyPrintUserEvent (LlvmCall{ret, call, args}) =
+        let prettyRet = case ret of
+                Just (ty, SomePtr ptr) -> Text.decodeUtf8 ty <> " v" <> Text.decodeUtf8 ptr <> " = "
+                _ -> ""
+
+            prettyArgs =
+                Text.singleton '('
+                    <> ( Text.intercalate (Text.singleton ',') $
+                            map
+                                ( either
+                                    (\str -> Text.singleton '"' <> Text.decodeUtf8 str <> Text.singleton '"')
+                                    (\(SomePtr ptr) -> Text.singleton 'v' <> Text.decodeUtf8 ptr)
+                                )
+                                args
+                       )
+                    <> Text.singleton ')'
+         in prettyRet <> Text.decodeUtf8 call <> prettyArgs <> ";\n"
 
 data LlvmVar = LlvmVar SomePtr Term
 
@@ -123,6 +145,9 @@ instance CustomUserEvent LlvmVar where
     decodeUserEvent = LlvmVar <$> get <*> decodeTerm' Nothing
     userEventTag _ = "LLVMV"
     eventType _ = LlvmCalls
+    prettyPrintUserEvent (LlvmVar ptr trm) = "var"
+
+-- prettyPrintUserEvent (LlvmVar ptr trm) = undefined
 
 {- | Uses dlopen to load a .so/.dylib C library at runtime. For doucmentation of flags such as `RTL_LAZY`, consult e.g.
      https://man7.org/linux/man-pages/man3/dlopen.3.html

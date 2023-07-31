@@ -8,7 +8,7 @@ import Control.DeepSeq (force)
 import Control.Exception (evaluate)
 import Control.Monad (forM_, when)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (isNothing)
+import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Text (unpack)
 import Options.Applicative
 
@@ -28,11 +28,16 @@ main = do
             , logLevels
             , llvmLibraryFile
             , eventlogEnabledUserEvents
+            , hijackEventlogFile
             } = options
 
     forM_ eventlogEnabledUserEvents $ \t -> do
         putStrLn $ "Tracing " <> show t
         enableCustomUserEvent t
+    when (isJust hijackEventlogFile) $ do
+        putStrLn $
+            "Hijacking eventlog into file " <> show (fromJust hijackEventlogFile)
+        enableHijackEventlogFile (fromJust hijackEventlogFile)
     putStrLn $
         "Loading definition from "
             <> definitionFile
