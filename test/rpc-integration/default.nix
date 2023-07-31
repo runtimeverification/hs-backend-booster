@@ -47,4 +47,5 @@ in {
   simplify = mkIntegrationTest { name = "simplify"; };
   get-model = mkIntegrationTest { name = "get-model"; };
   issue212 = mkIntegrationTest { name = "issue212"; };
+  foundry-bug-report.tar.gz = mkIntegrationTest { name = "foundry-bug-report.tar.gz"; };
 }
