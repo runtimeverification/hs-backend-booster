@@ -448,19 +448,25 @@ runTarball common tarFile keepGoing = do
     unpackIfRpc :: FilePath -> Tar.Entry -> IO [FilePath] -> IO [FilePath]
     unpackIfRpc tmpDir entry acc = do
         case splitFileName (Tar.entryPath entry) of
-            -- assume single directory "rpc_<something>" containing "*.json" files
-            (_, "") -- skip all directories
-                | Tar.Directory <- Tar.entryContent entry ->
-                    acc
-            (dir, file) -- unpack json files into tmp directory
+            -- unpack all directories "rpc_<something>" containing "*.json" files
+            (dir, "") -- directory
+                | Tar.Directory <- Tar.entryContent entry
+                , "rpc_" `isPrefixOf` dir -> do
+                    createDirectory dir -- create rpc dir so we can unpack files there
+                    acc -- no additional file to return
+                | otherwise ->
+                    acc -- skip other directories and top-level files
+            (dir, file)
                 | "rpc_" `isPrefixOf` dir
                 , ".json" `isSuffixOf` file
                 , Tar.NormalFile bs _size <- Tar.entryContent entry -> do
-                    BS.writeFile (tmpDir </> file) bs
-                    (file :) <$> acc
-            _other ->
-                -- skip anything else
-                acc
+                    -- unpack json files into tmp directory
+                    let newPath = dir </> file
+                    BS.writeFile (tmpDir </> newPath) bs
+                    (newPath :) <$> acc
+                | otherwise ->
+                    -- skip anything else
+                    acc
 
     noServerError :: MonadLoggerIO m => IOException -> m ()
     noServerError e@IOError{ioe_type = NoSuchThing} = do
