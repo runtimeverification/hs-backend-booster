@@ -16,7 +16,7 @@ else
         PLUGIN_INCLUDE+="-I$(dirname $LIBFILE)/../include "
     done
     #PLUGIN_CPP=$(find ${PLUGIN_DIR}/plugin-c -name "*.cpp")
-    PLUGIN_CPP="${PLUGIN_DIR}/plugin-c/blake2.cpp ${PLUGIN_DIR}/plugin-c/crypto.cpp ${PLUGIN_DIR}/plugin-c/plugin_util.cpp"
+    PLUGIN_CPP="${PLUGIN_DIR}/include/plugin-c/blake2.cpp ${PLUGIN_DIR}/include/plugin-c/crypto.cpp ${PLUGIN_DIR}/include/plugin-c/plugin_util.cpp"
 fi
 
 NAME=$(basename ${0%.tar.gz.kompile})
@@ -32,10 +32,16 @@ tar xzf ../test-$NAMETGZ -C $NAME definition.kore llvm_definition/
 cp $NAME/definition.kore ${NAMETGZ}.kore
 
 # kompile llvm-definition to interpreter
+
+case "$OSTYPE" in
+  linux*)   LPROCPS="-lprocps" ;;
+  *)        LPROCPS="" ;;
+esac
+
 llvm-kompile $NAME/llvm_definition/definition.kore $NAME/llvm_definition/dt c -- \
              -fPIC -std=c++17 -o interpreter \
              $PLUGIN_LIBS $PLUGIN_INCLUDE $PLUGIN_CPP \
-             -lcrypto -lssl -lprocps $NIX_LIBS
+             -lcrypto -lssl $LPROCPS
 mv interpreter.* $NAMETGZ.dylib
 
 # remove temporary artefacts

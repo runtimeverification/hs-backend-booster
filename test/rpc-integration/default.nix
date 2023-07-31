@@ -1,4 +1,4 @@
-{ stdenv, coreutils, lib, kore-rpc-booster, rpc-client, git, k, blockchain-k-plugin }:
+{ stdenv, coreutils, lib, kore-rpc-booster, rpc-client, git, k, blockchain-k-plugin, openssl, procps }:
 
 let
   mkIntegrationTest =
@@ -47,5 +47,5 @@ in {
   simplify = mkIntegrationTest { name = "simplify"; };
   get-model = mkIntegrationTest { name = "get-model"; };
   issue212 = mkIntegrationTest { name = "issue212"; };
-  foundry-bug-report.tar.gz = mkIntegrationTest { name = "foundry-bug-report.tar.gz"; };
+  foundry-bug-report.tar.gz = mkIntegrationTest { name = "foundry-bug-report.tar.gz"; nativeBuildInputs = [ k openssl procps ]; };
 }

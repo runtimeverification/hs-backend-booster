@@ -218,7 +218,7 @@
                 packages."hs-backend-booster:exe:kore-rpc-booster";
               rpc-client = packages."hs-backend-booster:exe:rpc-client";
               inherit (k-framework.packages.${system}) k;
-              inherit blockchain-k-plugin;
+              blockchain-k-plugin = blockchain-k-plugin.defaultPackage.${system};
             };
         });
 
