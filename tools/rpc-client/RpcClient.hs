@@ -462,6 +462,8 @@ runTarball common tarFile keepGoing = do
                 , Tar.NormalFile bs _size <- Tar.entryContent entry -> do
                     -- unpack json files into tmp directory
                     let newPath = dir </> file
+                    -- current tarballs do not have dir entries, create dir here
+                    createDirectoryIfMissing False $ tmpDir </> dir
                     BS.writeFile (tmpDir </> newPath) bs
                     (newPath :) <$> acc
                 | otherwise ->
