@@ -22,9 +22,9 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Aeson (ToJSON (..), Value (..), object, (.=))
-import Data.Bifunctor (first, second)
+import Data.Bifunctor (Bifunctor (bimap), first, second)
 import Data.ByteString.Char8 (ByteString)
-import Data.Coerce (coerce)
+import Data.Coerce (Coercible, coerce)
 import Data.Function (on)
 import Data.Generics (extQ)
 import Data.List (foldl', groupBy, nub, partition, sortOn)
@@ -817,15 +817,20 @@ expandAlias alias currentArgs
   where
     substitute substitution termOrPredicate =
         case termOrPredicate of
-            Def.BoolPredicate predicate ->
-                Def.BoolPredicate $ Util.substituteInPredicate substitution predicate
-            Def.TermAndPredicate Def.Pattern{term, constraints} ->
+            Def.BoolOrCeilPredicate predicate ->
+                Def.BoolOrCeilPredicate $ bimap (sub substitution) (sub substitution) predicate
+            Def.TermAndPredicate Def.Pattern{term, constraints, ceilConditions} ->
                 Def.TermAndPredicate
                     Def.Pattern
                         { term = Util.substituteInTerm substitution term
                         , constraints =
-                            Util.substituteInPredicate substitution <$> constraints
+                            sub substitution <$> constraints
+                        , ceilConditions =
+                            sub substitution <$> ceilConditions
                         }
+
+    sub :: (Coercible a Def.Term, Coercible Def.Term a) => Map Variable Def.Term -> a -> a
+    sub substitution = coerce . Util.substituteInTerm substitution . coerce
 
 removeTrueBools :: Def.Pattern -> Def.Pattern
 removeTrueBools p = p{Def.constraints = filter (/= Def.Predicate Def.TrueBool) p.constraints}

@@ -385,7 +385,7 @@ decodePattern mDef = do
             preds <- forM preds' $ \case
                 BPredicate p -> pure p
                 _ -> fail "Expecting a predicate"
-            pure $ Pattern trm preds
+            pure $ Pattern trm preds []
         _ -> fail "Expecting a term on the top of the stack"
 
 decodeSingleBlock :: Get Block

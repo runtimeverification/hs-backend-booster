@@ -52,6 +52,7 @@ import Booster.Pattern.Match
 import Booster.Pattern.Simplify
 import Booster.Pattern.Util
 import Booster.Prettyprinter (renderDefault)
+import Data.Coerce (coerce)
 
 newtype EquationT io a
     = EquationT (ReaderT EquationConfig (ExceptT EquationFailure (StateT EquationState io)) a)
@@ -274,7 +275,7 @@ evaluatePattern' ::
     MonadLoggerIO io =>
     Pattern ->
     EquationT io Pattern
-evaluatePattern' Pattern{term, constraints} = do
+evaluatePattern' Pattern{term, constraints, ceilConditions} = do
     pushConstraints constraints
     newTerm <- evaluateTerm' TopDown term
     -- after evaluating the term, evaluate all (existing and
@@ -282,7 +283,7 @@ evaluatePattern' Pattern{term, constraints} = do
     traverse_ simplifyAssumedPredicate . predicates =<< getState
     -- this may yield additional new constraints, left unevaluated
     evaluatedConstraints <- predicates <$> getState
-    pure Pattern{constraints = Set.toList evaluatedConstraints, term = newTerm}
+    pure Pattern{constraints = Set.toList evaluatedConstraints, term = newTerm, ceilConditions}
   where
     -- evaluate the given predicate assuming all others
     simplifyAssumedPredicate p = do
@@ -520,7 +521,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
 
             -- check required conditions, using substitution
             let required =
-                    concatMap (splitBoolPredicates . substituteInPredicate subst) $
+                    concatMap (splitBoolPredicates . coerce . substituteInTerm subst . coerce) $
                         rule.requires
             unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint required
 
@@ -533,7 +534,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                             -- check ensured conditions, filter any
                             -- true ones, prune if any is false
                             let ensured =
-                                    concatMap (splitBoolPredicates . substituteInPredicate subst) $
+                                    concatMap (splitBoolPredicates . coerce . substituteInTerm subst . coerce) $
                                         rule.ensures
                             mbEnsuredConditions <-
                                 runMaybeT $ catMaybes <$> mapM checkConstraint ensured
@@ -641,10 +642,7 @@ simplifyConstraint' = \case
                     Predicate <$> evalBool t
         | otherwise ->
             Predicate <$> evalBool t
-    other ->
-        pure other -- should not occur, predicates should be '_ ==Bool true'
   where
-
     evalBool :: MonadLoggerIO io => Term -> EquationT io Term
     evalBool t = do
         prior <- getState -- save prior state so we can revert

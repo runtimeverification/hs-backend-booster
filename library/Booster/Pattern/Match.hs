@@ -30,7 +30,6 @@ import Booster.Pattern.Util (
     freeVariables,
     isConstructorSymbol,
     isFunctionSymbol,
-    modifyVariablesInP,
     sortOfTerm,
     substituteInTerm,
  )

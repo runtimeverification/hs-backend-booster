@@ -49,6 +49,7 @@ import Booster.Pattern.Simplify
 import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
+import Data.Coerce (coerce)
 
 newtype RewriteT io err a = RewriteT {unRewriteT :: ReaderT RewriteConfig (ExceptT err io) a}
     deriving newtype (Functor, Applicative, Monad, MonadLogger, MonadIO, MonadLoggerIO)
@@ -157,7 +158,7 @@ applyRule ::
     Pattern ->
     RewriteRule k ->
     RewriteT io (RewriteFailed k) (Maybe (RewriteRule k, Pattern))
-applyRule pat rule = runMaybeT $ do
+applyRule pat@Pattern{ceilConditions} rule = runMaybeT $ do
     def <- lift getDefinition
     -- unify terms
     let unified = unifyTerms def rule.lhs pat.term
@@ -187,7 +188,7 @@ applyRule pat rule = runMaybeT $ do
     -- apply substitution to rule requires constraints and simplify (one by one
     -- in isolation). Stop if false, abort rewrite if indeterminate.
     let ruleRequires =
-            concatMap (splitBoolPredicates . substituteInPredicate subst) rule.requires
+            concatMap (splitBoolPredicates . coerce . substituteInTerm subst . coerce) rule.requires
         failIfUnclear = RuleConditionUnclear rule
     unclearRequires <- catMaybes <$> mapM (checkConstraint failIfUnclear) ruleRequires
     unless (null unclearRequires) $
@@ -197,7 +198,7 @@ applyRule pat rule = runMaybeT $ do
     -- check ensures constraints (new) from rhs: stop (prune here) if
     -- any are false, remove all that are trivially true, return the rest
     let ruleEnsures =
-            concatMap (splitBoolPredicates . substituteInPredicate subst) rule.ensures
+            concatMap (splitBoolPredicates . coerce . substituteInTerm subst . coerce) rule.ensures
     newConstraints <-
         catMaybes <$> mapM (checkConstraint id) ruleEnsures
 
@@ -205,7 +206,8 @@ applyRule pat rule = runMaybeT $ do
             Pattern
                 (substituteInTerm (refreshExistentials subst) rule.rhs)
                 -- adding new constraints that have not been trivially `Top`
-                (newConstraints <> map (substituteInPredicate subst) pat.constraints)
+                (newConstraints <> map (coerce . substituteInTerm subst . coerce) pat.constraints)
+                ceilConditions
     return (rule, rewritten)
   where
     failRewrite = lift . throw
@@ -228,8 +230,8 @@ applyRule pat rule = runMaybeT $ do
         RewriteConfig{definition, llvmApi, doTracing} <- lift $ RewriteT ask
         (simplified, _traces) <- simplifyConstraint doTracing definition llvmApi p
         case simplified of
-            Right Bottom -> fail "Rule condition was False"
-            Right Top -> pure Nothing
+            Right (Predicate FalseBool) -> fail "Rule condition was False"
+            Right (Predicate TrueBool) -> pure Nothing
             Right other -> pure $ Just $ onUnclear other
             Left _ -> pure $ Just $ onUnclear p
 

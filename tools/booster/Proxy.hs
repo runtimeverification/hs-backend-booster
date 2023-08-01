@@ -73,37 +73,37 @@ respondEither mbStatsVar booster kore req = case req of
         -- (boosterResult, boosterTime) <- withTime $ booster req
         -- case boosterResult of
         --     Right (Simplify boosterRes) -> do
-                -- let koreReq = Simplify simplifyReq{SimplifyRequest.state = boosterRes.state}
-                (koreResult, koreTime) <- withTime $ kore req --koreReq
-                case koreResult of
-                    Right (Simplify koreRes) -> do
-                        logStats SimplifyM (koreTime, koreTime)
-                        -- when (koreRes.state /= boosterRes.state) $
-                        --     -- TODO pretty instance for KoreJson terms for logging
-                        --     Log.logOtherNS "proxy" (Log.LevelOther "Simplify") . Text.pack . unlines $
-                        --         [ "Booster simplification:"
-                        --         , show boosterRes.state
-                        --         , "to"
-                        --         , show koreRes.state
-                        --         ]
-                        pure . Right . Simplify $
-                            SimplifyResult
-                                { state = koreRes.state
-                                , logs = koreRes.logs
-                                }
-                    koreError ->
-                        -- can only be an error
-                        pure koreError
-            -- Left ErrorObj{getErrMsg, getErrData = Object errObj} -> do
-            --     -- in case of problems, log the problem and try with kore
-            --     let boosterError = maybe "???" fromString $ Aeson.lookup "error" errObj
-            --         fromString (String s) = s
-            --         fromString other = Text.pack (show other)
-            --     Log.logInfoNS "proxy" . Text.unwords $
-            --         ["Problem with simplify request: ", Text.pack getErrMsg, "-", boosterError]
-            --     loggedKore SimplifyM req
-            -- _wrong ->
-            --     pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
+        -- let koreReq = Simplify simplifyReq{SimplifyRequest.state = boosterRes.state}
+        (koreResult, koreTime) <- withTime $ kore req -- koreReq
+        case koreResult of
+            Right (Simplify koreRes) -> do
+                logStats SimplifyM (koreTime, koreTime)
+                -- when (koreRes.state /= boosterRes.state) $
+                --     -- TODO pretty instance for KoreJson terms for logging
+                --     Log.logOtherNS "proxy" (Log.LevelOther "Simplify") . Text.pack . unlines $
+                --         [ "Booster simplification:"
+                --         , show boosterRes.state
+                --         , "to"
+                --         , show koreRes.state
+                --         ]
+                pure . Right . Simplify $
+                    SimplifyResult
+                        { state = koreRes.state
+                        , logs = koreRes.logs
+                        }
+            koreError ->
+                -- can only be an error
+                pure koreError
+    -- Left ErrorObj{getErrMsg, getErrData = Object errObj} -> do
+    --     -- in case of problems, log the problem and try with kore
+    --     let boosterError = maybe "???" fromString $ Aeson.lookup "error" errObj
+    --         fromString (String s) = s
+    --         fromString other = Text.pack (show other)
+    --     Log.logInfoNS "proxy" . Text.unwords $
+    --         ["Problem with simplify request: ", Text.pack getErrMsg, "-", boosterError]
+    --     loggedKore SimplifyM req
+    -- _wrong ->
+    --     pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
     AddModule _ -> do
         -- execute in booster first, assuming that kore won't throw an
         -- error if booster did not. The response is empty anyway.

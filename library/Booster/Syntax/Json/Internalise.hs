@@ -50,8 +50,8 @@ import Booster.Definition.Base (KoreDefinition (..), emptyKoreDefinition)
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
 import Booster.Syntax.Json.Externalise (externaliseSort)
-import Data.Maybe (catMaybes)
 import Booster.Syntax.ParsedKore.Parser (parsePattern)
+import Data.Either (partitionEithers)
 import Kore.Syntax.Json.Types qualified as Syntax
 
 internalisePattern ::
@@ -68,8 +68,9 @@ internalisePattern allowAlias sortVars definition p = do
     -- construct an AndTerm from all terms (checking sort consistency)
     term <- andTerm p =<< mapM (internaliseTerm allowAlias sortVars definition) terms
     -- internalise all predicates
-    constraints <- mapM (internaliseBoolPredicate allowAlias sortVars definition) predicates
-    pure Internal.Pattern{term, constraints}
+    (constraints, ceilConditions) <-
+        partitionEithers <$> mapM (internaliseBoolPredicate allowAlias sortVars definition) predicates
+    pure Internal.Pattern{term, constraints, ceilConditions}
   where
     andTerm :: Syntax.KorePattern -> [Internal.Term] -> Except PatternError Internal.Term
     andTerm _ [] = error "BUG: andTerm called with empty term list"
@@ -91,7 +92,7 @@ internaliseTermOrPredicate ::
     Syntax.KorePattern ->
     Except [PatternError] Internal.TermOrPredicate
 internaliseTermOrPredicate allowAlias sortVars definition syntaxPatt =
-    Internal.BoolPredicate
+    Internal.BoolOrCeilPredicate
         <$> (withExcept (: []) $ internaliseBoolPredicate allowAlias sortVars definition syntaxPatt)
         <|> Internal.TermAndPredicate
             <$> (withExcept (: []) $ internalisePattern allowAlias sortVars definition syntaxPatt)
@@ -225,13 +226,13 @@ internaliseBoolPredicate ::
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     Syntax.KorePattern ->
-    Except PatternError Internal.Predicate
+    Except PatternError (Either Internal.Predicate Internal.Ceil)
 internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pat = case pat of
     Syntax.KJEVar{} -> term
     Syntax.KJSVar{} -> term
     Syntax.KJApp{} -> term
     Syntax.KJString{} -> term
-    Syntax.KJTop{} -> pure $ Internal.Predicate Internal.TrueBool
+    Syntax.KJTop{} -> pure $ Left $ Internal.Predicate Internal.TrueBool
     Syntax.KJBottom{} -> notSupported -- TODO should we throw here?
     Syntax.KJNot{} -> notSupported
     -- Syntax.KJNot{arg} -> do
@@ -245,10 +246,8 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
     Syntax.KJExists{} -> notSupported
     Syntax.KJMu{} -> notSupported
     Syntax.KJNu{} -> notSupported
-    Syntax.KJCeil{arg} -> do
-        t <- internaliseTerm allowAlias sortVars definition arg
-        let sort = sortOfTerm t
-        pure $ Internal.Predicate $ Internal.InternalCeil sort t
+    Syntax.KJCeil{arg} ->
+        Right . Internal.Ceil <$> internaliseTerm allowAlias sortVars definition arg
     Syntax.KJFloor{} -> notSupported
     Syntax.KJEquals{argSort, first = arg1, second = arg2} -> do
         -- distinguish term and predicate equality
@@ -263,13 +262,17 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
                 ensureEqualSorts (sortOfTerm a) argS
                 ensureEqualSorts (sortOfTerm b) argS
                 case (argS, a, b) of
-                    (Internal.SortBool, Internal.TrueBool, x) -> pure $ Internal.Predicate x
-                    (Internal.SortBool, x, Internal.TrueBool) -> pure $ Internal.Predicate x
-                    (Internal.SortBool, Internal.FalseBool, x) -> pure $ Internal.Predicate $ Internal.NotBool x
-                    (Internal.SortBool, x, Internal.FalseBool) -> pure $ Internal.Predicate $ Internal.NotBool x
-                    (Internal.SortInt, _, _) -> pure $ Internal.Predicate $ Internal.EqualsInt a b
+                    (Internal.SortBool, Internal.TrueBool, x) -> pure $ Left $ Internal.Predicate x
+                    (Internal.SortBool, x, Internal.TrueBool) -> pure $ Left $ Internal.Predicate x
+                    (Internal.SortBool, Internal.FalseBool, x) -> pure $ Left $ Internal.Predicate $ Internal.NotBool x
+                    (Internal.SortBool, x, Internal.FalseBool) -> pure $ Left $ Internal.Predicate $ Internal.NotBool x
+                    (Internal.SortInt, _, _) -> pure $ Left $ Internal.Predicate $ Internal.EqualsInt a b
                     -- (Internal.SortK, _, _) -> pure $ Internal.Predicate $ Internal.EqualsK a b
-                    (Internal.SortBytes, _, _) -> pure $ Internal.Predicate $ Internal.EqualsK (Internal.KSeq Internal.SortBytes a) (Internal.KSeq Internal.SortBytes b)
+                    (Internal.SortBytes, _, _) ->
+                        pure $
+                            Left $
+                                Internal.Predicate $
+                                    Internal.EqualsK (Internal.KSeq Internal.SortBytes a) (Internal.KSeq Internal.SortBytes b)
                     _ -> notSupported
             (False, False) -> notSupported
             _other ->

@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -417,8 +418,12 @@ pattern DotDotDot = DomainValue (SortApp "internalDummySort" []) "..."
 {- | A predicate describes constraints on terms. It will always evaluate
    to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.
 -}
-data Predicate = Predicate Term | Ceil Term
-    deriving stock (Eq, Ord, Show, Generic)
+newtype Predicate = Predicate Term
+    deriving stock (Eq, Ord, Show, Generic, Data)
+    deriving anyclass (NFData)
+
+newtype Ceil = Ceil Term
+    deriving stock (Eq, Ord, Show, Generic, Data)
     deriving anyclass (NFData)
 
 pattern NotBool :: Term -> Term
@@ -446,7 +451,6 @@ pattern EqualsInt a b =
             )
         []
         [a, b]
-
 pattern EqualsK a b =
     SymbolApplication
         ( Symbol
@@ -459,9 +463,8 @@ pattern EqualsK a b =
         []
         [a, b]
 
-
 -- kseq{}(inj{<sort>, SortKItem{}}(<a>),dotk{}()
-pattern KSeq :: Sort -> Term ->Term
+pattern KSeq :: Sort -> Term -> Term
 pattern KSeq sort a =
     SymbolApplication
         ( Symbol
@@ -472,10 +475,8 @@ pattern KSeq sort a =
                 (SymbolAttributes Constructor IsNotIdem IsNotAssoc IsNotMacroOrAlias Nothing)
             )
         []
-        [
-            Injection sort SortKItem a
-            ,
-            SymbolApplication
+        [ Injection sort SortKItem a
+            , SymbolApplication
                 ( Symbol
                         "dotk"
                         []
@@ -485,20 +486,8 @@ pattern KSeq sort a =
                     )
                 []
                 []
-        ]
+            ]
 
-pattern InternalCeil :: Sort ->  Term -> Term
-pattern InternalCeil s t =
-    SymbolApplication
-        ( Symbol
-                "InternalCeil"
-                []
-                [s]
-                SortBool
-                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias Nothing)
-            )
-        []
-        [t]
 pattern TrueBool, FalseBool :: Term
 pattern TrueBool = DomainValue SortBool "true"
 pattern FalseBool = DomainValue SortBool "false"
@@ -509,12 +498,16 @@ pattern FalseBool = DomainValue SortBool "false"
 data Pattern = Pattern
     { term :: Term
     , constraints :: ![Predicate]
+    , ceilConditions :: ![Ceil]
     }
     deriving stock (Eq, Ord, Show, Generic, Data)
     deriving anyclass (NFData)
 
+pattern Pattern_ :: Term -> Pattern
+pattern Pattern_ t = Pattern t [] []
+
 data TermOrPredicate -- = Either Predicate Pattern
-    = BoolPredicate Predicate
+    = BoolOrCeilPredicate (Either Predicate Ceil)
     | TermAndPredicate Pattern
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
@@ -629,6 +622,12 @@ instance Pretty Predicate where
         "\\equalsTerm"
             <> KPretty.noParameters
             <> KPretty.argumentsP [t, DomainValue SortBool "true"]
+
+instance Pretty Ceil where
+    pretty (Ceil t) =
+        "\\ceil"
+            <> KPretty.noParameters
+            <> KPretty.argumentsP [t]
 
 instance Pretty Pattern where
     pretty patt =

@@ -165,16 +165,8 @@ respond stateVar =
                         (Left other, _traces) ->
                             pure . Left . backendError RpcError.Aborted $ show other -- FIXME
                             -- predicate only
-                Right (BoolPredicate predicate) -> do
+                Right (BoolOrCeilPredicate (Left predicate)) -> do
                     Log.logInfoNS "booster" "Simplifying a predicate"
-<<<<<<< HEAD
-                    let predicateSort =
-                            fromMaybe (error "not a predicate") $
-                                sortOfJson req.state.term
-                        result = externalisePredicate predicateSort predicate
-                    Log.logInfoNS "booster" $ pack $ show result
-                    pure . Right . Simplify $
-=======
                     ApplyEquations.simplifyConstraint doTracing def mLlvmLibrary predicate >>= \case
                         (Right newPred, traces) -> do
                             let predicateSort =
@@ -182,32 +174,14 @@ respond stateVar =
                                         sortOfJson req.state.term
                                 result = externalisePredicate predicateSort newPred
                             pure . Right . Simplify $
->>>>>>> origin/main
                                 SimplifyResult
                                     { state = addHeader result
-                                    , logs = mempty
+                                    , logs = mkTraces traces
                                     }
-<<<<<<< HEAD
-                    -- case ApplyEquations.traceSimplifyConstraint def mLlvmLibrary predicate of
-                    --     Right (newPred, traces) -> do
-                    --         logTraces $ filter (not . ApplyEquations.isMatchFailure) traces
-                    --         let predicateSort =
-                    --                 fromMaybe (error "not a predicate") $
-                    --                     sortOfJson req.state.term
-                    --             result = externalisePredicate predicateSort newPred
-                    --         pure . Right . Simplify $
-                    --             SimplifyResult
-                    --                 { state = addHeader result
-                    --                 , logs = mkTraces traces
-                    --                 }
-                    --     Left something ->
-                    --         pure . Left . backendError RpcError.Aborted $ show something -- FIXME
-=======
                         (Left something, _traces) ->
                             pure . Left . backendError RpcError.Aborted $ show something -- FIXME
->>>>>>> origin/main
-
-        -- this case is only reachable if the cancel appeared as part of a batch request
+                Right (BoolOrCeilPredicate (Right _ceil)) -> pure . Left . backendError RpcError.Aborted $ ("cannot simplify ceil at the moment" :: String) -- FIXME
+                -- this case is only reachable if the cancel appeared as part of a batch request
         Cancel -> pure $ Left cancelUnsupportedInBatchMode
         -- using "Method does not exist" error code
         _ -> pure $ Left notImplemented
@@ -378,7 +352,7 @@ mkLogEquationTrace
                             , origin
                             , result =
                                 Success
-                                    { rewrittenTerm = Just $ execStateToKoreJson $ toExecState $ Pattern rewrittenTrm []
+                                    { rewrittenTerm = Just $ execStateToKoreJson $ toExecState $ Pattern rewrittenTrm [] []
                                     , substitution = Nothing
                                     , ruleId = fromMaybe "UNKNOWN" _ruleId
                                     }
@@ -443,7 +417,7 @@ mkLogEquationTrace
                             }
             _ -> Nothing
       where
-        originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern subjectTerm []
+        originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern subjectTerm [] []
         originalTermIndex = Nothing
         origin = Booster
         _ruleId = fmap getUniqueId uid
@@ -515,7 +489,7 @@ mkLogRewriteTrace
                     let final = singleton $ case failure of
                             ApplyEquations.IndexIsNone trm ->
                                 Simplification
-                                    { originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern trm []
+                                    { originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern trm [] []
                                     , originalTermIndex = Nothing
                                     , origin = Booster
                                     , result = Failure{reason = "No index found for term", _ruleId = Nothing}

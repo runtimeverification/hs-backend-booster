@@ -9,7 +9,6 @@ module Booster.Pattern.Util (
     sortOfPattern,
     retractPattern,
     substituteInTerm,
-    substituteInPredicate,
     modifyVariables,
     modifyVariablesInT,
     modifyVarName,
@@ -63,7 +62,7 @@ applySubst subst (SortApp n args) =
 
 sortOfTermOrPredicate :: TermOrPredicate -> Maybe Sort
 sortOfTermOrPredicate (TermAndPredicate Pattern{term}) = Just (sortOfTerm term)
-sortOfTermOrPredicate (BoolPredicate _) = Nothing
+sortOfTermOrPredicate (BoolOrCeilPredicate _) = Nothing
 
 sortOfPattern :: Pattern -> Sort
 sortOfPattern pat = sortOfTerm pat.term
@@ -87,23 +86,18 @@ substituteInTerm substitution = goSubst
             Injection ss s sub -> Injection ss s (goSubst sub)
             KMap attrs keyVals rest -> KMap attrs (bimap goSubst goSubst <$> keyVals) (goSubst <$> rest)
 
-substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
-substituteInPredicate substitution (Predicate t) = Predicate $ substituteInTerm substitution t
-
 modifyVariables :: (Variable -> Variable) -> Pattern -> Pattern
 modifyVariables f p =
     Pattern
         { term = modifyVariablesInT f p.term
-        , constraints = map (modifyVariablesInP f) p.constraints
+        , constraints = map (coerce $ modifyVariablesInT f) p.constraints
+        , ceilConditions = map (coerce $ modifyVariablesInT f) p.ceilConditions
         }
 
 modifyVariablesInT :: (Variable -> Variable) -> Term -> Term
 modifyVariablesInT f = cata $ \case
     VarF v -> Var (f v)
     other -> embed other
-
-modifyVariablesInP :: (Variable -> Variable) -> Predicate -> Predicate
-modifyVariablesInP f (Predicate t) = Predicate $ modifyVariablesInT f t
 
 modifyVarName :: (VarName -> VarName) -> Variable -> Variable
 modifyVarName f v = v{variableName = f v.variableName}
