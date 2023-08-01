@@ -45,6 +45,7 @@ import System.Exit
 import System.FilePath
 import System.IO.Extra
 import System.Process
+import System.Time.Extra (Seconds, sleep)
 
 import Booster.JsonRpc (rpcJsonConfig)
 import Booster.JsonRpc.Utils (diffJson, isIdentical, renderResult)
@@ -74,7 +75,7 @@ main = do
                     liftIO exitSuccess
                 pure request
             -- runTCPClient operates on IO directly, therefore repeating runStderrLogging
-            runTCPClient common.host (show common.port) $ \s ->
+            retryTCPClient 0.5 5 common.host (show common.port) $ \s ->
                 cancelIfInterrupted s $ do
                     withLogLevel common.logLevel $
                         makeRequest
@@ -135,6 +136,23 @@ cancelIfInterrupted skt operation =
         exitWith (ExitFailure 130)
 
     cancel = object ["jsonrpc" ~> "2.0", "id" ~> "1", "method" ~> "cancel"]
+
+retryTCPClient :: Seconds -> Int -> String -> String -> (Socket -> IO a) -> IO a
+retryTCPClient delay retries host port operation
+    | retries < 0 || delay <= 0 =
+        error $ "retryTCPClient: negative parameters " <> show (delay,retries)
+    | retries == 0 = runTCPClient host port operation
+    | otherwise =
+        catchJust isNoSuchThing (runTCPClient host port operation) tryAgain
+  where
+    tryAgain _ = do
+        hPutStrLn stderr $ "[Warning] Could not connect (retrying " <> show retries <> " times)"
+        sleep delay
+        retryTCPClient delay (retries - 1) host port operation
+
+    isNoSuchThing :: IOError -> Maybe ()
+    isNoSuchThing IOError{ioe_type = NoSuchThing} = Just ()
+    isNoSuchThing _other = Nothing
 
 ----------------------------------------
 -- Logging
@@ -412,7 +430,7 @@ runTarball common tarFile keepGoing = do
     let checked = Tar.checkSecurity containedFiles
     -- probe server connection before doing anything, display
     -- instructions unless server was found.
-    runTCPClient common.host (show common.port) (runAllRequests checked)
+    retryTCPClient 1 10 common.host (show common.port) (runAllRequests checked)
         `catch` (withLogLevel common.logLevel . noServerError)
   where
     runAllRequests ::
