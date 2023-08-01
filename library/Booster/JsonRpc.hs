@@ -36,6 +36,7 @@ import Booster.Definition.Base qualified as Definition (RewriteRule (..))
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.ApplyEquations qualified as ApplyEquations
 import Booster.Pattern.Base (Pattern (..), TermOrPredicate (..))
+import Booster.Pattern.Base qualified as Pattern
 import Booster.Pattern.Rewrite (
     RewriteFailed (..),
     RewriteResult (..),
@@ -352,7 +353,7 @@ mkLogEquationTrace
                             , origin
                             , result =
                                 Success
-                                    { rewrittenTerm = Just $ execStateToKoreJson $ toExecState $ Pattern_ rewrittenTrm
+                                    { rewrittenTerm = Just $ execStateToKoreJson $ toExecState $ Pattern.Pattern_ rewrittenTrm
                                     , substitution = Nothing
                                     , ruleId = fromMaybe "UNKNOWN" _ruleId
                                     }
@@ -417,7 +418,7 @@ mkLogEquationTrace
                             }
             _ -> Nothing
       where
-        originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern_ subjectTerm
+        originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern.Pattern_ subjectTerm
         originalTermIndex = Nothing
         origin = Booster
         _ruleId = fmap getUniqueId uid
@@ -489,7 +490,7 @@ mkLogRewriteTrace
                     let final = singleton $ case failure of
                             ApplyEquations.IndexIsNone trm ->
                                 Simplification
-                                    { originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern_ trm
+                                    { originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern.Pattern_ trm
                                     , originalTermIndex = Nothing
                                     , origin = Booster
                                     , result = Failure{reason = "No index found for term", _ruleId = Nothing}
