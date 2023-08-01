@@ -222,12 +222,12 @@ definednessUnclear =
     testCase "con4 rewrite to f2 might become undefined" $ do
         let pcon4 =
                 [trm| kCell{}( kseq{}( inj{AnotherSort{}, SortKItem{}}( con4{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), ConfigVar:SortK{}) ) |]
-        pcon4 `failsWith` DefinednessUnclear rule4 (Pattern pcon4 [] []) [UndefinedSymbol "f2"]
+        pcon4 `failsWith` DefinednessUnclear rule4 (Pattern_ pcon4) [UndefinedSymbol "f2"]
 rewriteStuck =
     testCase "con3 app is stuck (no rules apply)" $ do
         let con3App =
                 [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con3{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), ConfigVar:SortK{}) ) |]
-        con3App `failsWith` NoApplicableRules (Pattern con3App [] [])
+        con3App `failsWith` NoApplicableRules (Pattern_ con3App)
 rulePriority =
     testCase "con1 rewrites to a branch when higher priority does not apply" $
         [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("otherThing") ) ), ConfigVar:SortK{}) ) |]
@@ -244,23 +244,23 @@ rulePriority =
 rewritesTo :: Term -> (Text, Term) -> IO ()
 t1 `rewritesTo` (lbl, t2) =
     unsafePerformIO
-        (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern t1 [] []))
-        @?= Right (RewriteFinished (Just lbl) Nothing $ Pattern t2 [] [])
+        (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern_ t1))
+        @?= Right (RewriteFinished (Just lbl) Nothing $ Pattern_ t2)
 
 branchesTo :: Term -> [(Text, Term)] -> IO ()
 t `branchesTo` ts =
     unsafePerformIO
-        (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern t [] []))
+        (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern_ t))
         @?= Right
-            ( RewriteBranch (Pattern t [] []) $
+            ( RewriteBranch (Pattern_ t) $
                 NE.fromList $
-                    map (\(lbl, t') -> (lbl, Nothing, Pattern t' [] [])) ts
+                    map (\(lbl, t') -> (lbl, Nothing, Pattern_ t')) ts
             )
 
 failsWith :: Term -> RewriteFailed "Rewrite" -> IO ()
 failsWith t err =
     unsafePerformIO
-        (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern t [] []))
+        (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern_ t))
         @?= Left err
 
 ----------------------------------------
@@ -269,7 +269,7 @@ failsWith t err =
 runRewrite :: Term -> IO (Natural, RewriteResult Term)
 runRewrite t = do
     (counter, _, res) <-
-        runNoLoggingT $ performRewrite False def Nothing Nothing [] [] $ Pattern t [] []
+        runNoLoggingT $ performRewrite False def Nothing Nothing [] [] $ Pattern_ t
     pure (counter, fmap (.term) res)
 
 aborts :: Term -> IO ()
@@ -398,7 +398,7 @@ supportsDepthControl =
     rewritesToDepth :: MaxDepth -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
     rewritesToDepth (MaxDepth depth) (Steps n) t t' f = do
         (counter, _, res) <-
-            runNoLoggingT $ performRewrite False def Nothing (Just depth) [] [] $ Pattern t [] []
+            runNoLoggingT $ performRewrite False def Nothing (Just depth) [] [] $ Pattern_ t
         (counter, fmap (.term) res) @?= (n, f t')
 
 supportsCutPoints :: TestTree
@@ -446,7 +446,7 @@ supportsCutPoints =
     rewritesToCutPoint :: Text -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
     rewritesToCutPoint lbl (Steps n) t t' f = do
         (counter, _, res) <-
-            runNoLoggingT $ performRewrite False def Nothing Nothing [lbl] [] $ Pattern t [] []
+            runNoLoggingT $ performRewrite False def Nothing Nothing [lbl] [] $ Pattern_ t
         (counter, fmap (.term) res) @?= (n, f t')
 
 supportsTerminalRules :: TestTree
@@ -472,5 +472,5 @@ supportsTerminalRules =
     rewritesToTerminal :: Text -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
     rewritesToTerminal lbl (Steps n) t t' f = do
         (counter, _, res) <-
-            runNoLoggingT $ performRewrite False def Nothing Nothing [] [lbl] $ Pattern t [] []
+            runNoLoggingT $ performRewrite False def Nothing Nothing [] [lbl] $ Pattern_ t
         (counter, fmap (.term) res) @?= (n, f t')
