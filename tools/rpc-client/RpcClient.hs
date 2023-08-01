@@ -103,6 +103,7 @@ makeRequest time name s bufSize request handleResponse = do
     response <- liftIO readResponse
     end <- liftIO $ getTime Monotonic
     logInfo_ "Response received."
+    logDebug_ $ "Response JSON: " <> BS.unpack response
     let timeStr = timeSpecs start end
     logInfo_ $ "Round trip time for request '" <> name <> "' was " <> timeStr
     when time $ do
