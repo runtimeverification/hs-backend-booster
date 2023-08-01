@@ -19,6 +19,7 @@ module Booster.LLVM.Internal (
     SomePtr (..),
     somePtr,
     LlvmCall (..),
+    LlvmCallArg (..),
     LlvmVar (..),
 ) where
 
@@ -108,10 +109,17 @@ newtype SomePtr = SomePtr ByteString
 somePtr :: Show a => a -> SomePtr
 somePtr ptr = SomePtr $ pack $ show ptr
 
+data LlvmCallArg
+    = LlvmCallArgByteString ByteString
+    | LlvmCallArgWord Word
+    | LlvmCallArgPtr SomePtr
+    deriving (Generic)
+
+instance Binary LlvmCallArg
 data LlvmCall = LlvmCall
     { ret :: Maybe (ByteString, SomePtr)
     , call :: ByteString
-    , args :: [Either ByteString SomePtr]
+    , args :: [LlvmCallArg]
     }
 instance CustomUserEvent LlvmCall where
     encodeUserEvent (LlvmCall{ret, call, args}) = put ret <> put call <> put args
@@ -129,9 +137,10 @@ instance CustomUserEvent LlvmCall where
                 Text.singleton '('
                     <> ( Text.intercalate (Text.singleton ',') $
                             map
-                                ( either
-                                    (\str -> Text.singleton '"' <> Text.decodeUtf8 str <> Text.singleton '"')
-                                    (\(SomePtr ptr) -> Text.singleton 'v' <> Text.decodeUtf8 ptr)
+                                ( \case
+                                    LlvmCallArgByteString str -> charUtf8 '"' <> byteString str <> charUtf8 '"'
+                                    LlvmCallArgWord int -> word64Dec (fromIntegral int)
+                                    LlvmCallArgPtr (SomePtr ptr) -> charUtf8 'v' <> byteString ptr
                                 )
                                 args
                        )
@@ -168,7 +177,7 @@ mkAPI dlib = flip runReaderT dlib $ do
             BS.useAsCString name $
                 newCompositePattern
                     >=> newForeignPtr freePattern
-                    >=> traceCall "kore_composite_pattern_new" [Left name] "kore_pattern*"
+                    >=> traceCall "kore_composite_pattern_new" [LlvmCallArgByteString name] "kore_pattern*"
 
     addArgumentCompositePattern <- koreCompositePatternAddArgument
     let addArgumentPattern parent child =
@@ -179,7 +188,7 @@ mkAPI dlib = flip runReaderT dlib $ do
                 Trace.traceIO $
                     LlvmCall
                         { call = "kore_composite_pattern_add_argument"
-                        , args = [Right $ somePtr parent, Right $ somePtr child]
+                        , args = [LlvmCallArgPtr $ somePtr parent, LlvmCallArgPtr $ somePtr child]
                         , ret = Nothing
                         }
                 pure parent
@@ -190,7 +199,7 @@ mkAPI dlib = flip runReaderT dlib $ do
             BS.useAsCStringLen name $ \(rawStr, len) ->
                 newString rawStr (fromIntegral len)
                     >>= ( newForeignPtr freePattern
-                            >=> traceCall "kore_string_pattern_new_with_len" [Left name] "kore_pattern*"
+                            >=> traceCall "kore_string_pattern_new_with_len" [LlvmCallArgByteString name] "kore_pattern*"
                         )
 
     newToken <- korePatternNewTokenWithLen
@@ -200,7 +209,10 @@ mkAPI dlib = flip runReaderT dlib $ do
                 withForeignPtr sort $
                     newToken rawName (fromIntegral len)
                         >=> newForeignPtr freePattern
-                        >=> traceCall "kore_pattern_new_token_with_len" [Left name] "kore_pattern*"
+                        >=> traceCall
+                            "kore_pattern_new_token_with_len"
+                            [LlvmCallArgByteString name, LlvmCallArgWord . fromIntegral $ len, LlvmCallArgPtr $ somePtr sort]
+                            "kore_pattern*"
 
     compositePatternFromSymbol <- koreCompositePatternFromSymbol
     let fromSymbol sym =
@@ -208,7 +220,7 @@ mkAPI dlib = flip runReaderT dlib $ do
             withForeignPtr sym $
                 compositePatternFromSymbol
                     >=> newForeignPtr freePattern
-                    >=> traceCall "kore_composite_pattern_from_symbol" [Right $ somePtr sym] "kore_pattern*"
+                    >=> traceCall "kore_composite_pattern_from_symbol" [LlvmCallArgPtr $ somePtr sym] "kore_pattern*"
 
     dumpPattern' <- korePatternDump
     let dumpPattern ptr =
@@ -238,7 +250,7 @@ mkAPI dlib = flip runReaderT dlib $ do
                 BS.useAsCString name $
                     newSymbol'
                         >=> newForeignPtr freeSymbol
-                        >=> traceCall "kore_symbol_new" [Left name] "kore_symbol*"
+                        >=> traceCall "kore_symbol_new" [LlvmCallArgByteString name] "kore_symbol*"
 
     addArgumentSymbol' <- koreSymbolAddFormalArgument
     let addArgumentSymbol sym sort =
@@ -248,7 +260,7 @@ mkAPI dlib = flip runReaderT dlib $ do
                 Trace.traceIO $
                     LlvmCall
                         { call = "kore_symbol_add_formal_argument"
-                        , args = [Right $ somePtr sym, Right $ somePtr sort]
+                        , args = [LlvmCallArgPtr $ somePtr sym, LlvmCallArgPtr $ somePtr sort]
                         , ret = Nothing
                         }
                 pure sym
@@ -265,7 +277,7 @@ mkAPI dlib = flip runReaderT dlib $ do
             BS.useAsCString name $
                 newSort'
                     >=> newForeignPtr freeSort
-                    >=> traceCall "kore_composite_sort_new" [Left name] "kore_sort*"
+                    >=> traceCall "kore_composite_sort_new" [LlvmCallArgByteString name] "kore_sort*"
 
     addArgumentSort' <- koreCompositeSortAddArgument
     let addArgumentSort parent child =
@@ -275,7 +287,7 @@ mkAPI dlib = flip runReaderT dlib $ do
                 Trace.traceIO $
                     LlvmCall
                         { call = "kore_composite_sort_add_formal_argument"
-                        , args = [Right $ somePtr parent, Right $ somePtr child]
+                        , args = [LlvmCallArgPtr $ somePtr parent, LlvmCallArgPtr $ somePtr child]
                         , ret = Nothing
                         }
                 pure parent
@@ -300,7 +312,7 @@ mkAPI dlib = flip runReaderT dlib $ do
                 Trace.traceIO $
                     LlvmCall
                         { call = "kore_simplify_bool"
-                        , args = [Right $ somePtr p]
+                        , args = [LlvmCallArgPtr $ somePtr p]
                         , ret = Nothing
                         }
                 withForeignPtr p $ fmap (== 1) <$> simplifyBool'
@@ -318,7 +330,11 @@ mkAPI dlib = flip runReaderT dlib $ do
                                     LlvmCall
                                         { call = "kore_simplify"
                                         , args =
-                                            [Right $ somePtr patPtr, Right $ somePtr sortPtr, Right $ somePtr strPtr, Right $ somePtr lenPtr]
+                                            [ LlvmCallArgPtr $ somePtr patPtr
+                                            , LlvmCallArgPtr $ somePtr sortPtr
+                                            , LlvmCallArgPtr $ somePtr strPtr
+                                            , LlvmCallArgPtr $ somePtr lenPtr
+                                            ]
                                         , ret = Nothing
                                         }
                                 len <- fromIntegral <$> peek lenPtr
