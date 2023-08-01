@@ -16,7 +16,7 @@ let
           export ${f}
         '') buildFlags}
         export SERVER=${kore-rpc-booster}/bin/kore-rpc-booster
-        export CLIENT="${rpc-client}/bin/rpc-client -l debug"
+        export CLIENT=${rpc-client}/bin/rpc-client
         export PLUGIN_DIR=${blockchain-k-plugin}
 
         patchShebangs runDirectoryTest.sh
