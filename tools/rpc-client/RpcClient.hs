@@ -140,7 +140,7 @@ cancelIfInterrupted skt operation =
 retryTCPClient :: Seconds -> Int -> String -> String -> (Socket -> IO a) -> IO a
 retryTCPClient delay retries host port operation
     | retries < 0 || delay <= 0 =
-        error $ "retryTCPClient: negative parameters " <> show (delay,retries)
+        error $ "retryTCPClient: negative parameters " <> show (delay, retries)
     | retries == 0 = runTCPClient host port operation
     | otherwise =
         catchJust isNoSuchThing (runTCPClient host port operation) tryAgain
