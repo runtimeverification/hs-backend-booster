@@ -68,7 +68,7 @@ server_pid=$!
 trap 'kill -2 ${server_pid}; popd' ERR EXIT
 echo "Server PID ${server_pid}"
 
-sleep 10
+sleep 5
 
 if [ -d $dir ]; then
     for test in $( ls $dir/state-*.{execute,send,simplify,add-module,get-model} 2>/dev/null ); do
