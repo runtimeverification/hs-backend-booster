@@ -70,6 +70,7 @@ library:
   - containers
   - deepseq
   - deriving-aeson
+  - Diff
   - exceptions
   - extra
   - filepath
@@ -88,6 +89,7 @@ library:
   - regex-pcre-builtin
   - stm
   - stm-conduit
+  - syb
   - template-haskell
   - text
   - transformers
@@ -123,16 +125,20 @@ executables:
       - aeson-pretty
       - base
       - bytestring
+      - bz2
       - clock
       - directory
       - extra
+      - filepath
       - hs-backend-booster
       - network
       - network-run
       - optparse-applicative
       - process
+      - tar
       - text
       - vector
+      - zlib
     ghc-options:
       - -rtsopts
   parsetest:
@@ -162,16 +168,6 @@ executables:
       - text
     ghc-options:
     - -rtsopts
-  dltest:
-    source-dirs: tools/dltest
-    main: Dltest.hs
-    dependencies:
-      - base
-      - directory
-      - hs-backend-booster
-      - unix
-    ghc-options:
-    - -rtsopts
   eventlog-parser:
     source-dirs: tools/eventlog-parser
     main: EventlogParser.hs
@@ -193,6 +189,14 @@ executables:
       - unordered-containers
     ghc-options:
     - -rtsopts
+  kore-json-differ:
+    source-dirs: tools/kore-json-differ
+    main: Main.hs
+    dependencies:
+      - base
+      - bytestring
+      - containers
+      - hs-backend-booster
 
   kore-rpc-booster:
     source-dirs: tools/booster

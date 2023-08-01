@@ -1,4 +1,7 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 {- |
@@ -24,17 +27,19 @@ import Booster.Prettyprinter qualified as KPretty
 import Control.DeepSeq (NFData (..))
 import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
+import Data.Data (Data)
 import Data.Either (fromRight)
 import Data.Functor.Foldable
 import Data.Hashable (Hashable)
 import Data.Hashable qualified as Hashable
 import Data.List (foldl1')
 import Data.Map qualified as Map
-import Data.Set (Set)
+import Data.Set (Set, fromList, toList)
 import Data.Set qualified as Set
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics (Generic)
+import Language.Haskell.TH.Syntax (Lift (..))
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
 
@@ -50,7 +55,7 @@ data Sort
       SortApp SortName [Sort]
     | -- | sort variable (symbolic)
       SortVar VarName
-    deriving stock (Eq, Ord, Show, Generic)
+    deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
 pattern SortBool, SortInt, SortK, SortKItem, SortBytes :: Sort
@@ -65,7 +70,7 @@ data Variable = Variable
     { variableSort :: Sort
     , variableName :: VarName
     }
-    deriving stock (Eq, Ord, Show, Generic)
+    deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
 data Symbol = Symbol
@@ -75,7 +80,7 @@ data Symbol = Symbol
     , resultSort :: Sort
     , attributes :: SymbolAttributes
     }
-    deriving stock (Eq, Ord, Show, Generic)
+    deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
 {- | A term consists of an AST of constructors and function calls, as
@@ -95,7 +100,7 @@ data TermF t
       -- sorts between source and target are shortened out.
       InjectionF Sort Sort t
     | KMapF KMapDefinition [(t, t)] (Maybe t)
-    deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic)
+    deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
 {- | Term attributes are synthetic (bottom-up) attributes that cache
@@ -112,9 +117,12 @@ data TermAttributes = TermAttributes
     , isConstructorLike :: !Bool
     -- ^ false for function calls, variables, and AndTerms
     }
-    deriving stock (Eq, Ord, Show, Generic)
+    deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
+instance Lift (Set Variable) where
+    lift s = let s' = toList s in [|fromList s'|]
+    liftTyped s = let s' = toList s in [||fromList s'||]
 instance Semigroup TermAttributes where
     a1 <> a2 =
         TermAttributes
@@ -129,7 +137,7 @@ instance Monoid TermAttributes where
 
 -- | A term together with its attributes.
 data Term = Term TermAttributes (TermF Term)
-    deriving stock (Ord, Show, Generic)
+    deriving stock (Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData)
 
 instance Eq Term where
@@ -409,7 +417,7 @@ pattern DotDotDot = DomainValue (SortApp "internalDummySort" []) "..."
 {- | A predicate describes constraints on terms. It will always evaluate
    to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.
 -}
-newtype Predicate = Predicate Term
+data Predicate = Predicate Term | Ceil Term
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
@@ -502,7 +510,7 @@ data Pattern = Pattern
     { term :: Term
     , constraints :: ![Predicate]
     }
-    deriving stock (Eq, Ord, Show, Generic)
+    deriving stock (Eq, Ord, Show, Generic, Data)
     deriving anyclass (NFData)
 
 data TermOrPredicate -- = Either Predicate Pattern
