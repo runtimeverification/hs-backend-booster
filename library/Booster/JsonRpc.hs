@@ -108,7 +108,7 @@ respond stateVar =
                             unless (null newModule.sorts) $
                                 throwE . AddModuleError $
                                     "Module introduces new sorts: " <> listNames newModule.sorts
-                            unless (null $ newModule.symbols) $
+                            unless (null newModule.symbols) $
                                 throwE . AddModuleError $
                                     "Module introduces new symbols: " <> listNames newModule.symbols
                      in case runExcept (checkModule >> addToDefinitions newModule state.definitions) of
@@ -352,7 +352,7 @@ mkLogEquationTrace
                             , origin
                             , result =
                                 Success
-                                    { rewrittenTerm = Just $ execStateToKoreJson $ toExecState $ Pattern rewrittenTrm [] []
+                                    { rewrittenTerm = Just $ execStateToKoreJson $ toExecState $ Pattern_ rewrittenTrm
                                     , substitution = Nothing
                                     , ruleId = fromMaybe "UNKNOWN" _ruleId
                                     }
@@ -417,7 +417,7 @@ mkLogEquationTrace
                             }
             _ -> Nothing
       where
-        originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern subjectTerm [] []
+        originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern_ subjectTerm
         originalTermIndex = Nothing
         origin = Booster
         _ruleId = fmap getUniqueId uid
@@ -489,7 +489,7 @@ mkLogRewriteTrace
                     let final = singleton $ case failure of
                             ApplyEquations.IndexIsNone trm ->
                                 Simplification
-                                    { originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern trm [] []
+                                    { originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern_ trm
                                     , originalTermIndex = Nothing
                                     , origin = Booster
                                     , result = Failure{reason = "No index found for term", _ruleId = Nothing}
