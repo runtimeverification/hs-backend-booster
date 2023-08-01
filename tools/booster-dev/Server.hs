@@ -5,12 +5,14 @@ License     : BSD-3-Clause
 module Main (main) where
 
 import Control.DeepSeq (force)
-import Control.Exception (evaluate)
+import Control.Exception (catch, evaluate, throwIO)
 import Control.Monad (forM_, when)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Text (unpack)
 import Options.Applicative
+import System.Directory (removeFile)
+import System.IO.Error (isDoesNotExistError)
 
 import Booster.CLOptions
 import Booster.JsonRpc (runServer)
@@ -35,9 +37,11 @@ main = do
         putStrLn $ "Tracing " <> show t
         enableCustomUserEvent t
     when (isJust hijackEventlogFile) $ do
+        let fname = fromJust hijackEventlogFile
         putStrLn $
-            "Hijacking eventlog into file " <> show (fromJust hijackEventlogFile)
-        enableHijackEventlogFile (fromJust hijackEventlogFile)
+            "Hijacking eventlog into file " <> show fname
+        removeFileIfExists fname
+        enableHijackEventlogFile fname
     putStrLn $
         "Loading definition from "
             <> definitionFile
@@ -67,3 +71,10 @@ parserInfoModifiers =
     fullDesc
         <> header
             "Haskell Backend Booster - a JSON RPC server for quick symbolic execution of Kore definitions"
+
+removeFileIfExists :: FilePath -> IO ()
+removeFileIfExists fileName = removeFile fileName `catch` handleExists
+  where
+    handleExists e
+        | isDoesNotExistError e = return ()
+        | otherwise = throwIO e

@@ -81,7 +81,8 @@ clOptionsParser =
             ( strOption
                 ( metavar "HIJACK_EVENTLOG_FILE"
                     <> long "hijack-eventlog-file"
-                    <> help "Hijack LlvmCall tracing events and write them to a file to overcome GHC RTS' restriction on event size (2^16 bytes). Avoid at all costs."
+                    <> help
+                        "Hijack LlvmCall tracing events and write them to a file to overcome GHC RTS' restriction on event size (2^16 bytes). Avoid at all costs."
                 )
             )
   where
