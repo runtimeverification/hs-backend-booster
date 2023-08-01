@@ -217,7 +217,7 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
 
     postExecSimplify :: Maybe Text -> API 'Res -> m (API 'Res)
     postExecSimplify mbModule
-        | not simplifyAfterExec = pure . id
+        | not simplifyAfterExec = pure
         | otherwise = \case
             Execute res ->
                 Execute <$> simplifyResult res
@@ -231,11 +231,11 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
             let filteredNexts = filter (not . isBottom) simplifiedNexts
             let result = case reason of
                     Branching
+                        | null filteredNexts ->
+                            res{reason = Stuck, nextStates = Nothing}
                         | length filteredNexts == 1 ->
                             res -- What now? would have to re-loop. Return as-is.
-                        | length filteredNexts == 0 ->
-                            res{reason = Stuck, nextStates = Nothing}
-                    -- otherwise falling through to _otherReason
+                            -- otherwise falling through to _otherReason
                     CutPointRule
                         | null filteredNexts ->
                             -- HACK. Would want to return the prior state
