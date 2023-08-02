@@ -1,4 +1,3 @@
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
@@ -131,7 +130,6 @@ instance CustomUserEvent LlvmCall where
     decodeUserEvent = LlvmCall <$> get <*> get <*> get
     userEventTag _ = "LLVM "
     eventType _ = LlvmCalls
-    userEventTag :: proxy LlvmCall -> ByteString
 
     prettyPrintUserEvent (LlvmCall{ret, call, args}) =
         let prettyRet = case ret of
@@ -161,7 +159,6 @@ instance CustomUserEvent LlvmVar where
     decodeUserEvent = LlvmVar <$> get <*> decodeTerm' Nothing
     userEventTag _ = "LLVMV"
     eventType _ = LlvmCalls
-    prettyPrintUserEvent :: LlvmVar -> ByteString
     prettyPrintUserEvent (LlvmVar (SomePtr ptr) trm) = "/* " <> ptr <> " |-> " <> BS.pack (KPretty.renderDefault $ pretty trm) <> " */\n"
 
 {- | Uses dlopen to load a .so/.dylib C library at runtime. For doucmentation of flags such as `RTL_LAZY`, consult e.g.
