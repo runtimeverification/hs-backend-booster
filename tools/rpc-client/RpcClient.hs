@@ -82,7 +82,6 @@ main = do
                             time
                             (getModeFile mode)
                             s
-                            8192
                             request
                             (postProcess prettify postProcessing)
                     shutdown s ShutdownReceive
@@ -92,11 +91,10 @@ makeRequest ::
     Bool ->
     String ->
     Socket ->
-    Int64 ->
     BS.ByteString ->
     (BS.ByteString -> m a) ->
     m a
-makeRequest time name s bufSize request handleResponse = do
+makeRequest time name s request handleResponse = do
     start <- liftIO $ getTime Monotonic
     logInfo_ $ "Sending request " <> name <> "..."
     logDebug_ $ "Request JSON: " <> BS.unpack request
@@ -112,6 +110,8 @@ makeRequest time name s bufSize request handleResponse = do
         liftIO $ writeFile (name <> ".time") timeStr
     handleResponse response
   where
+    bufSize :: Int64
+    bufSize = 1024
     readResponse :: IO BS.ByteString
     readResponse = do
         part <- recv s bufSize
@@ -529,7 +529,7 @@ runTarball common tarFile keepGoing = do
             request <- liftIO . BS.readFile $ tmpDir </> basename <> "_request.json"
             expected <- liftIO . BS.readFile $ tmpDir </> basename <> "_response.json"
 
-            actual <- makeRequest False basename skt 8192 request pure
+            actual <- makeRequest False basename skt request pure
 
             let diff = diffJson expected actual
             if isIdentical diff
