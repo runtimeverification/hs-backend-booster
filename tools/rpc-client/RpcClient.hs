@@ -75,7 +75,7 @@ main = do
                     liftIO exitSuccess
                 pure request
             -- runTCPClient operates on IO directly, therefore repeating runStderrLogging
-            retryTCPClient 0.5 5 common.host (show common.port) $ \s ->
+            retryTCPClient 1 5 common.host (show common.port) $ \s ->
                 cancelIfInterrupted s $ do
                     withLogLevel common.logLevel $
                         makeRequest
@@ -430,7 +430,7 @@ runTarball common tarFile keepGoing = do
     let checked = Tar.checkSecurity containedFiles
     -- probe server connection before doing anything, display
     -- instructions unless server was found.
-    retryTCPClient 1 10 common.host (show common.port) (runAllRequests checked)
+    retryTCPClient 2 10 common.host (show common.port) (runAllRequests checked)
         `catch` (withLogLevel common.logLevel . noServerError)
   where
     runAllRequests ::
