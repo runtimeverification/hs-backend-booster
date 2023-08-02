@@ -19,9 +19,6 @@ import Data.IORef
 import Data.Kind (Type)
 import Data.Maybe (fromJust, isJust)
 import Data.Proxy (Proxy (..))
-import Data.Text qualified as Text
-import Data.Text.Encoding qualified as Text (decodeUtf8)
-import Data.Text.IO qualified as Text (writeFile)
 import Debug.Trace.Binary (traceBinaryEvent, traceBinaryEventIO)
 import Debug.Trace.Flags
 import GHC.IO (unsafePerformIO)
