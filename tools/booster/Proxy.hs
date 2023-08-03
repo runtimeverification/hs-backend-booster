@@ -94,15 +94,19 @@ respondEither mbStatsVar booster kore req = case req of
                     koreError ->
                         -- can only be an error
                         pure koreError
-            Left ErrorObj{getErrMsg, getErrData = Object errObj} -> do
+            Left ErrorObj{getErrMsg, getErrData = errObj} -> do
                 -- in case of problems, log the problem and try with kore
-                let boosterError = maybe "???" fromString $ Aeson.lookup "error" errObj
+                let boosterError = maybe "???" fromString $ case errObj of
+                        Object o -> Aeson.lookup "error" o
+                        other -> Just other
                     fromString (String s) = s
                     fromString other = Text.pack (show other)
                 Log.logInfoNS "proxy" . Text.unwords $
                     ["Problem with simplify request: ", Text.pack getErrMsg, "-", boosterError]
                 loggedKore SimplifyM req
-            _wrong ->
+            Left ErrorVal{} ->
+                error "IMPOSSIBLE!"
+            Right _wrong ->
                 pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
     AddModule _ -> do
         -- execute in booster first, assuming that kore won't throw an
