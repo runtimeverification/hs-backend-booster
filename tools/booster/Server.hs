@@ -205,8 +205,7 @@ clProxyOptionsParser =
                 )
             <*> switch
                 ( long "simplify-after-exec"
-                    <> help "(development) Run kore simplifier on execute results before returning"
-                    <> hidden
+                    <> help "(experimental) Run kore simplifier on execute results before returning"
                 )
 
 mkKoreServer :: Log.LoggerEnv IO -> CLOptions -> KoreSolverOptions -> IO KoreServer
