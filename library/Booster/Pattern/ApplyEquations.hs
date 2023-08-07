@@ -562,6 +562,25 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
             Top -> pure Nothing
             _other -> pure $ Just p
 
+    -- Simplify given predicate in a nested EquationT execution.
+    -- Return Nothing if it is Bottom, return (Just Nothing) if it is
+    -- Top, otherwise return (Just simplified).
+    checkConstraint' ::
+        Predicate ->
+        MaybeT (EquationT io) (Maybe Predicate)
+    checkConstraint' p = do
+        config <- lift getConfig
+        (simplified, _traces) <-
+            -- all exception cases need to be handled differently for
+            -- constraints. For the moment, nest the EquationT monad
+            -- (no loop detection, no global iteration count).
+            lift $ simplifyConstraint config.doTracing config.definition config.llvmApi p
+        case simplified of
+            Right Bottom -> fail "Rule condition was False"
+            Right Top -> pure Nothing
+            Right other -> pure $ Just other
+            Left _ -> pure $ Just p
+
     allMustBeConcrete (AllConstrained Concrete) = True
     allMustBeConcrete _ = False
 
