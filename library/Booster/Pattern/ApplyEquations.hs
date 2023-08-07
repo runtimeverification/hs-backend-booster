@@ -526,7 +526,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                     concatMap
                         (splitBoolPredicates . substituteInPredicate subst)
                         rule.requires
-            unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint required
+            unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint' required
 
             case unclearConditions' of
                 Nothing -> throwE ConditionFalse
@@ -541,7 +541,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                                         (splitBoolPredicates . substituteInPredicate subst)
                                         rule.ensures
                             mbEnsuredConditions <-
-                                runMaybeT $ catMaybes <$> mapM checkConstraint ensured
+                                runMaybeT $ catMaybes <$> mapM checkConstraint' ensured
                             case mbEnsuredConditions of
                                 -- throws if an ensured condition found to be false
                                 Nothing -> throwE $ EnsuresFalse ensured
@@ -567,9 +567,11 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     -- Top, otherwise return (Just simplified).
     checkConstraint' ::
         Predicate ->
-        MaybeT (EquationT io) (Maybe Predicate)
+        MaybeT (ExceptT ApplyEquationResult (EquationT io)) (Maybe Predicate)
     checkConstraint' p = do
-        config <- lift getConfig
+        lift . logOther (LevelOther "Simplify") $
+            "recursive simplification of predicate: " <> pack (renderDefault (pretty p))
+        config <- lift $ lift getConfig
         (simplified, _traces) <-
             -- all exception cases need to be handled differently for
             -- constraints. For the moment, nest the EquationT monad
