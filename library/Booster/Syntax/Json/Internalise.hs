@@ -234,10 +234,10 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
     Syntax.KJString{} -> term
     Syntax.KJTop{} -> pure $ Left $ Internal.Predicate Internal.TrueBool
     Syntax.KJBottom{} -> notSupported -- TODO should we throw here?
-    Syntax.KJNot{} -> notSupported
-    -- Syntax.KJNot{arg} -> do
-    --     Internal.Predicate p <- internaliseBoolPredicate allowAlias sortVars definition arg
-    --     pure $ Internal.Predicate $ Internal.NotBool p
+    Syntax.KJNot{arg} -> do
+        internaliseBoolPredicate allowAlias sortVars definition arg >>= \case
+            Left (Internal.Predicate p )-> pure $ Left $ Internal.Predicate $ Internal.NotBool p
+            Right Internal.Ceil{} -> notSupported
     Syntax.KJAnd{} -> notSupported
     Syntax.KJOr{} -> notSupported
     Syntax.KJImplies{} -> notSupported
@@ -267,7 +267,6 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
                     (Internal.SortBool, Internal.FalseBool, x) -> pure $ Left $ Internal.Predicate $ Internal.NotBool x
                     (Internal.SortBool, x, Internal.FalseBool) -> pure $ Left $ Internal.Predicate $ Internal.NotBool x
                     (Internal.SortInt, _, _) -> pure $ Left $ Internal.Predicate $ Internal.EqualsInt a b
-                    -- (Internal.SortK, _, _) -> pure $ Internal.Predicate $ Internal.EqualsK a b
                     (Internal.SortBytes, _, _) ->
                         pure $
                             Left $
