@@ -77,6 +77,25 @@ data EquationFailure
     | InternalError Text
     deriving stock (Eq, Show)
 
+instance Pretty EquationFailure where
+    pretty = \case
+        IndexIsNone t ->
+            "Index 'None' for term " <> pretty t
+        TooManyIterations count start end ->
+            vsep
+                [ "Unable to finish evaluation in " <> pretty count <> " iterations"
+                , "Started with: " <> pretty start
+                , "Stopped at: " <> pretty end
+                ]
+        EquationLoop ts ->
+            vsep $ "Evaluation produced a loop:" : map pretty ts
+        SideConditionsFalse ps ->
+            vsep $
+                "Side conditions were found to be false during evaluation (pruning)"
+                    : map pretty ps
+        InternalError msg ->
+            "Internal error during evaluation: " <> pretty msg
+
 data EquationConfig = EquationConfig
     { definition :: KoreDefinition
     , llvmApi :: Maybe LLVM.API
@@ -564,7 +583,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
         MaybeT (ExceptT ApplyEquationResult (EquationT io)) (Maybe Predicate)
     checkConstraint p = do
         lift . logOther (LevelOther "Simplify") $
-            "recursive simplification of predicate: " <> pack (renderDefault (pretty p))
+            "Recursive simplification of predicate: " <> pack (renderDefault (pretty p))
         oldChangeFlag <- lift $ lift getChanged
         let restoreChangeFlag :: EquationT io ()
             restoreChangeFlag =
@@ -573,8 +592,8 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                     else resetChanged
             fallBackToP :: EquationFailure -> EquationT io Predicate
             fallBackToP e = do
-                logOther (LevelOther "Simplify") . pack $
-                    "Aborting recursive simplification after " <> show e
+                logOther (LevelOther "Simplify") . pack . renderDefault $
+                    "Aborting recursive simplification:" <> pretty e
                 pure p
         -- exceptions need to be handled differently in the recursion,
         -- falling back to the unsimplified constraint instead of aborting.
