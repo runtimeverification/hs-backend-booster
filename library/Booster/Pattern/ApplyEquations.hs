@@ -532,7 +532,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                     concatMap
                         (splitBoolPredicates . substituteInPredicate subst)
                         rule.requires
-            unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint' required
+            unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint required
 
             case unclearConditions' of
                 Nothing -> throwE ConditionFalse
@@ -547,7 +547,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                                         (splitBoolPredicates . substituteInPredicate subst)
                                         rule.ensures
                             mbEnsuredConditions <-
-                                runMaybeT $ catMaybes <$> mapM checkConstraint' ensured
+                                runMaybeT $ catMaybes <$> mapM checkConstraint ensured
                             case mbEnsuredConditions of
                                 -- throws if an ensured condition found to be false
                                 Nothing -> throwE $ EnsuresFalse ensured
@@ -559,10 +559,10 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     -- Simplify given predicate in a nested EquationT execution.
     -- Return Nothing immediately if it is Bottom, return (Just
     -- Nothing) if it is Top, otherwise return (Just simplified).
-    checkConstraint' ::
+    checkConstraint ::
         Predicate ->
         MaybeT (ExceptT ApplyEquationResult (EquationT io)) (Maybe Predicate)
-    checkConstraint' p = do
+    checkConstraint p = do
         lift . logOther (LevelOther "Simplify") $
             "recursive simplification of predicate: " <> pack (renderDefault (pretty p))
         oldChangeFlag <- lift $ lift getChanged
