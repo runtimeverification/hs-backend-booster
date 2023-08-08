@@ -297,7 +297,7 @@ evaluatePattern' Pattern{term, constraints} = do
     simplifyAssumedPredicate p = do
         allPs <- predicates <$> getState
         let otherPs = Set.delete p allPs
-        EquationT $ lift $ lift $ modify $ \s -> s{predicates = otherPs}
+        EquationT $ lift $ lift $ modify $ \s -> s{termStack = [], predicates = otherPs}
         newP <- simplifyConstraint' p
         pushConstraints [newP]
 

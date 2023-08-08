@@ -4,6 +4,13 @@ module SIMPLIFY
 
   syntax Int ::= f ( Int ) [function, no-evaluators] // a non-concrete value
 
+  // creating an indirect simplifiation loop
+  syntax Bool ::= p1 ( Int ) [function, total, no-evaluators, label("p1")]
+                | p2 ( Int ) [function, total, no-evaluators, label("p2")]
+
+  rule [p1-if-p2]: p1(X) => true requires p2(X) [simplification]
+  rule [p2-if-p1]: p2(X) => true requires p1(X) [simplification]
+
 /* Simplification rules from domains.md, reproduced here for documentation
 
   // Arithmetic Normalization
