@@ -21,13 +21,6 @@ packages:
 - completed:
     hackage: decision-diagrams-0.2.0.0@sha256:9f82d39f7331f6836784fa89354986e436a4d62d810b8fb2b44dd10c6a0beb85,3415
     pantry-tree:
-      sha256: 9514e48c9141b29a5f58b27c2950f17cc1c53eea3d393a6a1ed46ca16e876754
-      size: 546
-  original:
-    hackage: compact-0.2.0.0
-- completed:
-    hackage: decision-diagrams-0.2.0.0@sha256:9f82d39f7331f6836784fa89354986e436a4d62d810b8fb2b44dd10c6a0beb85,3415
-    pantry-tree:
       sha256: 36696cfd2af10c44fc0b7d8746c57d94c476eef4ba16f6ac98c2d6dae04f4b36
       size: 866
   original:
@@ -47,29 +40,29 @@ packages:
   original:
     hackage: monad-validate-1.2.0.1
 - completed:
-    commit: 1a91aea8470128561dbdc6d6aba551d1502ca654
+    commit: 8785dc971aa735bfae5fd5eec5f2e1dce00c36ba
     git: https://github.com/runtimeverification/haskell-backend.git
     name: kore
     pantry-tree:
-      sha256: e8fc431edeca149e6f303ce1e20f515184dc5932e1c665011a2a48909eab89ff
+      sha256: 55f800064db0f4d4ec820cf96d60d0cd0c4cb2b702318be7fccbc5d7266d8047
       size: 44548
     subdir: kore
     version: 0.60.0.0
   original:
-    commit: 1a91aea8470128561dbdc6d6aba551d1502ca654
+    commit: 8785dc971aa735bfae5fd5eec5f2e1dce00c36ba
     git: https://github.com/runtimeverification/haskell-backend.git
     subdir: kore
 - completed:
-    commit: 1a91aea8470128561dbdc6d6aba551d1502ca654
+    commit: 8785dc971aa735bfae5fd5eec5f2e1dce00c36ba
     git: https://github.com/runtimeverification/haskell-backend.git
     name: kore-rpc-types
     pantry-tree:
-      sha256: c5e0c34c3b850ba26c74bf4ea14943a3ab5b50ddd74702cf36879553e5325754
+      sha256: c249259e7dbe47b686bad0e5ec8156cc0398a85572b4327a1dc0bb586441cc72
       size: 404
     subdir: kore-rpc-types
     version: 0.60.0.0
   original:
-    commit: 1a91aea8470128561dbdc6d6aba551d1502ca654
+    commit: 8785dc971aa735bfae5fd5eec5f2e1dce00c36ba
     git: https://github.com/runtimeverification/haskell-backend.git
     subdir: kore-rpc-types
 snapshots:

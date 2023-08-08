@@ -106,13 +106,13 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
                 loggedKore SimplifyM req
             _wrong ->
                 pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
-    SimplifyImplies _simplifyImpliesReq -> do
+    SimplifyImplication _simplifyImpliesReq -> do
         -- execute in booster first, then in kore. Log the difference
         (boosterResult, boosterTime) <- withTime $ booster req
         case boosterResult of
-            Right (SimplifyImplies boosterRes) -> do
-                logStats SimplifyImpliesM (boosterTime, 0)
-                pure . Right . SimplifyImplies $ boosterRes
+            Right (SimplifyImplication boosterRes) -> do
+                logStats SimplifyImplicationM (boosterTime, 0)
+                pure . Right . SimplifyImplication $ boosterRes
             Left err@ErrorObj{getErrMsg, getErrData = Object errObj} -> do
                 let boosterError = maybe "???" fromString $ Aeson.lookup "error" errObj
                     fromString (String s) = s

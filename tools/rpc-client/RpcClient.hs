@@ -568,6 +568,8 @@ prepareRequestData (Exec file) mbOptFile opts =
     liftIO $ prepareOneTermRequest "execute" file mbOptFile opts
 prepareRequestData (Simpl file) mbOptFile opts =
     liftIO $ prepareOneTermRequest "simplify" file mbOptFile opts
+prepareRequestData (SimplImpl antecedentFile consequentFile) mbOptFile opts =
+    liftIO $ prepareImpliesRequest "simplify-implication" antecedentFile consequentFile mbOptFile opts
 prepareRequestData (AddModule file) mbOptFile opts = do
     unless (isNothing mbOptFile) $
         logWarn_ "Add-module mode, ignoring given option file"

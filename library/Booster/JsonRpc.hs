@@ -181,7 +181,7 @@ respond stateVar =
                                     }
                         (Left something, _traces) ->
                             pure . Left . backendError RpcError.Aborted $ show something -- FIXME
-        SimplifyImplies req -> withContext req._module $ \(def, mLlvmLibrary) -> do
+        SimplifyImplication req -> withContext req._module $ \(def, mLlvmLibrary) -> do
             let internalisedAntecedent =
                     runExcept $ internalisePattern False Nothing def req.antecedent.term
                 internalisedConsequent =
@@ -203,24 +203,24 @@ respond stateVar =
                     Log.logInfoNS "booster" "Checking implication by simplification"
                     case simplifyImplication doTracing def mLlvmLibrary antecedentPattern consequentPattern of
                         ImplicationValid ->
-                            pure . Right . SimplifyImplies $
-                                SimplifyImpliesResult
-                                    { satisfiable = Sat
-                                    , substitution = Nothing
+                            pure . Right . SimplifyImplication $
+                                SimplifyImplicationResult
+                                    { validity = Valid
+                                    , condition = Nothing
                                     , logs = mempty
                                     }
                         ImplicationInvalid _ ->
-                            pure . Right . SimplifyImplies $
-                                SimplifyImpliesResult
-                                    { satisfiable = Unsat
-                                    , substitution = Nothing
+                            pure . Right . SimplifyImplication $
+                                SimplifyImplicationResult
+                                    { validity = Invalid
+                                    , condition = Nothing
                                     , logs = mempty
                                     }
                         ImplicationUnknown _ ->
-                            pure . Right . SimplifyImplies $
-                                SimplifyImpliesResult
-                                    { satisfiable = Unknown
-                                    , substitution = Nothing
+                            pure . Right . SimplifyImplication $
+                                SimplifyImplicationResult
+                                    { validity = ValidityUnknown
+                                    , condition = Nothing
                                     , logs = mempty
                                     }
         Cancel -> pure $ Left cancelUnsupportedInBatchMode
