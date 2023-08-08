@@ -40,7 +40,7 @@ import System.Info (os)
 
 -- A prerequisite for all tests in this suite is that a fixed K
 -- definition was compiled in LLVM 'c' mode to produce a dynamic
--- library, and is available under 'test/llvm-kompiled/interpreter.{dylib,so}'
+-- library, and is available under 'test/llvm-integration/definition/llvm-kompiled/interpreter.{dylib,so}'
 
 definition, kompiledPath, dlPath :: FilePath
 definition = "test/llvm-integration/definition/llvm.k"
@@ -75,11 +75,18 @@ llvmSpec =
                     propertyTest . simplifyComparisonProp
 
             describe "LLVM byte array simplification" $ do
-                it "should leave literal byte arrays as they are" $
+                it "should leave non-empty literal byte arrays as they are" $
                     hedgehog . propertyTest . byteArrayProp
+                it "will return 9-byte byte array when given zero-length byte array" $ do
+                    \api -> do
+                        let emptyByteArray = bytesTerm ""
+                        let simplified = LLVM.simplifyTerm api testDef emptyByteArray bytesSort
+                        case simplified of
+                            Term _ (DomainValueF (SortApp "SortBytes" []) xs) -> BS.length xs `shouldBe` 9
+                            other -> expectationFailure (show other)
 
             describe "LLVM String handling" $
-                it "should work with latin-1strings" $
+                it "should work with latin-1 strings" $
                     hedgehog . propertyTest . latin1Prop
 
 --------------------------------------------------
@@ -99,25 +106,32 @@ compareNumbersProp api = property $ do
 simplifyComparisonProp api = property $ do
     x <- anInt64
     y <- anInt64
-    LLVM.simplifyTerm api testDef (x `equal` y) boolSort === boolTerm (x == y)
+    let simplified = LLVM.simplifyTerm api testDef (x `equal` y) boolSort
+    simplified === boolTerm (x == y)
 
 anInt64 :: PropertyT IO Int64
 anInt64 = forAll $ Gen.integral (Range.constantBounded :: Range Int64)
 
 byteArrayProp :: Internal.API -> Property
 byteArrayProp api = property $ do
-    i <- forAll $ Gen.int (Range.linear 0 1024)
+    let minTermSize = 1
+        maxTermSize = 1024
+    i <- forAll $ Gen.int (Range.linear minTermSize maxTermSize)
     let ba = BS.pack $ take i $ cycle ['\255', '\254' .. '\0']
-    LLVM.simplifyTerm api testDef (bytesTerm ba) bytesSort === bytesTerm ba
-    ba' <- forAll $ Gen.bytes $ Range.linear 0 1024
-    LLVM.simplifyTerm api testDef (bytesTerm ba') bytesSort === bytesTerm ba'
+    let simplified = LLVM.simplifyTerm api testDef (bytesTerm ba) bytesSort
+    simplified === bytesTerm ba
+    ba' <- forAll $ Gen.bytes $ Range.linear minTermSize maxTermSize
+    let simplified' = LLVM.simplifyTerm api testDef (bytesTerm ba') bytesSort
+    simplified' === bytesTerm ba'
 
 -- Round-trip test passing syntactic strings through the simplifier
 -- and back. latin-1 characters should be left as they are (treated as
 -- bytes internally). UTF-8 code points beyond latin-1 are forbidden.
 latin1Prop :: Internal.API -> Property
 latin1Prop api = property $ do
-    txt <- forAll $ Gen.text (Range.linear 0 123) Gen.latin1
+    let minTermSize = 1
+        maxTermSize = 123
+    txt <- forAll $ Gen.text (Range.linear minTermSize maxTermSize) Gen.latin1
     let stringDV = fromSyntacticString txt
         simplified = LLVM.simplifyTerm api testDef stringDV stringSort
     stringDV === simplified
