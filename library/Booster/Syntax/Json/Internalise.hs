@@ -236,7 +236,7 @@ internaliseBoolPredicate allowAlias sortVars definition@KoreDefinition{sorts} pa
     Syntax.KJBottom{} -> notSupported -- TODO should we throw here?
     Syntax.KJNot{arg} -> do
         internaliseBoolPredicate allowAlias sortVars definition arg >>= \case
-            Left (Internal.Predicate p )-> pure $ Left $ Internal.Predicate $ Internal.NotBool p
+            Left (Internal.Predicate p) -> pure $ Left $ Internal.Predicate $ Internal.NotBool p
             Right Internal.Ceil{} -> notSupported
     Syntax.KJAnd{} -> notSupported
     Syntax.KJOr{} -> notSupported
