@@ -63,6 +63,12 @@ newtype EquationT io a
 throw :: MonadLoggerIO io => EquationFailure -> EquationT io a
 throw = EquationT . lift . throwE
 
+catch_ ::
+    MonadLoggerIO io => EquationT io a -> (EquationFailure -> EquationT io a) -> EquationT io a
+catch_ (EquationT op) hdlr = EquationT $ do
+    cfg <- ask
+    lift (runReaderT op cfg `catchE` (\e -> let EquationT fallBack = hdlr e in runReaderT fallBack cfg))
+
 data EquationFailure
     = IndexIsNone Term
     | TooManyIterations Int Term Term
@@ -550,38 +556,35 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                                     lift $ pushConstraints conditions
                             pure $ substituteInTerm subst rule.rhs
   where
-    -- evaluate/simplify a predicate, cut the operation short when it
-    -- is Bottom.
-    checkConstraint ::
-        Predicate ->
-        MaybeT (ExceptT ApplyEquationResult (EquationT io)) (Maybe Predicate)
-    checkConstraint p = do
-        mApi <- (.llvmApi) <$> lift (lift getConfig)
-        case simplifyPredicate mApi p of
-            Bottom -> fail "side condition was false"
-            Top -> pure Nothing
-            _other -> pure $ Just p
-
     -- Simplify given predicate in a nested EquationT execution.
-    -- Return Nothing if it is Bottom, return (Just Nothing) if it is
-    -- Top, otherwise return (Just simplified).
+    -- Return Nothing immediately if it is Bottom, return (Just
+    -- Nothing) if it is Top, otherwise return (Just simplified).
     checkConstraint' ::
         Predicate ->
         MaybeT (ExceptT ApplyEquationResult (EquationT io)) (Maybe Predicate)
     checkConstraint' p = do
         lift . logOther (LevelOther "Simplify") $
             "recursive simplification of predicate: " <> pack (renderDefault (pretty p))
-        config <- lift $ lift getConfig
-        (simplified, _traces) <-
-            -- all exception cases need to be handled differently for
-            -- constraints. For the moment, nest the EquationT monad
-            -- (no loop detection, no global iteration count).
-            lift $ simplifyConstraint config.doTracing config.definition config.llvmApi p
+        oldChangeFlag <- lift $ lift getChanged
+        let restoreChangeFlag :: EquationT io ()
+            restoreChangeFlag =
+                if oldChangeFlag
+                    then setChanged
+                    else resetChanged
+            fallBackToP :: EquationFailure -> EquationT io Predicate
+            fallBackToP e = do
+                logOther (LevelOther "Simplify") . pack $
+                    "Aborting recursive simplification after " <> show e
+                pure p
+        -- exceptions need to be handled differently in the recursion,
+        -- falling back to the unsimplified constraint instead of aborting.
+        simplified <-
+            lift . lift $
+                resetChanged >> simplifyConstraint' p `catch_` fallBackToP <* restoreChangeFlag
         case simplified of
-            Right Bottom -> fail "Rule condition was False"
-            Right Top -> pure Nothing
-            Right other -> pure $ Just other
-            Left _ -> pure $ Just p
+            Bottom -> fail "Rule condition was False"
+            Top -> pure Nothing
+            other -> pure $ Just other
 
     allMustBeConcrete (AllConstrained Concrete) = True
     allMustBeConcrete _ = False
