@@ -7,21 +7,23 @@ License     : BSD-3-Clause
 module Booster.Pattern.Implication (
     simplifyImplication,
     ImplicationResult (..),
+    ImplicationInvalidReason (..),
+    ImplicationUnknownReason (..),
 ) where
 
 import Booster.Definition.Base (KoreDefinition)
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.Base (Pattern (..), Predicate, Term)
 import Booster.Pattern.Match qualified as Match
+import Booster.Pattern.Unify (Substitution)
 
--- | Result of matching a pattern to a subject (unification, failure, or indeterminate)
 data ImplicationResult
-    = ImplicationValid
-    | ImplicationInvalid ImplicationFailureReason
-    | ImplicationUnknown ImplicationUnknownReason
+    = ImplicationValid Substitution
+    | ImplicationInvalid (Maybe Substitution) ImplicationInvalidReason
+    | ImplicationUnknown (Maybe Substitution) ImplicationUnknownReason
     deriving stock (Eq, Show)
 
-data ImplicationFailureReason
+data ImplicationInvalidReason
     = MatchingFailed Match.MatchFailReason
     | ConstraintSubsumptionFailed [Predicate]
     deriving stock (Eq, Show)
@@ -41,11 +43,14 @@ simplifyImplication ::
     ImplicationResult
 simplifyImplication _doTracing def _mLlvmLibrary antecedent consequent =
     case Match.matchTerm def antecedent.term consequent.term of
-        Match.MatchSuccess _subst ->
+        Match.MatchSuccess subst ->
             -- got substitution, let's now look at constraints
             case (antecedent.constraints, consequent.constraints) of
-                ([], []) -> ImplicationValid
+                -- successful matching
+                ([], []) -> ImplicationValid subst
                 (_, _) ->
-                    ImplicationUnknown $ ConstraintSubsumptionUnknown (antecedent.constraints <> consequent.constraints)
-        Match.MatchFailed reason -> ImplicationInvalid . MatchingFailed $ reason
-        Match.MatchIndeterminate antecedent_term consequent_term -> ImplicationUnknown $ MatchingUnknown antecedent_term consequent_term
+                    ImplicationUnknown (Just subst) $
+                        ConstraintSubsumptionUnknown (antecedent.constraints <> consequent.constraints)
+        Match.MatchFailed reason -> ImplicationInvalid Nothing $ MatchingFailed reason
+        Match.MatchIndeterminate antecedentSubterm consequentSubterm ->
+            ImplicationUnknown Nothing $ MatchingUnknown antecedentSubterm consequentSubterm
