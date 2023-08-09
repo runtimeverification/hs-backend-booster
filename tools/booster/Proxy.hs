@@ -106,6 +106,22 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
                 loggedKore SimplifyM req
             _wrong ->
                 pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
+    SimplifyImplication _simplifyImpliesReq -> do
+        -- execute in booster first, then in kore. Log the difference
+        (boosterResult, boosterTime) <- withTime $ booster req
+        case boosterResult of
+            Right (SimplifyImplication boosterRes) -> do
+                logStats SimplifyImplicationM (boosterTime, 0)
+                pure . Right . SimplifyImplication $ boosterRes
+            Left err@ErrorObj{getErrMsg, getErrData = Object errObj} -> do
+                let boosterError = maybe "???" fromString $ Aeson.lookup "error" errObj
+                    fromString (String s) = s
+                    fromString other = Text.pack (show other)
+                Log.logInfoNS "proxy" . Text.unwords $
+                    ["Problem with simplify-implication request: ", Text.pack getErrMsg, "-", boosterError]
+                pure . Left $ err
+            _wrong ->
+                pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
     AddModule _ -> do
         -- execute in booster first, assuming that kore won't throw an
         -- error if booster did not. The response is empty anyway.

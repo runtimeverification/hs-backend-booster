@@ -1,0 +1,4 @@
+echo "kompiling micro-kevm.k"
+kompile --backend haskell micro-kevm.k
+cp micro-kevm-kompiled/definition.kore micro-kevm.kore
+rm -r micro-kevm-kompiled

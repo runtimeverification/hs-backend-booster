@@ -1,0 +1,129 @@
+{
+  "format": "KORE",
+  "version": 1,
+  "term": {
+    "tag": "App",
+    "name": "Lbl'-LT-'generatedTop'-GT-'",
+    "sorts": [],
+    "args": [
+      {
+        "tag": "App",
+        "name": "Lbl'-LT-'k'-GT-'",
+        "sorts": [],
+        "args": [
+          {
+            "args": [],
+            "name": "Lbl'Stop'EthereumSimulation'Unds'MICRO-KEVM-SYNTAX'Unds'EthereumSimulation",
+            "sorts": [],
+            "tag": "App"
+          }
+        ]
+      },
+      {
+        "name": "Lbl'-LT-'micro-kevm'-GT-'",
+        "sorts": [],
+        "tag": "App",
+        "args": [
+          {
+            "args": [
+              {
+                "tag": "EVar",
+                "name": "Y",
+                "sort": {
+                  "tag": "SortApp",
+                  "name": "SortWordStack",
+                  "args": []
+                }
+              }
+            ],
+            "name": "Lbl'-LT-'wordStack'-GT-'",
+            "sorts": [],
+            "tag": "App"
+          },
+          {
+            "args": [
+              {
+                "args": [],
+                "name": "Lbl'Stop'Set",
+                "sorts": [],
+                "tag": "App"
+              }
+            ],
+            "name": "Lbl'-LT-'touchedAccounts'-GT-'",
+            "sorts": [],
+            "tag": "App"
+          },
+          {
+            "args": [
+              {
+                "args": [
+                  {
+                    "args": [
+                      {
+                        "sort": {
+                          "args": [],
+                          "name": "SortInt",
+                          "tag": "SortApp"
+                        },
+                        "tag": "DV",
+                        "value": "0"
+                      }
+                    ],
+                    "name": "Lbl'-LT-'acctID'-GT-'",
+                    "sorts": [],
+                    "tag": "App"
+                  },
+                  {
+                    "args": [
+                      {
+                        "args": [
+                          {
+                            "sort": {
+                              "args": [],
+                              "name": "SortInt",
+                              "tag": "SortApp"
+                            },
+                            "tag": "DV",
+                            "value": "0"
+                          }
+                        ],
+                        "name": "Lbl'-LT-'acctID'-GT-'",
+                        "sorts": [],
+                        "tag": "App"
+                      },
+                      {
+                        "args": [
+                          {
+                            "sort": {
+                              "args": [],
+                              "name": "SortInt",
+                              "tag": "SortApp"
+                            },
+                            "tag": "DV",
+                            "value": "0"
+                          }
+                        ],
+                        "name": "Lbl'-LT-'balance'-GT-'",
+                        "sorts": [],
+                        "tag": "App"
+                      }
+                    ],
+                    "name": "Lbl'-LT-'account'-GT-'",
+                    "sorts": [],
+                    "tag": "App"
+                  }
+                ],
+                "name": "LblAccountCellMapItem",
+                "sorts": [],
+                "tag": "App"
+              }
+            ],
+            "name": "Lbl'-LT-'accounts'-GT-'",
+            "sorts": [],
+            "tag": "App"
+          }
+        ]
+      }
+    ]
+  }
+}

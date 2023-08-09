@@ -29,20 +29,28 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Records
 import Numeric.Natural
+import Prettyprinter (pretty)
 
 import Booster.Definition.Attributes.Base (getUniqueId, uniqueId)
 import Booster.Definition.Base (KoreDefinition (..))
 import Booster.Definition.Base qualified as Definition (RewriteRule (..))
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.ApplyEquations qualified as ApplyEquations
-import Booster.Pattern.Base (Pattern (..), TermOrPredicate (..))
+import Booster.Pattern.Base (Pattern (..), Predicate (..), TermOrPredicate (..))
+import Booster.Pattern.Implication (
+    ImplicationInvalidReason (..),
+    ImplicationResult (..),
+    ImplicationUnknownReason (..),
+    simplifyImplication,
+ )
 import Booster.Pattern.Rewrite (
     RewriteFailed (..),
     RewriteResult (..),
     RewriteTrace (..),
     performRewrite,
  )
-import Booster.Pattern.Util (sortOfPattern)
+import Booster.Pattern.Util (sortOfPattern, substitutionAsPredicate)
+import Booster.Prettyprinter (renderOneLineText)
 import Booster.Syntax.Json (KoreJson (..), addHeader, sortOfJson)
 import Booster.Syntax.Json.Externalise
 import Booster.Syntax.Json.Internalise (internalisePattern, internaliseTermOrPredicate)
@@ -180,8 +188,52 @@ respond stateVar =
                                     }
                         (Left something, _traces) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ show something -- FIXME
-
-        -- this case is only reachable if the cancel appeared as part of a batch request
+        RpcTypes.SimplifyImplication req -> withContext req._module $ \(def, mLlvmLibrary) -> do
+            let internalisedAntecedent =
+                    runExcept $ internalisePattern False Nothing def req.antecedent.term
+                internalisedConsequent =
+                    runExcept $ internalisePattern False Nothing def req.consequent.term
+                doTracing =
+                    any
+                        (fromMaybe False)
+                        [ req.logSuccessfulSimplifications
+                        , req.logFailedSimplifications
+                        ]
+            case (internalisedAntecedent, internalisedConsequent) of
+                (Left patternErrorsAntecedent, _) -> do
+                    Log.logError $ "Error internalising antecedent cterm: " <> Text.pack (show patternErrorsAntecedent)
+                    pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternErrorsAntecedent
+                (_, Left patternErrorsConsequent) -> do
+                    Log.logError $ "Error internalising consequent cterm: " <> Text.pack (show patternErrorsConsequent)
+                    pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternErrorsConsequent
+                (Right antecedentPattern, Right consequentPattern) -> do
+                    Log.logInfoNS "booster" "Checking implication by simplification"
+                    let predicateSort = externaliseSort (sortOfPattern consequentPattern)
+                    case simplifyImplication doTracing def mLlvmLibrary antecedentPattern consequentPattern of
+                        ImplicationValid subst -> do
+                            let koreJsonSubstitution = addHeader . externalisePredicate predicateSort . substitutionAsPredicate $ subst
+                            pure . Right . RpcTypes.SimplifyImplication $
+                                RpcTypes.SimplifyImplicationResult
+                                    { validity = RpcTypes.ImplicationValid
+                                    , substitution = Just koreJsonSubstitution
+                                    , logs = mempty
+                                    }
+                        ImplicationInvalid subst reason -> do
+                            let koreJsonSubstitution = addHeader . externalisePredicate predicateSort . substitutionAsPredicate <$> subst
+                            pure . Right . RpcTypes.SimplifyImplication $
+                                RpcTypes.SimplifyImplicationResult
+                                    { validity = RpcTypes.ImplicationInvalid (externaliseImplicationInvalidReason predicateSort reason)
+                                    , substitution = koreJsonSubstitution
+                                    , logs = mempty
+                                    }
+                        ImplicationUnknown subst reason -> do
+                            let koreJsonSubstitution = addHeader . externalisePredicate predicateSort . substitutionAsPredicate <$> subst
+                            pure . Right . RpcTypes.SimplifyImplication $
+                                RpcTypes.SimplifyImplicationResult
+                                    { validity = RpcTypes.ImplicationUnknown (externaliseImplicationUnknownReason predicateSort reason)
+                                    , substitution = koreJsonSubstitution
+                                    , logs = mempty
+                                    }
         RpcTypes.Cancel -> pure $ Left RpcError.cancelUnsupportedInBatchMode
         -- using "Method does not exist" error code
         _ -> pure $ Left RpcError.notImplemented
@@ -337,6 +389,24 @@ toExecState pat =
     RpcTypes.ExecuteState{term = addHeader t, predicate = fmap addHeader p, substitution = Nothing}
   where
     (t, p) = externalisePattern pat
+
+externaliseImplicationInvalidReason ::
+    KoreJson.Sort -> ImplicationInvalidReason -> RpcTypes.ImplicationInvalidReason
+externaliseImplicationInvalidReason externalisedSort = \case
+    MatchingFailed reason -> RpcTypes.MatchingFailed (renderOneLineText . pretty $ reason)
+    ConstraintSubsumptionFailed constraints ->
+        let conjunction = foldl AndPredicate Top constraints
+         in RpcTypes.ConstraintSubsumptionFailed $ addHeader $ externalisePredicate externalisedSort conjunction
+
+externaliseImplicationUnknownReason ::
+    KoreJson.Sort -> ImplicationUnknownReason -> RpcTypes.ImplicationUnknownReason
+externaliseImplicationUnknownReason externalisedSort = \case
+    MatchingUnknown term1 term2 -> RpcTypes.MatchingUnknown (addHeader $ externaliseTerm term1) (addHeader $ externaliseTerm term2)
+    ConstraintSubsumptionUnknown constraints ->
+        let conjunction = foldl AndPredicate Top constraints
+         in RpcTypes.ConstraintSubsumptionUnknown $
+                addHeader $
+                    externalisePredicate externalisedSort conjunction
 
 mkLogEquationTrace :: (Maybe Bool, Maybe Bool) -> ApplyEquations.EquationTrace -> Maybe LogEntry
 mkLogEquationTrace

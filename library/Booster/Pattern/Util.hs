@@ -10,6 +10,7 @@ module Booster.Pattern.Util (
     retractPattern,
     substituteInTerm,
     substituteInPredicate,
+    substitutionAsPredicate,
     modifyVariables,
     modifyVariablesInT,
     modifyVariablesInP,
@@ -72,6 +73,10 @@ sortOfPattern pat = sortOfTerm pat.term
 retractPattern :: TermOrPredicate -> Maybe Pattern
 retractPattern (TermAndPredicate patt) = Just patt
 retractPattern _ = Nothing
+
+-- | Convert a substitution into a conjunction of equalities
+substitutionAsPredicate :: Map Variable Term -> Predicate
+substitutionAsPredicate = foldl AndPredicate Top . Map.foldMapWithKey (\var term -> [EqualsTerm (Var var) term])
 
 substituteInTerm :: Map Variable Term -> Term -> Term
 substituteInTerm substitution = goSubst

@@ -135,6 +135,7 @@ instance ToJSON KoreRpcJson where
                 Execute r -> toJSON r
                 Implies r -> toJSON r
                 Simplify r -> toJSON r
+                SimplifyImplication r -> toJSON r
                 AddModule r -> toJSON r
                 GetModel r -> toJSON r
                 Cancel -> toJSON ()
@@ -179,6 +180,7 @@ rpcTypeOf = \case
         Execute _ -> ExecuteM
         Implies _ -> ImpliesM
         Simplify _ -> SimplifyM
+        SimplifyImplication _ -> SimplifyImplicationM
         AddModule _ -> AddModuleM
         GetModel _ -> GetModelM
         Cancel -> error "Cancel"

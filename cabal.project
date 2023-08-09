@@ -1,3 +1,5 @@
+optimization: False
+jobs: 4
 packages: .
 
 index-state: 2023-06-29T00:00:00Z
@@ -7,17 +9,16 @@ allow-newer:
   ghc-trace-events:base,
   ghc-bignum:base
 
-source-repository-package
-    type: git
-    location: https://github.com/co-log/co-log.git
-    tag: v0.5.0.0
-    --sha256: sha256-zs+cQf2bIQEaN10eEg8VJkCp0pQcTuXpUovCev5C6dc=
+-- source-repository-package
+--     type: git
+--     location: https://github.com/co-log/co-log.git
+--     tag: v0.5.0.0
+--     --sha256: sha256-zs+cQf2bIQEaN10eEg8VJkCp0pQcTuXpUovCev5C6dc=
 
 -- Do not move the order of `location`, `tag` and `--sha256` fields below as this will break the update script
 source-repository-package
     type: git
     location: https://github.com/runtimeverification/haskell-backend.git
-    tag: 3cfcc04ac3d0db7dd37487ed901700ed0f6f6450
-    --sha256: sha256-0icYpR6j++NkTlu7MDwR5yZRuOaqYwJCRwb2BnRU+8A=
+    tag: 3f22ee19cc591ce88cb8130c5442e9b344498729
+    --sha256: sha256-FKzHAugImqYFQDnF5MbCw8YDC7JoXAnORiJFNZxU7mI=
     subdir: kore kore-rpc-types
-

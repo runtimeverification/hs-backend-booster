@@ -48,4 +48,5 @@ in {
   get-model = mkIntegrationTest { name = "get-model"; };
   issue212 = mkIntegrationTest { name = "issue212"; };
   foundry-bug-report.tar.gz = mkIntegrationTest { name = "foundry-bug-report.tar.gz"; nativeBuildInputs = [ k openssl procps ]; };
+  simplify-implication = mkIntegrationTest { name = "simplify-implication"; };
 }
