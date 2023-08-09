@@ -31,6 +31,7 @@ import Booster.Pattern.Unify (FailReason (..), SortError, checkSubsort)
 import Booster.Pattern.Util (
     checkSymbolIsAc,
     freeVariables,
+    isConcrete,
     isConstructorSymbol,
     isFunctionSymbol,
     modifyVariablesInP,
@@ -274,7 +275,14 @@ match1
 match1
     (KMap _ [] Nothing)
     (KMap _ [] Nothing) = pure mempty
--- matching on non-empty maps is not supported
+-- concrete maps with equal keys and values match trivially
+match1
+    t1@(KMap def1 keyVals1 Nothing)
+    t2@(KMap def2 keyVals2 Nothing) =
+        if def1 == def2 && isConcrete t1 && isConcrete t2 && keyVals1 == keyVals2
+            then pure mempty
+            else indeterminate t1 t2
+-- matching on non-empty symbolic maps is not supported
 match1
     t1@KMap{}
     t2 = indeterminate t1 t2
