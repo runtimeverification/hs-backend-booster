@@ -1,0 +1,60 @@
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+        "substitution": {
+            "format": "KORE",
+            "version": 1,
+            "term": {
+                "tag": "And",
+                "sort": {
+                    "tag": "SortApp",
+                    "name": "SortGeneratedTopCell",
+                    "args": []
+                },
+                "first": {
+                    "tag": "Top",
+                    "sort": {
+                        "tag": "SortApp",
+                        "name": "SortGeneratedTopCell",
+                        "args": []
+                    }
+                },
+                "second": {
+                    "tag": "Equals",
+                    "argSort": {
+                        "tag": "SortApp",
+                        "name": "SortWordStack",
+                        "args": []
+                    },
+                    "sort": {
+                        "tag": "SortApp",
+                        "name": "SortGeneratedTopCell",
+                        "args": []
+                    },
+                    "first": {
+                        "tag": "EVar",
+                        "name": "X",
+                        "sort": {
+                            "tag": "SortApp",
+                            "name": "SortWordStack",
+                            "args": []
+                        }
+                    },
+                    "second": {
+                        "tag": "EVar",
+                        "name": "Y",
+                        "sort": {
+                            "tag": "SortApp",
+                            "name": "SortWordStack",
+                            "args": []
+                        }
+                    }
+                }
+            }
+        },
+        "validity": {
+            "tag": "ImplicationValid"
+        }
+    }
+}

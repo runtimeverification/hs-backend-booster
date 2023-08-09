@@ -73,7 +73,7 @@ echo "Server PID ${server_pid}"
 sleep 5
 
 if [ -d $dir ]; then
-    for test in $( ls $dir/state-*.{execute,send,simplify,add-module,get-model} 2>/dev/null ); do
+    for test in $( ls -d $dir/state-*.{execute,send,simplify,add-module,get-model,simplify-implication} 2>/dev/null ); do
         tmp=${test#$dir/state-}
         testname=${tmp%.*}
         # determine send mode from suffix
@@ -85,8 +85,14 @@ if [ -d $dir ]; then
             params=""
         fi
         # call rpc-client
-        echo "$client $mode $test $params --expect $dir/response-${testname}.json $*"
-        $client $mode $test $params --expect $dir/response-${testname}.json $*
+        if [[ "$mode" == "simplify-implication" ]]; then
+            echo "$client $mode $test/antecedent.json $test/consequent.json $params --expect $dir/response-${testname}.json $*"
+            $client simplify-implication $test/antecedent.json $test/consequent.json $params --expect $dir/response-${testname}.json $*
+        else
+            echo "$client $mode $test $params --expect $dir/response-${testname}.json $*"
+            $client $mode $test $params --expect $dir/response-${testname}.json $*
+        fi
+
     done
 else
     echo "$dir is a file, running a tarball test"

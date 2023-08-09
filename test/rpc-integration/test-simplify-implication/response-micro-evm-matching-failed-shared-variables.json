@@ -1,0 +1,13 @@
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+        "validity": {
+            "tag": "ImplicationInvalid",
+            "contents": {
+                "tag": "MatchingFailed",
+                "contents": "Shared variables: X:SortWordStack{}"
+            }
+        }
+    }
+}

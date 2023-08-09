@@ -27,10 +27,13 @@
           {
             "args": [
               {
-                "args": [],
-                "name": "Lbl'Stop'WordStack'Unds'MICRO-KEVM-SYNTAX'Unds'WordStack",
-                "sorts": [],
-                "tag": "App"
+                "tag": "EVar",
+                "name": "X",
+                "sort": {
+                  "tag": "SortApp",
+                  "name": "SortWordStack",
+                  "args": []
+                }
               }
             ],
             "name": "Lbl'-LT-'wordStack'-GT-'",
