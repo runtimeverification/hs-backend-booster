@@ -3,7 +3,7 @@
 
   inputs = {
     k-framework.url = "github:runtimeverification/k/v5.6.131";
-    haskell-backend.url = "github:runtimeverification/haskell-backend/be6592d784c1afcd56cb285720644f99d7e1b577";
+    haskell-backend.url = "github:runtimeverification/haskell-backend/1d7425fc6a7c34cf2eb8f6673edfb53b23566540";
     k-framework.inputs.booster-backend.follows = "";
     haskell-nix.follows = "haskell-backend/haskell-nix";
     nixpkgs.follows = "haskell-backend/haskell-nix/nixpkgs-unstable";
