@@ -181,9 +181,11 @@ respond stateVar =
                                     }
                         (Left something, _traces) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ show something -- FIXME
-                Right (BoolOrCeilPredicate (Right _ceil)) -> pure . Left . RpcError.backendError RpcError.Aborted $ ("cannot simplify ceil at the moment" :: String) -- FIXME
-                -- this case is only reachable if the cancel appeared as part of a batch request
-        -- this case is only reachable if the cancel appeared as part of a batch request
+                Right (BoolOrCeilPredicate (Right _ceil)) ->
+                    pure . Left . RpcError.backendError RpcError.Aborted $
+                        ("cannot simplify ceil at the moment" :: String) -- FIXME
+                        -- this case is only reachable if the cancel appeared as part of a batch request
+                        -- this case is only reachable if the cancel appeared as part of a batch request
         RpcTypes.Cancel -> pure $ Left RpcError.cancelUnsupportedInBatchMode
         -- using "Method does not exist" error code
         _ -> pure $ Left RpcError.notImplemented
