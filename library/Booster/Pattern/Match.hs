@@ -271,17 +271,17 @@ match1
             _other ->
                 failWith $ DifferentSymbols app subj
 ----- KMap
--- empty maps match trivially with an empty substitution
-match1
-    (KMap _ [] Nothing)
-    (KMap _ [] Nothing) = pure mempty
--- concrete maps with equal keys and values match trivially
 match1
     t1@(KMap def1 keyVals1 Nothing)
-    t2@(KMap def2 keyVals2 Nothing) =
-        if def1 == def2 && isConcrete t1 && isConcrete t2 && keyVals1 == keyVals2
-            then pure mempty
-            else indeterminate t1 t2
+    t2@(KMap def2 keyVals2 Nothing)
+        | def1 == def2 =
+            if isConcrete t1 && isConcrete t2
+                then
+                    if keyVals1 == keyVals2 -- identical concrete maps match
+                        then pure mempty
+                        else failWith $ DifferentValues t1 t2
+                else indeterminate t1 t2 -- symbolic maps are indeterminate
+        | otherwise = failWith $ DifferentSorts t1 t2
 -- matching on non-empty symbolic maps is not supported
 match1
     t1@KMap{}
