@@ -308,6 +308,9 @@ mkAPI dlib = flip runReaderT dlib $ do
 
     let sort = KoreSortAPI{new = newSort, addArgument = addArgumentSort, dump = dumpSort, cache = sortCache}
 
+    initialize <- kllvmInit
+    liftIO $ initialize
+
     simplifyBool' <- koreSimplifyBool
     let simplifyBool p =
             {-# SCC "LLVM.simplifyBool" #-}
