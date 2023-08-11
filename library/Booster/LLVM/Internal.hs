@@ -310,7 +310,7 @@ mkAPI dlib = flip runReaderT dlib $ do
     let sort = KoreSortAPI{new = newSort, addArgument = addArgumentSort, dump = dumpSort, cache = sortCache}
 
     initialize <- kllvmInit
-    liftIO $ initialize
+    liftIO initialize
     collect <- kllvmFreeAllMemory
 
     simplifyBool' <- koreSimplifyBool
