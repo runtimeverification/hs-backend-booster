@@ -101,6 +101,7 @@ data API = API
     , sort :: KoreSortAPI
     , simplifyBool :: KorePatternPtr -> IO Bool
     , simplify :: KorePatternPtr -> KoreSortPtr -> IO ByteString
+    , collect :: IO ()
     }
 
 newtype LLVM a = LLVM (ReaderT API IO a)
@@ -310,6 +311,7 @@ mkAPI dlib = flip runReaderT dlib $ do
 
     initialize <- kllvmInit
     liftIO $ initialize
+    collect <- kllvmFreeAllMemory
 
     simplifyBool' <- koreSimplifyBool
     let simplifyBool p =
@@ -347,7 +349,7 @@ mkAPI dlib = flip runReaderT dlib $ do
                                 cstr <- peek strPtr
                                 BS.packCStringLen (cstr, len)
 
-    pure API{patt, symbol, sort, simplifyBool, simplify}
+    pure API{patt, symbol, sort, simplifyBool, simplify, collect}
   where
     traceCall call args retTy retPtr = do
         Trace.traceIO $ LlvmCall{ret = Just (retTy, somePtr retPtr), call, args}
