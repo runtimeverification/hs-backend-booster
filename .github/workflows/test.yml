@@ -219,7 +219,7 @@ jobs:
           export SERVER=$(nix build .#kore-rpc-booster --no-link --json | $JQ -r '.[].outputs | to_entries[].value')/bin/kore-rpc-booster
           export CLIENT=$(nix build .#hs-backend-booster:exe:rpc-client --no-link --json | $JQ -r '.[].outputs | to_entries[].value')/bin/rpc-client
           cd test/rpc-integration
-          for dir in $(cd test/rpc-integration && ls -d test-*); do
+          for dir in $(ls -d test-*); do
               name=${dir##test-}
               echo "Running $name..."
               ./runDirectoryTest.sh test-$name --time
