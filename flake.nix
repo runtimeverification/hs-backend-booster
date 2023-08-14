@@ -2,9 +2,7 @@
   description = "hs-backend-booster";
 
   inputs = {
-    k-framework.url = "github:runtimeverification/k/v6.0.54";
-    haskell-backend.url = "github:runtimeverification/haskell-backend/3cfcc04ac3d0db7dd37487ed901700ed0f6f6450";
-    k-framework.inputs.booster-backend.follows = "";
+    haskell-backend.url = "github:runtimeverification/haskell-backend/sam/haskell-nix-update";
     haskell-nix.follows = "haskell-backend/haskell-nix";
     nixpkgs.follows = "haskell-backend/haskell-nix/nixpkgs-unstable";
 
@@ -16,7 +14,7 @@
   };
 
   outputs =
-    { self, nixpkgs, haskell-nix, k-framework, haskell-backend, blockchain-k-plugin, ... }@inputs:
+    { self, nixpkgs, haskell-nix, haskell-backend, blockchain-k-plugin, ... }@inputs:
     let
       inherit (nixpkgs) lib;
       perSystem = lib.genAttrs nixpkgs.lib.systems.flakeExposed;
@@ -29,9 +27,9 @@
         };
       allNixpkgsFor = perSystem nixpkgsForSystem;
       nixpkgsFor = system: allNixpkgsFor.${system};
-      index-state = "2023-06-26T23:55:21Z";
+      index-state = "2023-07-13T00:00:00Z";
 
-      boosterBackendFor = { compiler, pkgs, profiling ? false, k }:
+      boosterBackendFor = { compiler, pkgs, profiling ? false }:
         pkgs.haskell-nix.cabalProject {
           name = "hs-backend-booster";
           supportHpack = true;
@@ -86,15 +84,6 @@
                 }
               '';
             };
-            packages.hs-backend-booster.components.tests.llvm-integration = {
-              build-tools = with pkgs; lib.mkForce [ makeWrapper ];
-              postInstall = ''
-                wrapProgram $out/bin/llvm-integration --prefix PATH : ${
-                  lib.makeBinPath [ k ]
-                }
-              '';
-            };
-
             packages = { ghc.components.library.doHaddock = false; };
           }];
         };
@@ -102,16 +91,16 @@
       defaultCompiler = "ghc928";
 
       # Get flake outputs for different GHC versions
-      flakesFor = pkgs: k:
+      flakesFor = pkgs:
         let compilers = [ defaultCompiler ];
 
         in builtins.listToAttrs (lib.lists.forEach compilers (compiler:
           lib.attrsets.nameValuePair compiler
-          ((boosterBackendFor { inherit compiler pkgs k; }).flake { }))
+          ((boosterBackendFor { inherit compiler pkgs; }).flake { }))
           ++ lib.lists.forEach compilers (compiler:
             lib.attrsets.nameValuePair (compiler + "-prof")
             ((boosterBackendFor {
-              inherit compiler pkgs k;
+              inherit compiler pkgs;
               profiling = true;
             }).flake { })));
 
@@ -146,7 +135,7 @@
         let
           inherit (flakes.${defaultCompiler}) packages;
           pkgs = nixpkgsFor system;
-          flakes = flakesFor pkgs k-framework.packages.${system}.k;
+          flakes = flakesFor pkgs;
         in {
           kore-rpc-booster = packages."hs-backend-booster:exe:kore-rpc-booster";
           booster-dev = packages."hs-backend-booster:exe:booster-dev";
@@ -158,7 +147,7 @@
         let
           inherit (flakes.${defaultCompiler}) apps;
           flakes =
-            flakesFor (nixpkgsFor system) k-framework.packages.${system}.k;
+            flakesFor (nixpkgsFor system);
           pkgs = nixpkgsFor system;
           scripts = pkgs.symlinkJoin {
             name = "scripts";
@@ -190,7 +179,7 @@
       devShells = perSystem (system:
         let
           flakes =
-            flakesFor (nixpkgsFor system) k-framework.packages.${system}.k;
+            flakesFor (nixpkgsFor system);
         in {
           default = flakes.${defaultCompiler}.devShell;
         } // lib.attrsets.mapAttrs'
@@ -205,19 +194,8 @@
       checks = perSystem (system:
         let
           flakes =
-            flakesFor (nixpkgsFor system) k-framework.packages.${system}.k;
-        in flakes.${defaultCompiler}.checks // collectOutputs "checks" flakes
-        // {
-          integration = with nixpkgsFor system;
-            with flakes.${defaultCompiler};
-            callPackage ./test/rpc-integration {
-              kore-rpc-booster =
-                packages."hs-backend-booster:exe:kore-rpc-booster";
-              rpc-client = packages."hs-backend-booster:exe:rpc-client";
-              inherit (k-framework.packages.${system}) k;
-              blockchain-k-plugin = blockchain-k-plugin.defaultPackage.${system};
-            };
-        });
+            flakesFor (nixpkgsFor system);
+        in flakes.${defaultCompiler}.checks // collectOutputs "checks" flakes);
 
       overlays.default = lib.composeManyExtensions [
         (final: prev:
@@ -225,9 +203,7 @@
           (inputs.haskell-nix.overlays.combined final prev))
         (_: prev:
           let
-            inherit ((flakesFor prev
-              k-framework.packages.${prev.system}.k).${defaultCompiler})
-              packages;
+            inherit (flakesFor prev) packages;
           in {
             kore-rpc-booster =
               packages."hs-backend-booster:exe:kore-rpc-booster";
@@ -237,15 +213,6 @@
 
       formatter =
         perSystem (system: nixpkgs.legacyPackages.${system}.nixpkgs-fmt);
-
-      check = perSystem (system:
-        (nixpkgsFor system).runCommand "check" {
-          combined = builtins.attrValues self.checks.${system}
-            ++ builtins.attrValues self.packages.${system};
-        } ''
-          echo $combined
-          touch $out
-        '');
 
     };
 }

@@ -2,7 +2,6 @@ set -eux
 
 SCRIPT_DIR=$(dirname $0)
 PLUGIN_DIR=${PLUGIN_DIR:-""}
-NIX_LIBS=${NIX_LIBS:-""}
 
 
 if [ -z "$PLUGIN_DIR" ]; then
