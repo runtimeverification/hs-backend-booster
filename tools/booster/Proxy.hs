@@ -25,11 +25,15 @@ import Data.Text qualified as Text
 import Network.JSONRPC
 import SMT qualified
 
-import Booster.JsonRpc (execStateToKoreJson)
+import Booster.Definition.Base (KoreDefinition)
+import Booster.JsonRpc (execStateToKoreJson, toExecState)
+import Booster.Syntax.Json.Internalise (internalisePattern)
+import Control.Monad.Trans.Except (runExcept)
 import Kore.Attribute.Symbol (StepperAttributes)
 import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
 import Kore.Internal.TermLike (TermLike, VariableName)
 import Kore.JsonRpc qualified as Kore (ServerState)
+import Kore.JsonRpc.Error qualified as RpcError
 import Kore.JsonRpc.Types
 import Kore.JsonRpc.Types qualified as ExecuteRequest (ExecuteRequest (..))
 import Kore.JsonRpc.Types qualified as SimplifyRequest (SimplifyRequest (..))
@@ -207,10 +211,21 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
                                 -- otherwise we have hit a different
                                 -- HaltReason, at which point we should
                                 -- return, setting the correct depth
+                                -- and normalising any ML predicates with
+                                -- #Equals of sort other than bool
                                 Log.logInfoNS "proxy" . Text.pack $
                                     "Kore " <> show koreResult.reason
                                 logStats ExecuteM (time + bTime + kTime, koreTime + kTime)
-                                pure $ Right $ Execute koreResult{depth = currentDepth + boosterResult.depth + koreResult.depth}
+                                normaliseMLPredicates undefined koreResult.state >>= \case
+                                    Left err -> pure $ Left err
+                                    Right normalisedState ->
+                                        pure $
+                                            Right $
+                                                Execute
+                                                    koreResult
+                                                        { depth = currentDepth + boosterResult.depth + koreResult.depth
+                                                        , state = normalisedState
+                                                        }
                         -- can only be an error at this point
                         res -> pure res
                 | otherwise -> do
@@ -223,6 +238,15 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
                     pure $ Right $ Execute boosterResult{depth = currentDepth + boosterResult.depth}
             -- can only be an error at this point
             res -> pure res
+
+    normaliseMLPredicates :: KoreDefinition -> ExecuteState -> m (Either ErrorObj ExecuteState)
+    normaliseMLPredicates def state = do
+        let internalised = runExcept $ internalisePattern False Nothing def (execStateToKoreJson state).term
+        case internalised of
+            Left patternError -> do
+                Log.logDebugNS "proxy" $ "Error normalising ML predicates in cterm" <> Text.pack (show patternError)
+                pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternError
+            Right pat -> pure $ Right $ toExecState pat
 
     postExecSimplify :: Maybe Text -> API 'Res -> m (API 'Res)
     postExecSimplify mbModule
