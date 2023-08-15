@@ -62,6 +62,12 @@ newtype EquationT io a
 throw :: MonadLoggerIO io => EquationFailure -> EquationT io a
 throw = EquationT . lift . throwE
 
+catch_ ::
+    MonadLoggerIO io => EquationT io a -> (EquationFailure -> EquationT io a) -> EquationT io a
+catch_ (EquationT op) hdlr = EquationT $ do
+    cfg <- ask
+    lift (runReaderT op cfg `catchE` (\e -> let EquationT fallBack = hdlr e in runReaderT fallBack cfg))
+
 data EquationFailure
     = IndexIsNone Term
     | TooManyIterations Int Term Term
@@ -69,6 +75,25 @@ data EquationFailure
     | SideConditionsFalse [Predicate]
     | InternalError Text
     deriving stock (Eq, Show)
+
+instance Pretty EquationFailure where
+    pretty = \case
+        IndexIsNone t ->
+            "Index 'None' for term " <> pretty t
+        TooManyIterations count start end ->
+            vsep
+                [ "Unable to finish evaluation in " <> pretty count <> " iterations"
+                , "Started with: " <> pretty start
+                , "Stopped at: " <> pretty end
+                ]
+        EquationLoop ts ->
+            vsep $ "Evaluation produced a loop:" : map pretty ts
+        SideConditionsFalse ps ->
+            vsep $
+                "Side conditions were found to be false during evaluation (pruning)"
+                    : map pretty ps
+        InternalError msg ->
+            "Internal error during evaluation: " <> pretty msg
 
 data EquationConfig = EquationConfig
     { definition :: KoreDefinition
@@ -290,7 +315,7 @@ evaluatePattern' Pattern{term, constraints, ceilConditions} = do
     simplifyAssumedPredicate p = do
         allPs <- predicates <$> getState
         let otherPs = Set.delete p allPs
-        EquationT $ lift $ lift $ modify $ \s -> s{predicates = otherPs}
+        EquationT $ lift $ lift $ modify $ \s -> s{termStack = [], predicates = otherPs}
         newP <- simplifyConstraint' p
         pushConstraints [newP]
 
@@ -549,14 +574,32 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                                     lift $ pushConstraints conditions
                             pure $ substituteInTerm subst rule.rhs
   where
-    -- evaluate/simplify a predicate, cut the operation short when it
-    -- is Bottom.
+    -- Simplify given predicate in a nested EquationT execution.
+    -- Return Nothing immediately if it is Bottom, return (Just
+    -- Nothing) if it is Top, otherwise return (Just simplified).
     checkConstraint ::
         Predicate ->
         MaybeT (ExceptT ApplyEquationResult (EquationT io)) (Maybe Predicate)
     checkConstraint p = do
-        mApi <- (.llvmApi) <$> lift (lift getConfig)
-        case simplifyPredicate mApi p of
+        lift . logOther (LevelOther "Simplify") $
+            "Recursive simplification of predicate: " <> pack (renderDefault (pretty p))
+        oldChangeFlag <- lift $ lift getChanged
+        let restoreChangeFlag :: EquationT io ()
+            restoreChangeFlag =
+                if oldChangeFlag
+                    then setChanged
+                    else resetChanged
+            fallBackToP :: EquationFailure -> EquationT io Predicate
+            fallBackToP e = do
+                logOther (LevelOther "Simplify") . pack . renderDefault $
+                    "Aborting recursive simplification:" <> pretty e
+                pure p
+        -- exceptions need to be handled differently in the recursion,
+        -- falling back to the unsimplified constraint instead of aborting.
+        simplified <-
+            lift . lift $
+                resetChanged >> simplifyConstraint' p `catch_` fallBackToP <* restoreChangeFlag
+        case simplified of
             Predicate FalseBool -> fail "side condition was false"
             Predicate TrueBool -> pure Nothing
             other -> pure $ Just other
