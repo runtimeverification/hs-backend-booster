@@ -416,7 +416,7 @@ pattern DotDotDot :: Term
 pattern DotDotDot = DomainValue (SortApp "internalDummySort" []) "..."
 
 {- | A predicate describes constraints on terms. It will always evaluate
-   to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.
+   to 'TrueBool' or 'FalseBool'. Notice that 'Predicate's don't have a sort.
 -}
 newtype Predicate = Predicate Term
     deriving stock (Eq, Ord, Show, Generic, Data)
