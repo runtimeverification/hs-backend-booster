@@ -190,7 +190,6 @@ respond stateVar =
         RpcTypes.Cancel -> pure $ Left RpcError.cancelUnsupportedInBatchMode
         -- using "Method does not exist" error code
         _ -> pure $ Left RpcError.notImplemented
-  where
 
 withContext ::
     MonadIO m =>
