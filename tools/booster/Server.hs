@@ -142,7 +142,7 @@ main = do
                         server =
                             jsonRpcServer
                                 srvSettings
-                                (const $ Proxy.respondEither statVar simplifyAfterExec boosterRespond koreRespond)
+                                (const $ Proxy.respondEither statVar simplifyAfterExec boosterState boosterRespond koreRespond)
                                 [handleErrorCall, handleSomeException]
                         interruptHandler _ = do
                             when (logLevel >= LevelInfo) $

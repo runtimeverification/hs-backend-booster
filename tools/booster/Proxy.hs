@@ -26,8 +26,9 @@ import Network.JSONRPC
 import SMT qualified
 
 import Booster.Definition.Base (KoreDefinition)
-import Booster.JsonRpc (execStateToKoreJson, toExecState)
+import Booster.JsonRpc (ServerState, execStateToKoreJson, toExecState, withContext)
 import Booster.Syntax.Json.Internalise (internalisePattern)
+import Control.Concurrent (MVar)
 import Control.Monad.Trans.Except (runExcept)
 import Kore.Attribute.Symbol (StepperAttributes)
 import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
@@ -63,10 +64,11 @@ respondEither ::
     MonadIO m =>
     Maybe StatsVar ->
     Bool ->
+    MVar ServerState ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res)
-respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
+respondEither mbStatsVar simplifyAfterExec boosterState booster kore req = case req of
     Execute execReq
         | isJust execReq.stepTimeout || isJust execReq.movingAverageStepTimeout ->
             loggedKore ExecuteM req
@@ -216,7 +218,7 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
                                 Log.logInfoNS "proxy" . Text.pack $
                                     "Kore " <> show koreResult.reason
                                 logStats ExecuteM (time + bTime + kTime, koreTime + kTime)
-                                normaliseMLPredicates undefined koreResult.state >>= \case
+                                normaliseMLPredicates r._module koreResult.state >>= \case
                                     Left err -> pure $ Left err
                                     Right normalisedState ->
                                         pure $
@@ -239,8 +241,8 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
             -- can only be an error at this point
             res -> pure res
 
-    normaliseMLPredicates :: KoreDefinition -> ExecuteState -> m (Either ErrorObj ExecuteState)
-    normaliseMLPredicates def state = do
+    normaliseMLPredicates :: Maybe Text -> ExecuteState -> m (Either ErrorObj ExecuteState)
+    normaliseMLPredicates mmodule state = withContext boosterState mmodule $ \(def, _) -> do
         let internalised = runExcept $ internalisePattern False Nothing def (execStateToKoreJson state).term
         case internalised of
             Left patternError -> do
