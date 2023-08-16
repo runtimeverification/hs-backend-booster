@@ -38,7 +38,7 @@ diffJson file1 file2 =
             TextDiff $ getGroupedDiff lines1 lines2
         (other1, other2)
             | rpcTypeOf other1 /= rpcTypeOf other2 ->
-                DifferentType (rpcTypeOf other1) (rpcTypeOf other2) other2
+                DifferentType (rpcTypeOf other1) (rpcTypeOf other2)
             | otherwise -> do
                 JsonDiff (rpcTypeOf other1) $ computeJsonDiff other1 other2
   where
@@ -47,7 +47,7 @@ diffJson file1 file2 =
 
 data DiffResult
     = Identical KoreRpcType
-    | DifferentType KoreRpcType KoreRpcType KoreRpcJson
+    | DifferentType KoreRpcType KoreRpcType
     | JsonDiff KoreRpcType [Diff [BS.ByteString]]
     | TextDiff [Diff [BS.ByteString]]
     deriving (Eq, Show)
@@ -61,12 +61,11 @@ renderResult korefile1 korefile2 = \case
     Identical rpcType ->
         BS.unwords
             ["Files", file1, "and", file2, "are identical", typeString rpcType <> "s"]
-    DifferentType type1 type2 contents2 ->
+    DifferentType type1 type2 ->
         BS.unlines
             [ "Json data in files is of different type"
             , "  * File " <> file1 <> ": " <> typeString type1
             , "  * File " <> file2 <> ": " <> typeString type2
-            , "  * File " <> file2 <> " contents:" <> BS.pack (show contents2)
             ]
     JsonDiff rpcType diffs ->
         BS.unlines
