@@ -288,17 +288,17 @@
         "z3-src": "z3-src"
       },
       "locked": {
-        "lastModified": 1692009130,
-        "narHash": "sha256-qjtNlfQF2I+i4TOtEPzU3gHZuz6R2StuDe5TIlRVU44=",
+        "lastModified": 1690901851,
+        "narHash": "sha256-+XzzAYvZCqxrErpLXc+AUklk4gl6vBrBUgtR5/+bheU=",
         "owner": "runtimeverification",
         "repo": "haskell-backend",
-        "rev": "7e090031578c8e4eeb81bee44d5b79d9c3388000",
+        "rev": "3cfcc04ac3d0db7dd37487ed901700ed0f6f6450",
         "type": "github"
       },
       "original": {
         "owner": "runtimeverification",
-        "ref": "sam/haskell-nix-update",
         "repo": "haskell-backend",
+        "rev": "3cfcc04ac3d0db7dd37487ed901700ed0f6f6450",
         "type": "github"
       }
     },
