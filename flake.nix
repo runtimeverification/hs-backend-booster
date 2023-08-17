@@ -5,8 +5,6 @@
     haskell-backend.url = "github:runtimeverification/haskell-backend/3cfcc04ac3d0db7dd37487ed901700ed0f6f6450";
     haskell-nix.follows = "haskell-backend/haskell-nix";
     nixpkgs.follows = "haskell-backend/haskell-nix/nixpkgs-unstable";
-
-    blockchain-k-plugin.url = "github:runtimeverification/blockchain-k-plugin/da834be67f6c0aff11140ddfc0b04561494c14b8";
     flake-compat = {
       url = "github:edolstra/flake-compat";
       flake = false;
@@ -14,7 +12,7 @@
   };
 
   outputs =
-    { self, nixpkgs, haskell-nix, haskell-backend, blockchain-k-plugin, ... }@inputs:
+    { self, nixpkgs, haskell-nix, haskell-backend, ... }@inputs:
     let
       inherit (nixpkgs) lib;
       perSystem = lib.genAttrs nixpkgs.lib.systems.flakeExposed;
