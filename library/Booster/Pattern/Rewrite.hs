@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE InstanceSigs #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -20,7 +21,6 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger.CallStack
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
-import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State.Strict (StateT (runStateT), get, modify)
 import Data.Hashable qualified as Hashable
@@ -68,6 +68,9 @@ runRewriteT doTracing def mLlvmLibrary =
 throw :: MonadLoggerIO io => err -> RewriteT io err a
 throw = RewriteT . lift . throwE
 
+catch :: MonadLoggerIO io => RewriteT io err a -> (err -> RewriteT io err a) -> RewriteT io err a
+(RewriteT (ReaderT m)) `catch` h = RewriteT $ ReaderT $ \cfg -> m cfg `catchE` (\err -> runReaderT (unRewriteT $ h err) cfg)
+
 getDefinition :: MonadLoggerIO io => RewriteT io err KoreDefinition
 getDefinition = RewriteT $ definition <$> ask
 
@@ -110,7 +113,7 @@ rewriteStep cutLabels terminalLabels pat = do
         -- try all rules of the priority group. This will immediately
         -- fail the rewrite if anything is uncertain (unification,
         -- definedness, rule conditions)
-        results <- catMaybes <$> mapM (applyRule pat) rules
+        results <- filter (/= NotApplied) <$> mapM (applyRule pat) rules
 
         -- simplify and filter out bottom states
 
@@ -128,17 +131,101 @@ rewriteStep cutLabels terminalLabels pat = do
             uniqueId = (.uniqueId) . (.attributes)
 
         case results of
+            -- no rules in this group were applicable
             [] ->
                 processGroups rest
-            [(r, x)]
+            -- there was a single rule which applied
+            [Applied (r, x)]
                 | labelOf r `elem` cutLabels ->
                     pure $ RewriteCutPoint (labelOf r) (uniqueId r) pat x
                 | labelOf r `elem` terminalLabels ->
                     pure $ RewriteTerminal (labelOf r) (uniqueId r) x
                 | otherwise ->
                     pure $ RewriteFinished (Just $ ruleLabelOrLocT r) (uniqueId r) x
-            rxs ->
-                pure $ RewriteBranch pat $ NE.fromList $ map (\(r, p) -> (labelOf r, uniqueId r, p)) rxs
+            rxs
+                -- all rules which did apply had an ensures condition which evaluated to false
+                | all (== Trivial) rxs ->
+                    -- if, all the other groups only generate a not applicable or trivial rewrites,
+                    -- then we return a `RewriteTrivial`. To ensure this, we need to catch the
+                    -- `NoApplicableRules` exception which is thrown when we have exhausted all the rules.
+                    -- When this error is thrown, we know that all the following rule groups had only
+                    -- non-applicable rules.
+                    catchNoApplicableRulesWhenTrivial (processGroups rest) >>= \case
+                        RewriteTrivial{} -> pure $ RewriteTrivial pat
+                        other -> pure other
+                -- at this point, there were some Applied rules and potentially some Trivial ones.
+                -- here, we just return all the applied rules in a `RewriteBranch`
+                | otherwise ->
+                    pure $
+                        RewriteBranch pat $
+                            NE.fromList $
+                                map (\(r, p) -> (labelOf r, uniqueId r, p)) $
+                                    concatMap (\case Applied x -> [x]; _ -> []) rxs
+
+    catchNoApplicableRulesWhenTrivial ::
+        MonadLoggerIO io =>
+        RewriteT io (RewriteFailed k) (RewriteResult Pattern) ->
+        RewriteT io (RewriteFailed k) (RewriteResult Pattern)
+    catchNoApplicableRulesWhenTrivial m =
+        m `catch` \case
+            NoApplicableRules{} -> pure $ RewriteTrivial pat
+            err -> throw err
+
+data RewriteRuleAppResult a
+    = Applied a
+    | NotApplied
+    | Trivial
+    deriving (Show, Eq, Functor)
+
+newtype RewriteRuleAppT m a = RewriteRuleAppT {runRewriteRuleAppT :: m (RewriteRuleAppResult a)}
+    deriving (Functor)
+
+instance Monad m => Applicative (RewriteRuleAppT m) where
+    pure = RewriteRuleAppT . return . Applied
+    {-# INLINE pure #-}
+    mf <*> mx = RewriteRuleAppT $ do
+        mb_f <- runRewriteRuleAppT mf
+        case mb_f of
+            NotApplied -> return NotApplied
+            Trivial -> return Trivial
+            Applied f -> do
+                mb_x <- runRewriteRuleAppT mx
+                case mb_x of
+                    NotApplied -> return NotApplied
+                    Trivial -> return Trivial
+                    Applied x -> return (Applied (f x))
+    {-# INLINE (<*>) #-}
+    m *> k = m >> k
+    {-# INLINE (*>) #-}
+
+instance Monad m => Monad (RewriteRuleAppT m) where
+    return = pure
+    {-# INLINE return #-}
+    x >>= f = RewriteRuleAppT $ do
+        v <- runRewriteRuleAppT x
+        case v of
+            Applied y -> runRewriteRuleAppT (f y)
+            NotApplied -> return NotApplied
+            Trivial -> return Trivial
+    {-# INLINE (>>=) #-}
+
+instance MonadTrans RewriteRuleAppT where
+    lift :: Monad m => m a -> RewriteRuleAppT m a
+    lift = RewriteRuleAppT . fmap Applied
+    {-# INLINE lift #-}
+
+instance Monad m => MonadFail (RewriteRuleAppT m) where
+    fail _ = RewriteRuleAppT (return NotApplied)
+    {-# INLINE fail #-}
+
+instance MonadIO m => MonadIO (RewriteRuleAppT m) where
+    liftIO = lift . liftIO
+    {-# INLINE liftIO #-}
+
+instance MonadLogger m => MonadLogger (RewriteRuleAppT m) where
+    monadLoggerLog a b c d = lift $ monadLoggerLog a b c d
+
+instance MonadLoggerIO m => MonadLoggerIO (RewriteRuleAppT m)
 
 {- | Tries to apply one rewrite rule:
 
@@ -156,8 +243,8 @@ applyRule ::
     MonadLoggerIO io =>
     Pattern ->
     RewriteRule k ->
-    RewriteT io (RewriteFailed k) (Maybe (RewriteRule k, Pattern))
-applyRule pat rule = runMaybeT $ do
+    RewriteT io (RewriteFailed k) (RewriteRuleAppResult (RewriteRule k, Pattern))
+applyRule pat rule = runRewriteRuleAppT $ do
     def <- lift getDefinition
     -- unify terms
     let unified = unifyTerms def rule.lhs pat.term
@@ -191,17 +278,20 @@ applyRule pat rule = runMaybeT $ do
     let ruleRequires =
             concatMap (splitBoolPredicates . substituteInPredicate subst) rule.requires
         failIfUnclear = RuleConditionUnclear rule
-    unclearRequires <- catMaybes <$> mapM (checkConstraint failIfUnclear) ruleRequires
+        notAppliedIfBottom = RewriteRuleAppT $ pure NotApplied
+    unclearRequires <-
+        catMaybes <$> mapM (checkConstraint failIfUnclear notAppliedIfBottom) ruleRequires
     unless (null unclearRequires) $
         failRewrite $
             head unclearRequires
 
-    -- check ensures constraints (new) from rhs: stop (prune here) if
+    -- check ensures constraints (new) from rhs: stop and return `Trivial` if
     -- any are false, remove all that are trivially true, return the rest
     let ruleEnsures =
             concatMap (splitBoolPredicates . substituteInPredicate subst) rule.ensures
+        trivialIfBottom = RewriteRuleAppT $ pure Trivial
     newConstraints <-
-        catMaybes <$> mapM (checkConstraint id) ruleEnsures
+        catMaybes <$> mapM (checkConstraint id trivialIfBottom) ruleEnsures
 
     let rewritten =
             Pattern
@@ -224,13 +314,14 @@ applyRule pat rule = runMaybeT $ do
 
     checkConstraint ::
         (Predicate -> a) ->
+        RewriteRuleAppT (RewriteT io (RewriteFailed k)) (Maybe a) ->
         Predicate ->
-        MaybeT (RewriteT io (RewriteFailed k)) (Maybe a)
-    checkConstraint onUnclear p = do
+        RewriteRuleAppT (RewriteT io (RewriteFailed k)) (Maybe a)
+    checkConstraint onUnclear onBottom p = do
         RewriteConfig{definition, llvmApi, doTracing} <- lift $ RewriteT ask
         (simplified, _traces) <- simplifyConstraint doTracing definition llvmApi p
         case simplified of
-            Right Bottom -> fail "Rule condition was False"
+            Right Bottom -> onBottom
             Right Top -> pure Nothing
             Right other -> pure $ Just $ onUnclear other
             Left _ -> pure $ Just $ onUnclear p
@@ -326,6 +417,9 @@ data RewriteResult pat
     | -- | unable to handle the current case with this rewriter
       -- (signalled by exceptions)
       RewriteAborted pat
+    | -- | All applicable rules returned a pattern with a False
+      -- ensures clause
+      RewriteTrivial pat
     deriving stock (Eq, Show)
     deriving (Functor, Foldable, Traversable)
 
@@ -487,6 +581,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                 (Just _, [(lbl, uId, n)]) -> RewriteFinished (Just lbl) uId n
                 (Just x, ns) -> RewriteBranch x $ NE.fromList ns
         r@RewriteStuck{} -> pure r
+        r@RewriteTrivial{} -> pure r
         RewriteCutPoint lbl uId p next -> do
             p' <- simplifyP p
             next' <- simplifyP next
@@ -556,6 +651,9 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                     Right stuck@RewriteStuck{} -> do
                         logRewrite $ "Stopped after " <> showCounter counter
                         simplifyResult stuck
+                    Right trivial@RewriteTrivial{} -> do
+                        logRewrite $ "Simplified to bottom after " <> showCounter counter
+                        pure trivial
                     Right aborted@RewriteAborted{} -> do
                         logRewrite $ "Aborted after " <> showCounter counter
                         simplifyResult aborted
