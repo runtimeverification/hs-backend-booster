@@ -227,9 +227,9 @@ jobs:
               name=${dir##test-}
               echo "Running $name..."
               if [ "$name" = "a-to-f" ]; then
-                  SERVER=BOOSTER_DEV ./runDirectoryTest.sh test-$name --time
+                  SERVER=$BOOSTER_DEV ./runDirectoryTest.sh test-$name --time
               else
-                  SERVER=KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time
+                  SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time
               fi
           done
 
