@@ -284,7 +284,10 @@ respondEither mbStatsVar booster kore req = case req of
 
     postExecSimplify :: Maybe Text -> API 'Res -> m (API 'Res)
     postExecSimplify mbModule = \case
-        Execute res -> Execute <$> simplifyResult res
+        Execute res ->
+            case res.reason of
+                Branching -> Execute <$> simplifyResult res
+                _ -> pure (Execute res)
         other -> pure other
       where
         simplifyResult :: ExecuteResult -> m ExecuteResult
