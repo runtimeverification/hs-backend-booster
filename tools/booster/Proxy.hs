@@ -220,6 +220,56 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
             -- can only be an error at this point
             res -> pure res
 
+    runSimplify :: Maybe Text -> ExecuteState -> m ExecuteState
+    runSimplify mbModule s = do
+        let toSimplify = toRequestState s
+        Log.logInfoNS "proxy" "Simplify request"
+        simplResult <-
+            kore $
+                Simplify
+                    SimplifyRequest
+                        { state = toSimplify
+                        , _module = mbModule
+                        , logSuccessfulSimplifications = Nothing
+                        , logFailedSimplifications = Nothing
+                        }
+        case simplResult of
+            -- This request should not fail, as the only possible
+            -- failure mode would be malformed or invalid kore
+            Right (Simplify simplified) -> do
+                -- to convert back to a term/constraints form,
+                -- we run a trivial execute request (in booster)
+                -- We cannot call the booster internaliser without access to the server state
+                -- Again this should not fail.
+                let request =
+                        (emptyRequest simplified.state)
+                            { _module = mbModule
+                            , maxDepth = Just $ Depth 0
+                            }
+                Log.logInfoNS "proxy" "0-step execute request"
+                result <- booster $ Execute request
+                case result of
+                    Right (Execute ExecuteResult{state = finalState}) -> pure finalState
+                    _other -> pure s
+            _other ->
+                -- TODO log error
+                pure s -- if we hit an error here, return the original
+    emptyRequest :: KoreJson.KoreJson -> ExecuteRequest
+    emptyRequest state =
+        ExecuteRequest
+            { state
+            , maxDepth = Nothing
+            , _module = Nothing
+            , cutPointRules = Nothing
+            , terminalRules = Nothing
+            , movingAverageStepTimeout = Nothing
+            , stepTimeout = Nothing
+            , logSuccessfulSimplifications = Nothing
+            , logFailedSimplifications = Nothing
+            , logSuccessfulRewrites = Nothing
+            , logFailedRewrites = Nothing
+            }
+
     postExecSimplify :: Maybe Text -> API 'Res -> m (API 'Res)
     postExecSimplify mbModule
         | not simplifyAfterExec = pure
@@ -233,8 +283,8 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
         simplifyResult :: ExecuteResult -> m ExecuteResult
         simplifyResult res@ExecuteResult{reason, state, nextStates} = do
             Log.logInfoNS "proxy" . Text.pack $ "Simplifying state in " <> show reason <> " result"
-            simplifiedState <- runSimplify state
-            simplifiedNexts <- maybe (pure []) (mapM runSimplify) nextStates
+            simplifiedState <- runSimplify mbModule state
+            simplifiedNexts <- maybe (pure []) (mapM (runSimplify mbModule)) nextStates
             let filteredNexts = filter (not . isBottom) simplifiedNexts
             let result = case reason of
                     Branching
@@ -257,53 +307,3 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
         isBottom ExecuteState{predicate = Just p}
             | KoreJson.KJBottom _ <- p.term = True
         isBottom _ = False
-
-        runSimplify :: ExecuteState -> m ExecuteState
-        runSimplify s = do
-            let toSimplify = toRequestState s
-            Log.logInfoNS "proxy" "Simplify request"
-            simplResult <-
-                kore $
-                    Simplify
-                        SimplifyRequest
-                            { state = toSimplify
-                            , _module = mbModule
-                            , logSuccessfulSimplifications = Nothing
-                            , logFailedSimplifications = Nothing
-                            }
-            case simplResult of
-                -- This request should not fail, as the only possible
-                -- failure mode would be malformed or invalid kore
-                Right (Simplify simplified) -> do
-                    -- to convert back to a term/constraints form,
-                    -- we run a trivial execute request (in booster)
-                    -- We cannot call the booster internaliser without access to the server state
-                    -- Again this should not fail.
-                    let request =
-                            (emptyRequest simplified.state)
-                                { _module = mbModule
-                                , maxDepth = Just $ Depth 0
-                                }
-                    Log.logInfoNS "proxy" "0-step execute request"
-                    result <- booster $ Execute request
-                    case result of
-                        Right (Execute ExecuteResult{state = finalState}) -> pure finalState
-                        _other -> pure s
-                _other ->
-                    -- TODO log error
-                    pure s -- if we hit an error here, return the original
-        emptyRequest :: KoreJson.KoreJson -> ExecuteRequest
-        emptyRequest state =
-            ExecuteRequest
-                { state
-                , maxDepth = Nothing
-                , _module = Nothing
-                , cutPointRules = Nothing
-                , terminalRules = Nothing
-                , movingAverageStepTimeout = Nothing
-                , stepTimeout = Nothing
-                , logSuccessfulSimplifications = Nothing
-                , logFailedSimplifications = Nothing
-                , logSuccessfulRewrites = Nothing
-                , logFailedRewrites = Nothing
-                }
