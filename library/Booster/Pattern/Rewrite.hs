@@ -618,9 +618,9 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                 Just p' -> do
                     let simplifyP3rd (a, b, c) =
                             fmap (a,b,) <$> simplifyP c
-                    nexts' <- catMaybes <$> mapM simplifyP3rd (toList nexts) 
+                    nexts' <- catMaybes <$> mapM simplifyP3rd (toList nexts)
                     pure $ case nexts' of
-                        -- The `[]` case should be `Stuck` not `Trivial`, because `RewriteTrivial p'` 
+                        -- The `[]` case should be `Stuck` not `Trivial`, because `RewriteTrivial p'`
                         -- means the pattern `p'` is bottom, but we know that is not the case here.
                         [] -> RewriteStuck p'
                         [(lbl, uId, n)] -> RewriteFinished (Just lbl) uId n
