@@ -256,12 +256,10 @@ t1 `rewritesTo` (lbl, t2) =
     unsafePerformIO (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern t1 []))
         @?= Right (RewriteFinished (Just lbl) Nothing $ Pattern t2 [])
 
-
 getsStuck :: Term -> IO ()
 getsStuck t1 =
     unsafePerformIO (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern t1 []))
         @?= Right (RewriteStuck $ Pattern t1 [])
-
 
 branchesTo :: Term -> [(Text, Term)] -> IO ()
 t `branchesTo` ts =
