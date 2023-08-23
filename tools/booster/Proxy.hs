@@ -205,12 +205,17 @@ respondEither mbStatsVar booster kore req = case req of
                                 Log.logInfoNS "proxy" . Text.pack $
                                     "Kore " <> show koreResult.reason <> ". " <> "Attempting to simplify the pre-state and continue..."
                                 simplifiedPreBranchState <- runSimplify r._module koreResult.state
-                                loop
-                                    ( currentDepth + boosterResult.depth + koreResult.depth
-                                    , time + bTime + kTime
-                                    , koreTime + kTime
-                                    )
-                                    r{ExecuteRequest.state = execStateToKoreJson simplifiedPreBranchState}
+                                if simplifiedPreBranchState /= koreResult.state
+                                    then do
+                                        Log.logInfoNS "proxy" $
+                                            Text.pack "Simplified pre-state differs, continuing..."
+                                        loop
+                                            ( currentDepth + boosterResult.depth + koreResult.depth
+                                            , time + bTime + kTime
+                                            , koreTime + kTime
+                                            )
+                                            r{ExecuteRequest.state = execStateToKoreJson simplifiedPreBranchState}
+                                    else pure $ Right $ Execute koreResult{depth = currentDepth + boosterResult.depth + koreResult.depth}
                             | otherwise -> do
                                 -- otherwise we have hit a different
                                 -- HaltReason, at which point we should
