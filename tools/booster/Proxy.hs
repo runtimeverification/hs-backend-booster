@@ -58,11 +58,10 @@ respondEither ::
     Log.MonadLogger m =>
     MonadIO m =>
     Maybe StatsVar ->
-    Bool ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res)
-respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
+respondEither mbStatsVar booster kore req = case req of
     Execute execReq
         | isJust execReq.stepTimeout || isJust execReq.movingAverageStepTimeout ->
             loggedKore ExecuteM req
@@ -199,10 +198,13 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
                                     , koreTime + kTime
                                     )
                                     r{ExecuteRequest.state = execStateToKoreJson koreResult.state}
+                            -- if Kore branches, attempt the following:
+                            -- \* simplify the pre-branch state with Kore;
+                            -- \* continue execution in Booster
                             | koreResult.reason == Branching -> do
                                 Log.logInfoNS "proxy" . Text.pack $
                                     "Kore " <> show koreResult.reason <> ". " <> "Attempting to simplify the pre-state and continue..."
-                                simplifiedPreBranchState <- runSimplify Nothing koreResult.state
+                                simplifiedPreBranchState <- runSimplify r._module koreResult.state
                                 loop
                                     ( currentDepth + boosterResult.depth + koreResult.depth
                                     , time + bTime + kTime
@@ -281,11 +283,9 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
             }
 
     postExecSimplify :: Maybe Text -> API 'Res -> m (API 'Res)
-    postExecSimplify mbModule
-        | not simplifyAfterExec = pure
-        | otherwise = \case
-            Execute res -> Execute <$> simplifyResult res
-            other -> pure other
+    postExecSimplify mbModule = \case
+        Execute res -> Execute <$> simplifyResult res
+        other -> pure other
       where
         simplifyResult :: ExecuteResult -> m ExecuteResult
         simplifyResult res@ExecuteResult{reason, state, nextStates} = do
