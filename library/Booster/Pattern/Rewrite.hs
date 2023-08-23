@@ -68,9 +68,6 @@ runRewriteT doTracing def mLlvmLibrary =
 throw :: MonadLoggerIO io => err -> RewriteT io err a
 throw = RewriteT . lift . throwE
 
-catch :: MonadLoggerIO io => RewriteT io err a -> (err -> RewriteT io err a) -> RewriteT io err a
-(RewriteT (ReaderT m)) `catch` h = RewriteT $ ReaderT $ \cfg -> m cfg `catchE` (\err -> runReaderT (unRewriteT $ h err) cfg)
-
 getDefinition :: MonadLoggerIO io => RewriteT io err KoreDefinition
 getDefinition = RewriteT $ definition <$> ask
 
@@ -108,7 +105,7 @@ rewriteStep cutLabels terminalLabels pat = do
     processGroups ::
         MonadLoggerIO io => [[RewriteRule k]] -> RewriteT io (RewriteFailed k) (RewriteResult Pattern)
     processGroups [] =
-        throw (NoApplicableRules pat)
+        pure $ RewriteStuck pat
     processGroups (rules : rest) = do
         -- try all rules of the priority group. This will immediately
         -- fail the rewrite if anything is uncertain (unification,
@@ -146,12 +143,9 @@ rewriteStep cutLabels terminalLabels pat = do
                 -- all rules which did apply had an ensures condition which evaluated to false
                 | all (== Trivial) rxs ->
                     -- if, all the other groups only generate a not applicable or trivial rewrites,
-                    -- then we return a `RewriteTrivial`. To ensure this, we need to catch the
-                    -- `NoApplicableRules` exception which is thrown when we have exhausted all the rules.
-                    -- When this error is thrown, we know that all the following rule groups had only
-                    -- non-applicable rules.
-                    catchNoApplicableRulesWhenTrivial (processGroups rest) >>= \case
-                        RewriteTrivial{} -> pure $ RewriteTrivial pat
+                    -- then we return a `RewriteTrivial`.
+                    processGroups rest >>= \case
+                        RewriteStuck{} -> pure $ RewriteTrivial pat
                         other -> pure other
                 -- at this point, there were some Applied rules and potentially some Trivial ones.
                 -- here, we just return all the applied rules in a `RewriteBranch`
@@ -161,15 +155,6 @@ rewriteStep cutLabels terminalLabels pat = do
                             NE.fromList $
                                 map (\(r, p) -> (labelOf r, uniqueId r, p)) $
                                     concatMap (\case Applied x -> [x]; _ -> []) rxs
-
-    catchNoApplicableRulesWhenTrivial ::
-        MonadLoggerIO io =>
-        RewriteT io (RewriteFailed k) (RewriteResult Pattern) ->
-        RewriteT io (RewriteFailed k) (RewriteResult Pattern)
-    catchNoApplicableRulesWhenTrivial m =
-        m `catch` \case
-            NoApplicableRules{} -> pure $ RewriteTrivial pat
-            err -> throw err
 
 data RewriteRuleAppResult a
     = Applied a
@@ -490,13 +475,69 @@ showPattern title pat = hang 4 $ vsep [title, pretty pat.term]
    exactly one result in each step.
 
   * multiple results: a branch point, return current and all results
-  * RewriteStuck: config simplified to #Bottom, return current as stuck
+  * RewriteTrivial: config simplified to #Bottom, return current
   * RewriteCutPoint: a cut-point rule was applied, return lhs and rhs
   * RewriteTerminal: a terminal rule was applied, return rhs
-
+  * RewriteStuck: config could not be re-written by any rule, return current
   * RewriteFailed: rewriter cannot handle the case, return current
 
   The actions are logged at the custom log level '"Rewrite"'.
+
+
+    This flow chart should represent the actions of this function:
+                                            Receive pattern P (P /= _|_)
+
+                                                 │
+                                                 │   ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+    ┌────────────────────────────────────────┐   │   │                                                                                                  │
+    │                                        ▼   ▼   ▼                                                                                                  │
+    │                                                                                                                                                   │
+    │         ┌────────────────────────────  Apply rule  ◄───────────────────────────────────────────────────────────────────────────────────────────┐  │
+    │         │                                                                                                                                      │  │
+    │         │                                    │                                                                                                 │  │
+    │         │                                    └─────────────┐                                                                                   │  │
+    │         ▼                                                  ▼                                                                                   │  │
+    │                                                                                                                                                │  │
+    │  Rewrite aborted            ┌────────────────────  Rewrite finished  ─────────────────────────┐                                                │  │
+    │                             │                                                                 │                                                │  │
+    │         │                   │                               │                                 │                                                │  │
+    │         │                   │                               │                                 │                                                │  │
+    │         ▼                   ▼                               ▼                                 ▼                                                │  │
+    │                                                                                                                                                │  │
+    │  Return aborted       No rules apply                 Rewrite to P'  ───┐                  Rewrite to PS ─────────────────┬───────┐             │  │
+    │                                                                        │                                                 │       │             │  │
+    │                             │                           │              │                    │      │                     │       │             │  │
+    │                             │                           │              │                    │      └──────────┐          │       │             │  │
+    │                             │                           ▼              ▼                    ▼                 ▼          │       ▼             │  │
+    │                             │                                                                                            │                     │  │
+    │                             │                         P' == _|_    P' /= _|_           /\ PS == _|_      PS simplify to  │   PS simplify to  ──┘  │
+    │                             │                                                                                   []       │      single P'         │
+    │              ┌──────────────┼─────────────┐               │           │ │                   │                            │                        │
+    │              │              │             │               │           │ │                   │                   │        │                        │
+    │              ▼              ▼             ▼               │           │ │                   │                   │        └───────┐                │
+    │                                                           │           │ │                   │                   │                ▼                │
+    │          Does not     Simplified      Simplifies          │  ┌────────┼─┼───────────────────┘                   │                                 │
+    │          simplify      already                            │  │        │ │                                       │          PS simplify to         │
+    │                                                           │  │        │ │                                       │                PS'              │
+    │              │              │             │               │  │        │ │                                       │                                 │
+    │              │              │             │               ▼  ▼        │ │                                       │                 │               │
+    │              │              │             │                           │ └─────────────────┐                     │                 ▼               │
+    │              │              │             │        Return vacuous P   │                   │                     │                                 │
+    │              │              │             │                           │                   │                     │         Return branching        │
+    │              │              │             │                           │                   │                     │                                 │
+    │              └───────┐      │             │                           ▼                   ▼                     │                                 │
+    │                      ▼      ▼             │                                                                     │                                 │
+    │                                           │                    Depth/rule bound       Unbounded  ───────────────┼─────────────────────────────────┘
+    │                     Return stuck P        │                                                                     │
+    │                                           │                           │                                         │
+    │                            ▲              │                           │                                         │
+    │                            │              │                           │                                         │
+    └────────────────────────────┼──────────────┘                           ▼                                         │
+                                 │                                                                                    │
+                                 │                                    Return simplified P'                            │
+                                 │                                                                                    │
+                                 │                                                                                    │
+                                 └────────────────────────────────────────────────────────────────────────────────────┘
 -}
 performRewrite ::
     forall io.
@@ -567,34 +608,39 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
     -- Results may change when simplification prunes a false side
     -- condition, otherwise this would mainly be fmap simplifyP
     simplifyResult ::
+        Pattern ->
         RewriteResult Pattern ->
         StateT (Natural, Seq (RewriteTrace Pattern)) io (RewriteResult Pattern)
-    simplifyResult = \case
+    simplifyResult orig = \case
         RewriteBranch p nexts -> do
-            p' <- simplifyP p
-            let simplifyP3rd (a, b, c) =
-                    fmap (a,b,) <$> simplifyP c
-            nexts' <- catMaybes <$> mapM simplifyP3rd (toList nexts)
-            pure $ case (p', nexts') of
-                (Nothing, _) -> RewriteStuck p
-                (Just x, []) -> RewriteStuck x
-                (Just _, [(lbl, uId, n)]) -> RewriteFinished (Just lbl) uId n
-                (Just x, ns) -> RewriteBranch x $ NE.fromList ns
+            simplifyP p >>= \case
+                Nothing -> pure $ RewriteTrivial orig
+                Just p' -> do
+                    let simplifyP3rd (a, b, c) =
+                            fmap (a,b,) <$> simplifyP c
+                    nexts' <- catMaybes <$> mapM simplifyP3rd (toList nexts) 
+                    pure $ case nexts' of
+                        -- The `[]` case should be `Stuck` not `Trivial`, because `RewriteTrivial p'` 
+                        -- means the pattern `p'` is bottom, but we know that is not the case here.
+                        [] -> RewriteStuck p'
+                        [(lbl, uId, n)] -> RewriteFinished (Just lbl) uId n
+                        ns -> RewriteBranch p' $ NE.fromList ns
         r@RewriteStuck{} -> pure r
         r@RewriteTrivial{} -> pure r
         RewriteCutPoint lbl uId p next -> do
-            p' <- simplifyP p
-            next' <- simplifyP next
-            pure $ case (p', next') of
-                (Nothing, _) -> RewriteStuck pat
-                (Just x, Nothing) -> RewriteStuck x
-                (Just x, Just n) -> RewriteCutPoint lbl uId x n
+            simplifyP p >>= \case
+                Nothing -> pure $ RewriteTrivial orig
+                Just p' -> do
+                    next' <- simplifyP next
+                    pure $ case next' of
+                        Nothing -> RewriteTrivial next
+                        Just n -> RewriteCutPoint lbl uId p' n
         RewriteTerminal lbl uId p ->
-            maybe (RewriteStuck p) (RewriteTerminal lbl uId) <$> simplifyP p
+            maybe (RewriteTrivial orig) (RewriteTerminal lbl uId) <$> simplifyP p
         RewriteFinished lbl uId p ->
-            maybe (RewriteStuck p) (RewriteFinished lbl uId) <$> simplifyP p
+            maybe (RewriteTrivial orig) (RewriteFinished lbl uId) <$> simplifyP p
         RewriteAborted p ->
-            maybe (RewriteStuck p) RewriteAborted <$> simplifyP p
+            maybe (RewriteTrivial orig) RewriteAborted <$> simplifyP p
 
     logTraces =
         mapM_ (logSimplify . pack . renderDefault . pretty)
@@ -608,7 +654,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                 let title =
                         pretty $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
                 logRewrite $ pack $ renderDefault $ showPattern title pat'
-                (if wasSimplified then pure else simplifyResult) $ RewriteFinished Nothing Nothing pat'
+                (if wasSimplified then pure else simplifyResult pat') $ RewriteFinished Nothing Nothing pat'
             else
                 runRewriteT doTracing def mLlvmLibrary (rewriteStep cutLabels terminalLabels pat') >>= \case
                     Right (RewriteFinished mlbl uniqueId single) -> do
@@ -621,13 +667,16 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                         logRewrite $
                             "Terminal rule after " <> showCounter (counter + 1)
                         incrementCounter
-                        simplifyResult terminal
+                        simplifyResult pat' terminal
                     Right branching@RewriteBranch{} -> do
                         logRewrite $ "Stopped due to branching after " <> showCounter counter
-                        simplified <- simplifyResult branching
+                        simplified <- simplifyResult pat' branching
                         case simplified of
                             RewriteStuck{} -> do
                                 logRewrite "Rewrite stuck after pruning branches"
+                                pure simplified
+                            RewriteTrivial{} -> do
+                                logRewrite $ "Simplified to bottom after " <> showCounter counter
                                 pure simplified
                             RewriteFinished mlbl uniqueId single -> do
                                 logRewrite "All but one branch pruned, continuing"
@@ -640,36 +689,34 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                                 pure simplified
                             _other -> error "simplifyResult: Unexpected return value"
                     Right cutPoint@(RewriteCutPoint lbl _ _ _) -> do
-                        simplified <- simplifyResult cutPoint
+                        simplified <- simplifyResult pat' cutPoint
                         case simplified of
                             RewriteCutPoint{} ->
                                 logRewrite $ "Cut point " <> lbl <> " after " <> showCounter counter
                             RewriteStuck{} ->
                                 logRewrite $ "Stuck after " <> showCounter counter
+                            RewriteTrivial{} ->
+                                logRewrite $ "Simplified to bottom after " <> showCounter counter
                             _other -> error "simplifyResult: Unexpected return value"
                         pure simplified
                     Right stuck@RewriteStuck{} -> do
                         logRewrite $ "Stopped after " <> showCounter counter
-                        simplifyResult stuck
+                        rewriteTrace $ RewriteStepFailed $ NoApplicableRules pat'
+                        if wasSimplified
+                            then pure stuck
+                            else withSimplified pat' "Retrying with simplified pattern" (doSteps True)
                     Right trivial@RewriteTrivial{} -> do
                         logRewrite $ "Simplified to bottom after " <> showCounter counter
                         pure trivial
                     Right aborted@RewriteAborted{} -> do
                         logRewrite $ "Aborted after " <> showCounter counter
-                        simplifyResult aborted
+                        simplifyResult pat' aborted
                     -- if unification was unclear and the pattern was
                     -- unsimplified, simplify and retry rewriting once
                     Left failure@RuleApplicationUnclear{}
                         | not wasSimplified -> do
                             rewriteTrace $ RewriteStepFailed failure
                             withSimplified pat' "Retrying with simplified pattern" (doSteps True)
-                    -- if there were no applicable rules and the pattern
-                    -- was unsimplified, simplify and re-try once
-                    Left failure@NoApplicableRules{} -> do
-                        rewriteTrace $ RewriteStepFailed failure
-                        if wasSimplified
-                            then pure $ RewriteStuck pat'
-                            else withSimplified pat' "Retrying with simplified pattern" (doSteps True)
                     Left failure -> do
                         rewriteTrace $ RewriteStepFailed failure
                         let msg = "Aborted after " <> showCounter counter
