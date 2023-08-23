@@ -199,6 +199,16 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
                                     , koreTime + kTime
                                     )
                                     r{ExecuteRequest.state = execStateToKoreJson koreResult.state}
+                            | koreResult.reason == Branching -> do
+                                Log.logInfoNS "proxy" . Text.pack $
+                                    "Kore " <> show koreResult.reason <> ". " <> "Attempting to simplify the pre-state and continue..."
+                                simplifiedPreBranchState <- runSimplify Nothing koreResult.state
+                                loop
+                                    ( currentDepth + boosterResult.depth + koreResult.depth
+                                    , time + bTime + kTime
+                                    , koreTime + kTime
+                                    )
+                                    r{ExecuteRequest.state = execStateToKoreJson simplifiedPreBranchState}
                             | otherwise -> do
                                 -- otherwise we have hit a different
                                 -- HaltReason, at which point we should
