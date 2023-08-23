@@ -160,12 +160,16 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
         (bResult, bTime) <- withTime $ booster (Execute r{maxDepth = mbDepthLimit})
         case bResult of
             Right (Execute boosterResult)
-                -- if the new backend aborts or gets stuck, revert to the old one
+                -- if the new backend aborts, gets stuck or branches, revert to the old one
                 --
                 -- if we are stuck in the new backend we try to re-run
                 -- in the old one to work around any potential
                 -- unification bugs.
-                | boosterResult.reason `elem` [Aborted, Stuck] -> do
+                --
+                -- if we branch in the new backend we try to re-run
+                -- in the old one to see if the branch can be eliminated
+                -- using old backend's powerful simplifier
+                | boosterResult.reason `elem` [Aborted, Stuck, Branching] -> do
                     -- attempt to do one step in the old backend
                     Log.logInfoNS "proxy" . Text.pack $
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
