@@ -284,10 +284,7 @@ respondEither mbStatsVar simplifyAfterExec booster kore req = case req of
     postExecSimplify mbModule
         | not simplifyAfterExec = pure
         | otherwise = \case
-            Execute res ->
-                case res.reason of
-                    Branching -> Execute <$> simplifyResult res
-                    _ -> pure (Execute res)
+            Execute res -> Execute <$> simplifyResult res
             other -> pure other
       where
         simplifyResult :: ExecuteResult -> m ExecuteResult
