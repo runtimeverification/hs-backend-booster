@@ -52,7 +52,7 @@ jobs:
           ghc: ${{ env.ghc_version }}
 
       - name: 'Run unit tests'
-        run: docker exec -t hs-booster-ci-stack-unit-buster-${{ github.run_id }} /bin/bash -c 'export LANG=C.UTF-8 && stack --system-ghc --stack-root $(pwd)/stack-cache test :unit-tests --pedantic'
+        run: docker exec -t hs-booster-ci-stack-unit-buster-${{ github.run_id }} /bin/bash -c 'export LANG=en_GB.UTF-8 && stack --system-ghc --stack-root $(pwd)/stack-cache test :unit-tests --pedantic'
 
       - name: 'Tear down Docker'
         if: always()
@@ -99,7 +99,7 @@ jobs:
       - name: 'Build and run unit tests'
         run: |
           docker exec -t hs-booster-ci-cabal-unit-buster-${{ github.run_id }} \
-            /bin/bash -c 'export LANG=C.UTF-8 && cabal --store-dir /opt/workspace/cabal-cache/store v2-test unit-tests --enable-tests --test-show-details=direct'
+            /bin/bash -c 'export LANG=en_GB.UTF-8 && cabal --store-dir /opt/workspace/cabal-cache/store v2-test unit-tests --enable-tests --test-show-details=direct'
 
       - name: 'Configure with profiling'
         run: |
