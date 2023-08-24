@@ -49,6 +49,7 @@ import Booster.Pattern.Simplify
 import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
+import Data.List (partition)
 
 newtype RewriteT io err a = RewriteT {unRewriteT :: ReaderT RewriteConfig (ExceptT err io) a}
     deriving newtype (Functor, Applicative, Monad, MonadLogger, MonadIO, MonadLoggerIO)
@@ -121,7 +122,6 @@ rewriteStep cutLabels terminalLabels pat = do
         -- so unless the original pattern contained bottom, we won't gain anything from
         -- calling the simplifier on the original conditions which came with the term.
 
-        -- let finalResults = filter (not . isBottom . simplifyPattern dl . snd) results
 
         let labelOf = fromMaybe "" . (.ruleLabel) . (.attributes)
             ruleLabelOrLocT = renderOneLineText . ruleLabelOrLoc
@@ -129,32 +129,30 @@ rewriteStep cutLabels terminalLabels pat = do
 
         case results of
             -- no rules in this group were applicable
-            [] ->
-                processGroups rest
-            -- there was a single rule which applied
-            [Applied (r, x)]
-                | labelOf r `elem` cutLabels ->
-                    pure $ RewriteCutPoint (labelOf r) (uniqueId r) pat x
-                | labelOf r `elem` terminalLabels ->
-                    pure $ RewriteTerminal (labelOf r) (uniqueId r) x
-                | otherwise ->
-                    pure $ RewriteFinished (Just $ ruleLabelOrLocT r) (uniqueId r) x
-            rxs
-                -- all rules which did apply had an ensures condition which evaluated to false
-                | all (== Trivial) rxs ->
+            [] -> processGroups rest
+            _ -> case concatMap (\case Applied x -> [x]; _ -> []) results of
+                [] ->
+                    -- all remaining branches are trivial, i.e. rules which did apply had an ensures condition which evaluated to false
                     -- if, all the other groups only generate a not applicable or trivial rewrites,
                     -- then we return a `RewriteTrivial`.
                     processGroups rest >>= \case
                         RewriteStuck{} -> pure $ RewriteTrivial pat
                         other -> pure other
+                -- all branches but one were either not applied or trivial
+                [(r, x)]
+                    | labelOf r `elem` cutLabels ->
+                        pure $ RewriteCutPoint (labelOf r) (uniqueId r) pat x
+                    | labelOf r `elem` terminalLabels ->
+                        pure $ RewriteTerminal (labelOf r) (uniqueId r) x
+                    | otherwise ->
+                        pure $ RewriteFinished (Just $ ruleLabelOrLocT r) (uniqueId r) x
                 -- at this point, there were some Applied rules and potentially some Trivial ones.
                 -- here, we just return all the applied rules in a `RewriteBranch`
-                | otherwise ->
+                rxs -> 
                     pure $
                         RewriteBranch pat $
                             NE.fromList $
-                                map (\(r, p) -> (labelOf r, uniqueId r, p)) $
-                                    concatMap (\case Applied x -> [x]; _ -> []) rxs
+                                map (\(r, p) -> (ruleLabelOrLocT r, uniqueId r, p)) rxs
 
 data RewriteRuleAppResult a
     = Applied a
