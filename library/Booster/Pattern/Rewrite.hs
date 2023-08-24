@@ -426,6 +426,11 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
     logRewrite = logOther (LevelOther "Rewrite")
     logSimplify = logOther (LevelOther "Simplify")
 
+    logDumpTerm :: Text -> Pattern -> StateT (Natural, Seq (RewriteTrace Pattern)) io ()
+    logDumpTerm msg p =
+        logOther (LevelOther "DumpTerms") . pack . renderDefault $
+            showPattern (pretty msg) p
+
     prettyText :: Pretty a => a -> Text
     prettyText = pack . renderDefault . pretty
 
@@ -445,6 +450,9 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
             case res of
                 Right newPattern -> do
                     rewriteTrace $ RewriteSimplified traces Nothing
+                    let (orig, simpl) = diff p newPattern
+                    logDumpTerm "Simplification of pattern: " orig
+                    logDumpTerm "simplified to: " simpl
                     pure $ Just newPattern
                 Left r@(SideConditionsFalse _ps) -> do
                     logSimplify "Side conditions were found to be false, pruning"
@@ -453,10 +461,13 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                 -- NB any errors here might be caused by simplifying one
                 -- of the constraints, so we cannot use partial results
                 -- and have to return the original on errors.
-                Left r@(TooManyIterations n _start _result) -> do
+                Left r@(TooManyIterations n start result) -> do
                     logWarn $ "Simplification unable to finish in " <> prettyText n <> " steps."
-                    -- could output term before and after at debug or custom log level
                     rewriteTrace $ RewriteSimplified traces (Just r)
+                    -- output term before and after at custom log level
+                    let (start', result') = mkDiffTerms (start, result)
+                    logDumpTerm "Start term: " p{term = start'}
+                    logDumpTerm "End term (not used): " p{term = result'}
                     pure $ Just p
                 Left r@(EquationLoop (t : ts)) -> do
                     let termDiffs = zipWith (curry mkDiffTerms) (t : ts) ts

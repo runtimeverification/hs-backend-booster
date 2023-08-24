@@ -230,6 +230,7 @@ iterateEquations maxIterations direction preference startTerm =
             pushTerm currentTerm
             -- evaluate functions and simplify (recursively at each level)
             newTerm <- applyTerm direction preference currentTerm
+            logOther (LevelOther "DumpTerms") . pack . renderDefault $ "Evaluation iteration: " <> pretty newTerm
             changeFlag <- getChanged
             if changeFlag
                 then checkForLoop newTerm >> resetChanged >> go newTerm
