@@ -123,12 +123,6 @@ respondEither mbStatsVar booster kore req = case req of
             _wrong ->
                 pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
 
-    toSimplifyRequest :: ExecuteState -> KoreJson.KoreJson
-    toSimplifyRequest ExecuteState{term = t, substitution, predicate} =
-        let subAndPred = catMaybes [KoreJson.term <$> substitution, KoreJson.term <$> predicate]
-            termSort = KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []
-         in t{KoreJson.term = foldr (KoreJson.KJAnd termSort) t.term subAndPred}
-
     loggedKore method r = do
         Log.logInfoNS "proxy" . Text.pack $ show method <> " (using kore)"
         (result, time) <- withTime $ kore r
@@ -169,11 +163,11 @@ respondEither mbStatsVar booster kore req = case req of
                 -- in the old one to work around any potential
                 -- unification bugs.
                 | boosterResult.reason `elem` [Aborted, Stuck] -> do
+                    Log.logInfoNS "proxy" . Text.pack $
+                        "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     -- simplify Booster's state with Kore's simplifier
                     simplifiedBoosterState <- simplifyExecuteState r._module boosterResult.state
                     -- attempt to do one step in the old backend
-                    Log.logInfoNS "proxy" . Text.pack $
-                        "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     (kResult, kTime) <-
                         withTime $
                             kore
@@ -227,16 +221,9 @@ respondEither mbStatsVar booster kore req = case req of
 
     simplifyExecuteState :: Maybe Text -> ExecuteState -> m ExecuteState
     simplifyExecuteState mbModule s = do
-        let toSimplify = toSimplifyRequest s
-        Log.logInfoNS "proxy" "Simplify request"
+        Log.logInfoNS "proxy" "Simplifying execution state"
         simplResult <-
-            handleSimplify $
-                SimplifyRequest
-                    { state = toSimplify
-                    , _module = mbModule
-                    , logSuccessfulSimplifications = Nothing
-                    , logFailedSimplifications = Nothing
-                    }
+            handleSimplify $ toSimplifyRequest s
         case simplResult of
             -- This request should not fail, as the only possible
             -- failure mode would be malformed or invalid kore
@@ -250,7 +237,7 @@ respondEither mbStatsVar booster kore req = case req of
                             { _module = mbModule
                             , maxDepth = Just $ Depth 0
                             }
-                Log.logInfoNS "proxy" "0-step execute request"
+                Log.logInfoNS "proxy" "Making 0-step execute request to convert back to a term/constraints form"
                 result <- booster $ Execute request
                 case result of
                     Right (Execute ExecuteResult{state = finalState}) -> pure finalState
@@ -259,6 +246,18 @@ respondEither mbStatsVar booster kore req = case req of
                 -- TODO log error
                 pure s -- if we hit an error here, return the original
       where
+        toSimplifyRequest :: ExecuteState -> SimplifyRequest
+        toSimplifyRequest ExecuteState{term = t, substitution, predicate} =
+            let subAndPred = catMaybes [KoreJson.term <$> substitution, KoreJson.term <$> predicate]
+                termSort = KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []
+                term = t{KoreJson.term = foldr (KoreJson.KJAnd termSort) t.term subAndPred}
+             in SimplifyRequest
+                    { state = term
+                    , _module = mbModule
+                    , logSuccessfulSimplifications = Nothing
+                    , logFailedSimplifications = Nothing
+                    }
+
         emptyExecuteRequest :: KoreJson.KoreJson -> ExecuteRequest
         emptyExecuteRequest state =
             ExecuteRequest
