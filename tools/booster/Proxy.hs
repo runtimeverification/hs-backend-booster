@@ -69,7 +69,24 @@ respondEither mbStatsVar booster kore req = case req of
             startLoop execReq >>= traverse (postExecSimplify execReq._module)
     Implies _ ->
         loggedKore ImpliesM req
-    Simplify simplifyReq -> do
+    Simplify simplifyReq -> handleSimplify simplifyReq
+    AddModule _ -> do
+        -- execute in booster first, assuming that kore won't throw an
+        -- error if booster did not. The response is empty anyway.
+        (boosterResult, boosterTime) <- withTime $ booster req
+        case boosterResult of
+            Left _err -> pure boosterResult
+            Right _ -> do
+                (koreRes, koreTime) <- withTime $ kore req
+                logStats AddModuleM (boosterTime + koreTime, koreTime)
+                pure koreRes
+    GetModel _ ->
+        loggedKore GetModelM req
+    Cancel ->
+        pure $ Left $ ErrorObj "Cancel not supported" (-32601) Null
+  where
+    handleSimplify :: SimplifyRequest -> m (Either ErrorObj (API 'Res))
+    handleSimplify simplifyReq = do
         -- execute in booster first, then in kore. Log the difference
         (boosterResult, boosterTime) <- withTime $ booster req
         case boosterResult of
@@ -105,21 +122,7 @@ respondEither mbStatsVar booster kore req = case req of
                 loggedKore SimplifyM req
             _wrong ->
                 pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
-    AddModule _ -> do
-        -- execute in booster first, assuming that kore won't throw an
-        -- error if booster did not. The response is empty anyway.
-        (boosterResult, boosterTime) <- withTime $ booster req
-        case boosterResult of
-            Left _err -> pure boosterResult
-            Right _ -> do
-                (koreRes, koreTime) <- withTime $ kore req
-                logStats AddModuleM (boosterTime + koreTime, koreTime)
-                pure koreRes
-    GetModel _ ->
-        loggedKore GetModelM req
-    Cancel ->
-        pure $ Left $ ErrorObj "Cancel not supported" (-32601) Null
-  where
+
     toRequestState :: ExecuteState -> KoreJson.KoreJson
     toRequestState ExecuteState{term = t, substitution, predicate} =
         let subAndPred = catMaybes [KoreJson.term <$> substitution, KoreJson.term <$> predicate]
