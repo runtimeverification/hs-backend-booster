@@ -66,7 +66,7 @@ respondEither mbStatsVar booster kore req = case req of
         | isJust execReq.stepTimeout || isJust execReq.movingAverageStepTimeout ->
             loggedKore ExecuteM req
         | otherwise ->
-            startLoop execReq >>= traverse (postExecSimplify execReq._module)
+            handleExecute execReq >>= traverse (postExecSimplify execReq._module)
     Implies _ ->
         loggedKore ImpliesM req
     Simplify simplifyReq -> handleSimplify simplifyReq
@@ -150,10 +150,11 @@ respondEither mbStatsVar booster kore req = case req of
         | otherwise =
             pure ()
 
-    startLoop = loop (0, 0.0, 0.0)
+    handleExecute :: ExecuteRequest -> m (Either ErrorObj (API 'Res))
+    handleExecute = executionLoop (0, 0.0, 0.0)
 
-    loop :: (Depth, Double, Double) -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
-    loop (!currentDepth, !time, !koreTime) r = do
+    executionLoop :: (Depth, Double, Double) -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
+    executionLoop (!currentDepth, !time, !koreTime) r = do
         Log.logInfoNS "proxy" . Text.pack $
             if currentDepth == 0
                 then "Starting execute request"
@@ -195,7 +196,7 @@ respondEither mbStatsVar booster kore req = case req of
                                         "kore depth-bound, continuing... (currently at "
                                             <> show (currentDepth + boosterResult.depth + koreResult.depth)
                                             <> ")"
-                                loop
+                                executionLoop
                                     ( currentDepth + boosterResult.depth + koreResult.depth
                                     , time + bTime + kTime
                                     , koreTime + kTime
