@@ -263,14 +263,13 @@ respondEither mbStatsVar booster kore req = case req of
             let toSimplify = toSimplifyRequest s
             Log.logInfoNS "proxy" "Simplify request"
             simplResult <-
-                kore $
-                    Simplify
-                        SimplifyRequest
-                            { state = toSimplify
-                            , _module = mbModule
-                            , logSuccessfulSimplifications = Nothing
-                            , logFailedSimplifications = Nothing
-                            }
+                handleSimplify $
+                    SimplifyRequest
+                        { state = toSimplify
+                        , _module = mbModule
+                        , logSuccessfulSimplifications = Nothing
+                        , logFailedSimplifications = Nothing
+                        }
             case simplResult of
                 -- This request should not fail, as the only possible
                 -- failure mode would be malformed or invalid kore
