@@ -49,7 +49,6 @@ import Booster.Pattern.Simplify
 import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
-import Data.List (partition)
 
 newtype RewriteT io err a = RewriteT {unRewriteT :: ReaderT RewriteConfig (ExceptT err io) a}
     deriving newtype (Functor, Applicative, Monad, MonadLogger, MonadIO, MonadLoggerIO)
@@ -122,7 +121,6 @@ rewriteStep cutLabels terminalLabels pat = do
         -- so unless the original pattern contained bottom, we won't gain anything from
         -- calling the simplifier on the original conditions which came with the term.
 
-
         let labelOf = fromMaybe "" . (.ruleLabel) . (.attributes)
             ruleLabelOrLocT = renderOneLineText . ruleLabelOrLoc
             uniqueId = (.uniqueId) . (.attributes)
@@ -148,7 +146,7 @@ rewriteStep cutLabels terminalLabels pat = do
                         pure $ RewriteFinished (Just $ ruleLabelOrLocT r) (uniqueId r) x
                 -- at this point, there were some Applied rules and potentially some Trivial ones.
                 -- here, we just return all the applied rules in a `RewriteBranch`
-                rxs -> 
+                rxs ->
                     pure $
                         RewriteBranch pat $
                             NE.fromList $
@@ -483,7 +481,11 @@ showPattern title pat = hang 4 $ vsep [title, pretty pat.term]
 
 
     This flow chart should represent the actions of this function:
-                                                 |
+
+
+                                Receive pattern P (P /= _|_)
+
+                                             |
                                              |   +--------------------------------------------------------------------------------------------------+
 +----------------------------------------+   |   |                                                                                                  |
 |                                        v   v   v                                                                                                  |
