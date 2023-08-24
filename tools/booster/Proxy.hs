@@ -123,8 +123,8 @@ respondEither mbStatsVar booster kore req = case req of
             _wrong ->
                 pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
 
-    toRequestState :: ExecuteState -> KoreJson.KoreJson
-    toRequestState ExecuteState{term = t, substitution, predicate} =
+    toSimplifyRequest :: ExecuteState -> KoreJson.KoreJson
+    toSimplifyRequest ExecuteState{term = t, substitution, predicate} =
         let subAndPred = catMaybes [KoreJson.term <$> substitution, KoreJson.term <$> predicate]
             termSort = KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []
          in t{KoreJson.term = foldr (KoreJson.KJAnd termSort) t.term subAndPred}
@@ -152,7 +152,7 @@ respondEither mbStatsVar booster kore req = case req of
 
     startLoop = loop (0, 0.0, 0.0)
 
-    -- loop :: (Depth, Double, Double) -> ExecuteRequest -> m (Either Response)
+    loop :: (Depth, Double, Double) -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
     loop (!currentDepth, !time, !koreTime) r = do
         Log.logInfoNS "proxy" . Text.pack $
             if currentDepth == 0
@@ -233,8 +233,8 @@ respondEither mbStatsVar booster kore req = case req of
         simplifyResult :: ExecuteResult -> m ExecuteResult
         simplifyResult res@ExecuteResult{reason, state, nextStates} = do
             Log.logInfoNS "proxy" . Text.pack $ "Simplifying state in " <> show reason <> " result"
-            simplifiedState <- runSimplify state
-            simplifiedNexts <- maybe (pure []) (mapM runSimplify) nextStates
+            simplifiedState <- simplifyExecuteState state
+            simplifiedNexts <- maybe (pure []) (mapM simplifyExecuteState) nextStates
             let filteredNexts = filter (not . isBottom) simplifiedNexts
             let result = case reason of
                     Branching
@@ -258,9 +258,9 @@ respondEither mbStatsVar booster kore req = case req of
             | KoreJson.KJBottom _ <- p.term = True
         isBottom _ = False
 
-        runSimplify :: ExecuteState -> m ExecuteState
-        runSimplify s = do
-            let toSimplify = toRequestState s
+        simplifyExecuteState :: ExecuteState -> m ExecuteState
+        simplifyExecuteState s = do
+            let toSimplify = toSimplifyRequest s
             Log.logInfoNS "proxy" "Simplify request"
             simplResult <-
                 kore $
@@ -280,7 +280,7 @@ respondEither mbStatsVar booster kore req = case req of
                     -- We cannot call the booster internaliser without access to the server state
                     -- Again this should not fail.
                     let request =
-                            (emptyRequest simplified.state)
+                            (emptyExecuteRequest simplified.state)
                                 { _module = mbModule
                                 , maxDepth = Just $ Depth 0
                                 }
@@ -292,18 +292,19 @@ respondEither mbStatsVar booster kore req = case req of
                 _other ->
                     -- TODO log error
                     pure s -- if we hit an error here, return the original
-        emptyRequest :: KoreJson.KoreJson -> ExecuteRequest
-        emptyRequest state =
-            ExecuteRequest
-                { state
-                , maxDepth = Nothing
-                , _module = Nothing
-                , cutPointRules = Nothing
-                , terminalRules = Nothing
-                , movingAverageStepTimeout = Nothing
-                , stepTimeout = Nothing
-                , logSuccessfulSimplifications = Nothing
-                , logFailedSimplifications = Nothing
-                , logSuccessfulRewrites = Nothing
-                , logFailedRewrites = Nothing
-                }
+          where
+            emptyExecuteRequest :: KoreJson.KoreJson -> ExecuteRequest
+            emptyExecuteRequest state =
+                ExecuteRequest
+                    { state
+                    , maxDepth = Nothing
+                    , _module = Nothing
+                    , cutPointRules = Nothing
+                    , terminalRules = Nothing
+                    , movingAverageStepTimeout = Nothing
+                    , stepTimeout = Nothing
+                    , logSuccessfulSimplifications = Nothing
+                    , logFailedSimplifications = Nothing
+                    , logSuccessfulRewrites = Nothing
+                    , logFailedRewrites = Nothing
+                    }
