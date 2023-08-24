@@ -169,6 +169,8 @@ respondEither mbStatsVar booster kore req = case req of
                 -- in the old one to work around any potential
                 -- unification bugs.
                 | boosterResult.reason `elem` [Aborted, Stuck] -> do
+                    -- simplify Booster's state with Kore's simplifier
+                    simplifiedBoosterState <- simplifyExecuteState r._module boosterResult.state
                     -- attempt to do one step in the old backend
                     Log.logInfoNS "proxy" . Text.pack $
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
@@ -177,7 +179,7 @@ respondEither mbStatsVar booster kore req = case req of
                             kore
                                 ( Execute
                                     r
-                                        { state = execStateToKoreJson boosterResult.state
+                                        { state = execStateToKoreJson simplifiedBoosterState
                                         , maxDepth = Just $ Depth 1
                                         }
                                 )
