@@ -19,7 +19,7 @@ import Control.Monad.Logger qualified as Log
 import Data.Aeson (ToJSON (..))
 import Data.Aeson.KeyMap qualified as Aeson
 import Data.Aeson.Types (Value (..))
-import Data.Maybe (catMaybes, isJust)
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Network.JSONRPC
