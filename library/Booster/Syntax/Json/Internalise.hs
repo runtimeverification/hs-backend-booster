@@ -147,6 +147,7 @@ internaliseTermRaw qq allowAlias sortVars definition@KoreDefinition{sorts, symbo
                                     , isAssoc = Internal.IsNotAssoc
                                     , isMacroOrAlias = Internal.IsNotMacroOrAlias
                                     , isKMapSymbol = Nothing
+                                    , hasConcreteEvaluators = Flag False
                                     }
                     else
                         maybe (throwE $ UnknownSymbol name symPatt) pure $

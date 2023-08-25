@@ -14,6 +14,7 @@ import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.Base
 import Booster.Pattern.Util (isConcrete, sortOfTerm)
 import Data.Bifunctor (bimap)
+import Debug.Trace (trace)
 
 {- | We want to break apart predicates of type `X #Equals Y1 andBool ... Yn` into
 `X #Equals Y1, ..., X #Equals  Yn` in the case when some of the `Y`s are abstract
@@ -71,8 +72,9 @@ simplifyConcrete (Just mApi) def trm = recurse trm
     recurse t@(Term attributes _)
         | attributes.isEvaluated =
             t
-        | isConcrete t =
-            simplifyTerm mApi def t (sortOfTerm t)
+        | isConcrete t && attributes.canBeConcretelyEvaluated =
+            trace ("simplify" <> show t) $
+                simplifyTerm mApi def t (sortOfTerm t)
         | otherwise =
             case t of
                 var@Var{} ->

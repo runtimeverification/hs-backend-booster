@@ -180,6 +180,7 @@ data SymbolAttributes = SymbolAttributes
     , isAssoc :: Flag "isAssoc"
     , isMacroOrAlias :: Flag "isMacroOrAlias"
     , isKMapSymbol :: Maybe KMapDefinition
+    , hasConcreteEvaluators :: Flag "hasConcreteEvaluators"
     }
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)

@@ -15,6 +15,7 @@ module Booster.Pattern.Base (
 ) where
 
 import Booster.Definition.Attributes.Base (
+    Flag (Flag),
     KMapAttributes (..),
     KMapDefinition (..),
     SymbolAttributes (..),
@@ -28,6 +29,7 @@ import Booster.Prettyprinter qualified as KPretty
 import Control.DeepSeq (NFData (..))
 import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
+import Data.Coerce (coerce)
 import Data.Data (Data)
 import Data.Either (fromRight)
 import Data.Functor.Foldable
@@ -113,6 +115,7 @@ data TermAttributes = TermAttributes
     -- variables, recursive through AndTerm
     , hash :: !Int
     , isConstructorLike :: !Bool
+    , canBeConcretelyEvaluated :: Bool
     -- ^ false for function calls, variables, and AndTerms
     }
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
@@ -128,10 +131,11 @@ instance Semigroup TermAttributes where
             , isEvaluated = a1.isEvaluated && a2.isEvaluated
             , hash = 0
             , isConstructorLike = a1.isConstructorLike && a2.isConstructorLike
+            , canBeConcretelyEvaluated = a1.canBeConcretelyEvaluated && a2.canBeConcretelyEvaluated
             }
 
 instance Monoid TermAttributes where
-    mempty = TermAttributes Set.empty True 0 False
+    mempty = TermAttributes Set.empty True 0 False True
 
 -- | A term together with its attributes.
 data Term = Term TermAttributes (TermF Term)
@@ -167,6 +171,7 @@ kmapUnitSymbol def =
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , isKMapSymbol = Just def
+                , hasConcreteEvaluators = Flag True
                 }
         }
 kmapConcatSymbol def =
@@ -182,6 +187,7 @@ kmapConcatSymbol def =
                 , isAssoc = IsAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , isKMapSymbol = Just def
+                , hasConcreteEvaluators = Flag True
                 }
         }
 kmapElementSymbol def =
@@ -197,6 +203,7 @@ kmapElementSymbol def =
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , isKMapSymbol = Just def
+                , hasConcreteEvaluators = Flag True
                 }
         }
 
@@ -308,6 +315,8 @@ pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts
                             Hashable.hash ("SymbolApplication" :: ByteString, sym, sorts, map (hash . getAttributes) args)
                         , isConstructorLike =
                             symIsConstructor && argAttributes.isConstructorLike
+                        , canBeConcretelyEvaluated =
+                            coerce sym.attributes.hasConcreteEvaluators && argAttributes.canBeConcretelyEvaluated
                         }
                     $ SymbolApplicationF sym sorts args
 
@@ -379,6 +388,8 @@ pattern KMap def keyVals rest <- Term _ (KMapF def keyVals rest)
                                 )
                         , isConstructorLike =
                             argAttributes.isConstructorLike
+                        , canBeConcretelyEvaluated =
+                            argAttributes.canBeConcretelyEvaluated
                         }
                     $ KMapF def (Set.toList $ Set.fromList $ keyVals ++ keyVals') rest'
 {-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var, Injection, KMap #-}
@@ -398,6 +409,7 @@ injectionSymbol =
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , isKMapSymbol = Nothing
+                , hasConcreteEvaluators = Flag True
                 }
         }
 

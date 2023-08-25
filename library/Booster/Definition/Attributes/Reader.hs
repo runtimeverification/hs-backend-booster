@@ -186,12 +186,14 @@ instance HasAttributes ParsedSymbol where
                     throwE $
                         "Sort injection '" <> name.getId <> "' cannot be associative."
                 attributes .! "assoc"
+            hasConcreteEvaluators = coerce . not <$> attributes .! "no-evaluators"
         SymbolAttributes
             <$> symbolType
             <*> isIdem
             <*> isAssoc
             <*> (coerce <$> (attributes .! "macro" <||> attributes .! "alias'Kywd'"))
             <*> pure Nothing
+            <*> hasConcreteEvaluators
 
 instance HasAttributes ParsedSort where
     type Attributes ParsedSort = SortAttributes
