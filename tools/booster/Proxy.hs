@@ -247,16 +247,13 @@ respondEither mbStatsVar booster kore req = case req of
                 pure s -- if we hit an error here, return the original
       where
         toSimplifyRequest :: ExecuteState -> SimplifyRequest
-        toSimplifyRequest ExecuteState{term = t, substitution, predicate} =
-            let subAndPred = catMaybes [KoreJson.term <$> substitution, KoreJson.term <$> predicate]
-                termSort = KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []
-                term = t{KoreJson.term = foldr (KoreJson.KJAnd termSort) t.term subAndPred}
-             in SimplifyRequest
-                    { state = term
-                    , _module = mbModule
-                    , logSuccessfulSimplifications = Nothing
-                    , logFailedSimplifications = Nothing
-                    }
+        toSimplifyRequest state =
+            SimplifyRequest
+                { state = execStateToKoreJson state
+                , _module = mbModule
+                , logSuccessfulSimplifications = Nothing
+                , logFailedSimplifications = Nothing
+                }
 
         emptyExecuteRequest :: KoreJson.KoreJson -> ExecuteRequest
         emptyExecuteRequest state =
