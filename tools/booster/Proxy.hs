@@ -166,6 +166,7 @@ respondEither mbStatsVar booster kore req = case req of
                     Log.logInfoNS "proxy" . Text.pack $
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     -- simplify Booster's state with Kore's simplifier
+                    Log.logInfoNS "proxy" . Text.pack $ "Simplifying booster state and falling back to Kore "
                     simplifiedBoosterState <- simplifyExecuteState r._module boosterResult.state
                     -- attempt to do one step in the old backend
                     (kResult, kTime) <-
@@ -242,9 +243,10 @@ respondEither mbStatsVar booster kore req = case req of
                 case result of
                     Right (Execute ExecuteResult{state = finalState}) -> pure finalState
                     _other -> pure s
-            _other ->
-                -- TODO log error
-                pure s -- if we hit an error here, return the original
+            _other -> do
+                -- if we hit an error here, return the original
+                Log.logWarnNS "proxy" "Unexpected failure when calling Kore simplifier, returning original term"
+                pure s
       where
         toSimplifyRequest :: ExecuteState -> SimplifyRequest
         toSimplifyRequest state =
