@@ -257,13 +257,14 @@ externaliseKmapUnsafe def keyVals rest =
                 s
                 keyVals
   where
-    stripIsKmap :: Symbol -> Symbol
-    stripIsKmap s@Symbol{attributes = attrs} = s{attributes = attrs{collectionMetadata = Nothing}}
-
-    unit = SymbolApplication (stripIsKmap $ unitSymbol $ KMapMeta def) [] []
-    k |-> v = SymbolApplication (stripIsKmap $ kmapElementSymbol def) [] [k, v]
-    a `con` b = SymbolApplication (stripIsKmap $ concatSymbol $ KMapMeta def) [] [a, b]
+    unit = SymbolApplication (stripCollectionMetadata $ unitSymbol $ KMapMeta def) [] []
+    k |-> v = SymbolApplication (stripCollectionMetadata $ kmapElementSymbol def) [] [k, v]
+    a `con` b = SymbolApplication (stripCollectionMetadata $ concatSymbol $ KMapMeta def) [] [a, b]
 {-# INLINE externaliseKmapUnsafe #-}
+
+stripCollectionMetadata :: Symbol -> Symbol
+stripCollectionMetadata s@Symbol{attributes = attrs} =
+    s{attributes = attrs{collectionMetadata = Nothing}}
 
 internaliseKmap :: KMapDefinition -> Term -> ([(Term, Term)], Maybe Term)
 internaliseKmap def@KMapDefinition{symbolNames = names} = \case
@@ -370,9 +371,9 @@ externaliseKList def heads optMid tails
     | Just mid <- optMid =
         concatList $ map singleton heads <> (mid : map singleton tails)
   where
-    elemSym = klistElementSymbol def
-    emptyList = SymbolApplication (unitSymbol $ KListMeta def) [] []
-    concatSym = concatSymbol $ KListMeta def
+    elemSym = stripCollectionMetadata $ klistElementSymbol def
+    emptyList = SymbolApplication (stripCollectionMetadata $ unitSymbol $ KListMeta def) [] []
+    concatSym = stripCollectionMetadata $ concatSymbol $ KListMeta def
 
     singleton :: Term -> Term
     singleton = SymbolApplication elemSym [] . (: [])
