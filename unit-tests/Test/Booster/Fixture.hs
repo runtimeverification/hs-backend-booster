@@ -56,7 +56,7 @@ testDefinition =
     super `withSubsorts` subs =
         ( getName super
         ,
-            ( SortAttributes{argCount = 0, kmapAttributes = Nothing}
+            ( SortAttributes{argCount = 0, collectionAttributes = Nothing}
             , Set.fromList (getName super : map getName subs)
             )
         )
@@ -96,7 +96,7 @@ testKMapDefinition =
         }
   where
     testKMapSymbolNames =
-        KMapAttributes
+        KCollectionSymbolnames
             { unitSymbolName = "Lbl'Stop'TestKMap"
             , elementSymbolName = "LblTestKMapItem"
             , concatSymbolName = "Lbl'Unds'TestKMap'Unds'"

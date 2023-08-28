@@ -15,8 +15,9 @@ module Booster.Pattern.Base (
 ) where
 
 import Booster.Definition.Attributes.Base (
+    KCollectionMetadata (..),
+    KCollectionSymbolnames (..),
     KListDefinition (..),
-    KMapAttributes (..),
     KMapDefinition (..),
     SymbolAttributes (..),
     SymbolType (..),
@@ -161,37 +162,49 @@ instance Recursive Term where
 getAttributes :: Term -> TermAttributes
 getAttributes (Term a _) = a
 
-kmapUnitSymbol, kmapConcatSymbol, kmapElementSymbol :: KMapDefinition -> Symbol
-kmapUnitSymbol def =
+unitSymbol, concatSymbol :: KCollectionMetadata -> Symbol
+unitSymbol def =
     Symbol
-        { name = def.symbolNames.unitSymbolName
+        { name = symbolNames.unitSymbolName
         , sortVars = []
         , argSorts = []
-        , resultSort = SortApp def.mapSortName []
+        , resultSort = SortApp collectionSort []
         , attributes =
             SymbolAttributes
                 { symbolType = TotalFunction
                 , isIdem = IsNotIdem
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
-                , isKMapSymbol = Just def
+                , collectionMetadata = Just def
                 }
         }
-kmapConcatSymbol def =
+  where
+    (symbolNames, collectionSort) =
+        case def of
+            KMapMeta mapDef -> (mapDef.symbolNames, mapDef.mapSortName)
+            KListMeta listDef -> (listDef.symbolNames, listDef.listSortName)
+concatSymbol def =
     Symbol
-        { name = def.symbolNames.concatSymbolName
+        { name = symbolNames.concatSymbolName
         , sortVars = []
-        , argSorts = [SortApp def.mapSortName [], SortApp def.mapSortName []]
-        , resultSort = SortApp def.mapSortName []
+        , argSorts = [SortApp collectionSort [], SortApp collectionSort []]
+        , resultSort = SortApp collectionSort []
         , attributes =
             SymbolAttributes
-                { symbolType = PartialFunction
+                { symbolType
                 , isIdem = IsNotIdem
                 , isAssoc = IsAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
-                , isKMapSymbol = Just def
+                , collectionMetadata = Just def
                 }
         }
+  where
+    (symbolNames, collectionSort, symbolType) =
+        case def of
+            KMapMeta mapDef -> (mapDef.symbolNames, mapDef.mapSortName, PartialFunction)
+            KListMeta listDef -> (listDef.symbolNames, listDef.listSortName, TotalFunction)
+
+kmapElementSymbol :: KMapDefinition -> Symbol
 kmapElementSymbol def =
     Symbol
         { name = def.symbolNames.elementSymbolName
@@ -204,7 +217,24 @@ kmapElementSymbol def =
                 , isIdem = IsNotIdem
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
-                , isKMapSymbol = Just def
+                , collectionMetadata = Just $ KMapMeta def
+                }
+        }
+
+klistElementSymbol :: KListDefinition -> Symbol
+klistElementSymbol def =
+    Symbol
+        { name = def.symbolNames.elementSymbolName
+        , sortVars = []
+        , argSorts = [SortApp def.elementSortName []]
+        , resultSort = SortApp def.listSortName []
+        , attributes =
+            SymbolAttributes
+                { symbolType = TotalFunction
+                , isIdem = IsNotIdem
+                , isAssoc = IsNotAssoc
+                , isMacroOrAlias = IsNotMacroOrAlias
+                , collectionMetadata = Just $ KListMeta def
                 }
         }
 
@@ -228,25 +258,26 @@ externaliseKmapUnsafe def keyVals rest =
                 keyVals
   where
     stripIsKmap :: Symbol -> Symbol
-    stripIsKmap s@Symbol{attributes = attrs} = s{attributes = attrs{isKMapSymbol = Nothing}}
+    stripIsKmap s@Symbol{attributes = attrs} = s{attributes = attrs{collectionMetadata = Nothing}}
 
-    unit = SymbolApplication (stripIsKmap $ kmapUnitSymbol def) [] []
+    unit = SymbolApplication (stripIsKmap $ unitSymbol $ KMapMeta def) [] []
     k |-> v = SymbolApplication (stripIsKmap $ kmapElementSymbol def) [] [k, v]
-    a `con` b = SymbolApplication (stripIsKmap $ kmapConcatSymbol def) [] [a, b]
+    a `con` b = SymbolApplication (stripIsKmap $ concatSymbol $ KMapMeta def) [] [a, b]
 {-# INLINE externaliseKmapUnsafe #-}
 
 internaliseKmap :: KMapDefinition -> Term -> ([(Term, Term)], Maybe Term)
-internaliseKmap def@KMapDefinition{symbolNames = KMapAttributes{elementSymbolName, concatSymbolName, unitSymbolName}} = \case
+internaliseKmap def@KMapDefinition{symbolNames = names} = \case
     SymbolApplication s _ []
-        | s.name == unitSymbolName -> ([], Nothing)
+        | s.name == names.unitSymbolName -> ([], Nothing)
     SymbolApplication s _ [k, v]
-        | s.name == elementSymbolName -> ([(k, v)], Nothing)
+        | s.name == names.elementSymbolName -> ([(k, v)], Nothing)
     SymbolApplication s _ [l, r]
-        | s.name == concatSymbolName -> combine (internaliseKmap def l) (internaliseKmap def r)
+        | s.name == names.concatSymbolName -> combine (internaliseKmap def l) (internaliseKmap def r)
     KMap def' keyVals rest
         | def == def' -> (keyVals, rest)
     other -> ([], Just other) -- do we want to recurse into this term in case there are some maps under e.g. function symbol??
   where
+    concatSym = concatSymbol (KMapMeta def)
     combine (conc1, sym1) (conc2, sym2) =
         ( conc1 ++ conc2
         , case (sym1, sym2) of
@@ -260,12 +291,12 @@ internaliseKmap def@KMapDefinition{symbolNames = KMapAttributes{elementSymbolNam
                             , hash =
                                 Hashable.hash
                                     ( "SymbolApplication" :: ByteString
-                                    , kmapConcatSymbol def
+                                    , concatSym
                                     , map hash [aAttribs, bAttribs]
                                     )
                             , isConstructorLike = False
                             }
-                 in Just $ Term attribs $ SymbolApplicationF (kmapConcatSymbol def) [] [a, b]
+                 in Just $ Term attribs $ SymbolApplicationF concatSym [] [a, b]
         )
 
 instance Corecursive Term where
@@ -296,7 +327,7 @@ pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts
     where
         SymbolApplication sym [source, target] [arg]
             | sym == injectionSymbol = Injection source target arg
-        SymbolApplication sym@Symbol{attributes = SymbolAttributes{isKMapSymbol = Just def}} sorts args =
+        SymbolApplication sym@Symbol{attributes = SymbolAttributes{collectionMetadata = Just (KMapMeta def)}} sorts args =
             let (keyVals, rest) = internaliseKmap def $ Term mempty $ SymbolApplicationF sym sorts args
              in KMap def keyVals rest
         SymbolApplication sym sorts args =
@@ -438,7 +469,7 @@ injectionSymbol =
                 , isIdem = IsNotIdem
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
-                , isKMapSymbol = Nothing
+                , collectionMetadata = Nothing
                 }
         }
 

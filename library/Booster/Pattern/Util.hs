@@ -40,6 +40,7 @@ import Data.Set qualified as Set
 import Booster.Definition.Attributes.Base (
     Concreteness (..),
     Flag (..),
+    KCollectionMetadata (..),
     KListDefinition (..),
     KMapDefinition (..),
     SymbolAttributes (..),
@@ -180,20 +181,33 @@ filterTermSymbols check = cata $ \case
         | check symbol -> symbol : concat ts
         | otherwise -> concat ts
     AndTermF t1 t2 -> t1 <> t2
+    DomainValueF _ _ -> []
+    VarF _ -> []
     InjectionF _ _ t -> t
-    KMapF def [] Nothing -> [kmapUnitSymbol def | check $ kmapUnitSymbol def]
+    KMapF def [] Nothing -> [unit | let unit = unitSymbol $ KMapMeta def, check unit]
     KMapF _ [] (Just t) -> t
     KMapF def kvs t ->
         let
-            concatSymbol = kmapConcatSymbol def
-            elementSymbol = kmapElementSymbol def
-            unitSymbol = kmapUnitSymbol def
+            concatSym = concatSymbol $ KMapMeta def
+            elementSym = kmapElementSymbol def
+            unitSym = unitSymbol $ KMapMeta def
          in
-            (if check concatSymbol then (concatSymbol :) else id) $
-                (if check elementSymbol then (elementSymbol :) else id) $
-                    (if check unitSymbol then (unitSymbol :) else id) $
-                        concatMap (uncurry (<>)) kvs ++ fromMaybe [] t
-    _ -> []
+            filter check [concatSym, elementSym, unitSym]
+                <> concatMap (uncurry (<>)) kvs
+                <> fromMaybe [] t
+    KListF def [] Nothing [] ->
+        let unitSym = unitSymbol $ KListMeta def
+         in if check unitSym then [unitSym] else []
+    KListF def heads optMid tails ->
+        let concatSym = concatSymbol $ KListMeta def
+            elemSym = klistElementSymbol def
+            unitSym = unitSymbol $ KListMeta def
+         in fromMaybe [] optMid
+                <> if null (heads <> tails)
+                    then []
+                    else
+                        filter check [concatSym, elemSym, unitSym]
+                            <> concat (heads <> tails)
 
 isBottom :: Pattern -> Bool
 isBottom = (Bottom `elem`) . constraints
