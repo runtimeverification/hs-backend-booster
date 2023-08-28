@@ -86,3 +86,5 @@ simplifyConcrete (Just mApi) def trm = recurse trm
                 Injection sources target sub ->
                     Injection sources target $ recurse sub
                 KMap mdef keyVals rest -> KMap mdef (map (bimap recurse recurse) keyVals) (recurse <$> rest)
+                KList ldef heads mid tails ->
+                    KList ldef (map recurse heads) (fmap recurse mid) (map recurse tails)

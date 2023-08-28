@@ -197,7 +197,7 @@ filterTermSymbols check = cata $ \case
                 <> fromMaybe [] t
     KListF def [] Nothing [] ->
         let unitSym = unitSymbol $ KListMeta def
-         in if check unitSym then [unitSym] else []
+         in [unitSym | check unitSym]
     KListF def heads optMid tails ->
         let concatSym = concatSymbol $ KListMeta def
             elemSym = klistElementSymbol def

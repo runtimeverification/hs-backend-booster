@@ -324,6 +324,8 @@ applyTerm BottomUp pref =
             applyAtTop pref t
         KMapF def keyVals rest ->
             KMap def <$> mapM (uncurry $ liftM2 (,)) keyVals <*> sequence rest
+        KListF def heads mid tails ->
+            KList def <$> sequence heads <*> sequence mid <*> sequence tails
 applyTerm TopDown pref = \t@(Term attributes _) ->
     if attributes.isEvaluated
         then pure t
@@ -366,6 +368,11 @@ applyTerm TopDown pref = \t@(Term attributes _) ->
             KMap def
                 <$> mapM (\(k, v) -> (,) <$> applyTerm TopDown pref k <*> applyTerm TopDown pref v) keyVals
                 <*> maybe (pure Nothing) ((Just <$>) . applyTerm TopDown pref) rest
+        KList def heads mid tails ->
+            KList def
+                <$> mapM (applyTerm TopDown pref) heads
+                <*> maybe (pure Nothing) ((Just <$>) . applyTerm TopDown pref) mid
+                <*> mapM (applyTerm TopDown pref) tails
 
 {- | Try to apply function equations and simplifications to the given
    top-level term, in priority order and per group.
