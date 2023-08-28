@@ -349,6 +349,15 @@ unify1
     m@KMap{}
     trm =
         failWith $ DifferentSymbols m trm
+-- no unification for lists, return indeterminate for now
+unify1
+    l1@KList{}
+    other =
+        addIndeterminate l1 other
+unify1
+    other
+    l2@KList{} =
+        addIndeterminate l2 other
 
 failWith :: FailReason -> StateT s (Except UnificationResult) ()
 failWith = lift . throwE . UnificationFailed

@@ -40,6 +40,7 @@ import Data.Set qualified as Set
 import Booster.Definition.Attributes.Base (
     Concreteness (..),
     Flag (..),
+    KListDefinition (..),
     KMapDefinition (..),
     SymbolAttributes (..),
     SymbolType (..),
@@ -55,6 +56,7 @@ sortOfTerm (DomainValue sort _) = sort
 sortOfTerm (Var Variable{variableSort}) = variableSort
 sortOfTerm (Injection _ sort _) = sort
 sortOfTerm (KMap def _ _) = SortApp def.mapSortName []
+sortOfTerm (KList def _ _ _) = SortApp def.listSortName []
 
 applySubst :: Map VarName Sort -> Sort -> Sort
 applySubst subst var@(SortVar n) =
@@ -87,6 +89,8 @@ substituteInTerm substitution = goSubst
             AndTerm t1 t2 -> AndTerm (goSubst t1) (goSubst t2)
             Injection ss s sub -> Injection ss s (goSubst sub)
             KMap attrs keyVals rest -> KMap attrs (bimap goSubst goSubst <$> keyVals) (goSubst <$> rest)
+            KList def heads mid tails ->
+                KList def (map goSubst heads) (fmap goSubst mid) (map goSubst tails)
 
 substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
 substituteInPredicate substitution = cata $ \case

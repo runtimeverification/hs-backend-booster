@@ -15,6 +15,7 @@ module Booster.Pattern.Base (
 ) where
 
 import Booster.Definition.Attributes.Base (
+    KListDefinition (..),
     KMapAttributes (..),
     KMapDefinition (..),
     SymbolAttributes (..),
@@ -24,7 +25,7 @@ import Booster.Definition.Attributes.Base (
     pattern IsNotIdem,
     pattern IsNotMacroOrAlias,
  )
-import Booster.Prettyprinter qualified as KPretty
+
 import Control.DeepSeq (NFData (..))
 import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
@@ -44,6 +45,8 @@ import GHC.Generics (Generic)
 import Language.Haskell.TH.Syntax (Lift (..))
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
+
+import Booster.Prettyprinter qualified as KPretty
 
 type VarName = ByteString
 type SymbolName = ByteString
@@ -86,8 +89,7 @@ data Symbol = Symbol
    variables.
    This is anything that can be part of a K configuration.
 
-   Deliberately kept simple in this codebase (leaving out built-in
-   types and containers).
+   This codebase deliberately does not include built-in types.
 -}
 data TermF t
     = AndTermF t t
@@ -98,6 +100,12 @@ data TermF t
       -- sorts between source and target are shortened out.
       InjectionF Sort Sort t
     | KMapF KMapDefinition [(t, t)] (Maybe t)
+    | -- | internal List
+      KListF
+        KListDefinition -- metadata
+        [t] -- head elements
+        (Maybe t) -- optional (symbolic) middle
+        [t] -- tail elements
     deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
@@ -266,7 +274,8 @@ instance Corecursive Term where
     embed (DomainValueF s t) = DomainValue s t
     embed (VarF v) = Var v
     embed (InjectionF source target t) = Injection source target t
-    embed (KMapF sort conc sym) = KMap sort conc sym
+    embed (KMapF def conc sym) = KMap def conc sym
+    embed (KListF def heads sym tails) = KList def heads sym tails
 
 -- smart term constructors, as bidirectional patterns
 pattern AndTerm :: Term -> Term -> Term
@@ -381,7 +390,39 @@ pattern KMap def keyVals rest <- Term _ (KMapF def keyVals rest)
                             argAttributes.isConstructorLike
                         }
                     $ KMapF def (Set.toList $ Set.fromList $ keyVals ++ keyVals') rest'
-{-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var, Injection, KMap #-}
+
+pattern KList :: KListDefinition -> [Term] -> Maybe Term -> [Term] -> Term
+pattern KList def heads mid tails <- Term _ (KListF def heads mid tails)
+    where
+        KList def heads mid tails =
+            let argAttributes =
+                    case (heads <> tails, mid) of
+                        ([], Nothing) ->
+                            mempty
+                        (nonEmpty, Nothing) ->
+                            foldl1' (<>) $ map getAttributes nonEmpty
+                        (elems, Just m) ->
+                            foldr (<>) (getAttributes m) $ map getAttributes elems
+                (heads', mid', tails') = case mid of
+                    Just (KList def' hds m tls)
+                        | def' == def ->
+                            (hds, m, tls)
+                        | otherwise ->
+                            error $ "Inconsistent list definition" <> show (def, def')
+                    other -> ([], other, [])
+             in Term
+                    argAttributes
+                        { hash =
+                            Hashable.hash
+                                ( "KList" :: ByteString
+                                , def
+                                , map (hash . getAttributes) heads
+                                , fmap (hash . getAttributes) mid
+                                , map (hash . getAttributes) tails
+                                )
+                        }
+                    $ KListF def (heads <> heads') mid' (tails' <> tails)
+{-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var, Injection, KMap, KList #-}
 
 -- hard-wired injection symbol
 injectionSymbol :: Symbol
@@ -536,7 +577,21 @@ instance Pretty Term where
             Pretty.braces . Pretty.hsep . Pretty.punctuate Pretty.comma $
                 [pretty k <> "->" <> pretty v | (k, v) <- keyVals]
                     ++ maybe [] ((: []) . pretty) rest
+        KList _meta heads (Just mid) tails ->
+            Pretty.hsep $
+                Pretty.punctuate
+                    " +"
+                    [renderList heads, pretty mid, renderList tails]
+        KList _meta [] Nothing [] ->
+            "[]"
+        KList _meta heads Nothing tails ->
+            renderList (heads <> tails)
       where
+        renderList l
+            | null l = mempty
+            | otherwise =
+                Pretty.brackets . Pretty.hsep . Pretty.punctuate Pretty.comma $
+                    map pretty l
         collectSet = \case
             SymbolApplication (Symbol "Lbl'Unds'Set'Unds'" _ _ _ _) _ args ->
                 concatMap collectSet args

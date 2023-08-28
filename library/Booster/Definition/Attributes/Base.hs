@@ -22,6 +22,7 @@ module Booster.Definition.Attributes.Base (
     SortAttributes (..),
     KMapAttributes (..),
     KMapDefinition (..),
+    KListDefinition (..),
     Label,
     UniqueId (..),
     Location (..),
@@ -197,6 +198,14 @@ data KMapDefinition = KMapDefinition
     , keySortName :: ByteString
     , elementSortName :: ByteString
     , mapSortName :: ByteString
+    }
+    deriving stock (Eq, Ord, Show, Generic, Data, Lift)
+    deriving anyclass (NFData, Hashable)
+
+data KListDefinition = KListDefinition
+    { symbolNames :: KMapAttributes -- FIXME rename this
+    , elementSortName :: ByteString
+    , listSortName :: ByteString
     }
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
