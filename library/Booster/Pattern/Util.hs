@@ -57,7 +57,7 @@ sortOfTerm (DomainValue sort _) = sort
 sortOfTerm (Var Variable{variableSort}) = variableSort
 sortOfTerm (Injection _ sort _) = sort
 sortOfTerm (KMap def _ _) = SortApp def.mapSortName []
-sortOfTerm (KList def _ _ _) = SortApp def.listSortName []
+sortOfTerm (KList def _ _) = SortApp def.listSortName []
 
 applySubst :: Map VarName Sort -> Sort -> Sort
 applySubst subst var@(SortVar n) =
@@ -90,8 +90,8 @@ substituteInTerm substitution = goSubst
             AndTerm t1 t2 -> AndTerm (goSubst t1) (goSubst t2)
             Injection ss s sub -> Injection ss s (goSubst sub)
             KMap attrs keyVals rest -> KMap attrs (bimap goSubst goSubst <$> keyVals) (goSubst <$> rest)
-            KList def heads mid tails ->
-                KList def (map goSubst heads) (fmap goSubst mid) (map goSubst tails)
+            KList def heads rest ->
+                KList def (map goSubst heads) (bimap goSubst (map goSubst) <$> rest)
 
 substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
 substituteInPredicate substitution = cata $ \case
@@ -195,19 +195,22 @@ filterTermSymbols check = cata $ \case
             filter check [concatSym, elementSym, unitSym]
                 <> concatMap (uncurry (<>)) kvs
                 <> fromMaybe [] t
-    KListF def [] Nothing [] ->
-        let unitSym = unitSymbol $ KListMeta def
-         in [unitSym | check unitSym]
-    KListF def heads optMid tails ->
+    KListF def heads Nothing ->
         let concatSym = concatSymbol $ KListMeta def
             elemSym = klistElementSymbol def
             unitSym = unitSymbol $ KListMeta def
-         in fromMaybe [] optMid
-                <> if null (heads <> tails)
+         in if null heads
+                then [unitSym | check unitSym]
+                else filter check [concatSym, elemSym] <> concat heads
+    KListF def heads (Just (mid, tails)) ->
+        let concatSym = concatSymbol $ KListMeta def
+            elemSym = klistElementSymbol def
+            unitSym = unitSymbol $ KListMeta def
+            ends = heads <> tails
+         in mid
+                <> if null ends
                     then []
-                    else
-                        filter check [concatSym, elemSym, unitSym]
-                            <> concat (heads <> tails)
+                    else filter check [concatSym, elemSym, unitSym] <> concat ends
 
 isBottom :: Pattern -> Bool
 isBottom = (Bottom `elem`) . constraints

@@ -28,6 +28,7 @@ import Booster.Definition.Attributes.Base (
  )
 
 import Control.DeepSeq (NFData (..))
+import Data.Bifunctor (second)
 import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
 import Data.Data (Data)
@@ -105,8 +106,7 @@ data TermF t
       KListF
         KListDefinition -- metadata
         [t] -- head elements
-        (Maybe t) -- optional (symbolic) middle
-        [t] -- tail elements
+        (Maybe (t, [t])) -- optional (symbolic) middle and tail elements
     deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
@@ -311,48 +311,39 @@ internaliseKmap def@KMapDefinition{symbolNames = names} = \case
 internaliseKList :: KListDefinition -> Term -> Term
 internaliseKList def = \case
     SymbolApplication s _ []
-        | s.name == def.symbolNames.unitSymbolName -> KList def [] Nothing []
+        | s.name == def.symbolNames.unitSymbolName -> KList def [] Nothing
     SymbolApplication s _ [x]
-        | s.name == def.symbolNames.elementSymbolName -> KList def [x] Nothing []
+        | s.name == def.symbolNames.elementSymbolName -> KList def [x] Nothing
     SymbolApplication concatSym _ [x, y]
         | concatSym.name == def.symbolNames.concatSymbolName ->
-            let first = internaliseKList def x
-                second = internaliseKList def y
-             in case (first, second) of
-                    -- try to combine cases that can be represented as `heads mid tails`
-                    (KList def1 hds1 mid1 tls1, KList def2 hds2 mid2 tls2)
-                        | def1 /= def2 ->
-                            error $ "Inconsistent list definition " <> show (def1, def2)
-                        | Nothing <- mid1
-                        , Nothing <- mid2
-                        , -- invariant if mid* is Nothing:
-                          null tls1
-                        , null tls2 ->
-                            KList def1 (hds1 <> hds2) Nothing []
-                        | Nothing <- mid1
-                        , -- should have null tls1
-                          null tls1 ->
-                            KList def1 (hds1 <> hds2) mid2 tls2
-                        | Nothing <- mid2
-                        , null tls2 ->
-                            KList def1 hds1 mid1 (tls1 <> hds2)
-                    (a@(Term aAttribs _), b@(Term bAttribs _)) ->
-                        -- otherwise neither mid1 nor mid2 are
-                        -- trivial, or the terms are not KList at all.
-                        -- Reconstruct the concat expression directly
-                        -- to avoid a loop
-                        let attribs =
-                                (aAttribs <> bAttribs)
-                                    { isEvaluated = False
-                                    , hash =
-                                        Hashable.hash
-                                            ( "SymbolApplication" :: ByteString
-                                            , concatSym
-                                            , map hash [aAttribs, bAttribs]
-                                            )
-                                    , isConstructorLike = False
-                                    }
-                         in Term attribs $ SymbolApplicationF concatSym [] [a, b]
+            case (internaliseKList def x, internaliseKList def y) of
+                -- try to combine cases that can be represented as `heads mid tails`
+                (KList def1 hds1 rst1, KList def2 hds2 rst2)
+                    | def1 /= def2 ->
+                        error $ "Inconsistent list definition " <> show (def1, def2)
+                    | Nothing <- rst1
+                    , Nothing <- rst2 ->
+                        KList def1 (hds1 <> hds2) Nothing
+                    | Nothing <- rst1 ->
+                        KList def1 (hds1 <> hds2) rst2
+                    | Nothing <- rst2 ->
+                        KList def1 hds1 $ fmap (second (<> hds2)) rst1
+                -- otherwise neither mid1 nor mid2 are trivial, or
+                -- the terms are not KList at all. Reconstruct
+                -- the concat expression directly to avoid a loop.
+                (a@(Term aAttribs _), b@(Term bAttribs _)) ->
+                    let attribs =
+                            (aAttribs <> bAttribs)
+                                { isEvaluated = False
+                                , hash =
+                                    Hashable.hash
+                                        ( "SymbolApplication" :: ByteString
+                                        , concatSym
+                                        , map hash [aAttribs, bAttribs]
+                                        )
+                                , isConstructorLike = False
+                                }
+                     in Term attribs $ SymbolApplicationF concatSym [] [a, b]
     other -> other
 
 {- | reconstructs a list-constructing symbol application nest from an
@@ -361,14 +352,13 @@ internaliseKList def = \case
    This is not a precise inverse of the above internalisation because
    the list concatenation becomes right-biased as much as possible.
 
-   TODO Assumes tails is empty if optMid is Nothing. Change representation.
-   TODO Assumes that mid is a list type but not KList. Which is probably fair.
+   Assumes that mid is a list type but not KList (ensured by internalisation).
 -}
-externaliseKList :: KListDefinition -> [Term] -> Maybe Term -> [Term] -> Term
-externaliseKList def heads optMid tails
-    | Nothing <- optMid =
+externaliseKList :: KListDefinition -> [Term] -> Maybe (Term, [Term]) -> Term
+externaliseKList def heads optRest
+    | Nothing <- optRest =
         concatList $ map singleton heads
-    | Just mid <- optMid =
+    | Just (mid, tails) <- optRest =
         concatList $ map singleton heads <> (mid : map singleton tails)
   where
     elemSym = stripCollectionMetadata $ klistElementSymbol def
@@ -390,7 +380,7 @@ instance Corecursive Term where
     embed (VarF v) = Var v
     embed (InjectionF source target t) = Injection source target t
     embed (KMapF def conc sym) = KMap def conc sym
-    embed (KListF def heads sym tails) = KList def heads sym tails
+    embed (KListF def heads rest) = KList def heads rest
 
 -- smart term constructors, as bidirectional patterns
 pattern AndTerm :: Term -> Term -> Term
@@ -513,25 +503,28 @@ pattern KMap def keyVals rest <- Term _ (KMapF def keyVals rest)
                         }
                     $ KMapF def (Set.toList $ Set.fromList $ keyVals ++ keyVals') rest'
 
-pattern KList :: KListDefinition -> [Term] -> Maybe Term -> [Term] -> Term
-pattern KList def heads mid tails <- Term _ (KListF def heads mid tails)
+pattern KList :: KListDefinition -> [Term] -> Maybe (Term, [Term]) -> Term
+pattern KList def heads rest <- Term _ (KListF def heads rest)
     where
-        KList def heads mid tails =
+        KList def heads rest =
             let argAttributes =
-                    case (heads <> tails, mid) of
+                    case (heads, rest) of
                         ([], Nothing) ->
                             mempty
                         (nonEmpty, Nothing) ->
                             foldl1' (<>) $ map getAttributes nonEmpty
-                        (elems, Just m) ->
-                            foldr ((<>) . getAttributes) (getAttributes m) elems
-                (heads', mid', tails') = case mid of
-                    Just (KList def' hds m tls)
-                        | def' == def ->
-                            (hds, m, tls)
-                        | otherwise ->
+                        (_, Just (m, tails)) ->
+                            foldr ((<>) . getAttributes) (getAttributes m) $ heads <> tails
+                (newHeads, newRest) = case rest of
+                    Just (KList def' heads' rest', tails)
+                        | def' /= def ->
                             error $ "Inconsistent list definition" <> show (def, def')
-                    other -> ([], other, [])
+                        | otherwise ->
+                            maybe
+                                (heads <> heads' <> tails, Nothing)
+                                (\(m, ts) -> (heads <> heads', Just (m, ts <> tails)))
+                                rest'
+                    other -> (heads, other)
              in Term
                     argAttributes
                         { hash =
@@ -539,11 +532,11 @@ pattern KList def heads mid tails <- Term _ (KListF def heads mid tails)
                                 ( "KList" :: ByteString
                                 , def
                                 , map (hash . getAttributes) heads
-                                , fmap (hash . getAttributes) mid
-                                , map (hash . getAttributes) tails
+                                , fmap (hash . getAttributes . fst) rest
+                                , fmap (map (hash . getAttributes) . snd) rest
                                 )
                         }
-                    $ KListF def (heads <> heads') mid' (tails' <> tails)
+                    $ KListF def newHeads newRest
 {-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var, Injection, KMap, KList #-}
 
 -- hard-wired injection symbol
@@ -699,15 +692,15 @@ instance Pretty Term where
             Pretty.braces . Pretty.hsep . Pretty.punctuate Pretty.comma $
                 [pretty k <> "->" <> pretty v | (k, v) <- keyVals]
                     ++ maybe [] ((: []) . pretty) rest
-        KList _meta heads (Just mid) tails ->
+        KList _meta heads (Just (mid, tails)) ->
             Pretty.hsep $
                 Pretty.punctuate
                     " +"
                     [renderList heads, pretty mid, renderList tails]
-        KList _meta [] Nothing [] ->
+        KList _meta [] Nothing ->
             "[]"
-        KList _meta heads Nothing tails ->
-            renderList (heads <> tails)
+        KList _meta heads Nothing ->
+            renderList heads
       where
         renderList l
             | null l = mempty

@@ -505,12 +505,11 @@ recomputeTermAttributes = \case
             def
             (map (bimap recomputeTermAttributes recomputeTermAttributes) keyVals)
             (fmap recomputeTermAttributes rest)
-    Internal.KList def heads mid tails ->
+    Internal.KList def heads rest ->
         Internal.KList
             def
             (map recomputeTermAttributes heads)
-            (fmap recomputeTermAttributes mid)
-            (map recomputeTermAttributes tails)
+            (fmap (bimap recomputeTermAttributes (map recomputeTermAttributes)) rest)
 
 trm :: QuasiQuoter
 trm =
