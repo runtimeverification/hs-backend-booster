@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
 {- |
@@ -20,12 +21,17 @@ import Control.Monad.Logger (
     ToLogStr (toLogStr),
     defaultLoc,
  )
+import Control.Monad.Logger qualified as Log
 import Control.Monad.Logger qualified as Logger
+import Data.Aeson.Types (Value (..))
 import Data.Conduit.Network (serverSettings)
 import Data.IORef (writeIORef)
 import Data.InternedText (globalInternedTextCache)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
+import Data.Text (Text)
+import Data.Text qualified as Text
+import Network.JSONRPC
 import Options.Applicative
 import System.Clock (
     Clock (..),
@@ -44,7 +50,7 @@ import Kore.JsonRpc (ServerState (..))
 import Kore.JsonRpc qualified as Kore
 import Kore.JsonRpc.Error
 import Kore.JsonRpc.Server
-import Kore.JsonRpc.Types (API, ReqOrRes (Req, Res))
+import Kore.JsonRpc.Types
 import Kore.Log (
     ExeName (..),
     KoreLogType (LogSomeAction),
@@ -54,14 +60,64 @@ import Kore.Log (
     swappableLogger,
     withLogger,
  )
+import Kore.Log qualified
 import Kore.Log qualified as Log
 import Kore.Log.DebugSolver qualified as Log
 import Kore.Rewrite.SMT.Lemma (declareSMTLemmas)
 import Kore.Syntax.Definition (ModuleName (ModuleName), SentenceAxiom)
 import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
-import Proxy (KoreServer (..))
-import Proxy qualified
 import SMT qualified
+
+data KoreServer = KoreServer
+    { serverState :: MVar.MVar Kore.ServerState
+    , mainModule :: Text
+    , runSMT ::
+        forall a.
+        SmtMetadataTools StepperAttributes ->
+        [SentenceAxiom (TermLike VariableName)] ->
+        SMT.SMT a ->
+        IO a
+    , loggerEnv :: Kore.Log.LoggerEnv IO
+    }
+
+respond ::
+    forall m.
+    Log.MonadLogger m =>
+    Respond (API 'Req) m (API 'Res) ->
+    Respond (API 'Req) m (API 'Res)
+respond kore req = case req of
+    Execute _ ->
+        loggedKore ExecuteM req >>= \case
+            Right (Execute koreResult) -> do
+                Log.logInfoNS "proxy" . Text.pack $
+                    "Kore " <> show koreResult.reason <> " at " <> show koreResult.depth
+                pure . Right . Execute $ koreResult
+            res -> pure res
+    Implies _ -> loggedKore ImpliesM req
+    Simplify simplifyReq -> handleSimplify simplifyReq
+    AddModule _ -> kore req
+    GetModel _ ->
+        loggedKore GetModelM req
+    Cancel ->
+        pure $ Left $ ErrorObj "Cancel not supported" (-32601) Null
+  where
+    handleSimplify :: SimplifyRequest -> m (Either ErrorObj (API 'Res))
+    handleSimplify simplifyReq = do
+        let koreReq = Simplify simplifyReq
+        koreResult <- kore koreReq
+        case koreResult of
+            Right (Simplify koreRes) -> do
+                pure . Right . Simplify $
+                    SimplifyResult
+                        { state = koreRes.state
+                        , logs = koreRes.logs
+                        }
+            koreError ->
+                pure koreError
+
+    loggedKore method r = do
+        Log.logInfoNS "proxy" . Text.pack $ show method <> " (using kore)"
+        kore r
 
 main :: IO ()
 main = do
@@ -99,7 +155,7 @@ main = do
                     }
             srvSettings = serverSettings port "*"
 
-        liftIO $ void $ withBugReport (ExeName "hs-booster-proxy") BugReportOnError $ \reportDirectory ->
+        liftIO $ void $ withBugReport (ExeName "kore-rpc-dev") BugReportOnError $ \reportDirectory ->
             withLogger reportDirectory koreLogOptions $ \actualLogAction -> do
                 mvarLogAction <- newMVar actualLogAction
                 let logAction = swappableLogger mvarLogAction
@@ -112,7 +168,7 @@ main = do
                     server =
                         jsonRpcServer
                             srvSettings
-                            (const $ Proxy.respondEither koreRespond)
+                            (const $ respond koreRespond)
                             [handleErrorCall, handleSomeException]
                     interruptHandler _ = do
                         when (logLevel >= LevelInfo) $
@@ -145,7 +201,7 @@ data CLProxyOptions = CLProxyOptions
 parserInfoModifiers :: InfoMod options
 parserInfoModifiers =
     fullDesc
-        <> header "Haskell Backend Booster Proxy - a JSON RPC server combining kore and booster backends"
+        <> header "kore-rpc-dev - a JSON RPC for Kore with the interface of kore-rpc-booster"
 
 clProxyOptionsParser :: Parser CLProxyOptions
 clProxyOptionsParser =
@@ -174,7 +230,7 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
                         }
 
         pure $
-            Proxy.KoreServer
+            KoreServer
                 { serverState
                 , mainModule = mainModuleName
                 , runSMT
