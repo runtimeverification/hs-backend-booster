@@ -12,10 +12,8 @@ module Proxy (
 ) where
 
 import Control.Concurrent.MVar qualified as MVar
-import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Logger qualified as Log
 import Data.Aeson.Types (Value (..))
-import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Network.JSONRPC
@@ -28,7 +26,6 @@ import Kore.JsonRpc qualified as Kore (ServerState)
 import Kore.JsonRpc.Types
 import Kore.Log qualified
 import Kore.Syntax.Definition (SentenceAxiom)
-import Stats (StatsVar, addStats, microsWithUnit, timed)
 
 data KoreServer = KoreServer
     { serverState :: MVar.MVar Kore.ServerState
@@ -48,11 +45,9 @@ serverError detail = ErrorObj ("Server error: " <> detail) (-32032)
 respondEither ::
     forall m.
     Log.MonadLogger m =>
-    MonadIO m =>
-    Maybe StatsVar ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res)
-respondEither mbStatsVar kore req = case req of
+respondEither kore req = case req of
     Execute _ ->
         loggedKore ExecuteM req >>= \case
             Right (Execute koreResult) -> do
@@ -62,10 +57,7 @@ respondEither mbStatsVar kore req = case req of
             res -> pure res
     Implies _ -> loggedKore ImpliesM req
     Simplify simplifyReq -> handleSimplify simplifyReq
-    AddModule _ -> do
-        (koreRes, koreTime) <- withTime $ kore req
-        logStats AddModuleM (koreTime, koreTime)
-        pure koreRes
+    AddModule _ -> kore req
     GetModel _ ->
         loggedKore GetModelM req
     Cancel ->
@@ -74,10 +66,9 @@ respondEither mbStatsVar kore req = case req of
     handleSimplify :: SimplifyRequest -> m (Either ErrorObj (API 'Res))
     handleSimplify simplifyReq = do
         let koreReq = Simplify simplifyReq
-        (koreResult, koreTime) <- withTime $ kore koreReq
+        koreResult <- kore koreReq
         case koreResult of
             Right (Simplify koreRes) -> do
-                logStats SimplifyM (koreTime, koreTime)
                 pure . Right . Simplify $
                     SimplifyResult
                         { state = koreRes.state
@@ -88,21 +79,4 @@ respondEither mbStatsVar kore req = case req of
 
     loggedKore method r = do
         Log.logInfoNS "proxy" . Text.pack $ show method <> " (using kore)"
-        (result, time) <- withTime $ kore r
-        logStats method (time, time)
-        pure result
-
-    withTime = if isJust mbStatsVar then Stats.timed else fmap (,0.0)
-
-    logStats method (time, koreTime)
-        | Just v <- mbStatsVar = do
-            addStats v method time koreTime
-            Log.logInfoNS "proxy" . Text.pack . unwords $
-                [ "Performed"
-                , show method
-                , "in"
-                , microsWithUnit time
-                , "(" <> microsWithUnit koreTime <> " kore time)"
-                ]
-        | otherwise =
-            pure ()
+        kore r

@@ -12,7 +12,6 @@ import Control.Concurrent.MVar qualified as MVar
 import Control.Exception (AsyncException (UserInterrupt), handleJust)
 import Control.Monad (forM_, void, when)
 import Control.Monad.Catch (bracket)
-import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Logger (
     LogLevel (..),
@@ -63,7 +62,6 @@ import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
 import Proxy (KoreServer (..))
 import Proxy qualified
 import SMT qualified
-import Stats qualified
 
 main :: IO ()
 main = do
@@ -77,7 +75,6 @@ main = do
                     , eventlogEnabledUserEvents
                     }
             , koreSolverOptions
-            , proxyOptions = ProxyOptions{printStats}
             , debugSolverOptions
             } = options
         (logLevel, customLevels) = adjustLogLevels logLevels
@@ -108,8 +105,6 @@ main = do
                 let logAction = swappableLogger mvarLogAction
 
                 kore@KoreServer{runSMT} <- mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions
-                statVar <- if printStats then Just <$> Stats.newStats else pure Nothing
-
                 runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
                 let koreRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
@@ -117,12 +112,11 @@ main = do
                     server =
                         jsonRpcServer
                             srvSettings
-                            (const $ Proxy.respondEither statVar koreRespond)
+                            (const $ Proxy.respondEither koreRespond)
                             [handleErrorCall, handleSomeException]
                     interruptHandler _ = do
                         when (logLevel >= LevelInfo) $
                             putStrLn "[Info#proxy] Server shutting down"
-                        whenJust statVar Stats.showStats
                         exitSuccess
                 handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger
   where
@@ -144,14 +138,8 @@ toSeverity LevelOther{} = Nothing
 
 data CLProxyOptions = CLProxyOptions
     { clOptions :: CLOptions
-    , proxyOptions :: ProxyOptions
     , koreSolverOptions :: !KoreSolverOptions
     , debugSolverOptions :: !Log.DebugSolverOptions
-    }
-
-newtype ProxyOptions = ProxyOptions
-    { printStats :: Bool
-    -- ^ print timing statistics per request and on shutdown
     }
 
 parserInfoModifiers :: InfoMod options
@@ -163,16 +151,8 @@ clProxyOptionsParser :: Parser CLProxyOptions
 clProxyOptionsParser =
     CLProxyOptions
         <$> clOptionsParser
-        <*> parseProxyOptions
         <*> parseKoreSolverOptions
         <*> Log.parseDebugSolverOptions
-  where
-    parseProxyOptions =
-        ProxyOptions
-            <$> switch
-                ( long "print-stats"
-                    <> help "(development) Print timing information per request and on shutdown"
-                )
 
 mkKoreServer :: Log.LoggerEnv IO -> CLOptions -> KoreSolverOptions -> IO KoreServer
 mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainModuleName} koreSolverOptions =
