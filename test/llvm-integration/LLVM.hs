@@ -4,8 +4,10 @@ License     : BSD-3-Clause
 -}
 module Main (
     main,
+    displayTestDef,
 ) where
 
+import Control.Monad (when, unless)
 import Control.Monad.Trans.Except (runExcept)
 import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
@@ -18,6 +20,7 @@ import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
+import Data.Text.IO qualified as Text
 import GHC.IO.Exception
 import Hedgehog
 import Hedgehog.Gen qualified as Gen
@@ -35,6 +38,8 @@ import Booster.LLVM.Internal as Internal
 import Booster.Pattern.Base
 import Booster.Syntax.Json.Externalise (externaliseTerm)
 import Booster.Syntax.Json.Internalise qualified as Syntax
+import Booster.Syntax.ParsedKore.Internalise (buildDefinitions)
+import Booster.Syntax.ParsedKore.Parser (parseDefinition)
 import Kore.Syntax.Json.Types qualified as Syntax
 import System.Info (os)
 
@@ -197,6 +202,54 @@ testDef =
         Map.empty -- no function equations
         Map.empty -- no simplifications
         Map.empty -- no predicate simplifications
+
+{- To refresh the definition below, run this using the repl and fix up
+   the remainder of the file if differences are shown.
+-}
+displayTestDef :: IO ()
+displayTestDef = do
+    defText <- Text.readFile (kompiledPath </> "definition.kore")
+    parsed <- either error pure $ parseDefinition definition defText
+    defMap <- either (error . show) pure $ runExcept $ buildDefinitions parsed
+    let def = fromMaybe (error "LLVM module not found") $ Map.lookup "LLVM" defMap
+        prunedDef =
+            def
+                { modules = Map.empty
+                , aliases = Map.empty
+                , functionEquations = Map.empty
+                , simplifications = Map.empty
+                , predicateSimplifications = Map.empty
+                }
+    -- compare to what we have
+    if testDef == prunedDef
+        then putStrLn "Definition in Haskell file is consistent with compilation output"
+        else do
+            putStrLn "Differences between Haskell file and loaded definition:"
+            when (testDef.sorts /= prunedDef.sorts) $ do
+                putStrLn "sorts differ"
+                mapCompare testDef.sorts prunedDef.sorts
+            when (testDef.symbols /= prunedDef.symbols) $ do
+                putStrLn "symbols differ"
+                mapCompare testDef.symbols prunedDef.symbols
+  where
+    mapCompare map1 map2 = do
+        let diff1 = Map.difference map1 map2
+            diff2 = Map.difference map2 map1
+            commonKeys = Set.intersection (Map.keysSet map1) (Map.keysSet map2)
+        let elemCompare k =
+                let e1 = fromMaybe (error "Bad key") $ Map.lookup k map1
+                    e2 = fromMaybe (error "Bad key") $ Map.lookup k map2
+                 in when (e1 /= e2) $ do
+                        putStrLn $ "Elements at key " <> show k <> " differ:"
+                        print e1
+                        print e2
+        mapM_ elemCompare commonKeys
+        unless (Map.null diff1) $
+            putStrLn $
+                "Map 1 has additional keys " <> show (Set.toList $ Map.keysSet diff1)
+        unless (Map.null diff2) $
+            putStrLn $
+                "Map 2 has additional keys " <> show (Set.toList $ Map.keysSet diff2)
 
 sortMapKmap :: KMapDefinition
 sortMapKmap =
@@ -611,7 +664,7 @@ defSymbols =
                 , attributes =
                     SymbolAttributes
                         { collectionMetadata = Nothing
-                        , symbolType = TotalFunction
+                        , symbolType = PartialFunction
                         , isIdem = IsIdem
                         , isAssoc = IsAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
@@ -1830,24 +1883,6 @@ defSymbols =
                 }
             )
         ,
-            ( "LbldecodeBytes'LParUndsCommUndsRParUnds'BYTES-STRING-ENCODE'Unds'String'Unds'String'Unds'Bytes"
-            , Symbol
-                { name =
-                    "LbldecodeBytes'LParUndsCommUndsRParUnds'BYTES-STRING-ENCODE'Unds'String'Unds'String'Unds'Bytes"
-                , sortVars = []
-                , argSorts = [SortApp "SortString" [], SortApp "SortBytes" []]
-                , resultSort = SortApp "SortString" []
-                , attributes =
-                    SymbolAttributes
-                        { collectionMetadata = Nothing
-                        , symbolType = PartialFunction
-                        , isIdem = IsNotIdem
-                        , isAssoc = IsNotAssoc
-                        , isMacroOrAlias = IsNotMacroOrAlias
-                        }
-                }
-            )
-        ,
             ( "Lbldiv2'LParUndsRParUnds'LLVM'Unds'Num'Unds'Even"
             , Symbol
                 { name = "Lbldiv2'LParUndsRParUnds'LLVM'Unds'Num'Unds'Even"
@@ -1858,24 +1893,6 @@ defSymbols =
                     SymbolAttributes
                         { collectionMetadata = Nothing
                         , symbolType = TotalFunction
-                        , isIdem = IsNotIdem
-                        , isAssoc = IsNotAssoc
-                        , isMacroOrAlias = IsNotMacroOrAlias
-                        }
-                }
-            )
-        ,
-            ( "LblencodeBytes'LParUndsCommUndsRParUnds'BYTES-STRING-ENCODE'Unds'Bytes'Unds'String'Unds'String"
-            , Symbol
-                { name =
-                    "LblencodeBytes'LParUndsCommUndsRParUnds'BYTES-STRING-ENCODE'Unds'Bytes'Unds'String'Unds'String"
-                , sortVars = []
-                , argSorts = [SortApp "SortString" [], SortApp "SortString" []]
-                , resultSort = SortApp "SortBytes" []
-                , attributes =
-                    SymbolAttributes
-                        { collectionMetadata = Nothing
-                        , symbolType = PartialFunction
                         , isIdem = IsNotIdem
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
