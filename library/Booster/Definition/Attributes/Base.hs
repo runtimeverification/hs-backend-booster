@@ -21,7 +21,7 @@ module Booster.Definition.Attributes.Base (
     SymbolAttributes (..),
     SortAttributes (..),
     KCollectionTag (..),
-    KCollectionSymbolnames (..),
+    KCollectionSymbolNames (..),
     KCollectionMetadata (..),
     KMapDefinition (..),
     KListDefinition (..),
@@ -198,7 +198,7 @@ data KCollectionMetadata
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
-data KCollectionSymbolnames = KCollectionSymbolnames
+data KCollectionSymbolNames = KCollectionSymbolNames
     { unitSymbolName :: ByteString
     , elementSymbolName :: ByteString
     , concatSymbolName :: ByteString
@@ -207,7 +207,7 @@ data KCollectionSymbolnames = KCollectionSymbolnames
     deriving anyclass (NFData, Hashable)
 
 data KMapDefinition = KMapDefinition
-    { symbolNames :: KCollectionSymbolnames
+    { symbolNames :: KCollectionSymbolNames
     , keySortName :: ByteString
     , elementSortName :: ByteString
     , mapSortName :: ByteString
@@ -216,7 +216,7 @@ data KMapDefinition = KMapDefinition
     deriving anyclass (NFData, Hashable)
 
 data KListDefinition = KListDefinition
-    { symbolNames :: KCollectionSymbolnames
+    { symbolNames :: KCollectionSymbolNames
     , elementSortName :: ByteString
     , listSortName :: ByteString
     }
@@ -225,7 +225,7 @@ data KListDefinition = KListDefinition
 
 data SortAttributes = SortAttributes
     { argCount :: Int
-    , collectionAttributes :: Maybe (KCollectionSymbolnames, KCollectionTag)
+    , collectionAttributes :: Maybe (KCollectionSymbolNames, KCollectionTag)
     }
     deriving stock (Eq, Show, Generic)
     deriving anyclass (NFData)

@@ -96,7 +96,7 @@ testKMapDefinition =
         }
   where
     testKMapSymbolNames =
-        KCollectionSymbolnames
+        KCollectionSymbolNames
             { unitSymbolName = "Lbl'Stop'TestKMap"
             , elementSymbolName = "LblTestKMapItem"
             , concatSymbolName = "Lbl'Unds'TestKMap'Unds'"

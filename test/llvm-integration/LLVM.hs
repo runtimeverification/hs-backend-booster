@@ -255,7 +255,7 @@ sortMapKmap :: KMapDefinition
 sortMapKmap =
     KMapDefinition
         { symbolNames =
-            KCollectionSymbolnames
+            KCollectionSymbolNames
                 { unitSymbolName = "Lbl'Stop'Map"
                 , elementSymbolName = "Lbl'UndsPipe'-'-GT-Unds'"
                 , concatSymbolName = "Lbl'Unds'Map'Unds'"
@@ -269,7 +269,7 @@ sortListKList :: KListDefinition
 sortListKList =
     KListDefinition
         { symbolNames =
-            KCollectionSymbolnames
+            KCollectionSymbolNames
                 { unitSymbolName = "Lbl'Stop'List"
                 , elementSymbolName = "LblListItem"
                 , concatSymbolName = "Lbl'Unds'List'Unds'"

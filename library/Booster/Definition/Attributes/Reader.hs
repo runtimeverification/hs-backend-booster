@@ -187,7 +187,7 @@ instance HasAttributes ParsedSort where
                         { argCount = length sortVars
                         , collectionAttributes =
                             Just
-                                ( KCollectionSymbolnames
+                                ( KCollectionSymbolNames
                                     { unitSymbolName
                                     , elementSymbolName
                                     , concatSymbolName
@@ -201,7 +201,7 @@ instance HasAttributes ParsedSort where
                         { argCount = length sortVars
                         , collectionAttributes =
                             Just
-                                ( KCollectionSymbolnames
+                                ( KCollectionSymbolNames
                                     { unitSymbolName
                                     , elementSymbolName
                                     , concatSymbolName

@@ -16,7 +16,7 @@ module Booster.Pattern.Base (
 
 import Booster.Definition.Attributes.Base (
     KCollectionMetadata (..),
-    KCollectionSymbolnames (..),
+    KCollectionSymbolNames (..),
     KListDefinition (..),
     KMapDefinition (..),
     SymbolAttributes (..),
