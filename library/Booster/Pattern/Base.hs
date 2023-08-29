@@ -26,6 +26,7 @@ import Booster.Definition.Attributes.Base (
     pattern IsNotIdem,
     pattern IsNotMacroOrAlias,
  )
+import Booster.Prettyprinter qualified as KPretty
 
 import Control.DeepSeq (NFData (..))
 import Data.Bifunctor (second)
@@ -47,8 +48,6 @@ import GHC.Generics (Generic)
 import Language.Haskell.TH.Syntax (Lift (..))
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
-
-import Booster.Prettyprinter qualified as KPretty
 
 type VarName = ByteString
 type SymbolName = ByteString
