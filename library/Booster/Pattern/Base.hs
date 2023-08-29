@@ -318,8 +318,8 @@ internaliseKList def = \case
             case (internaliseKList def x, internaliseKList def y) of
                 -- try to combine cases that can be represented as `heads mid tails`
                 (KList def1 hds1 rst1, KList def2 hds2 rst2)
-                    | def1 /= def2 ->
-                        error $ "Inconsistent list definition " <> show (def1, def2)
+                    | def1 /= def2 -> inconsistent def1 def2
+                    | def /= def1 -> inconsistent def def1
                     | Nothing <- rst1
                     , Nothing <- rst2 ->
                         KList def1 (hds1 <> hds2) Nothing
@@ -327,22 +327,39 @@ internaliseKList def = \case
                         KList def1 (hds1 <> hds2) rst2
                     | Nothing <- rst2 ->
                         KList def1 hds1 $ fmap (second (<> hds2)) rst1
-                -- otherwise neither mid1 nor mid2 are trivial, or
-                -- the terms are not KList at all. Reconstruct
-                -- the concat expression directly to avoid a loop.
-                (a@(Term aAttribs _), b@(Term bAttribs _)) ->
-                    let attribs =
-                            (aAttribs <> bAttribs)
-                                { isEvaluated = False
-                                , hash =
-                                    Hashable.hash
-                                        ( "SymbolApplication" :: ByteString
-                                        , concatSym
-                                        , map hash [aAttribs, bAttribs]
-                                        )
-                                , isConstructorLike = False
-                                }
+                -- otherwise neither mid1 nor mid2 are trivial, we
+                -- reconstruct concat expression.
+                (a@KList{}, b@KList{}) ->
+                    let attribs = concatAttribs (getAttributes a) (getAttributes b)
                      in Term attribs $ SymbolApplicationF concatSym [] [a, b]
+                -- One of the terms is a fully concrete KList and
+                -- the other is something else: combine to a KList
+                (KList def1 heads Nothing, nonKList)
+                    | def /= def1 -> inconsistent def def1
+                    | otherwise ->
+                        KList def heads (Just (nonKList, []))
+                (nonKList, KList def1 tails Nothing)
+                    | def /= def1 -> inconsistent def def1
+                    | otherwise ->
+                        KList def [] (Just (nonKList, tails))
+                -- two non-KList terms, keep the concat expression
+                (a@(Term aAttribs _), b@(Term bAttribs _)) ->
+                    let attribs = concatAttribs aAttribs bAttribs
+                     in Term attribs $ SymbolApplicationF concatSym [] [a, b]
+      where
+        inconsistent d1 d2 = error $ "Inconsistent list definitions " <> show (d1, d2)
+        concatAttribs :: TermAttributes -> TermAttributes -> TermAttributes
+        concatAttribs aAttribs bAttribs =
+            (aAttribs <> bAttribs)
+                { isEvaluated = False
+                , hash =
+                    Hashable.hash
+                        ( "SymbolApplication" :: ByteString
+                        , concatSym
+                        , map hash [aAttribs, bAttribs]
+                        )
+                , isConstructorLike = False
+                }
     other -> other
 
 {- | reconstructs a list-constructing symbol application nest from an
