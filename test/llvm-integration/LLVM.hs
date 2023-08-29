@@ -7,7 +7,7 @@ module Main (
     displayTestDef,
 ) where
 
-import Control.Monad (when, unless)
+import Control.Monad (unless, when)
 import Control.Monad.Trans.Except (runExcept)
 import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
