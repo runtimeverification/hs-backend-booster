@@ -285,9 +285,10 @@ unify1
             failWith $ DifferentSorts l1 l2
         | -- two fully-concrete lists of the same length
           Nothing <- rest1
-        , Nothing <- rest2
-        , length heads1 == length heads2 =
-            void $ enqueuePairs heads1 heads2
+        , Nothing <- rest2 =
+            if length heads1 == length heads2
+                then void $ enqueuePairs heads1 heads2
+                else failWith $ DifferentValues l1 l2
         | -- left list has a symbolic part, right one is fully concrete
           Just (symb1, tails1) <- rest1
         , Nothing <- rest2 = do
@@ -302,11 +303,11 @@ unify1
                     | otherwise -> do
                         -- fully concrete list too short
                         let surplusLeft = KList def1 [] rest1
-                        failWith $ DifferentSymbols surplusLeft emptyList
+                        failWith $ DifferentValues surplusLeft emptyList
                 Just (Left leftover1) -> do
                     -- fully concrete list too short
                     let surplusLeft = KList def1 leftover1 rest1
-                    failWith $ DifferentSymbols surplusLeft emptyList
+                    failWith $ DifferentValues surplusLeft emptyList
                 Just (Right leftover2)
                     | null tails1 -> do
                         let newRight = KList def2 leftover2 Nothing
@@ -321,7 +322,7 @@ unify1
                             Just (Left tail1) -> do
                                 -- fully concrete list too short
                                 let surplusLeft = KList def1 [] $ Just (symb1, reverse tail1)
-                                failWith $ DifferentSymbols surplusLeft emptyList
+                                failWith $ DifferentValues surplusLeft emptyList
                             Just (Right tail2) -> do
                                 let newRight = KList def2 (reverse tail2) Nothing
                                 enqueueRegularProblem symb1 newRight
@@ -387,11 +388,11 @@ unify1
 unify1
     l1@KList{}
     other =
-        failWith $ DifferentSymbols l1 other
+        failWith $ DifferentValues l1 other
 unify1
     other
     l2@KList{} =
-        failWith $ DifferentSymbols other l2
+        failWith $ DifferentValues other l2
 ------ Internalised Maps
 unify1
     t1@(KMap def1 _ _)

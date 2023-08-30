@@ -261,22 +261,29 @@ internalLists =
             "Empty and non-empty concrete list fail to unify"
             emptyList
             concreteList
-            (failed $ DifferentSymbols emptyList concreteList)
+            (failed $ DifferentValues emptyList concreteList)
+        , let two = klist (replicate 2 headElem) Nothing
+              three = klist (replicate 3 headElem) Nothing
+           in test
+                "Concrete lists of different length fail to unify"
+                two
+                three
+                (failed $ DifferentValues two three)
         , test
             "Empty and non-empty list fail to unify (symbolic tail)"
             headList
             emptyList
-            (failed $ DifferentSymbols headList emptyList)
+            (failed $ DifferentValues headList emptyList)
         , test
             "Empty and non-empty list fail to unify (symbolic init)"
             tailList
             emptyList
-            (failed $ DifferentSymbols tailList emptyList)
+            (failed $ DifferentValues tailList emptyList)
         , test
             "Unification failures may swap the argument lists"
             emptyList
             tailList
-            (failed $ DifferentSymbols tailList emptyList)
+            (failed $ DifferentValues tailList emptyList)
         , test
             "Head list and tail list produce indeterminate unification"
             headList
