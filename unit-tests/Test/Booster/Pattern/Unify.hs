@@ -1,4 +1,5 @@
 {-# LANGUAGE QuasiQuotes #-}
+
 {-# OPTIONS -Wno-incomplete-uni-patterns #-}
 
 {- |
@@ -247,89 +248,94 @@ internalLists =
     testGroup
         "Internal lists"
         [ test
-              "Can unify an empty list with itself"
-              emptyList
-              emptyList
-              (success [])
+            "Can unify an empty list with itself"
+            emptyList
+            emptyList
+            (success [])
         , test
-              "Can unify a concrete list with itself"
-              concreteList
-              concreteList
-              (success [])
+            "Can unify a concrete list with itself"
+            concreteList
+            concreteList
+            (success [])
         , test
-              "Empty and non-empty concrete list fail to unify"
-              emptyList
-              concreteList
-              (failed $ DifferentSymbols emptyList concreteList)
+            "Empty and non-empty concrete list fail to unify"
+            emptyList
+            concreteList
+            (failed $ DifferentSymbols emptyList concreteList)
         , test
-              "Empty and non-empty list fail to unify (symbolic tail)"
-              headList
-              emptyList
-              (failed $ DifferentSymbols headList emptyList)
+            "Empty and non-empty list fail to unify (symbolic tail)"
+            headList
+            emptyList
+            (failed $ DifferentSymbols headList emptyList)
         , test
-              "Empty and non-empty list fail to unify (symbolic init)"
-              tailList
-              emptyList
-              (failed $ DifferentSymbols tailList emptyList)
+            "Empty and non-empty list fail to unify (symbolic init)"
+            tailList
+            emptyList
+            (failed $ DifferentSymbols tailList emptyList)
         , test
-              "Unification failures may swap the argument lists"
-              emptyList
-              tailList
-              (failed $ DifferentSymbols tailList emptyList)
+            "Unification failures may swap the argument lists"
+            emptyList
+            tailList
+            (failed $ DifferentSymbols tailList emptyList)
         , test
-              "Head list and tail list produce indeterminate unification"
-              headList
-              tailList
-              (remainder [(headList, tailList)])
+            "Head list and tail list produce indeterminate unification"
+            headList
+            tailList
+            (remainder [(headList, tailList)])
         , test
-              "Tail list and head list produce indeterminate unification"
-              tailList
-              headList
-              (remainder [(tailList, headList)])
+            "Tail list and head list produce indeterminate unification"
+            tailList
+            headList
+            (remainder [(tailList, headList)])
         , let listWithHeads = klist (replicate 3 headElem) Nothing
            in test
-                  "Can match a single head element of a concrete list"
-                  headList -- "head":TAIL
-                  listWithHeads
-                  (success [("TAIL", listSort, klist (replicate 2 headElem) Nothing)])
+                "Can extract a single head element of a concrete list"
+                headList -- "head":TAIL
+                listWithHeads
+                (success [("TAIL", listSort, klist (replicate 2 headElem) Nothing)])
         , let KList _ hds (Just (v, tls)) = mixedList -- incomplete pattern match here
               tailElement = last tls
               initVariable = [trm| INIT:SortTestList{} |]
               matchTail = klist [] (Just (initVariable, [tailElement]))
               expected = klist hds (Just (v, init tls))
            in test
-                  "Can match a single tail element of a mixed list"
-                  matchTail
-                  mixedList
-                  (success [("INIT", listSort, expected)])
-        , let list1 = klist
-                          (replicate 3 headElem)
-                          (Just (var "LIST1" listSort, replicate 2 lastElem))
-              list2 = klist
-                          (replicate 3 headElem)
-                          (Just (var "LIST2" listSort, replicate 3 lastElem))
+                "Can extract a single tail element of a mixed list"
+                matchTail
+                mixedList
+                (success [("INIT", listSort, expected)])
+        , let list1 =
+                klist
+                    (replicate 3 headElem)
+                    (Just (var "LIST1" listSort, replicate 2 lastElem))
+              list2 =
+                klist
+                    (replicate 3 headElem)
+                    (Just (var "LIST2" listSort, replicate 3 lastElem))
            in test
-                  "Matches two lists with symbolic middle (binding LIST1)"
-                  list1
-                  list2
-                  (success [("LIST1", listSort, klist [] (Just (var "LIST2" listSort, [lastElem])))])
-        , let list1 = klist
-                          (replicate 3 headElem)
-                          (Just (var "LIST1" listSort, replicate 2 lastElem))
-              list2 = klist
-                          (replicate 3 headElem)
-                          (Just (var "LIST2" listSort, replicate 3 lastElem))
+                "Unifies two lists with symbolic middle (binding LIST1)"
+                list1
+                list2
+                (success [("LIST1", listSort, klist [] (Just (var "LIST2" listSort, [lastElem])))])
+        , let list1 =
+                klist
+                    (replicate 3 headElem)
+                    (Just (var "LIST1" listSort, replicate 2 lastElem))
+              list2 =
+                klist
+                    (replicate 3 headElem)
+                    (Just (var "LIST2" listSort, replicate 3 lastElem))
            in test
-                  "Matches two lists with symbolic middle (binding LIST1), reverse direction"
-                  list2
-                  list1
-                  (success [("LIST1", listSort, klist [] (Just (var "LIST2" listSort, [lastElem])))])
+                "Unifies two lists with symbolic middle (binding LIST1), reverse direction"
+                list2
+                list1
+                (success [("LIST1", listSort, klist [] (Just (var "LIST2" listSort, [lastElem])))])
         ]
   where
     headElem = [trm| \dv{SomeSort{}}("head") |]
     lastElem = [trm| \dv{SomeSort{}}("last") |]
 
     klist = KList testKListDef
+
 ----------------------------------------
 
 success :: [(VarName, Sort, Term)] -> UnificationResult

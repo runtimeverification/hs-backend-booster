@@ -336,12 +336,23 @@ unify1
             case remainder of
                 Nothing -> do
                     -- proceed with tails and then symb
-                    addIndeterminate l1 l2 -- FIXME
+                    tailRem <-
+                        fmap (bimap reverse reverse)
+                            <$> enqueuePairs (reverse tails1) (reverse tails2)
+                    case tailRem of
+                        Nothing ->
+                            enqueueRegularProblem symb1 symb2
+                        Just (Left tails1') -> do
+                            let newLeft = KList def1 [] (Just (symb1, tails1'))
+                            enqueueRegularProblem newLeft symb2
+                        Just (Right tails2') -> do
+                            let newRight = KList def2 [] (Just (symb2, tails2'))
+                            enqueueRegularProblem symb1 newRight
                 Just headRem -> do
                     -- either left or right was longer, remove tails and proceed
                     tailRem <-
-                        fmap (bimap reverse reverse) <$>
-                        enqueuePairs (reverse tails1) (reverse tails2)
+                        fmap (bimap reverse reverse)
+                            <$> enqueuePairs (reverse tails1) (reverse tails2)
                     case (headRem, tailRem) of
                         (Left heads1', Nothing) -> do
                             let newLeft = KList def1 heads1' (Just (symb1, []))
