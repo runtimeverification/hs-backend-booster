@@ -17,6 +17,7 @@ import Control.Monad.Trans.State
 import Control.Monad.Trans.Writer
 import Data.Bifunctor (second)
 import Data.Either.Extra
+import Data.List.Extra (splitAtEnd)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Sequence (Seq (..), (><))
@@ -25,6 +26,7 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Prettyprinter
 
+import Booster.Definition.Attributes.Base (KListDefinition (..), KCollectionSymbolNames (..))
 import Booster.Definition.Base
 import Booster.Pattern.Base
 import Booster.Pattern.Unify (FailReason (..), SortError, checkSubsort)
@@ -265,6 +267,13 @@ match1
                     indeterminate app subj
                 | otherwise ->
                     enqueueProblems $ Seq.fromList $ zip args1 args2
+            -- Some lists cannot be internalised and remain applications of the
+            -- list concat symbol. Catch this case as an indeterminate one.
+            KList def _ _
+                | symbol1.name == def.symbolNames.concatSymbolName ->
+                    indeterminate app subj
+                | otherwise ->
+                    failWith (DifferentSymbols app subj)
             -- subject not a symbol application: fail
             -- Var{} case caught above
             -- and, domain values, injections, maps: fail
@@ -286,10 +295,57 @@ match1
 match1
     t1@KMap{}
     t2 = indeterminate t1 t2
--- no unification for lists, return indeterminate for now
+----- KList
+match1
+    t1@(KList def1 heads1 rest1)
+    t2@(KList def2 heads2 rest2)
+        | -- incompatible list sorts
+          def1 /= def2 =
+            failWith $ DifferentSorts t1 t2
+        | -- two fully concrete lists
+          Nothing <- rest1
+        , Nothing <- rest2 =
+            if length heads1 == length heads2
+                then enqueueProblems $ Seq.fromList $ zip heads1 heads2
+                else failWith $ DifferentValues t1 t2
+        | -- subject fully concrete, pattern has symbolic middle
+          Nothing <- rest2
+        , Just (symb1, tails1) <- rest1 = do
+            let l1 = length heads1
+                l2 = length heads2
+            case compare l1 l2 of
+                GT ->
+                    -- subject list too short (shorter than the pattern prefix)
+                    failWith $ DifferentValues t1 t2
+                EQ | null tails1 ->
+                       -- symb1 needs to become .List but is not (yet)
+                       indeterminate t1 t2
+                   | otherwise ->
+                       -- subject list too short to contain pattern suffix
+                       failWith $ DifferentValues t1 t2
+                LT -> do
+                    -- enqueue resulting matching problems
+                    let (toMatch, heads2') = splitAt l1 heads2
+                    enqueueProblems $ Seq.fromList $ zip heads1 toMatch
+                    -- enqueue matching problems for suffix terms and remaining middle
+                    let lTls1 = length tails1
+                    if lTls1 < l2 - l1 -- length heads2'
+                        then -- subject too short
+                          failWith $ DifferentValues t1 t2
+                        else do
+                          let (mid, tails2) = splitAtEnd lTls1 heads2'
+                          enqueueProblems $ Seq.fromList $ zip tails1 tails2
+                          enqueueProblem symb1 (KList def2 mid Nothing)
+
+        | -- no other cases supported
+          otherwise =
+            indeterminate t1 t2
+-- internalised lists only match other internalised lists (indeterminate otherwise)
 match1
     t1@KList{}
     t2 = indeterminate t1 t2
+
+
 
 failWith :: FailReason -> StateT s (Except MatchResult) ()
 failWith = lift . throwE . MatchFailed . General
