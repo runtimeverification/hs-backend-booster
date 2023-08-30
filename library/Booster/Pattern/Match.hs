@@ -26,7 +26,7 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Prettyprinter
 
-import Booster.Definition.Attributes.Base (KCollectionSymbolNames (..), KListDefinition (..))
+import Booster.Definition.Attributes.Base (KListDefinition (..), KCollectionSymbolNames (..))
 import Booster.Definition.Base
 import Booster.Pattern.Base
 import Booster.Pattern.Unify (FailReason (..), SortError, checkSubsort)
@@ -317,13 +317,12 @@ match1
                 GT ->
                     -- subject list too short (shorter than the pattern prefix)
                     failWith $ DifferentValues t1 t2
-                EQ
-                    | null tails1 ->
-                        -- symb1 needs to become .List but is not (yet)
-                        indeterminate t1 t2
-                    | otherwise ->
-                        -- subject list too short to contain pattern suffix
-                        failWith $ DifferentValues t1 t2
+                EQ | null tails1 ->
+                       -- symb1 needs to become .List but is not (yet)
+                       indeterminate t1 t2
+                   | otherwise ->
+                       -- subject list too short to contain pattern suffix
+                       failWith $ DifferentValues t1 t2
                 LT -> do
                     -- enqueue resulting matching problems
                     let (toMatch, heads2') = splitAt l1 heads2
@@ -332,11 +331,12 @@ match1
                     let lTls1 = length tails1
                     if lTls1 < l2 - l1 -- length heads2'
                         then -- subject too short
-                            failWith $ DifferentValues t1 t2
+                          failWith $ DifferentValues t1 t2
                         else do
-                            let (mid, tails2) = splitAtEnd lTls1 heads2'
-                            enqueueProblems $ Seq.fromList $ zip tails1 tails2
-                            enqueueProblem symb1 (KList def2 mid Nothing)
+                          let (mid, tails2) = splitAtEnd lTls1 heads2'
+                          enqueueProblems $ Seq.fromList $ zip tails1 tails2
+                          enqueueProblem symb1 (KList def2 mid Nothing)
+
         | -- no other cases supported
           otherwise =
             indeterminate t1 t2
@@ -344,6 +344,8 @@ match1
 match1
     t1@KList{}
     t2 = indeterminate t1 t2
+
+
 
 failWith :: FailReason -> StateT s (Except MatchResult) ()
 failWith = lift . throwE . MatchFailed . General
