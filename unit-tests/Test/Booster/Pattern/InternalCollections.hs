@@ -6,6 +6,11 @@ License     : BSD-3-Clause
 -}
 module Test.Booster.Pattern.InternalCollections (
     test_collections,
+    emptyList,
+    concreteList,
+    headList,
+    tailList,
+    mixedList,
 ) where
 
 import Test.Tasty
@@ -47,10 +52,10 @@ internalising =
         "Internalising lists"
         [ testCase "Empty list" $ internalise unit @=? emptyList
         , let headAndRest =
-                listConcat (inList [trm| \dv{SomeSort{}}("head") |]) [trm| REST:SortTestList{} |]
+                listConcat (inList [trm| \dv{SomeSort{}}("head") |]) [trm| TAIL:SortTestList{} |]
            in testCase "Head list" $ internalise headAndRest @=? headList
         , let restAndTail =
-                listConcat [trm| REST:SortTestList{} |] (inList [trm| \dv{SomeSort{}}("tail") |])
+                listConcat [trm| INIT:SortTestList{} |] (inList [trm| \dv{SomeSort{}}("last") |])
            in testCase "Tail list" $ internalise restAndTail @=? tailList
         , -- , let restAndTail =
           --           [trm| Lbl'Unds'TestList'Unds'{}(REST:SortTestList{}, \dv{SomeSort{}}("tail")) |]
@@ -82,12 +87,12 @@ headList =
     KList
         testKListDef
         [[trm| \dv{SomeSort{}}("head")|]]
-        $ Just ([trm| REST:SortTestList{}|], [])
+        $ Just ([trm| TAIL:SortTestList{}|], [])
 tailList =
     KList
         testKListDef
         []
-        $ Just ([trm| REST:SortTestList{}|], [[trm| \dv{SomeSort{}}("tail")|]])
+        $ Just ([trm| INIT:SortTestList{}|], [[trm| \dv{SomeSort{}}("last")|]])
 mixedList =
     KList
         testKListDef
