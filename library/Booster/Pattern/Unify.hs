@@ -297,9 +297,7 @@ unify1
             case remainder of
                 Nothing -- equal head length, rest1 must become .List
                     | null tails1 ->
-                        -- could enqueue this but we know symb1 cannot be `.List`
-                        -- because it would be removed by internalisation
-                        addIndeterminate symb1 emptyList
+                        enqueueRegularProblem symb1 emptyList
                     | otherwise -> do
                         -- fully concrete list too short
                         let surplusLeft = KList def1 [] rest1
@@ -318,7 +316,7 @@ unify1
                         case tailRemainder of
                             Nothing ->
                                 -- again symb1 needs to become `.List`
-                                addIndeterminate symb1 emptyList
+                                enqueueRegularProblem symb1 emptyList
                             Just (Left tail1) -> do
                                 -- fully concrete list too short
                                 let surplusLeft = KList def1 [] $ Just (symb1, reverse tail1)
