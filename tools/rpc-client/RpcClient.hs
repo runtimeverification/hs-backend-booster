@@ -74,7 +74,7 @@ main = do
                     liftIO exitSuccess
                 pure request
             -- runTCPClient operates on IO directly, therefore repeating runStderrLogging
-            retryTCPClient 1 5 common.host (show common.port) $ \s ->
+            retryTCPClient 2 10 common.host (show common.port) $ \s ->
                 cancelIfInterrupted s $ do
                     withLogLevel common.logLevel $
                         makeRequest
