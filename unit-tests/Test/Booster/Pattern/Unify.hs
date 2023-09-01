@@ -302,14 +302,16 @@ internalLists =
                 (success [("TAIL", listSort, klist (replicate 2 headElem) Nothing)])
         , let singletonList = klist [headElem] Nothing
               matchHead =
-                  klist [ [trm| HEAD:SomeSort{} |] ] $ Just ( [trm| TAIL:SortTestList{} |], [])
+                klist [[trm| HEAD:SomeSort{} |]] $ Just ([trm| TAIL:SortTestList{} |], [])
            in test
                 "Can extract a single head element of a singleton list"
                 matchHead
                 singletonList
-                (success [ ("HEAD", someSort, headElem)
-                         , ("TAIL", listSort, klist [] Nothing)
-                         ])
+                ( success
+                    [ ("HEAD", someSort, headElem)
+                    , ("TAIL", listSort, klist [] Nothing)
+                    ]
+                )
         , let KList _ hds (Just (v, tls)) = mixedList -- incomplete pattern match here
               tailElement = last tls
               initVariable = [trm| INIT:SortTestList{} |]
@@ -321,14 +323,16 @@ internalLists =
                 mixedList
                 (success [("INIT", listSort, expected)])
         , let singletonList = klist [lastElem] Nothing
-              matchTail = klist [] $ Just ( [trm| INIT:SortTestList{} |], [ [trm| LAST:SomeSort{} |] ])
+              matchTail = klist [] $ Just ([trm| INIT:SortTestList{} |], [[trm| LAST:SomeSort{} |]])
            in test
                 "Can extract the tail element of a singleton list"
                 matchTail
                 singletonList
-                (success [("LAST", someSort, lastElem),
-                          ("INIT", listSort, klist [] Nothing)
-                         ])
+                ( success
+                    [ ("LAST", someSort, lastElem)
+                    , ("INIT", listSort, klist [] Nothing)
+                    ]
+                )
         , let list1 =
                 klist
                     (replicate 3 headElem)
