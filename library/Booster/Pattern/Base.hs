@@ -21,11 +21,11 @@ import Booster.Definition.Attributes.Base (
     KMapDefinition (..),
     SymbolAttributes (..),
     SymbolType (..),
+    pattern CanBeEvaluated,
     pattern IsAssoc,
     pattern IsNotAssoc,
     pattern IsNotIdem,
-    pattern IsNotMacroOrAlias, 
-    pattern CanBeEvaluated,
+    pattern IsNotMacroOrAlias,
  )
 import Booster.Prettyprinter qualified as KPretty
 
