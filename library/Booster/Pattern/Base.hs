@@ -19,6 +19,7 @@ import Booster.Definition.Attributes.Base (
     KCollectionSymbolNames (..),
     KListDefinition (..),
     KMapDefinition (..),
+    KSetDefinition,
     SymbolAttributes (..),
     SymbolType (..),
     pattern CanBeEvaluated,
@@ -107,6 +108,11 @@ data TermF t
         KListDefinition -- metadata
         [t] -- head elements
         (Maybe (t, [t])) -- optional (symbolic) middle and tail elements
+    | -- | internal set
+      KSetF
+        KSetDefinition -- metadata, identical to KListDefinition
+        [t] -- known elements (no duplicates)
+        (Maybe t) -- optional symbolic rest
     deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
@@ -186,6 +192,7 @@ unitSymbol def =
         case def of
             KMapMeta mapDef -> (mapDef.symbolNames, mapDef.mapSortName)
             KListMeta listDef -> (listDef.symbolNames, listDef.listSortName)
+            KSetMeta setDef -> (setDef.symbolNames, setDef.listSortName)
 concatSymbol def =
     Symbol
         { name = symbolNames.concatSymbolName
@@ -207,6 +214,7 @@ concatSymbol def =
         case def of
             KMapMeta mapDef -> (mapDef.symbolNames, mapDef.mapSortName, PartialFunction)
             KListMeta listDef -> (listDef.symbolNames, listDef.listSortName, TotalFunction)
+            KSetMeta listDef -> (listDef.symbolNames, listDef.listSortName, PartialFunction)
 
 kmapElementSymbol :: KMapDefinition -> Symbol
 kmapElementSymbol def =
@@ -404,6 +412,7 @@ instance Corecursive Term where
     embed (InjectionF source target t) = Injection source target t
     embed (KMapF def conc sym) = KMap def conc sym
     embed (KListF def heads rest) = KList def heads rest
+    embed (KSetF def heads rest) = KSet def heads rest
 
 -- smart term constructors, as bidirectional patterns
 pattern AndTerm :: Term -> Term -> Term
@@ -564,7 +573,31 @@ pattern KList def heads rest <- Term _ (KListF def heads rest)
                                 )
                         }
                     $ KListF def newHeads newRest
-{-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var, Injection, KMap, KList #-}
+
+pattern KSet :: KSetDefinition -> [Term] -> Maybe Term -> Term
+pattern KSet def elements rest <- Term _ (KSetF def elements rest)
+  where
+      KSet def elements rest =
+          let argAttributes = undefined
+              (newElements, newRest) = case rest of
+                  Just (KSet def' elements' rest')
+                      | def /= def' ->
+                          error $ "Inconsistent set definition " <> show (def, def')
+                      | otherwise ->
+                            (Set.toList . Set.fromList $ elements <> elements', rest')
+                  other -> (elements, other)
+           in Term
+                  argAttributes
+                      { hash =
+                          Hashable.hash
+                              ( "KSet" :: ByteString
+                              , def
+                              , map (hash . getAttributes) elements
+                              , fmap (hash . getAttributes) rest
+                              )
+                      }
+                  $ KSetF def newElements newRest
+{-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var, Injection, KMap, KList, KSet #-}
 
 -- hard-wired injection symbol
 injectionSymbol :: Symbol
@@ -729,6 +762,9 @@ instance Pretty Term where
             "[]"
         KList _meta heads Nothing ->
             renderList heads
+        KSet _meta es rest ->
+            Pretty.braces . Pretty.hsep . Pretty.punctuate Pretty.comma $
+                map pretty es <> maybe [] ((:[]) . pretty) rest
       where
         renderList l
             | null l = mempty

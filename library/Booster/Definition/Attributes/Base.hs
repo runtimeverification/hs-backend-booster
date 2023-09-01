@@ -25,6 +25,7 @@ module Booster.Definition.Attributes.Base (
     KCollectionMetadata (..),
     KMapDefinition (..),
     KListDefinition (..),
+    KSetDefinition,
     Label,
     UniqueId (..),
     Location (..),
@@ -202,7 +203,7 @@ data KCollectionTag = KMapTag | KListTag
 data KCollectionMetadata
     = KMapMeta KMapDefinition
     | KListMeta KListDefinition
-    -- KSetMeta KSetDefinition (same as KListDefinition)
+    | KSetMeta KSetDefinition
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
@@ -230,6 +231,8 @@ data KListDefinition = KListDefinition
     }
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
+
+type KSetDefinition = KListDefinition
 
 data SortAttributes = SortAttributes
     { argCount :: Int

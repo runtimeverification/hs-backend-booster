@@ -58,6 +58,7 @@ sortOfTerm (Var Variable{variableSort}) = variableSort
 sortOfTerm (Injection _ sort _) = sort
 sortOfTerm (KMap def _ _) = SortApp def.mapSortName []
 sortOfTerm (KList def _ _) = SortApp def.listSortName []
+sortOfTerm (KSet def _ _) = SortApp def.listSortName []
 
 applySubst :: Map VarName Sort -> Sort -> Sort
 applySubst subst var@(SortVar n) =
@@ -92,6 +93,8 @@ substituteInTerm substitution = goSubst
             KMap attrs keyVals rest -> KMap attrs (bimap goSubst goSubst <$> keyVals) (goSubst <$> rest)
             KList def heads rest ->
                 KList def (map goSubst heads) (bimap goSubst (map goSubst) <$> rest)
+            KSet def elements rest ->
+                KSet def (map goSubst elements) (goSubst <$> rest)
 
 substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
 substituteInPredicate substitution = cata $ \case
@@ -211,6 +214,17 @@ filterTermSymbols check = cata $ \case
                 <> if null ends
                     then []
                     else filter check [concatSym, elemSym, unitSym] <> concat ends
+    KSetF def elements rest ->
+        let concatSym = concatSymbol $ KSetMeta def
+            unitSym = unitSymbol $ KSetMeta def
+            elemSym = klistElementSymbol def -- HACK
+         in if null elements
+                then
+                    fromMaybe
+                        [ unitSym | check unitSym ]
+                        rest
+                else
+                    filter check [concatSym, elemSym] <> fromMaybe [] rest
 
 isBottom :: Pattern -> Bool
 isBottom = (Bottom `elem`) . constraints
