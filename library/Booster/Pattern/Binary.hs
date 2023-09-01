@@ -204,7 +204,7 @@ lookupKoreDefinitionSymbol name = DecodeM $ do
                     []
                     []
                     (SortApp "UNKNOWN" [])
-                    (SymbolAttributes PartialFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias Nothing (Flag False))
+                    (SymbolAttributes PartialFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CannotBeEvaluated Nothing)
         Just def -> Map.lookup name $ symbols def
 
 {- | Successively decodes items from the given "block" of bytes,
@@ -457,6 +457,7 @@ encodeTerm = \case
     AndTerm t1 t2 -> encodeSymbolApplication "\\and" [sortOfTerm t1] [Left t1, Left t2]
     Injection source target t -> encodeSymbolApplication "inj" [source, target] [Left t]
     KMap def keyVals rest -> encodeTerm $ externaliseKmapUnsafe def keyVals rest
+    KList def heads rest -> encodeTerm $ externaliseKList def heads rest
 
 encodeSymbol :: ByteString -> [Sort] -> Put
 encodeSymbol name sorts = do

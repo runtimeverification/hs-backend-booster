@@ -20,8 +20,11 @@ module Booster.Definition.Attributes.Base (
     SymbolType (..),
     SymbolAttributes (..),
     SortAttributes (..),
-    KMapAttributes (..),
+    KCollectionTag (..),
+    KCollectionSymbolNames (..),
+    KCollectionMetadata (..),
     KMapDefinition (..),
+    KListDefinition (..),
     Label,
     UniqueId (..),
     Location (..),
@@ -35,6 +38,8 @@ module Booster.Definition.Attributes.Base (
     pattern IsNotAssoc,
     pattern IsMacroOrAlias,
     pattern IsNotMacroOrAlias,
+    pattern CanBeEvaluated,
+    pattern CannotBeEvaluated,
     NotPreservesDefinednessReason (..),
 ) where
 
@@ -174,18 +179,34 @@ pattern IsMacroOrAlias = Flag True
 pattern IsNotMacroOrAlias = Flag False
 {-# COMPLETE IsMacroOrAlias, IsNotMacroOrAlias #-}
 
+pattern CanBeEvaluated, CannotBeEvaluated :: Flag "canBeEvaluated"
+pattern CanBeEvaluated = Flag True
+pattern CannotBeEvaluated = Flag False
+{-# COMPLETE CanBeEvaluated, CannotBeEvaluated #-}
+
 data SymbolAttributes = SymbolAttributes
     { symbolType :: SymbolType
     , isIdem :: Flag "isIdem"
     , isAssoc :: Flag "isAssoc"
     , isMacroOrAlias :: Flag "isMacroOrAlias"
-    , isKMapSymbol :: Maybe KMapDefinition
-    , hasConcreteEvaluators :: Flag "hasConcreteEvaluators"
+    , hasEvaluators :: Flag "canBeEvaluated"
+    , collectionMetadata :: Maybe KCollectionMetadata
     }
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
-data KMapAttributes = KMapAttributes
+data KCollectionTag = KMapTag | KListTag
+    deriving stock (Eq, Ord, Show, Generic, Data, Lift)
+    deriving anyclass (NFData, Hashable)
+
+data KCollectionMetadata
+    = KMapMeta KMapDefinition
+    | KListMeta KListDefinition
+    -- KSetMeta KSetDefinition (same as KListDefinition)
+    deriving stock (Eq, Ord, Show, Generic, Data, Lift)
+    deriving anyclass (NFData, Hashable)
+
+data KCollectionSymbolNames = KCollectionSymbolNames
     { unitSymbolName :: ByteString
     , elementSymbolName :: ByteString
     , concatSymbolName :: ByteString
@@ -194,7 +215,7 @@ data KMapAttributes = KMapAttributes
     deriving anyclass (NFData, Hashable)
 
 data KMapDefinition = KMapDefinition
-    { symbolNames :: KMapAttributes
+    { symbolNames :: KCollectionSymbolNames
     , keySortName :: ByteString
     , elementSortName :: ByteString
     , mapSortName :: ByteString
@@ -202,9 +223,17 @@ data KMapDefinition = KMapDefinition
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
+data KListDefinition = KListDefinition
+    { symbolNames :: KCollectionSymbolNames
+    , elementSortName :: ByteString
+    , listSortName :: ByteString
+    }
+    deriving stock (Eq, Ord, Show, Generic, Data, Lift)
+    deriving anyclass (NFData, Hashable)
+
 data SortAttributes = SortAttributes
     { argCount :: Int
-    , kmapAttributes :: Maybe KMapAttributes
+    , collectionAttributes :: Maybe (KCollectionSymbolNames, KCollectionTag)
     }
     deriving stock (Eq, Show, Generic)
     deriving anyclass (NFData)
