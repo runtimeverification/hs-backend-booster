@@ -404,6 +404,12 @@ externaliseKList def heads optRest
     concatList xs =
         foldr1 (\a b -> SymbolApplication concatSym [] [a, b]) xs
 
+internaliseKSet :: KSetDefinition -> Term -> Term
+internaliseKSet _ = id -- FIXME
+
+externaliseKSet :: KSetDefinition -> [Term] -> Maybe Term -> Term
+externaliseKSet _ _ _ = undefined -- FIXME
+
 instance Corecursive Term where
     embed (AndTermF t1 t2) = AndTerm t1 t2
     embed (SymbolApplicationF s ss ts) = SymbolApplication s ss ts
