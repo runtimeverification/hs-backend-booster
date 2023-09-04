@@ -405,10 +405,53 @@ externaliseKList def heads optRest
         foldr1 (\a b -> SymbolApplication concatSym [] [a, b]) xs
 
 internaliseKSet :: KSetDefinition -> Term -> Term
-internaliseKSet _ = id -- FIXME
+internaliseKSet def = \case
+    SymbolApplication s _ []
+        | s.name == def.symbolNames.unitSymbolName -> KSet def [] Nothing
+    SymbolApplication s _ [x]
+        | s.name == def.symbolNames.elementSymbolName -> KSet def [x] Nothing
+    SymbolApplication concatSym _ [x, y]
+        | concatSym.name == def.symbolNames.concatSymbolName ->
+            case (internaliseKSet def x, internaliseKSet def y) of
+                (KSet def1 elems1 rest1, KSet def2 elems2 rest2)
+                    | def1 /= def2 ->
+                        error $ "Inconsistent set definition " <> show (def1, def2)
+                    | def1 /= def ->
+                        error $ "Inconsistent set definition " <> show (def1, def)
+                    | not . null $ Set.intersection (Set.fromList elems1) (Set.fromList elems2) ->
+                        error $ "Non-empty set intersection, undefined result " <> show (elems1, elems2) -- FIXME
+
+                    | Nothing <- rest1 ->
+                        KSet def (elems1 <> elems2) rest2
+                    | Nothing <- rest2 ->
+                        KSet def (elems1 <> elems2) rest1
+                    | Just r1 <- rest1
+                    , Just r2 <- rest2 ->
+                        KSet def
+                            (elems1 <> elems2)
+                            (Just $ SymbolApplication concatSym [] [r1, r2]) -- FIXME does this loop?
+                -- TODO one-sided cases missing
+                (other1, other2) ->
+                    SymbolApplication concatSym [] [other1, other2]
+    other -> other
 
 externaliseKSet :: KSetDefinition -> [Term] -> Maybe Term -> Term
-externaliseKSet _ _ _ = undefined -- FIXME
+externaliseKSet def elements optRest
+    | Nothing <- optRest =
+          concatSet $ map singleton elements
+    | Just rest <- optRest =
+          concatSet $ map singleton elements <> [rest]
+  where
+    elemSym = stripCollectionMetadata $ klistElementSymbol def
+    concatSym = stripCollectionMetadata $ concatSymbol $ KSetMeta def
+
+    emptySet = SymbolApplication (stripCollectionMetadata $ unitSymbol $ KSetMeta def) [] []
+
+    singleton x = SymbolApplication elemSym [] [x]
+
+    concatSet [] = emptySet
+    concatSet xs =
+        foldr1 (\a b -> SymbolApplication concatSym [] [a, b]) xs
 
 instance Corecursive Term where
     embed (AndTermF t1 t2) = AndTerm t1 t2
@@ -584,7 +627,14 @@ pattern KSet :: KSetDefinition -> [Term] -> Maybe Term -> Term
 pattern KSet def elements rest <- Term _ (KSetF def elements rest)
   where
       KSet def elements rest =
-          let argAttributes = undefined
+          let argAttributes
+                  | Nothing <- rest
+                  , null elements =
+                      mempty
+                  | Nothing <- rest =
+                      foldl1' (<>) $ map getAttributes elements
+                  | Just r <- rest =
+                      foldr ((<>) . getAttributes) (getAttributes r) elements
               (newElements, newRest) = case rest of
                   Just (KSet def' elements' rest')
                       | def /= def' ->

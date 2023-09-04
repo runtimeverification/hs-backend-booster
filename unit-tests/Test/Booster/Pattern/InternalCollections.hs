@@ -18,15 +18,19 @@ import Test.Tasty.HUnit
 
 import Booster.Pattern.Base
 import Booster.Syntax.Json.Internalise (trm)
-import Test.Booster.Fixture as Fixture
+import Test.Booster.Fixture qualified as Fixture
 
 test_collections :: TestTree
 test_collections =
     testGroup
         "Internal collection representation"
         [ listRoundTrips
-        , internalising
+        , listInternalisation
+        , setRoundTrips
+        , setInternalisation
         ]
+
+------------------------------------------------------------
 
 -- round-tripping from internal through external and back
 listRoundTrips :: TestTree
@@ -46,8 +50,8 @@ listRoundTrips =
     roundTrip name otherTerm =
         testCase name $ assertFailure $ "contains a non-list term" <> show otherTerm
 
-internalising :: TestTree
-internalising =
+listInternalisation :: TestTree
+listInternalisation =
     testGroup
         "Internalising lists"
         [ testCase "Empty list" $ internalise unit @=? emptyList
@@ -75,27 +79,27 @@ internalising =
         ]
   where
     internalise = internaliseKList Fixture.testKListDef
-    unit = SymbolApplication unitSym [] []
+    unit = SymbolApplication Fixture.listUnitSym [] []
 
 -- internalised data structures representing variants of lists
 emptyList, concreteList, headList, tailList, mixedList :: Term
 emptyList =
-    KList testKListDef [] Nothing
+    KList Fixture.testKListDef [] Nothing
 concreteList =
-    KList testKListDef (replicate 3 [trm| \dv{SomeSort{}}("thing")|]) Nothing
+    KList Fixture.testKListDef (replicate 3 [trm| \dv{SomeSort{}}("thing")|]) Nothing
 headList =
     KList
-        testKListDef
+        Fixture.testKListDef
         [[trm| \dv{SomeSort{}}("head")|]]
         $ Just ([trm| TAIL:SortTestList{}|], [])
 tailList =
     KList
-        testKListDef
+        Fixture.testKListDef
         []
         $ Just ([trm| INIT:SortTestList{}|], [[trm| \dv{SomeSort{}}("last")|]])
 mixedList =
     KList
-        testKListDef
+        Fixture.testKListDef
         [[trm| \dv{SomeSort{}}("variable follows")|]]
         $ Just
             ( [trm| REST:SortTestList{}|]
@@ -103,7 +107,50 @@ mixedList =
             )
 
 listConcat :: Term -> Term -> Term
-listConcat l1 l2 = SymbolApplication concatSym [] [l1, l2]
+listConcat l1 l2 = SymbolApplication Fixture.listConcatSym [] [l1, l2]
 
 inList :: Term -> Term
-inList x = SymbolApplication elemSym [] [x]
+inList x = SymbolApplication Fixture.listElemSym [] [x]
+
+------------------------------------------------------------
+
+-- round-tripping from internal through external and back
+setRoundTrips :: TestTree
+setRoundTrips =
+    testGroup
+        "Set round-trip conversions"
+        [ roundTrip "empty set" emptySet
+        , roundTrip "concrete set" concreteSet
+        , roundTrip "set pattern matching an element" setWithElement
+        ]
+  where
+    roundTrip :: String -> Term -> TestTree
+    roundTrip name setTerm@(KSet def heads rest) =
+        testCase name $ setTerm @=? internaliseKSet def (externaliseKSet def heads rest)
+    roundTrip name otherTerm =
+        testCase name $ assertFailure $ "contains a non-set term" <> show otherTerm
+
+setInternalisation :: TestTree
+setInternalisation =
+    testGroup
+        "Internalising setts"
+        [ testCase "Empty set" $ internalise unit @=? emptySet
+        ]
+  where
+    internalise = internaliseKSet Fixture.testKSetDef
+    unit = SymbolApplication Fixture.setUnitSym [] []
+
+-- internalised data structures representing sets
+emptySet, concreteSet, setWithElement :: Term
+emptySet =
+    KSet Fixture.testKSetDef [] Nothing
+concreteSet =
+    KSet
+        Fixture.testKSetDef
+        [ [trm| \dv{SomeSort{}}("1")|],[trm| \dv{SomeSort{}}("2")|],[trm| \dv{SomeSort{}}("3")|] ]
+        Nothing
+setWithElement =
+    KSet
+        Fixture.testKSetDef
+        [ [trm| \dv{SomeSort{}}("element") |] ]
+        (Just [trm| REST:SortTestSet{}|] )

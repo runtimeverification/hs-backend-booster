@@ -49,6 +49,7 @@ testDefinition =
                 , ("f2", f2)
                 ]
                 <> listSymbols
+                <> setSymbols
         , aliases = Map.empty
         , rewriteTheory = Map.empty
         , functionEquations = Map.empty
@@ -141,8 +142,8 @@ testKListDef =
         , listSortName = "SortTestList"
         }
 
-concatSym, elemSym, unitSym :: Symbol
-(concatSym, elemSym, unitSym) = (withMeta cSym, withMeta eSym, withMeta uSym)
+listConcatSym, listElemSym, listUnitSym :: Symbol
+(listConcatSym, listElemSym, listUnitSym) = (withMeta cSym, withMeta eSym, withMeta uSym)
   where
     withMeta sym =
         sym
@@ -157,7 +158,43 @@ concatSym, elemSym, unitSym :: Symbol
 listSymbols :: Map.Map ByteString Symbol
 listSymbols =
     Map.fromList
-        [ (testKListDef.symbolNames.unitSymbolName, unitSym)
-        , (testKListDef.symbolNames.elementSymbolName, elemSym)
-        , (testKListDef.symbolNames.concatSymbolName, concatSym)
+        [ (testKListDef.symbolNames.unitSymbolName, listUnitSym)
+        , (testKListDef.symbolNames.elementSymbolName, listElemSym)
+        , (testKListDef.symbolNames.concatSymbolName, listConcatSym)
+        ]
+
+------------------------------------------------------------------------------
+
+testKSetDef :: KSetDefinition
+testKSetDef =
+    KListDefinition
+        { symbolNames =
+            KCollectionSymbolNames
+                { unitSymbolName = "Lbl'Stop'TestSet"
+                , elementSymbolName = "LblTestSetItem"
+                , concatSymbolName = "Lbl'Unds'TestSet'Unds'"
+                }
+        , elementSortName = "SortTestSetItem"
+        , listSortName = "SortTestSet"
+        }
+
+setConcatSym, setElemSym, setUnitSym :: Symbol
+(setConcatSym, setElemSym, setUnitSym) = (withMeta cSym, withMeta eSym, withMeta uSym)
+  where
+    withMeta sym =
+        sym
+            { attributes = sym.attributes{collectionMetadata = Just $ KSetMeta testKSetDef}
+            , sortVars = sym.sortVars -- disambiguates the record update
+            }
+    cSym =
+        [symb| symbol Lbl'Unds'TestSet'Unds'{}(SortTestSet{}, SortTestSet{}) : SortTestSet{} [function{}(), total{}(), assoc{}()] |]
+    eSym = [symb| symbol LblTestSetItem{}(SomeSort{}) : SortTestSet{} [function{}(), total{}()] |]
+    uSym = [symb| symbol Lbl'Stop'TestSet{}() : SortTestSet{} [function{}(), total{}()] |]
+
+setSymbols :: Map.Map ByteString Symbol
+setSymbols =
+    Map.fromList
+        [ (testKSetDef.symbolNames.unitSymbolName, setUnitSym)
+        , (testKSetDef.symbolNames.elementSymbolName, setElemSym)
+        , (testKSetDef.symbolNames.concatSymbolName, setConcatSym)
         ]
