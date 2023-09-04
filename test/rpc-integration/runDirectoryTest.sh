@@ -86,6 +86,9 @@ if [ -d $dir ]; then
         if [ $(basename $server) == "booster-dev" ]; then
             echo "$client $mode $test $params --expect $dir/response-${testname}.booster-dev $*"
             $client $mode $test $params --expect $dir/response-${testname}.booster-dev $*
+        elif [ $(basename $server) == "kore-rpc-dev" ]; then
+            echo "$client $mode $test $params --expect $dir/response-${testname}.kore-rpc-dev $*"
+            $client $mode $test $params --expect $dir/response-${testname}.kore-rpc-dev $*
         else
             echo "$client $mode $test $params --expect $dir/response-${testname}.json $*"
             $client $mode $test $params --expect $dir/response-${testname}.json $*
