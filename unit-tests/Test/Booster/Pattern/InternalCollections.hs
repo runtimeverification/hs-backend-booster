@@ -135,6 +135,12 @@ setInternalisation =
     testGroup
         "Internalising setts"
         [ testCase "Empty set" $ internalise unit @=? emptySet
+        , let oneElemList =
+                  setConcat
+                      [trm| \dv{SomeSort{}}("element")|]
+                      [trm| REST:SortTestSet{} |]
+           in testCase "Set with element" $
+                  internalise oneElemList @=? setWithElement
         ]
   where
     internalise = internaliseKSet Fixture.testKSetDef
@@ -154,3 +160,9 @@ setWithElement =
         Fixture.testKSetDef
         [ [trm| \dv{SomeSort{}}("element") |] ]
         (Just [trm| REST:SortTestSet{}|] )
+
+setConcat :: Term -> Term -> Term
+setConcat l1 l2 = SymbolApplication Fixture.setConcatSym [] [l1, l2]
+
+-- inSet :: Term -> Term
+-- inSet x = SymbolApplication Fixture.setElemSym [] [x]

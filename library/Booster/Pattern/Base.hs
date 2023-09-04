@@ -111,7 +111,7 @@ data TermF t
     | -- | internal set
       KSetF
         KSetDefinition -- metadata, identical to KListDefinition
-        [t] -- known elements (no duplicates)
+        [t] -- known elements (no duplicate check)
         (Maybe t) -- optional symbolic rest
     deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
@@ -418,9 +418,6 @@ internaliseKSet def = \case
                         error $ "Inconsistent set definition " <> show (def1, def2)
                     | def1 /= def ->
                         error $ "Inconsistent set definition " <> show (def1, def)
-                    | not . null $ Set.intersection (Set.fromList elems1) (Set.fromList elems2) ->
-                        error $ "Non-empty set intersection, undefined result " <> show (elems1, elems2) -- FIXME
-
                     | Nothing <- rest1 ->
                         KSet def (elems1 <> elems2) rest2
                     | Nothing <- rest2 ->
@@ -429,8 +426,19 @@ internaliseKSet def = \case
                     , Just r2 <- rest2 ->
                         KSet def
                             (elems1 <> elems2)
-                            (Just $ SymbolApplication concatSym [] [r1, r2]) -- FIXME does this loop?
-                -- TODO one-sided cases missing
+                            (Just $ SymbolApplication concatSym [] [r1, r2])
+                (KSet def1 elems1 rest1, other2)
+                    | def1 /= def -> error $ "Inconsistent set definition " <> show (def1, def)
+                    | Nothing <- rest1 ->
+                        KSet def elems1 (Just other2)
+                    | Just r1 <- rest1 ->
+                        KSet def elems1 (Just $ SymbolApplication concatSym [] [r1, other2])
+                (other1, KSet def2 elems2 rest2)
+                    | def2 /= def -> error $ "Inconsistent set definition " <> show (def2, def)
+                    | Nothing <- rest2 ->
+                        KSet def elems2 (Just other1)
+                    | Just r2 <- rest2 ->
+                        KSet def elems2 (Just $ SymbolApplication concatSym [] [other1, r2])
                 (other1, other2) ->
                     SymbolApplication concatSym [] [other1, other2]
     other -> other
