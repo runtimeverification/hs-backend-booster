@@ -433,17 +433,15 @@ internaliseKSet def = \case
                     | Nothing <- rest1 ->
                         KSet def elems1 (Just other2)
                     | Just r1 <- rest1 ->
-                        KSet def elems1 (Just $ SymbolApplication concatSym' [] [r1, other2])
+                        KSet def elems1 (Just $ SymbolApplication concatSym [] [r1, other2])
                 (other1, KSet def2 elems2 rest2)
                     | def2 /= def -> error $ "Inconsistent set definition " <> show (def2, def)
                     | Nothing <- rest2 ->
                         KSet def elems2 (Just other1)
                     | Just r2 <- rest2 ->
-                        KSet def elems2 (Just $ SymbolApplication concatSym' [] [other1, r2])
+                        KSet def elems2 (Just $ SymbolApplication concatSym [] [other1, r2])
                 (other1, other2) ->
-                    SymbolApplication concatSym' [] [other1, other2]
-      where
-        concatSym' = stripCollectionMetadata concatSym
+                    SymbolApplication (stripCollectionMetadata concatSym) [] [other1, other2]
     other -> other
 
 externaliseKSet :: KSetDefinition -> [Term] -> Maybe Term -> Term
