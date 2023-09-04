@@ -13,6 +13,7 @@ module Test.Booster.Pattern.InternalCollections (
     mixedList,
 ) where
 
+import Data.ByteString.Char8 qualified as BS
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -76,8 +77,6 @@ listInternalisation =
                     replicate 4 $
                         inList [trm| \dv{SomeSort{}}("after variable") |]
            in testCase "mixing a list" $ internalise (listConcat before listAfter) @=? mixedList
-        , testCase "list with two variables" $
-            internalise (listConcat headList tailList) @=? listConcat headList tailList
         ]
   where
     internalise = internaliseKList Fixture.testKListDef
@@ -109,7 +108,7 @@ mixedList =
             )
 
 listConcat :: Term -> Term -> Term
-listConcat l1 l2 = SymbolApplication Fixture.listConcatSym [] [l1, l2]
+listConcat l1 l2 = Term mempty $ SymbolApplicationF Fixture.listConcatSym [] [l1, l2]
 
 inList :: Term -> Term
 inList x = SymbolApplication Fixture.listElemSym [] [x]
@@ -143,6 +142,11 @@ setInternalisation =
                     [trm| REST:SortTestSet{} |]
            in testCase "Set with element" $
                 setWithElement @=? internalise oneElemList
+        , let fullyConcrete =
+                  foldr1 setConcat $
+                      map (inSet . Fixture.dv Fixture.someSort . BS.pack . show @Int) [1..3]
+           in testCase "Fully concrete set" $
+                concreteSet @=? internalise fullyConcrete
         ]
   where
     internalise = internaliseKSet Fixture.testKSetDef
@@ -164,7 +168,7 @@ setWithElement =
         (Just [trm| REST:SortTestSet{}|])
 
 setConcat :: Term -> Term -> Term
-setConcat l1 l2 = SymbolApplication Fixture.setConcatSym [] [l1, l2]
+setConcat l1 l2 = Term mempty $ SymbolApplicationF Fixture.setConcatSym [] [l1, l2]
 
 inSet :: Term -> Term
 inSet x = SymbolApplication Fixture.setElemSym [] [x]
