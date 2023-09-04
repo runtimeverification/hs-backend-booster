@@ -76,6 +76,8 @@ listInternalisation =
                     replicate 4 $
                         inList [trm| \dv{SomeSort{}}("after variable") |]
            in testCase "mixing a list" $ internalise (listConcat before listAfter) @=? mixedList
+        , testCase "list with two variables" $
+            internalise (listConcat headList tailList) @=? listConcat headList tailList
         ]
   where
     internalise = internaliseKList Fixture.testKListDef
@@ -134,13 +136,13 @@ setInternalisation :: TestTree
 setInternalisation =
     testGroup
         "Internalising setts"
-        [ testCase "Empty set" $ internalise unit @=? emptySet
+        [ testCase "Empty set" $ emptySet @=? internalise unit
         , let oneElemList =
-                  setConcat
-                      [trm| \dv{SomeSort{}}("element")|]
-                      [trm| REST:SortTestSet{} |]
+                setConcat
+                    (inSet [trm| \dv{SomeSort{}}("element")|])
+                    [trm| REST:SortTestSet{} |]
            in testCase "Set with element" $
-                  internalise oneElemList @=? setWithElement
+                setWithElement @=? internalise oneElemList
         ]
   where
     internalise = internaliseKSet Fixture.testKSetDef
@@ -153,16 +155,16 @@ emptySet =
 concreteSet =
     KSet
         Fixture.testKSetDef
-        [ [trm| \dv{SomeSort{}}("1")|],[trm| \dv{SomeSort{}}("2")|],[trm| \dv{SomeSort{}}("3")|] ]
+        [[trm| \dv{SomeSort{}}("1")|], [trm| \dv{SomeSort{}}("2")|], [trm| \dv{SomeSort{}}("3")|]]
         Nothing
 setWithElement =
     KSet
         Fixture.testKSetDef
-        [ [trm| \dv{SomeSort{}}("element") |] ]
-        (Just [trm| REST:SortTestSet{}|] )
+        [[trm| \dv{SomeSort{}}("element") |]]
+        (Just [trm| REST:SortTestSet{}|])
 
 setConcat :: Term -> Term -> Term
 setConcat l1 l2 = SymbolApplication Fixture.setConcatSym [] [l1, l2]
 
--- inSet :: Term -> Term
--- inSet x = SymbolApplication Fixture.setElemSym [] [x]
+inSet :: Term -> Term
+inSet x = SymbolApplication Fixture.setElemSym [] [x]

@@ -424,7 +424,8 @@ internaliseKSet def = \case
                         KSet def (elems1 <> elems2) rest1
                     | Just r1 <- rest1
                     , Just r2 <- rest2 ->
-                        KSet def
+                        KSet
+                            def
                             (elems1 <> elems2)
                             (Just $ SymbolApplication concatSym [] [r1, r2])
                 (KSet def1 elems1 rest1, other2)
@@ -432,23 +433,25 @@ internaliseKSet def = \case
                     | Nothing <- rest1 ->
                         KSet def elems1 (Just other2)
                     | Just r1 <- rest1 ->
-                        KSet def elems1 (Just $ SymbolApplication concatSym [] [r1, other2])
+                        KSet def elems1 (Just $ SymbolApplication concatSym' [] [r1, other2])
                 (other1, KSet def2 elems2 rest2)
                     | def2 /= def -> error $ "Inconsistent set definition " <> show (def2, def)
                     | Nothing <- rest2 ->
                         KSet def elems2 (Just other1)
                     | Just r2 <- rest2 ->
-                        KSet def elems2 (Just $ SymbolApplication concatSym [] [other1, r2])
+                        KSet def elems2 (Just $ SymbolApplication concatSym' [] [other1, r2])
                 (other1, other2) ->
-                    SymbolApplication concatSym [] [other1, other2]
+                    SymbolApplication concatSym' [] [other1, other2]
+      where
+        concatSym' = stripCollectionMetadata concatSym
     other -> other
 
 externaliseKSet :: KSetDefinition -> [Term] -> Maybe Term -> Term
 externaliseKSet def elements optRest
     | Nothing <- optRest =
-          concatSet $ map singleton elements
+        concatSet $ map singleton elements
     | Just rest <- optRest =
-          concatSet $ map singleton elements <> [rest]
+        concatSet $ map singleton elements <> [rest]
   where
     elemSym = stripCollectionMetadata $ klistElementSymbol def
     concatSym = stripCollectionMetadata $ concatSymbol $ KSetMeta def
@@ -499,6 +502,8 @@ pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts
                  in KMap def keyVals rest
             | Just (KListMeta def) <- sym.attributes.collectionMetadata =
                 internaliseKList def $ Term mempty $ SymbolApplicationF sym sorts args
+            | Just (KSetMeta def) <- sym.attributes.collectionMetadata =
+                internaliseKSet def $ Term mempty $ SymbolApplicationF sym sorts args
             | otherwise =
                 let argAttributes
                         | null args = mempty
@@ -633,34 +638,34 @@ pattern KList def heads rest <- Term _ (KListF def heads rest)
 
 pattern KSet :: KSetDefinition -> [Term] -> Maybe Term -> Term
 pattern KSet def elements rest <- Term _ (KSetF def elements rest)
-  where
-      KSet def elements rest =
-          let argAttributes
-                  | Nothing <- rest
-                  , null elements =
-                      mempty
-                  | Nothing <- rest =
-                      foldl1' (<>) $ map getAttributes elements
-                  | Just r <- rest =
-                      foldr ((<>) . getAttributes) (getAttributes r) elements
-              (newElements, newRest) = case rest of
-                  Just (KSet def' elements' rest')
-                      | def /= def' ->
-                          error $ "Inconsistent set definition " <> show (def, def')
-                      | otherwise ->
+    where
+        KSet def elements rest =
+            let argAttributes
+                    | Nothing <- rest
+                    , null elements =
+                        mempty
+                    | Nothing <- rest =
+                        foldl1' (<>) $ map getAttributes elements
+                    | Just r <- rest =
+                        foldr ((<>) . getAttributes) (getAttributes r) elements
+                (newElements, newRest) = case rest of
+                    Just (KSet def' elements' rest')
+                        | def /= def' ->
+                            error $ "Inconsistent set definition " <> show (def, def')
+                        | otherwise ->
                             (Set.toList . Set.fromList $ elements <> elements', rest')
-                  other -> (elements, other)
-           in Term
-                  argAttributes
-                      { hash =
-                          Hashable.hash
-                              ( "KSet" :: ByteString
-                              , def
-                              , map (hash . getAttributes) elements
-                              , fmap (hash . getAttributes) rest
-                              )
-                      }
-                  $ KSetF def newElements newRest
+                    other -> (elements, other)
+             in Term
+                    argAttributes
+                        { hash =
+                            Hashable.hash
+                                ( "KSet" :: ByteString
+                                , def
+                                , map (hash . getAttributes) elements
+                                , fmap (hash . getAttributes) rest
+                                )
+                        }
+                    $ KSetF def newElements newRest
 {-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var, Injection, KMap, KList, KSet #-}
 
 -- hard-wired injection symbol
@@ -828,7 +833,7 @@ instance Pretty Term where
             renderList heads
         KSet _meta es rest ->
             Pretty.braces . Pretty.hsep . Pretty.punctuate Pretty.comma $
-                map pretty es <> maybe [] ((:[]) . pretty) rest
+                map pretty es <> maybe [] ((: []) . pretty) rest
       where
         renderList l
             | null l = mempty

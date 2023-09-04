@@ -221,10 +221,9 @@ filterTermSymbols check = cata $ \case
          in if null elements
                 then
                     fromMaybe
-                        [ unitSym | check unitSym ]
+                        [unitSym | check unitSym]
                         rest
-                else
-                    filter check [concatSym, elemSym] <> fromMaybe [] rest
+                else filter check [concatSym, elemSym] <> fromMaybe [] rest
 
 isBottom :: Pattern -> Bool
 isBottom = (Bottom `elem`) . constraints
