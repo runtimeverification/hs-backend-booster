@@ -189,7 +189,7 @@ setConcatSym, setElemSym, setUnitSym :: Symbol
             , sortVars = sym.sortVars -- disambiguates the record update
             }
     cSym =
-        [symb| symbol Lbl'Unds'TestSet'Unds'{}(SortTestSet{}, SortTestSet{}) : SortTestSet{} [function{}(), total{}(), assoc{}()] |]
+        [symb| symbol Lbl'Unds'TestSet'Unds'{}(SortTestSet{}, SortTestSet{}) : SortTestSet{} [function{}(), assoc{}()] |]
     eSym = [symb| symbol LblTestSetItem{}(SomeSort{}) : SortTestSet{} [function{}(), total{}()] |]
     uSym = [symb| symbol Lbl'Stop'TestSet{}() : SortTestSet{} [function{}(), total{}()] |]
 
