@@ -829,9 +829,11 @@ instance Pretty Term where
             "[]"
         KList _meta heads Nothing ->
             renderList heads
+        KSet _meta [] Nothing -> "{}"
+        KSet _meta [] (Just rest) -> pretty rest
         KSet _meta es rest ->
-            Pretty.braces . Pretty.hsep . Pretty.punctuate Pretty.comma $
-                map pretty es <> maybe [] ((: []) . pretty) rest
+            (Pretty.braces . Pretty.hsep . Pretty.punctuate Pretty.comma $ map pretty es)
+                 Pretty.<+> maybe mempty ((" ++ " <>) . pretty) rest
       where
         renderList l
             | null l = mempty
