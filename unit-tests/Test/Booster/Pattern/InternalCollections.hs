@@ -143,10 +143,27 @@ setInternalisation =
            in testCase "Set with element" $
                 setWithElement @=? internalise oneElemList
         , let fullyConcrete =
-                  foldr1 setConcat $
-                      map (inSet . Fixture.dv Fixture.someSort . BS.pack . show @Int) [1..3]
+                foldr1 setConcat $
+                    map (inSet . Fixture.dv Fixture.someSort . BS.pack . show @Int) [1 .. 3]
            in testCase "Fully concrete set" $
                 concreteSet @=? internalise fullyConcrete
+        , let var1, var2 :: Term
+              var1 = Fixture.var "VAR1" Fixture.setSort
+              var2 = Fixture.var "VAR2" Fixture.setSort
+              e1 = [trm| \dv{SomeSort{}}("1") |]
+              e2 = [trm| \dv{SomeSort{}}("2") |]
+              e3 = [trm| \dv{SomeSort{}}("3") |]
+              twoVarsSet =
+                setConcat
+                    (setConcat (inSet e1) $ setConcat (inSet e2) var1)
+                    (setConcat (inSet e3) var2)
+              result =
+                KSet
+                    Fixture.testKSetDef
+                    [e1, e2, e3]
+                    (Just $ SymbolApplication Fixture.setConcatSym [] [var1, var2])
+           in testCase "two variables and some concrete elements in set, concat pushed inwards" $
+                result @=? internalise twoVarsSet
         ]
   where
     internalise = internaliseKSet Fixture.testKSetDef

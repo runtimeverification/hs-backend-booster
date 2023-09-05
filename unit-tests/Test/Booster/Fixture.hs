@@ -18,13 +18,14 @@ import Booster.Pattern.Base
 import Booster.Syntax.Json.Internalise (trm)
 import Booster.Syntax.ParsedKore.Internalise (symb)
 
-someSort, aSubsort, differentSort, kSort, kItemSort, listSort :: Sort
+someSort, aSubsort, differentSort, kSort, kItemSort, listSort, setSort :: Sort
 someSort = SortApp "SomeSort" []
 aSubsort = SortApp "AnotherSort" []
 differentSort = SortApp "DifferentSort" []
 kSort = SortApp "SortK" []
 kItemSort = SortApp "SortKItem" []
 listSort = SortApp testKListDef.listSortName []
+setSort = SortApp testKSetDef.listSortName []
 
 testDefinition :: KoreDefinition
 testDefinition =
@@ -38,6 +39,7 @@ testDefinition =
                 , differentSort `withSubsorts` []
                 , kSort `withSubsorts` []
                 , listSort `withSubsorts` []
+                , setSort `withSubsorts` []
                 ]
         , symbols =
             Map.fromList
