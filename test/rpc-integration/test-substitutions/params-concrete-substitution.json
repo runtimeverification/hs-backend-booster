@@ -1,5 +1,5 @@
 {
     "terminal-rules": [
-        "TEST.init"
+        "TEST.concrete-subst"
     ]
 }
