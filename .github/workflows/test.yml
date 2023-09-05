@@ -227,8 +227,11 @@ jobs:
           for dir in $(ls -d test-*); do
               name=${dir##test-}
               echo "Running $name..."
-              if [ "$name" = "a-to-f" ] || [ "$name" = "diamond" ] || [ "$name" = "substitutions" ]; then
+              if [ "$name" = "a-to-f" ] || [ "$name" = "diamond" ]; then
                   SERVER=$BOOSTER_DEV ./runDirectoryTest.sh test-$name --time
+                  SERVER=$KORE_RPC_DEV ./runDirectoryTest.sh test-$name --time
+                  SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time
+              elif [ "$name" = "substitutions" ]; then
                   SERVER=$KORE_RPC_DEV ./runDirectoryTest.sh test-$name --time
                   SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time
               else
