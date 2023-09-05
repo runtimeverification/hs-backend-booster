@@ -14,6 +14,7 @@ module Test.Booster.Pattern.InternalCollections (
 ) where
 
 import Data.ByteString.Char8 qualified as BS
+import Data.List qualified as List
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -134,7 +135,7 @@ setRoundTrips =
 setInternalisation :: TestTree
 setInternalisation =
     testGroup
-        "Internalising setts"
+        "Internalising sets"
         [ testCase "Empty set" $ emptySet @=? internalise unit
         , let oneElemList =
                 setConcat
@@ -143,8 +144,10 @@ setInternalisation =
            in testCase "Set with element" $
                 setWithElement @=? internalise oneElemList
         , let fullyConcrete =
-                foldr1 setConcat $
-                    map (inSet . Fixture.dv Fixture.someSort . BS.pack . show @Int) [1 .. 3]
+                foldr1 setConcat
+                    $ map inSet
+                        . List.sort
+                    $ map (Fixture.dv Fixture.someSort . BS.pack . show @Int) [1 .. 3]
            in testCase "Fully concrete set" $
                 concreteSet @=? internalise fullyConcrete
         , let var1, var2 :: Term
@@ -160,7 +163,7 @@ setInternalisation =
               result =
                 KSet
                     Fixture.testKSetDef
-                    [e1, e2, e3]
+                    (List.sort [e1, e2, e3])
                     (Just $ SymbolApplication Fixture.setConcatSym [] [var1, var2])
            in testCase "two variables and some concrete elements in set, concat pushed inwards" $
                 result @=? internalise twoVarsSet
@@ -176,7 +179,12 @@ emptySet =
 concreteSet =
     KSet
         Fixture.testKSetDef
-        [[trm| \dv{SomeSort{}}("1")|], [trm| \dv{SomeSort{}}("2")|], [trm| \dv{SomeSort{}}("3")|]]
+        ( List.sort
+            [ [trm| \dv{SomeSort{}}("1")|]
+            , [trm| \dv{SomeSort{}}("2")|]
+            , [trm| \dv{SomeSort{}}("3")|]
+            ]
+        )
         Nothing
 setWithElement =
     KSet

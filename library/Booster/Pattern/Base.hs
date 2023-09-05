@@ -40,7 +40,7 @@ import Data.Functor.Foldable
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Hashable (Hashable)
 import Data.Hashable qualified as Hashable
-import Data.List (foldl1')
+import Data.List as List (foldl1', sort)
 import Data.Map qualified as Map
 import Data.Set (Set, fromList, toList)
 import Data.Set qualified as Set
@@ -419,14 +419,14 @@ internaliseKSet def = \case
                     | def1 /= def ->
                         error $ "Inconsistent set definition " <> show (def1, def)
                     | Nothing <- rest1 ->
-                        KSet def (elems1 <> elems2) rest2
+                        KSet def (List.sort $ elems1 <> elems2) rest2
                     | Nothing <- rest2 ->
-                        KSet def (elems1 <> elems2) rest1
+                        KSet def (List.sort $ elems1 <> elems2) rest1
                     | Just r1 <- rest1
                     , Just r2 <- rest2 ->
                         KSet
                             def
-                            (elems1 <> elems2)
+                            (List.sort $ elems1 <> elems2)
                             (Just $ SymbolApplication concatSym [] [r1, r2])
                 (KSet def1 elems1 rest1, other2)
                     | def1 /= def -> error $ "Inconsistent set definition " <> show (def1, def)
@@ -527,15 +527,15 @@ pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts
                         (SymbolApplicationF sym sorts args)
 
 pattern DomainValue :: Sort -> ByteString -> Term
-pattern DomainValue sort value <- Term _ (DomainValueF sort value)
+pattern DomainValue s value <- Term _ (DomainValueF s value)
     where
-        DomainValue sort value =
+        DomainValue s value =
             Term
                 mempty
-                    { hash = Hashable.hash ("DomainValue" :: ByteString, sort, value)
+                    { hash = Hashable.hash ("DomainValue" :: ByteString, s, value)
                     , isConstructorLike = True
                     }
-                $ DomainValueF sort value
+                $ DomainValueF s value
 
 pattern Var :: Variable -> Term
 pattern Var v <- Term _ (VarF v)
