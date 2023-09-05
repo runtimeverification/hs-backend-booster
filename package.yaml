@@ -157,6 +157,30 @@ executables:
       - transformers
     ghc-options:
     - -rtsopts
+  preserves-definedness:
+    source-dirs: tools/preserves-definedness
+    main: PreservesDefinedness.hs
+    dependencies:
+      - aeson
+      - base
+      - clock
+      - conduit-extra
+      - containers
+      - exceptions
+      - deepseq
+      - directory
+      - filepath
+      - hs-backend-booster
+      - json-rpc
+      - kore
+      - kore-rpc-types
+      - monad-logger
+      - optparse-applicative
+      - prettyprinter
+      - text
+      - transformers
+    ghc-options:
+    - -rtsopts
   parsetest-binary:
     source-dirs: tools/parsetest-binary
     main: ParsetestBinary.hs
