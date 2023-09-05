@@ -39,7 +39,7 @@
                       "name": "SortState",
                       "args": []
                     },
-                    "value": "init"
+                    "value": "symbolic-subst"
                   }
                 ]
               },
