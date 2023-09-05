@@ -196,7 +196,7 @@ data SymbolAttributes = SymbolAttributes
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
-data KCollectionTag = KMapTag | KListTag
+data KCollectionTag = KMapTag | KListTag | KSetTag
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
