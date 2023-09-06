@@ -807,8 +807,6 @@ instance Pretty Term where
     pretty = \case
         AndTerm t1 t2 ->
             pretty t1 <> "/\\" <> pretty t2
-        SymbolApplication (Symbol "Lbl'Unds'Set'Unds'" _ _ _ _) _ args ->
-            Pretty.braces . Pretty.hsep . Pretty.punctuate Pretty.comma $ concatMap collectSet args
         SymbolApplication symbol _sortParams args ->
             pretty (Text.replace "Lbl" "" $ Text.decodeUtf8 $ decodeLabel' symbol.name)
                 <> KPretty.argumentsP args
@@ -833,18 +831,13 @@ instance Pretty Term where
         KSet _meta [] (Just rest) -> pretty rest
         KSet _meta es rest ->
             (Pretty.braces . Pretty.hsep . Pretty.punctuate Pretty.comma $ map pretty es)
-                 Pretty.<+> maybe mempty ((" ++ " <>) . pretty) rest
+                Pretty.<+> maybe mempty ((" ++ " <>) . pretty) rest
       where
         renderList l
             | null l = mempty
             | otherwise =
                 Pretty.brackets . Pretty.hsep . Pretty.punctuate Pretty.comma $
                     map pretty l
-        collectSet = \case
-            SymbolApplication (Symbol "Lbl'Unds'Set'Unds'" _ _ _ _) _ args ->
-                concatMap collectSet args
-            SymbolApplication (Symbol "LblSetItem" _ _ _ _) _ args -> map pretty args
-            other -> [pretty other]
 
 instance Pretty Sort where
     pretty (SortApp name params) =
