@@ -202,28 +202,29 @@ filterTermSymbols check = cata $ \case
         let concatSym = concatSymbol $ KListMeta def
             elemSym = klistElementSymbol def
             unitSym = unitSymbol $ KListMeta def
-         in if null heads
-                then [unitSym | check unitSym]
-                else filter check [concatSym, elemSym] <> concat heads
+         in case heads of
+                [] -> [unitSym | check unitSym]
+                [x] -> [elemSym | check elemSym] <> x
+                more -> filter check [concatSym, elemSym] <> concat more
     KListF def heads (Just (mid, tails)) ->
         let concatSym = concatSymbol $ KListMeta def
             elemSym = klistElementSymbol def
-            unitSym = unitSymbol $ KListMeta def
             ends = heads <> tails
          in mid
                 <> if null ends
                     then []
-                    else filter check [concatSym, elemSym, unitSym] <> concat ends
+                    else filter check [concatSym, elemSym] <> concat ends
     KSetF def elements rest ->
         let concatSym = concatSymbol $ KSetMeta def
             unitSym = unitSymbol $ KSetMeta def
-            elemSym = klistElementSymbol def -- HACK
-         in if null elements
-                then
-                    fromMaybe
-                        [unitSym | check unitSym]
-                        rest
-                else filter check [concatSym, elemSym] <> fromMaybe [] rest
+            elemSym = klistElementSymbol def
+         in case elements of
+                [] -> fromMaybe [unitSym | check unitSym] rest
+                [single] ->
+                    single
+                        <> maybe [elemSym | check elemSym] (filter check [concatSym, elemSym] <>) rest
+                more ->
+                    filter check [concatSym, elemSym] <> fromMaybe [] rest <> concat more
 
 isBottom :: Pattern -> Bool
 isBottom = (Bottom `elem`) . constraints
