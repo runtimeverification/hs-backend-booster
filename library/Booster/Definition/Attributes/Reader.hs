@@ -226,7 +226,6 @@ instance HasAttributes ParsedSort where
                                 )
                         }
             (Just _, Just _, Just _, Just _) ->
-                -- ignore any other hooked sorts like lists/sets
                 pure
                     SortAttributes
                         { argCount = length sortVars
