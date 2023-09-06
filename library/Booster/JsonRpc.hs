@@ -354,7 +354,11 @@ execResponse req (d, traces, rr) = case rr of
 
 toExecState :: Pattern -> RpcTypes.ExecuteState
 toExecState pat =
-    RpcTypes.ExecuteState{term = addHeader t, predicate = fmap addHeader p, substitution = fmap addHeader s}
+    RpcTypes.ExecuteState
+        { term = addHeader t
+        , predicate = fmap addHeader p
+        , substitution = fmap addHeader s
+        }
   where
     (t, p, s) = externalisePattern pat
 
