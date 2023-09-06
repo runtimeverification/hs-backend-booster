@@ -44,7 +44,6 @@ import System.Directory
 import System.Exit
 import System.FilePath
 import System.IO.Extra
-import System.Process
 import System.Time.Extra (Seconds, sleep)
 
 import Booster.JsonRpc (rpcJsonConfig)
@@ -75,7 +74,7 @@ main = do
                     liftIO exitSuccess
                 pure request
             -- runTCPClient operates on IO directly, therefore repeating runStderrLogging
-            retryTCPClient 1 5 common.host (show common.port) $ \s ->
+            retryTCPClient 2 10 common.host (show common.port) $ \s ->
                 cancelIfInterrupted s $ do
                     withLogLevel common.logLevel $
                         makeRequest
@@ -115,7 +114,7 @@ makeRequest time name s request handleResponse = do
     readResponse :: IO BS.ByteString
     readResponse = do
         part <- recv s bufSize
-        if BS.length part < bufSize
+        if BS.length part < bufSize && '\n' `BS.elem` part
             then pure part
             else do
                 more <- readResponse
@@ -443,7 +442,9 @@ runTarball common tarFile keepGoing = do
                 liftIO $ Tar.foldEntries (unpackIfRpc tmp) (pure []) throwAnyError checked
             logInfo_ $ "RPC data:" <> show jsonFiles
 
-            let requests = mapMaybe (stripSuffix "_request.json") jsonFiles
+            -- we should not rely on the requests being returned in a sorted order and
+            -- should therefore sort them explicitly
+            let requests = sort $ mapMaybe (stripSuffix "_request.json") jsonFiles
             results <-
                 forM requests $ \r -> do
                     mbError <- runRequest skt tmp jsonFiles r
@@ -651,12 +652,10 @@ postProcess prettify postProcessing output =
                             liftIO . exitWith $ ExitFailure 1
                 True -> do
                     expected <- liftIO $ BS.readFile expectFile
-                    when (prettyOutput /= expected) $ do
+                    let diff = diffJson expected prettyOutput
+                    unless (isIdentical diff) $ do
                         liftIO $ BS.writeFile "response" prettyOutput
-                        (_, result, _) <-
-                            liftIO $
-                                readProcessWithExitCode "git" ["diff", "--no-index", "--color-words=.", expectFile, "response"] ""
-                        liftIO $ putStrLn result
+                        liftIO $ BS.putStrLn $ renderResult "expected response" "actual response" diff
 
                         if regenerate
                             then do

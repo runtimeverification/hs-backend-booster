@@ -49,7 +49,7 @@ simplifyConcrete (Just mApi) def trm = recurse trm
     recurse t@(Term attributes _)
         | attributes.isEvaluated =
             t
-        | isConcrete t =
+        | isConcrete t && attributes.canBeEvaluated =
             simplifyTerm mApi def t (sortOfTerm t)
         | otherwise =
             case t of
@@ -64,3 +64,5 @@ simplifyConcrete (Just mApi) def trm = recurse trm
                 Injection sources target sub ->
                     Injection sources target $ recurse sub
                 KMap mdef keyVals rest -> KMap mdef (map (bimap recurse recurse) keyVals) (recurse <$> rest)
+                KList ldef heads rest ->
+                    KList ldef (map recurse heads) (fmap (bimap recurse (map recurse)) rest)

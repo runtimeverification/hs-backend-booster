@@ -29,6 +29,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State
+import Data.Bifunctor (second)
 import Data.Foldable (toList, traverse_)
 import Data.Functor.Foldable
 import Data.List (elemIndex)
@@ -323,13 +324,17 @@ applyTerm BottomUp pref =
             applyAtTop pref t
         KMapF def keyVals rest ->
             KMap def <$> mapM (uncurry $ liftM2 (,)) keyVals <*> sequence rest
+        KListF def heads rest ->
+            KList def
+                <$> sequence heads
+                <*> mapM (uncurry (liftM2 (,)) . second sequence) rest
 applyTerm TopDown pref = \t@(Term attributes _) ->
     if attributes.isEvaluated
         then pure t
         else do
             config <- getConfig
             -- All fully concrete values go to the LLVM backend (top-down only)
-            if isConcrete t && isJust config.llvmApi
+            if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
                 then do
                     let result = simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
                     when (result /= t) setChanged
@@ -365,6 +370,18 @@ applyTerm TopDown pref = \t@(Term attributes _) ->
             KMap def
                 <$> mapM (\(k, v) -> (,) <$> applyTerm TopDown pref k <*> applyTerm TopDown pref v) keyVals
                 <*> maybe (pure Nothing) ((Just <$>) . applyTerm TopDown pref) rest
+        KList def heads rest ->
+            KList def
+                <$> mapM (applyTerm TopDown pref) heads
+                <*> maybe
+                    (pure Nothing)
+                    ( (Just <$>)
+                        . \(mid, tails) ->
+                            (,)
+                                <$> applyTerm TopDown pref mid
+                                <*> mapM (applyTerm TopDown pref) tails
+                    )
+                    rest
 
 {- | Try to apply function equations and simplifications to the given
    top-level term, in priority order and per group.
@@ -559,7 +576,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
         case simplifyPredicate mApi p of
             Predicate FalseBool -> fail "side condition was false"
             Predicate TrueBool -> pure Nothing
-            other -> pure $ Just other
+            _other -> pure $ Just p
 
     allMustBeConcrete (AllConstrained Concrete) = True
     allMustBeConcrete _ = False
@@ -633,8 +650,8 @@ simplifyConstraint' :: MonadLoggerIO io => Predicate -> EquationT io Predicate
 -- evaluating them using simplifyBool if they are concrete.
 -- Non-concrete \equals predicates are simplified using evaluateTerm.
 simplifyConstraint' = \case
-    Predicate t
-        | isConcrete t -> do
+    Predicate t@(Term TermAttributes{canBeEvaluated} _)
+        | isConcrete t && canBeEvaluated -> do
             mbApi <- (.llvmApi) <$> getConfig
             case mbApi of
                 Just api ->

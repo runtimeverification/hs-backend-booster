@@ -28,6 +28,7 @@ import Booster.Pattern.Unify (FailReason (..), SortError, checkSubsort)
 import Booster.Pattern.Util (
     checkSymbolIsAc,
     freeVariables,
+    isConcrete,
     isConstructorSymbol,
     isFunctionSymbol,
     sortOfTerm,
@@ -265,9 +266,25 @@ match1
             -- and, domain values, injections, maps: fail
             _other ->
                 failWith $ DifferentSymbols app subj
--- matching on maps unsupported
+----- KMap
+match1
+    t1@(KMap def1 keyVals1 Nothing)
+    t2@(KMap def2 keyVals2 Nothing)
+        | def1 == def2 =
+            if isConcrete t1 && isConcrete t2
+                then
+                    if keyVals1 == keyVals2 -- identical concrete maps match
+                        then pure mempty
+                        else failWith $ DifferentValues t1 t2
+                else indeterminate t1 t2 -- symbolic maps are indeterminate
+        | otherwise = failWith $ DifferentSorts t1 t2
+-- matching on non-empty symbolic maps is not supported
 match1
     t1@KMap{}
+    t2 = indeterminate t1 t2
+-- no unification for lists, return indeterminate for now
+match1
+    t1@KList{}
     t2 = indeterminate t1 t2
 
 failWith :: FailReason -> StateT s (Except MatchResult) ()

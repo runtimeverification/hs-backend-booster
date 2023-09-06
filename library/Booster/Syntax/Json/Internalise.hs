@@ -147,7 +147,8 @@ internaliseTermRaw qq allowAlias sortVars definition@KoreDefinition{sorts, symbo
                                     , isIdem = Internal.IsNotIdem
                                     , isAssoc = Internal.IsNotAssoc
                                     , isMacroOrAlias = Internal.IsNotMacroOrAlias
-                                    , isKMapSymbol = Nothing
+                                    , hasEvaluators = Flag False
+                                    , collectionMetadata = Nothing
                                     }
                     else
                         maybe (throwE $ UnknownSymbol name symPatt) pure $
@@ -479,6 +480,11 @@ recomputeTermAttributes = \case
             def
             (map (bimap recomputeTermAttributes recomputeTermAttributes) keyVals)
             (fmap recomputeTermAttributes rest)
+    Internal.KList def heads rest ->
+        Internal.KList
+            def
+            (map recomputeTermAttributes heads)
+            (fmap (bimap recomputeTermAttributes (map recomputeTermAttributes)) rest)
 
 trm :: QuasiQuoter
 trm =

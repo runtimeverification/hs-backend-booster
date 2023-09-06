@@ -237,9 +237,16 @@ data ServerState = ServerState
 execStateToKoreJson :: RpcTypes.ExecuteState -> KoreJson.KoreJson
 execStateToKoreJson RpcTypes.ExecuteState{term = t, substitution, predicate} =
     let subAndPred = catMaybes [KoreJson.term <$> substitution, KoreJson.term <$> predicate]
+        innerSorts = mapMaybe sortOfJson $ KoreJson.term t : subAndPred
+        topLevelSort = case innerSorts of
+            [] -> KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []
+            xs ->
+                if all (== head xs) (tail xs) -- we know xs is non-empty, hence `head` is safe here
+                    then KoreJson.SortApp (head xs).name []
+                    else KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []
      in t
             { KoreJson.term =
-                foldr (KoreJson.KJAnd $ KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []) t.term subAndPred
+                foldr (KoreJson.KJAnd topLevelSort) t.term subAndPred
             }
 
 execResponse ::
@@ -263,6 +270,17 @@ execResponse req (d, traces, rr) = case rr of
             RpcTypes.Execute
                 RpcTypes.ExecuteResult
                     { reason = RpcTypes.Stuck
+                    , depth
+                    , logs
+                    , state = toExecState p
+                    , nextStates = Nothing
+                    , rule = Nothing
+                    }
+    RewriteTrivial p ->
+        Right $
+            RpcTypes.Execute
+                RpcTypes.ExecuteResult
+                    { reason = RpcTypes.Vacuous
                     , depth
                     , logs
                     , state = toExecState p
