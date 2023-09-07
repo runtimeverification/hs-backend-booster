@@ -187,15 +187,23 @@ filterTermSymbols check = cata $ \case
     DomainValueF _ _ -> []
     VarF _ -> []
     InjectionF _ _ t -> t
-    KMapF def [] Nothing -> [unit | let unit = unitSymbol $ KMapMeta def, check unit]
-    KMapF _ [] (Just t) -> t
+    -- Note the different cases:
+    -- - empty collection: unit symbol only
+    -- - singleton collections: element symbol only
+    -- - opaque only: no collection symbols required
+    -- - non-empty collection: no unit symbol required
+    KMapF def [] Nothing ->
+        [unitSym | let unitSym = unitSymbol $ KMapMeta def, check unitSym]
+    KMapF def [(k, v)] Nothing ->
+        k <> v <> [elemSym | let elemSym = kmapElementSymbol def, check elemSym]
+    KMapF _ [] (Just t) ->
+        t
     KMapF def kvs t ->
         let
             concatSym = concatSymbol $ KMapMeta def
             elementSym = kmapElementSymbol def
-            unitSym = unitSymbol $ KMapMeta def
          in
-            filter check [concatSym, elementSym, unitSym]
+            filter check [concatSym, elementSym]
                 <> concatMap (uncurry (<>)) kvs
                 <> fromMaybe [] t
     KListF def heads Nothing ->
