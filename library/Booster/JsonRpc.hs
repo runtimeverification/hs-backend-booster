@@ -500,8 +500,8 @@ mkLogRewriteTrace
                                 , origin = Booster
                                 }
             RewriteSimplified equationTraces Nothing
-                | logSuccessfulSimplifications || logFailedSimplifications ->
-                    mapM (mkLogEquationTrace equationLogOpts) equationTraces
+                | logSuccessfulSimplifications || logFailedSimplifications -> mapM (mkLogEquationTrace equationLogOpts) equationTraces
+                | otherwise -> Just []
             RewriteSimplified equationTraces (Just failure)
                 | logFailedSimplifications -> do
                     let final = singleton $ case failure of
@@ -541,4 +541,5 @@ mkLogRewriteTrace
                                     , result = Failure{reason = "Side conditions false", _ruleId = Nothing}
                                     }
                     (<> final) <$> mapM (mkLogEquationTrace equationLogOpts) equationTraces
+                | otherwise -> Just []
             _ -> Nothing
