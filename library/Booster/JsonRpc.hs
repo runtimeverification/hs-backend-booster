@@ -133,7 +133,11 @@ respond stateVar =
                         [req.logSuccessfulSimplifications, req.logFailedSimplifications] =
                         const Nothing
                     | otherwise =
-                        Just . mapMaybe (mkLogEquationTrace (fromMaybe False req.logSuccessfulSimplifications, fromMaybe False req.logFailedSimplifications))
+                        Just
+                            . mapMaybe
+                                ( mkLogEquationTrace
+                                    (fromMaybe False req.logSuccessfulSimplifications, fromMaybe False req.logFailedSimplifications)
+                                )
                 doTracing =
                     any
                         (fromMaybe False)
@@ -500,7 +504,8 @@ mkLogRewriteTrace
                                 , origin = Booster
                                 }
             RewriteSimplified equationTraces Nothing
-                | logSuccessfulSimplifications || logFailedSimplifications -> mapM (mkLogEquationTrace equationLogOpts) equationTraces
+                | logSuccessfulSimplifications || logFailedSimplifications ->
+                    mapM (mkLogEquationTrace equationLogOpts) equationTraces
                 | otherwise -> Just []
             RewriteSimplified equationTraces (Just failure)
                 | logFailedSimplifications -> do
