@@ -342,13 +342,17 @@ execResponse req (d, traces, rr) = case rr of
     depth = RpcTypes.Depth d
 
     logs =
-        fmap concat
-            . mapM
-                ( mkLogRewriteTrace
-                    (logSuccessfulRewrites, logFailedRewrites)
-                    (logSuccessfulSimplifications, logFailedSimplifications)
-                )
-            $ toList traces
+        let ls =
+                fmap concat
+                    . mapM
+                        ( mkLogRewriteTrace
+                            (logSuccessfulRewrites, logFailedRewrites)
+                            (logSuccessfulSimplifications, logFailedSimplifications)
+                        )
+                    $ toList traces
+         in case ls of
+                Just [] -> Nothing
+                xs -> xs
 
 toExecState :: Pattern -> RpcTypes.ExecuteState
 toExecState pat =
