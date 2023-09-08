@@ -133,9 +133,7 @@ respond stateVar =
                         [req.logSuccessfulSimplifications, req.logFailedSimplifications] =
                         const Nothing
                     | otherwise =
-                        Just
-                            . mapMaybe (mkLogEquationTrace (req.logSuccessfulSimplifications, req.logFailedSimplifications))
-                            . toList
+                        Just . mapMaybe (mkLogEquationTrace (fromMaybe False req.logSuccessfulSimplifications, fromMaybe False req.logFailedSimplifications))
                 doTracing =
                     any
                         (fromMaybe False)
@@ -333,30 +331,20 @@ execResponse req (d, traces, rr) = case rr of
                     , rule = Nothing
                     }
   where
-    RpcTypes.ExecuteRequest
-        { logSuccessfulRewrites
-        , logFailedRewrites
-        , logSuccessfulSimplifications
-        , logFailedSimplifications
-        } = req
+    logSuccessfulRewrites = fromMaybe False req.logSuccessfulRewrites
+    logFailedRewrites = fromMaybe False req.logFailedRewrites
+    logSuccessfulSimplifications = fromMaybe False req.logSuccessfulSimplifications
+    logFailedSimplifications = fromMaybe False req.logFailedSimplifications
     depth = RpcTypes.Depth d
 
-    logs
-        | not
-            ( fromMaybe False logSuccessfulRewrites
-                || fromMaybe False logFailedRewrites
-                || fromMaybe False logSuccessfulSimplifications
-                || fromMaybe False logFailedSimplifications
-            ) =
-            Nothing
-        | otherwise =
-            fmap concat
-                . mapM
-                    ( mkLogRewriteTrace
-                        (logSuccessfulRewrites, logFailedRewrites)
-                        (logSuccessfulSimplifications, logFailedSimplifications)
-                    )
-                $ toList traces
+    logs =
+        fmap concat
+            . mapM
+                ( mkLogRewriteTrace
+                    (logSuccessfulRewrites, logFailedRewrites)
+                    (logSuccessfulSimplifications, logFailedSimplifications)
+                )
+            $ toList traces
 
 toExecState :: Pattern -> RpcTypes.ExecuteState
 toExecState pat =
@@ -368,13 +356,13 @@ toExecState pat =
   where
     (t, p, s) = externalisePattern pat
 
-mkLogEquationTrace :: (Maybe Bool, Maybe Bool) -> ApplyEquations.EquationTrace -> Maybe LogEntry
+mkLogEquationTrace :: (Bool, Bool) -> ApplyEquations.EquationTrace -> Maybe LogEntry
 mkLogEquationTrace
     (logSuccessfulSimplifications, logFailedSimplifications)
     ApplyEquations.EquationTrace{subjectTerm, ruleId = uid, result} =
         case result of
             ApplyEquations.Success rewrittenTrm
-                | fromMaybe False logSuccessfulSimplifications ->
+                | logSuccessfulSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -388,7 +376,7 @@ mkLogEquationTrace
                                     }
                             }
             ApplyEquations.FailedMatch _failReason
-                | fromMaybe False logFailedSimplifications ->
+                | logFailedSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -397,7 +385,7 @@ mkLogEquationTrace
                             , result = Failure{reason = "Failed match", _ruleId}
                             }
             ApplyEquations.IndeterminateMatch
-                | fromMaybe False logFailedSimplifications ->
+                | logFailedSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -406,7 +394,7 @@ mkLogEquationTrace
                             , result = Failure{reason = "Indeterminate match", _ruleId}
                             }
             ApplyEquations.IndeterminateCondition _failedConditions
-                | fromMaybe False logFailedSimplifications ->
+                | logFailedSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -415,7 +403,7 @@ mkLogEquationTrace
                             , result = Failure{reason = "Indeterminate side-condition", _ruleId}
                             }
             ApplyEquations.ConditionFalse
-                | fromMaybe False logFailedSimplifications ->
+                | logFailedSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -424,7 +412,7 @@ mkLogEquationTrace
                             , result = Failure{reason = "Side-condition is false", _ruleId}
                             }
             ApplyEquations.RuleNotPreservingDefinedness
-                | fromMaybe False logFailedSimplifications ->
+                | logFailedSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -433,7 +421,7 @@ mkLogEquationTrace
                             , result = Failure{reason = "The equation does not preserve definedness", _ruleId}
                             }
             ApplyEquations.MatchConstraintViolated _ varName
-                | fromMaybe False logFailedSimplifications ->
+                | logFailedSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -453,8 +441,8 @@ mkLogEquationTrace
         _ruleId = fmap getUniqueId uid
 
 mkLogRewriteTrace ::
-    (Maybe Bool, Maybe Bool) ->
-    (Maybe Bool, Maybe Bool) ->
+    (Bool, Bool) ->
+    (Bool, Bool) ->
     RewriteTrace Pattern ->
     Maybe [LogEntry]
 mkLogRewriteTrace
@@ -462,7 +450,7 @@ mkLogRewriteTrace
     equationLogOpts@(logSuccessfulSimplifications, logFailedSimplifications) =
         \case
             RewriteSingleStep _ uid _ res
-                | fromMaybe False logSuccessfulRewrites ->
+                | logSuccessfulRewrites ->
                     Just $
                         singleton $
                             Rewrite
@@ -476,7 +464,7 @@ mkLogRewriteTrace
                                 }
             RewriteBranchingStep _ _ -> Nothing -- we may or may not want to emit a trace here in the future
             RewriteStepFailed reason
-                | fromMaybe False logFailedRewrites ->
+                | logFailedRewrites ->
                     Just $
                         singleton $
                             Rewrite
@@ -512,10 +500,10 @@ mkLogRewriteTrace
                                 , origin = Booster
                                 }
             RewriteSimplified equationTraces Nothing
-                | fromMaybe False logSuccessfulSimplifications || fromMaybe False logFailedSimplifications ->
+                | logSuccessfulSimplifications || logFailedSimplifications ->
                     mapM (mkLogEquationTrace equationLogOpts) equationTraces
             RewriteSimplified equationTraces (Just failure)
-                | fromMaybe False logFailedSimplifications -> do
+                | logFailedSimplifications -> do
                     let final = singleton $ case failure of
                             ApplyEquations.IndexIsNone trm ->
                                 Simplification
