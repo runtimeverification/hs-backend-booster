@@ -33,6 +33,7 @@ import Kore.JsonRpc qualified as Kore (ServerState)
 import Kore.JsonRpc.Types
 import Kore.JsonRpc.Types qualified as ExecuteRequest (ExecuteRequest (..))
 import Kore.JsonRpc.Types qualified as SimplifyRequest (SimplifyRequest (..))
+import Kore.JsonRpc.Types.Log qualified as RPCLog
 import Kore.Log qualified
 import Kore.Syntax.Definition (SentenceAxiom)
 import Kore.Syntax.Json.Types qualified as KoreJson
@@ -154,10 +155,11 @@ respondEither mbStatsVar booster kore req = case req of
             pure ()
 
     handleExecute :: ExecuteRequest -> m (Either ErrorObj (API 'Res))
-    handleExecute = executionLoop (0, 0.0, 0.0)
+    handleExecute = executionLoop (0, 0.0, 0.0, [])
 
-    executionLoop :: (Depth, Double, Double) -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
-    executionLoop (!currentDepth, !time, !koreTime) r = do
+    executionLoop ::
+        (Depth, Double, Double, [RPCLog.LogEntry]) -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
+    executionLoop (!currentDepth, !time, !koreTime, !rpcLogs) r = do
         Log.logInfoNS "proxy" . Text.pack $
             if currentDepth == 0
                 then "Starting execute request"
@@ -176,6 +178,7 @@ respondEither mbStatsVar booster kore req = case req of
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     -- simplify Booster's state with Kore's simplifier
                     Log.logInfoNS "proxy" . Text.pack $ "Simplifying booster state and falling back to Kore "
+                    -- TODO: collect simplification traces!! simplifyExecuteState currently throws them away
                     simplifiedBoosterState <-
                         simplifyExecuteState
                             ( r.logSuccessfulSimplifications
@@ -214,6 +217,7 @@ respondEither mbStatsVar booster kore req = case req of
                                     ( currentDepth + boosterResult.depth + koreResult.depth
                                     , time + bTime + kTime
                                     , koreTime + kTime
+                                    , maybe rpcLogs (rpcLogs ++) (liftA2 (++) boosterResult.logs koreResult.logs)
                                     )
                                     r{ExecuteRequest.state = execStateToKoreJson koreResult.state}
                             | otherwise -> do
@@ -223,7 +227,13 @@ respondEither mbStatsVar booster kore req = case req of
                                 Log.logInfoNS "proxy" . Text.pack $
                                     "Kore " <> show koreResult.reason <> " at " <> show koreResult.depth
                                 logStats ExecuteM (time + bTime + kTime, koreTime + kTime)
-                                pure $ Right $ Execute koreResult{depth = currentDepth + boosterResult.depth + koreResult.depth}
+                                pure $
+                                    Right $
+                                        Execute
+                                            koreResult
+                                                { depth = currentDepth + boosterResult.depth + koreResult.depth
+                                                , logs = (rpcLogs ++) <$> liftA2 (++) boosterResult.logs koreResult.logs
+                                                }
                         -- can only be an error at this point
                         res -> pure res
                 | otherwise -> do
@@ -233,7 +243,13 @@ respondEither mbStatsVar booster kore req = case req of
                     Log.logInfoNS "proxy" . Text.pack $
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     logStats ExecuteM (time + bTime, koreTime)
-                    pure $ Right $ Execute boosterResult{depth = currentDepth + boosterResult.depth}
+                    pure $
+                        Right $
+                            Execute
+                                boosterResult
+                                    { depth = currentDepth + boosterResult.depth
+                                    , logs = (rpcLogs ++) <$> boosterResult.logs
+                                    }
             -- can only be an error at this point
             res -> pure res
 
