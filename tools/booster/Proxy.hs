@@ -58,10 +58,11 @@ respondEither ::
     Log.MonadLogger m =>
     MonadIO m =>
     Maybe StatsVar ->
+    Depth ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res)
-respondEither mbStatsVar booster kore req = case req of
+respondEither mbStatsVar koreFallbackDepth booster kore req = case req of
     Execute execReq
         | isJust execReq.stepTimeout || isJust execReq.movingAverageStepTimeout ->
             loggedKore ExecuteM req
@@ -168,14 +169,14 @@ respondEither mbStatsVar booster kore req = case req of
                     -- simplify Booster's state with Kore's simplifier
                     Log.logInfoNS "proxy" . Text.pack $ "Simplifying booster state and falling back to Kore "
                     simplifiedBoosterState <- simplifyExecuteState r._module boosterResult.state
-                    -- attempt to do one step in the old backend
+                    -- attempt to do koreFallbackDepth steps in the old backend
                     (kResult, kTime) <-
                         withTime $
                             kore
                                 ( Execute
                                     r
                                         { state = execStateToKoreJson simplifiedBoosterState
-                                        , maxDepth = Just $ Depth 1
+                                        , maxDepth = Just koreFallbackDepth
                                         }
                                 )
                     when (isJust mbStatsVar) $
@@ -184,7 +185,7 @@ respondEither mbStatsVar booster kore req = case req of
                     case kResult of
                         Right (Execute koreResult)
                             | koreResult.reason == DepthBound -> do
-                                -- if we made one step, add the number of
+                                -- if we made koreFallbackDepth steps, add the number of
                                 -- steps we have taken to the counter and
                                 -- attempt with booster again
                                 when (koreResult.depth == 0) $ error "Expected kore-rpc to take at least one step"
