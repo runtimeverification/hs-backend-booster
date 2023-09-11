@@ -11,7 +11,7 @@ module Proxy (
     respondEither,
 ) where
 
-import Control.Applicative (liftA2)
+import Control.Applicative (liftA2, liftA3)
 import Control.Concurrent.MVar qualified as MVar
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO)
@@ -178,8 +178,7 @@ respondEither mbStatsVar booster kore req = case req of
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     -- simplify Booster's state with Kore's simplifier
                     Log.logInfoNS "proxy" . Text.pack $ "Simplifying booster state and falling back to Kore "
-                    -- TODO: collect simplification traces!! simplifyExecuteState currently throws them away
-                    simplifiedBoosterState <-
+                    (simplifiedBoosterState, boosterStateSimplificationLogs) <-
                         simplifyExecuteState
                             ( r.logSuccessfulSimplifications
                             , r.logFailedSimplifications
@@ -217,7 +216,10 @@ respondEither mbStatsVar booster kore req = case req of
                                     ( currentDepth + boosterResult.depth + koreResult.depth
                                     , time + bTime + kTime
                                     , koreTime + kTime
-                                    , maybe rpcLogs (rpcLogs ++) (liftA2 (++) boosterResult.logs koreResult.logs)
+                                    , maybe
+                                        rpcLogs
+                                        (rpcLogs ++)
+                                        (liftA3 (\a b c -> a ++ b ++ c) boosterResult.logs boosterStateSimplificationLogs koreResult.logs)
                                     )
                                     r{ExecuteRequest.state = execStateToKoreJson koreResult.state}
                             | otherwise -> do
@@ -254,7 +256,10 @@ respondEither mbStatsVar booster kore req = case req of
             res -> pure res
 
     simplifyExecuteState ::
-        (Maybe Bool, Maybe Bool, Maybe Bool, Maybe Bool) -> Maybe Text -> ExecuteState -> m ExecuteState
+        (Maybe Bool, Maybe Bool, Maybe Bool, Maybe Bool) ->
+        Maybe Text ->
+        ExecuteState ->
+        m (ExecuteState, Maybe [RPCLog.LogEntry])
     simplifyExecuteState
         ( logSuccessfulSimplifications
             , logFailedSimplifications
@@ -282,12 +287,12 @@ respondEither mbStatsVar booster kore req = case req of
                     Log.logInfoNS "proxy" "Making 0-step execute request to convert back to a term/constraints form"
                     result <- booster $ Execute request
                     case result of
-                        Right (Execute ExecuteResult{state = finalState}) -> pure finalState
-                        _other -> pure s
+                        Right (Execute ExecuteResult{state = finalState}) -> pure (finalState, result.logs)
+                        _other -> pure (s, Nothing)
                 _other -> do
                     -- if we hit an error here, return the original
                     Log.logWarnNS "proxy" "Unexpected failure when calling Kore simplifier, returning original term"
-                    pure s
+                    pure (s, Nothing)
           where
             toSimplifyRequest :: ExecuteState -> SimplifyRequest
             toSimplifyRequest state =
@@ -323,9 +328,9 @@ respondEither mbStatsVar booster kore req = case req of
         simplifyResult :: ExecuteResult -> m ExecuteResult
         simplifyResult res@ExecuteResult{reason, state, nextStates} = do
             Log.logInfoNS "proxy" . Text.pack $ "Simplifying state in " <> show reason <> " result"
-            simplifiedState <- simplifyExecuteState logSettings mbModule state
+            (simplifiedState, _simplifiedStateLogs) <- simplifyExecuteState logSettings mbModule state
             simplifiedNexts <- maybe (pure []) (mapM $ simplifyExecuteState logSettings mbModule) nextStates
-            let filteredNexts = filter (not . isBottom) simplifiedNexts
+            let filteredNexts = map fst . filter (not . isBottom . fst) $ simplifiedNexts
             let result = case reason of
                     Branching
                         | null filteredNexts ->
@@ -338,7 +343,9 @@ respondEither mbStatsVar booster kore req = case req of
                             -- HACK. Would want to return the prior state
                             res{reason = Stuck, nextStates = Nothing}
                     _otherReason ->
-                        res{state = simplifiedState, nextStates}
+                        res{state = simplifiedState, nextStates = Just filteredNexts}
+            -- NOTE: we deliberately ignore simplification traces produced by simplifyExecuteState.
+            --       append them to result.logs if needed in the future.
             pure result
 
         isBottom :: ExecuteState -> Bool
