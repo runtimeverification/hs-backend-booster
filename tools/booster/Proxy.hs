@@ -287,7 +287,8 @@ respondEither mbStatsVar booster kore req = case req of
                     Log.logInfoNS "proxy" "Making 0-step execute request to convert back to a term/constraints form"
                     result <- booster $ Execute request
                     case result of
-                        Right (Execute ExecuteResult{state = finalState}) -> pure (finalState, result.logs)
+                        Right (Execute ExecuteResult{state = finalState, logs = finalLogs}) ->
+                            pure (finalState, finalLogs)
                         _other -> pure (s, Nothing)
                 _other -> do
                     -- if we hit an error here, return the original
