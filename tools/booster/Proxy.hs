@@ -343,8 +343,11 @@ respondEither mbStatsVar booster kore req = case req of
                         | null filteredNexts ->
                             -- HACK. Would want to return the prior state
                             res{reason = Stuck, nextStates = Nothing}
-                    _otherReason ->
-                        res{state = simplifiedState, nextStates = Just filteredNexts}
+                    _otherReason
+                        | null filteredNexts ->
+                            res{state = simplifiedState, nextStates = Nothing}
+                        | otherwise ->
+                            res{state = simplifiedState, nextStates = Just filteredNexts}
             -- NOTE: we deliberately ignore simplification traces produced by simplifyExecuteState.
             --       append them to result.logs if needed in the future.
             pure result
