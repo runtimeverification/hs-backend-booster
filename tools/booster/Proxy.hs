@@ -116,7 +116,7 @@ respondEither mbStatsVar booster kore req = case req of
                         pure . Right . Simplify $
                             SimplifyResult
                                 { state = koreRes.state
-                                , logs = Just (fromMaybe [] boosterRes.logs ++ fromMaybe [] koreRes.logs)
+                                , logs = combineLogs [boosterRes.logs, koreRes.logs]
                                 }
                     koreError ->
                         -- can only be an error
@@ -212,10 +212,9 @@ respondEither mbStatsVar booster kore req = case req of
                                             <> show (currentDepth + boosterResult.depth + koreResult.depth)
                                             <> ")"
                                 let accumulatedLogs =
-                                        rpcLogs
-                                            ++ fromMaybe [] boosterResult.logs
-                                            ++ fromMaybe [] boosterStateSimplificationLogs
-                                            ++ fromMaybe [] koreResult.logs
+                                        fromMaybe [] $
+                                            combineLogs
+                                                [Just rpcLogs, boosterResult.logs, boosterStateSimplificationLogs, koreResult.logs]
                                 executionLoop
                                     ( currentDepth + boosterResult.depth + koreResult.depth
                                     , time + bTime + kTime
@@ -235,7 +234,7 @@ respondEither mbStatsVar booster kore req = case req of
                                         Execute
                                             koreResult
                                                 { depth = currentDepth + boosterResult.depth + koreResult.depth
-                                                , logs = Just (rpcLogs ++ fromMaybe [] boosterResult.logs ++ fromMaybe [] koreResult.logs)
+                                                , logs = combineLogs [Just rpcLogs, boosterResult.logs, koreResult.logs]
                                                 }
                         -- can only be an error at this point
                         res -> pure res
@@ -251,7 +250,7 @@ respondEither mbStatsVar booster kore req = case req of
                             Execute
                                 boosterResult
                                     { depth = currentDepth + boosterResult.depth
-                                    , logs = (rpcLogs ++) <$> boosterResult.logs
+                                    , logs = combineLogs [Just rpcLogs, boosterResult.logs]
                                     }
             -- can only be an error at this point
             res -> pure res
@@ -359,3 +358,15 @@ respondEither mbStatsVar booster kore req = case req of
         isBottom ExecuteState{predicate = Just p}
             | KoreJson.KJBottom _ <- p.term = True
         isBottom _ = False
+
+-- | Combine multiple, possibly empty/non-existent (Nothing) lists of logs into one
+combineLogs :: [Maybe [RPCLog.LogEntry]] -> Maybe [RPCLog.LogEntry]
+combineLogs logSources = case combineLogsImpl [] logSources of
+    [] -> Nothing
+    xs -> Just xs
+  where
+    combineLogsImpl :: [RPCLog.LogEntry] -> [Maybe [RPCLog.LogEntry]] -> [RPCLog.LogEntry]
+    combineLogsImpl acc = \case
+        [] -> acc
+        (Nothing : rest) -> combineLogsImpl acc rest
+        (Just logs : rest) -> combineLogsImpl (acc ++ logs) rest
