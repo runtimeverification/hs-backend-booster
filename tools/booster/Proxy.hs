@@ -353,8 +353,8 @@ respondEither mbStatsVar booster kore req = case req of
                             }
             let allLogs =
                     if null filteredNexts
-                        then combineLogs [result.logs, simplifiedStateLogs]
-                        else combineLogs $ [result.logs, simplifiedStateLogs] ++ filteredNextsLogs
+                        then simplifiedStateLogs
+                        else combineLogs $ simplifiedStateLogs : filteredNextsLogs
             pure $ appendLogs result allLogs
 
         isBottom :: ExecuteState -> Bool
