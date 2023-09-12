@@ -19,6 +19,7 @@ import Control.Monad.Logger qualified as Log
 import Data.Aeson (ToJSON (..), encode)
 import Data.Aeson.KeyMap qualified as Aeson
 import Data.Aeson.Types (Value (..))
+import Data.Either (partitionEithers)
 import Data.Maybe (catMaybes, isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -33,6 +34,7 @@ import Kore.JsonRpc qualified as Kore (ServerState)
 import Kore.JsonRpc.Types
 import Kore.JsonRpc.Types qualified as ExecuteRequest (ExecuteRequest (..))
 import Kore.JsonRpc.Types qualified as SimplifyRequest (SimplifyRequest (..))
+import Kore.JsonRpc.Types.Log (LogEntry)
 import Kore.Log qualified
 import Kore.Syntax.Definition (SentenceAxiom)
 import Kore.Syntax.Json.Types qualified as KoreJson
@@ -170,11 +172,11 @@ respondEither mbStatsVar booster kore req = case req of
                     simplifyResult <- simplifyExecuteState r._module boosterResult.state
 
                     case simplifyResult of
-                        Nothing -> do
+                        Left logOnly -> do
                             -- state was simplified to bottom, return vacuous
                             Log.logInfoNS "proxy" "Vacuous after simplification"
-                            pure . Right . Execute $ makeVacuous boosterResult
-                        Just simplifiedBoosterState -> do
+                            pure . Right . Execute $ makeVacuous logOnly boosterResult
+                        Right (simplifiedBoosterState, _logs) -> do
                             -- attempt to do one step in the old backend
                             (kResult, kTime) <-
                                 withTime $
@@ -226,7 +228,10 @@ respondEither mbStatsVar booster kore req = case req of
             -- can only be an error at this point
             res -> pure res
 
-    simplifyExecuteState :: Maybe Text -> ExecuteState -> m (Maybe ExecuteState)
+    simplifyExecuteState ::
+        Maybe Text ->
+        ExecuteState ->
+        m (Either (Maybe [LogEntry]) (ExecuteState, Maybe [LogEntry]))
     simplifyExecuteState mbModule s = do
         Log.logInfoNS "proxy" "Simplifying execution state"
         simplResult <-
@@ -236,7 +241,7 @@ respondEither mbStatsVar booster kore req = case req of
             -- failure mode would be malformed or invalid kore
             Right (Simplify simplified)
                 | KoreJson.KJBottom _ <- simplified.state.term ->
-                    pure Nothing
+                    pure (Left simplified.logs)
                 | otherwise -> do
                     -- to convert back to a term/constraints form,
                     -- we run a trivial execute request (in booster)
@@ -250,16 +255,17 @@ respondEither mbStatsVar booster kore req = case req of
                     Log.logInfoNS "proxy" "Making 0-step execute request to convert back to a term/constraints form"
                     result <- booster $ Execute request
                     case result of
-                        Right (Execute ExecuteResult{state = finalState}) -> pure $ Just finalState
+                        Right (Execute ExecuteResult{state = finalState}) ->
+                            pure $ Right (finalState, simplified.logs)
                         other -> do
                             Log.logWarnNS "proxy" $
                                 "Error in pseudo-execute step after simplification "
                                     <> either (Text.pack . show) (Text.pack . show . encode) other
-                            pure $ Just s
+                            pure $ Right (s, Just [])
             _other -> do
                 -- if we hit an error here, return the original
                 Log.logWarnNS "proxy" "Unexpected failure when calling Kore simplifier, returning original term"
-                pure $ Just s
+                pure $ Right (s, Just [])
       where
         toSimplifyRequest :: ExecuteState -> SimplifyRequest
         toSimplifyRequest state =
@@ -293,41 +299,54 @@ respondEither mbStatsVar booster kore req = case req of
       where
         simplifyResult :: ExecuteResult -> m ExecuteResult
         -- TODO avoid simplifying when we know we already did (in executionLoop)
-        simplifyResult res@ExecuteResult{reason, state, nextStates} = do
+        simplifyResult res@ExecuteResult{reason, state, nextStates, logs} = do
             Log.logInfoNS "proxy" . Text.pack $ "Simplifying state in " <> show reason <> " result"
             mbSimplifiedState <- simplifyExecuteState mbModule state
 
             case mbSimplifiedState of
-                Nothing -> do
+                Left logOnly -> do
                     -- simplified to Bottom, return vacuous
                     Log.logInfoNS "proxy" "Vacuous after simplifying result"
-                    pure $ makeVacuous res
-                Just simplifiedState -> do
+                    pure $ makeVacuous logOnly res
+                Right (simplifiedState, simplLogs) -> do
                     next' <- maybe (pure []) (mapM (simplifyExecuteState mbModule)) nextStates
 
-                    let filteredNexts = catMaybes next'
-                    --                    filteredNexts <- maybe (pure []) (catMaybes . mapM (simplifyExecuteState mbModule)) nextStates
-                    --            simplifiedNexts <- maybe (pure []) (mapM $ simplifyExecuteState mbModule) nextStates
-                    --            let filteredNexts = filter (not . isBottom) simplifiedNexts
+                    let (logsOnly, filteredNexts) = partitionEithers next'
+                        newLogs = catMaybes $ simplLogs : logsOnly <> map snd filteredNexts
+                        allLogs = fmap (<> concat newLogs) logs
+
                     let result = case reason of
                             Branching
                                 | null filteredNexts ->
-                                    res{reason = Stuck, nextStates = Nothing}
+                                    res
+                                        { reason = Stuck
+                                        , nextStates = Nothing
+                                        , logs = allLogs
+                                        }
                                 | length filteredNexts == 1 ->
                                     res -- What now? would have to re-loop. Return as-is.
                                     -- otherwise falling through to _otherReason
                             CutPointRule
                                 | null filteredNexts ->
                                     -- HACK. Would want to return the prior state
-                                    res{reason = Stuck, nextStates = Nothing}
+                                    res
+                                        { reason = Stuck
+                                        , nextStates = Nothing
+                                        , logs = allLogs
+                                        }
                             _otherReason ->
-                                res{state = simplifiedState, nextStates}
+                                res
+                                    { state = simplifiedState
+                                    , nextStates = Just $ map fst filteredNexts
+                                    , logs = allLogs
+                                    }
                     pure result
 
-makeVacuous :: ExecuteResult -> ExecuteResult
-makeVacuous result =
+makeVacuous :: Maybe [LogEntry] -> ExecuteResult -> ExecuteResult
+makeVacuous addedLogs result =
     result
         { reason = Vacuous
         , nextStates = Nothing
         , rule = Nothing
+        , logs = liftA2 (<>) result.logs addedLogs
         }
