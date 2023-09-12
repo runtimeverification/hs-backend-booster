@@ -195,20 +195,20 @@ filterTermSymbols check = cata $ \case
     KMapF def [] Nothing ->
         [unitSym | let unitSym = unitSymbol $ KMapMeta def, check unitSym]
     KMapF def [(k, v)] Nothing ->
-        k <> v <> [elemSym | let elemSym = kmapElementSymbol def, check elemSym]
+        k <> v <> [elemSym | let elemSym = elementSymbol $ KMapMeta def, check elemSym]
     KMapF _ [] (Just t) ->
         t
     KMapF def kvs t ->
         let
             concatSym = concatSymbol $ KMapMeta def
-            elementSym = kmapElementSymbol def
+            elementSym = elementSymbol $ KMapMeta def
          in
             filter check [concatSym, elementSym]
                 <> concatMap (uncurry (<>)) kvs
                 <> fromMaybe [] t
     KListF def heads Nothing ->
         let concatSym = concatSymbol $ KListMeta def
-            elemSym = klistElementSymbol def
+            elemSym = elementSymbol $ KListMeta def
             unitSym = unitSymbol $ KListMeta def
          in case heads of
                 [] -> [unitSym | check unitSym]
@@ -216,7 +216,7 @@ filterTermSymbols check = cata $ \case
                 more -> filter check [concatSym, elemSym] <> concat more
     KListF def heads (Just (mid, tails)) ->
         let concatSym = concatSymbol $ KListMeta def
-            elemSym = klistElementSymbol def
+            elemSym = elementSymbol $ KListMeta def
             ends = heads <> tails
          in mid
                 <> if null ends
@@ -225,7 +225,7 @@ filterTermSymbols check = cata $ \case
     KSetF def elements rest ->
         let concatSym = concatSymbol $ KSetMeta def
             unitSym = unitSymbol $ KSetMeta def
-            elemSym = klistElementSymbol def
+            elemSym = elementSymbol $ KSetMeta def
          in case elements of
                 [] -> fromMaybe [unitSym | check unitSym] rest
                 [single] ->

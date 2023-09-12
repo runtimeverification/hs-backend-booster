@@ -13,9 +13,10 @@ import Data.Foldable ()
 import Data.List (partition)
 import Data.Text.Encoding qualified as Text
 
-import Booster.Pattern.Base (externaliseKmapUnsafe)
+import Booster.Definition.Attributes.Base (KCollectionMetadata (..))
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
+import Data.List.NonEmpty qualified as NonEmpty
 import Kore.Syntax.Json.Types qualified as Syntax
 
 {- | Converts an internal pattern to a triple of term, predicate and substitution in
@@ -74,11 +75,39 @@ externaliseTerm = \case
             (symbolNameToId Internal.injectionSymbol.name)
             (map externaliseSort [source, target])
             [externaliseTerm trm]
-    Internal.KMap def keyVals rest -> externaliseTerm $ externaliseKmapUnsafe def keyVals rest
+    Internal.KMap def keyVals rest ->
+        externaliseCollection
+            (\(k, v) -> [externaliseTerm k, externaliseTerm v])
+            (pure . externaliseTerm)
+            (KMapMeta def)
+            keyVals
+            rest
     Internal.KList def heads rest ->
-        externaliseTerm $ Internal.externaliseKList def heads rest
+        let
+            externaliseListElem e = [externaliseTerm e]
+            def' = KListMeta def
+         in
+            externaliseCollection
+                externaliseListElem
+                (\(mid, rst) -> externaliseTerm mid : map (externaliseElem externaliseListElem def') rst)
+                def'
+                heads
+                rest
     Internal.KSet def heads rest ->
-        externaliseTerm $ Internal.externaliseKSet def heads rest
+        externaliseCollection
+            (pure . externaliseTerm)
+            (pure . externaliseTerm)
+            (KSetMeta def)
+            heads
+            rest
+  where
+    externaliseCollection externaliseElemInner externaliseRest def elems rest =
+        case map (externaliseElem externaliseElemInner def) elems ++ maybe [] externaliseRest rest of
+            [] -> Syntax.KJApp (symbolNameToId (Internal.unitSymbol def).name) [] []
+            [e] -> e
+            e : es -> Syntax.KJRightAssoc (symbolNameToId (Internal.concatSymbol def).name) [] $ e NonEmpty.:| es
+
+    externaliseElem externaliseInner def e = Syntax.KJApp (symbolNameToId (Internal.elementSymbol def).name) [] $ externaliseInner e
 
 externalisePredicate :: Syntax.Sort -> Internal.Predicate -> Syntax.KorePattern
 externalisePredicate sort =

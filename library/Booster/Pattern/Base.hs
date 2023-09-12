@@ -170,7 +170,7 @@ instance Recursive Term where
 getAttributes :: Term -> TermAttributes
 getAttributes (Term a _) = a
 
-unitSymbol, concatSymbol :: KCollectionMetadata -> Symbol
+unitSymbol, concatSymbol, elementSymbol :: KCollectionMetadata -> Symbol
 unitSymbol def =
     Symbol
         { name = symbolNames.unitSymbolName
@@ -215,32 +215,12 @@ concatSymbol def =
             KMapMeta mapDef -> (mapDef.symbolNames, mapDef.mapSortName, PartialFunction)
             KListMeta listDef -> (listDef.symbolNames, listDef.listSortName, TotalFunction)
             KSetMeta listDef -> (listDef.symbolNames, listDef.listSortName, PartialFunction)
-
-kmapElementSymbol :: KMapDefinition -> Symbol
-kmapElementSymbol def =
+elementSymbol def =
     Symbol
-        { name = def.symbolNames.elementSymbolName
+        { name = symbolNames.elementSymbolName
         , sortVars = []
-        , argSorts = [SortApp def.keySortName [], SortApp def.elementSortName []]
-        , resultSort = SortApp def.mapSortName []
-        , attributes =
-            SymbolAttributes
-                { symbolType = PartialFunction
-                , isIdem = IsNotIdem
-                , isAssoc = IsNotAssoc
-                , isMacroOrAlias = IsNotMacroOrAlias
-                , hasEvaluators = CanBeEvaluated
-                , collectionMetadata = Just $ KMapMeta def
-                }
-        }
-
-klistElementSymbol :: KListDefinition -> Symbol
-klistElementSymbol def =
-    Symbol
-        { name = def.symbolNames.elementSymbolName
-        , sortVars = []
-        , argSorts = [SortApp def.elementSortName []]
-        , resultSort = SortApp def.listSortName []
+        , argSorts = [SortApp s [] | s <- argss]
+        , resultSort = SortApp collectionSort []
         , attributes =
             SymbolAttributes
                 { symbolType = TotalFunction
@@ -248,9 +228,15 @@ klistElementSymbol def =
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , hasEvaluators = CanBeEvaluated
-                , collectionMetadata = Just $ KListMeta def
+                , collectionMetadata = Just def
                 }
         }
+  where
+    (symbolNames, argss, collectionSort) =
+        case def of
+            KMapMeta mapDef -> (mapDef.symbolNames, [mapDef.keySortName, mapDef.elementSortName], mapDef.mapSortName)
+            KListMeta listDef -> (listDef.symbolNames, [listDef.elementSortName], listDef.listSortName)
+            KSetMeta listDef -> (listDef.symbolNames, [listDef.elementSortName], listDef.listSortName)
 
 -- this function is marked unsafe because we won't get the same thing if we externalise and then internalise again.
 -- this is because of the pattern synonym smart constructor for SymbolApplication, which checks if the current symbol is a KMap symbol
@@ -272,7 +258,7 @@ externaliseKmapUnsafe def keyVals rest =
                 keyVals
   where
     unit = SymbolApplication (stripCollectionMetadata $ unitSymbol $ KMapMeta def) [] []
-    k |-> v = SymbolApplication (stripCollectionMetadata $ kmapElementSymbol def) [] [k, v]
+    k |-> v = SymbolApplication (stripCollectionMetadata $ elementSymbol $ KMapMeta def) [] [k, v]
     a `con` b = SymbolApplication (stripCollectionMetadata $ concatSymbol $ KMapMeta def) [] [a, b]
 {-# INLINE externaliseKmapUnsafe #-}
 
@@ -392,7 +378,7 @@ externaliseKList def heads optRest
     | Just (mid, tails) <- optRest =
         concatList $ map singleton heads <> (mid : map singleton tails)
   where
-    elemSym = stripCollectionMetadata $ klistElementSymbol def
+    elemSym = stripCollectionMetadata $ elementSymbol $ KListMeta def
     emptyList = SymbolApplication (stripCollectionMetadata $ unitSymbol $ KListMeta def) [] []
     concatSym = stripCollectionMetadata $ concatSymbol $ KListMeta def
 
@@ -451,7 +437,7 @@ externaliseKSet def elements optRest
     | Just rest <- optRest =
         concatSet $ map singleton elements <> [rest]
   where
-    elemSym = stripCollectionMetadata $ klistElementSymbol def
+    elemSym = stripCollectionMetadata $ elementSymbol $ KSetMeta def
     concatSym = stripCollectionMetadata $ concatSymbol $ KSetMeta def
 
     emptySet = SymbolApplication (stripCollectionMetadata $ unitSymbol $ KSetMeta def) [] []
