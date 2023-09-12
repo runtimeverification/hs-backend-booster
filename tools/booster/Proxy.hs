@@ -16,10 +16,10 @@ import Control.Concurrent.MVar qualified as MVar
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Logger qualified as Log
-import Data.Aeson (ToJSON (..))
+import Data.Aeson (ToJSON (..), encode)
 import Data.Aeson.KeyMap qualified as Aeson
 import Data.Aeson.Types (Value (..))
-import Data.Maybe (isJust)
+import Data.Maybe (catMaybes, isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Network.JSONRPC
@@ -167,48 +167,54 @@ respondEither mbStatsVar booster kore req = case req of
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     -- simplify Booster's state with Kore's simplifier
                     Log.logInfoNS "proxy" . Text.pack $ "Simplifying booster state and falling back to Kore "
-                    simplifiedBoosterState <- simplifyExecuteState r._module boosterResult.state
-                    -- attempt to do one step in the old backend
-                    (kResult, kTime) <-
-                        withTime $
-                            kore
-                                ( Execute
-                                    r
-                                        { state = execStateToKoreJson simplifiedBoosterState
-                                        , maxDepth = Just $ Depth 1
-                                        }
-                                )
-                    when (isJust mbStatsVar) $
-                        Log.logInfoNS "proxy" . Text.pack $
-                            "Kore fall-back in " <> microsWithUnit kTime
-                    case kResult of
-                        Right (Execute koreResult)
-                            | koreResult.reason == DepthBound -> do
-                                -- if we made one step, add the number of
-                                -- steps we have taken to the counter and
-                                -- attempt with booster again
-                                when (koreResult.depth == 0) $ error "Expected kore-rpc to take at least one step"
-                                Log.logInfoNS "proxy" $
-                                    Text.pack $
-                                        "kore depth-bound, continuing... (currently at "
-                                            <> show (currentDepth + boosterResult.depth + koreResult.depth)
-                                            <> ")"
-                                executionLoop
-                                    ( currentDepth + boosterResult.depth + koreResult.depth
-                                    , time + bTime + kTime
-                                    , koreTime + kTime
-                                    )
-                                    r{ExecuteRequest.state = execStateToKoreJson koreResult.state}
-                            | otherwise -> do
-                                -- otherwise we have hit a different
-                                -- HaltReason, at which point we should
-                                -- return, setting the correct depth
+                    simplifyResult <- simplifyExecuteState r._module boosterResult.state
+
+                    case simplifyResult of
+                        Nothing -> do
+                            -- state was simplified to bottom, return vacuous
+                            Log.logInfoNS "proxy" "Vacuous after simplification"
+                            pure . Right . Execute $ makeVacuous boosterResult
+                        Just simplifiedBoosterState -> do
+                            -- attempt to do one step in the old backend
+                            (kResult, kTime) <-
+                                withTime $
+                                    kore $
+                                        Execute
+                                            r
+                                                { state = execStateToKoreJson simplifiedBoosterState
+                                                , maxDepth = Just $ Depth 1
+                                                }
+                            when (isJust mbStatsVar) $
                                 Log.logInfoNS "proxy" . Text.pack $
-                                    "Kore " <> show koreResult.reason <> " at " <> show koreResult.depth
-                                logStats ExecuteM (time + bTime + kTime, koreTime + kTime)
-                                pure $ Right $ Execute koreResult{depth = currentDepth + boosterResult.depth + koreResult.depth}
-                        -- can only be an error at this point
-                        res -> pure res
+                                    "Kore fall-back in " <> microsWithUnit kTime
+                            case kResult of
+                                Right (Execute koreResult)
+                                    | koreResult.reason == DepthBound -> do
+                                        -- if we made one step, add the number of
+                                        -- steps we have taken to the counter and
+                                        -- attempt with booster again
+                                        when (koreResult.depth == 0) $ error "Expected kore-rpc to take at least one step"
+                                        Log.logInfoNS "proxy" $
+                                            Text.pack $
+                                                "kore depth-bound, continuing... (currently at "
+                                                    <> show (currentDepth + boosterResult.depth + koreResult.depth)
+                                                    <> ")"
+                                        executionLoop
+                                            ( currentDepth + boosterResult.depth + koreResult.depth
+                                            , time + bTime + kTime
+                                            , koreTime + kTime
+                                            )
+                                            r{ExecuteRequest.state = execStateToKoreJson koreResult.state}
+                                    | otherwise -> do
+                                        -- otherwise we have hit a different
+                                        -- HaltReason, at which point we should
+                                        -- return, setting the correct depth
+                                        Log.logInfoNS "proxy" . Text.pack $
+                                            "Kore " <> show koreResult.reason <> " at " <> show koreResult.depth
+                                        logStats ExecuteM (time + bTime + kTime, koreTime + kTime)
+                                        pure $ Right $ Execute koreResult{depth = currentDepth + boosterResult.depth + koreResult.depth}
+                                -- can only be an error at this point
+                                res -> pure res
                 | otherwise -> do
                     -- we were successful with the booster, thus we
                     -- return the booster result with the updated
@@ -220,7 +226,7 @@ respondEither mbStatsVar booster kore req = case req of
             -- can only be an error at this point
             res -> pure res
 
-    simplifyExecuteState :: Maybe Text -> ExecuteState -> m ExecuteState
+    simplifyExecuteState :: Maybe Text -> ExecuteState -> m (Maybe ExecuteState)
     simplifyExecuteState mbModule s = do
         Log.logInfoNS "proxy" "Simplifying execution state"
         simplResult <-
@@ -228,25 +234,32 @@ respondEither mbStatsVar booster kore req = case req of
         case simplResult of
             -- This request should not fail, as the only possible
             -- failure mode would be malformed or invalid kore
-            Right (Simplify simplified) -> do
-                -- to convert back to a term/constraints form,
-                -- we run a trivial execute request (in booster)
-                -- We cannot call the booster internaliser without access to the server state
-                -- Again this should not fail.
-                let request =
-                        (emptyExecuteRequest simplified.state)
-                            { _module = mbModule
-                            , maxDepth = Just $ Depth 0
-                            }
-                Log.logInfoNS "proxy" "Making 0-step execute request to convert back to a term/constraints form"
-                result <- booster $ Execute request
-                case result of
-                    Right (Execute ExecuteResult{state = finalState}) -> pure finalState
-                    _other -> pure s
+            Right (Simplify simplified)
+                | KoreJson.KJBottom _ <- simplified.state.term ->
+                    pure Nothing
+                | otherwise -> do
+                    -- to convert back to a term/constraints form,
+                    -- we run a trivial execute request (in booster)
+                    -- We cannot call the booster internaliser without access to the server state
+                    -- This should not fail because the bottom case has been caught above.
+                    let request =
+                            (emptyExecuteRequest simplified.state)
+                                { _module = mbModule
+                                , maxDepth = Just $ Depth 0
+                                }
+                    Log.logInfoNS "proxy" "Making 0-step execute request to convert back to a term/constraints form"
+                    result <- booster $ Execute request
+                    case result of
+                        Right (Execute ExecuteResult{state = finalState}) -> pure $ Just finalState
+                        other -> do
+                            Log.logWarnNS "proxy" $
+                                "Error in pseudo-execute step after simplification "
+                                    <> either (Text.pack . show) (Text.pack . show . encode) other
+                            pure $ Just s
             _other -> do
                 -- if we hit an error here, return the original
                 Log.logWarnNS "proxy" "Unexpected failure when calling Kore simplifier, returning original term"
-                pure s
+                pure $ Just s
       where
         toSimplifyRequest :: ExecuteState -> SimplifyRequest
         toSimplifyRequest state =
@@ -279,29 +292,42 @@ respondEither mbStatsVar booster kore req = case req of
         other -> pure other
       where
         simplifyResult :: ExecuteResult -> m ExecuteResult
+        -- TODO avoid simplifying when we know we already did (in executionLoop)
         simplifyResult res@ExecuteResult{reason, state, nextStates} = do
             Log.logInfoNS "proxy" . Text.pack $ "Simplifying state in " <> show reason <> " result"
-            simplifiedState <- simplifyExecuteState mbModule state
-            simplifiedNexts <- maybe (pure []) (mapM $ simplifyExecuteState mbModule) nextStates
-            let filteredNexts = filter (not . isBottom) simplifiedNexts
-            let result = case reason of
-                    Branching
-                        | null filteredNexts ->
-                            res{reason = Stuck, nextStates = Nothing}
-                        | length filteredNexts == 1 ->
-                            res -- What now? would have to re-loop. Return as-is.
-                            -- otherwise falling through to _otherReason
-                    CutPointRule
-                        | null filteredNexts ->
-                            -- HACK. Would want to return the prior state
-                            res{reason = Stuck, nextStates = Nothing}
-                    _otherReason ->
-                        res{state = simplifiedState, nextStates}
-            pure result
+            mbSimplifiedState <- simplifyExecuteState mbModule state
 
-        isBottom :: ExecuteState -> Bool
-        isBottom ExecuteState{term}
-            | KoreJson.KJBottom _ <- term.term = True
-        isBottom ExecuteState{predicate = Just p}
-            | KoreJson.KJBottom _ <- p.term = True
-        isBottom _ = False
+            case mbSimplifiedState of
+                Nothing -> do
+                    -- simplified to Bottom, return vacuous
+                    Log.logInfoNS "proxy" "Vacuous after simplifying result"
+                    pure $ makeVacuous res
+                Just simplifiedState -> do
+                    next' <- maybe (pure []) (mapM (simplifyExecuteState mbModule)) nextStates
+
+                    let filteredNexts = catMaybes next'
+                    --                    filteredNexts <- maybe (pure []) (catMaybes . mapM (simplifyExecuteState mbModule)) nextStates
+                    --            simplifiedNexts <- maybe (pure []) (mapM $ simplifyExecuteState mbModule) nextStates
+                    --            let filteredNexts = filter (not . isBottom) simplifiedNexts
+                    let result = case reason of
+                            Branching
+                                | null filteredNexts ->
+                                    res{reason = Stuck, nextStates = Nothing}
+                                | length filteredNexts == 1 ->
+                                    res -- What now? would have to re-loop. Return as-is.
+                                    -- otherwise falling through to _otherReason
+                            CutPointRule
+                                | null filteredNexts ->
+                                    -- HACK. Would want to return the prior state
+                                    res{reason = Stuck, nextStates = Nothing}
+                            _otherReason ->
+                                res{state = simplifiedState, nextStates}
+                    pure result
+
+makeVacuous :: ExecuteResult -> ExecuteResult
+makeVacuous result =
+    result
+        { reason = Vacuous
+        , nextStates = Nothing
+        , rule = Nothing
+        }
