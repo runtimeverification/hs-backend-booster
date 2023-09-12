@@ -346,11 +346,11 @@ respondEither mbStatsVar booster kore req = case req of
                         | null filteredNexts ->
                             -- HACK. Would want to return the prior state
                             res{reason = Stuck, nextStates = Nothing}
-                    _otherReason
-                        | null filteredNexts ->
-                            res{state = simplifiedState, nextStates = Nothing}
-                        | otherwise ->
-                            res{state = simplifiedState, nextStates = Just filteredNexts}
+                    _otherReason ->
+                        res
+                            { state = simplifiedState
+                            , nextStates = if null filteredNexts then Nothing else Just filteredNexts
+                            }
             let allLogs =
                     if null filteredNexts
                         then combineLogs [result.logs, simplifiedStateLogs]
