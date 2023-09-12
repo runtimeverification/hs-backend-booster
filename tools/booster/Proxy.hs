@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 
 {- |
 Module      : Proxy
@@ -331,9 +332,9 @@ respondEither mbStatsVar booster kore req = case req of
         simplifyResult :: ExecuteResult -> m ExecuteResult
         simplifyResult res@ExecuteResult{reason, state, nextStates} = do
             Log.logInfoNS "proxy" . Text.pack $ "Simplifying state in " <> show reason <> " result"
-            (simplifiedState, _simplifiedStateLogs) <- simplifyExecuteState logSettings mbModule state
+            (simplifiedState, simplifiedStateLogs) <- simplifyExecuteState logSettings mbModule state
             simplifiedNexts <- maybe (pure []) (mapM $ simplifyExecuteState logSettings mbModule) nextStates
-            let filteredNexts = map fst . filter (not . isBottom . fst) $ simplifiedNexts
+            let (filteredNexts, filteredNextsLogs) = unzip . filter (not . isBottom . fst) $ simplifiedNexts
             let result = case reason of
                     Branching
                         | null filteredNexts ->
@@ -350,9 +351,11 @@ respondEither mbStatsVar booster kore req = case req of
                             res{state = simplifiedState, nextStates = Nothing}
                         | otherwise ->
                             res{state = simplifiedState, nextStates = Just filteredNexts}
-            -- NOTE: we deliberately ignore simplification traces produced by simplifyExecuteState.
-            --       append them to result.logs if needed in the future.
-            pure result
+            let allLogs =
+                    if null filteredNexts
+                        then combineLogs [result.logs, simplifiedStateLogs]
+                        else combineLogs $ [result.logs, simplifiedStateLogs] ++ filteredNextsLogs
+            pure $ appendLogs result allLogs
 
         isBottom :: ExecuteState -> Bool
         isBottom ExecuteState{term}
@@ -372,3 +375,6 @@ combineLogs logSources = case combineLogsImpl [] logSources of
         [] -> acc
         (Nothing : rest) -> combineLogsImpl acc rest
         (Just logs : rest) -> combineLogsImpl (acc ++ logs) rest
+
+appendLogs :: ExecuteResult -> Maybe [RPCLog.LogEntry] -> ExecuteResult
+appendLogs ExecuteResult{..} newLogs = ExecuteResult{logs = combineLogs [logs, newLogs], ..}
