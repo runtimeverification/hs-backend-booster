@@ -263,8 +263,8 @@ respondEither mbStatsVar booster kore req = case req of
     simplifyExecuteState
         ( logSuccessfulSimplifications
             , logFailedSimplifications
-            , logSuccessfulRewrites
-            , logFailedRewrites
+            , _logSuccessfulRewrites
+            , _logFailedRewrites
             )
         mbModule
         s = do
@@ -287,8 +287,10 @@ respondEither mbStatsVar booster kore req = case req of
                     Log.logInfoNS "proxy" "Making 0-step execute request to convert back to a term/constraints form"
                     result <- booster $ Execute request
                     case result of
-                        Right (Execute ExecuteResult{state = finalState, logs = finalLogs}) ->
-                            pure (finalState, finalLogs)
+                        Right (Execute ExecuteResult{state = finalState}) ->
+                            -- return the state converted by the Booster and logs from simplification.
+                            -- The logs from the 0-step execute request because will be empty, we don't request them
+                            pure (finalState, combineLogs [simplified.logs])
                         _other -> pure (s, Nothing)
                 _other -> do
                     -- if we hit an error here, return the original
@@ -314,10 +316,10 @@ respondEither mbStatsVar booster kore req = case req of
                     , terminalRules = Nothing
                     , movingAverageStepTimeout = Nothing
                     , stepTimeout = Nothing
-                    , logSuccessfulSimplifications
-                    , logFailedSimplifications
-                    , logSuccessfulRewrites
-                    , logFailedRewrites
+                    , logSuccessfulSimplifications = Nothing
+                    , logFailedSimplifications = Nothing
+                    , logSuccessfulRewrites = Nothing
+                    , logFailedRewrites = Nothing
                     }
 
     postExecSimplify ::
