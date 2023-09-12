@@ -11,7 +11,6 @@ module Proxy (
     respondEither,
 ) where
 
-import Control.Applicative (liftA2, liftA3)
 import Control.Concurrent.MVar qualified as MVar
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO)
@@ -19,7 +18,7 @@ import Control.Monad.Logger qualified as Log
 import Data.Aeson (ToJSON (..))
 import Data.Aeson.KeyMap qualified as Aeson
 import Data.Aeson.Types (Value (..))
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Network.JSONRPC
@@ -117,7 +116,7 @@ respondEither mbStatsVar booster kore req = case req of
                         pure . Right . Simplify $
                             SimplifyResult
                                 { state = koreRes.state
-                                , logs = liftA2 (++) boosterRes.logs koreRes.logs
+                                , logs = Just (fromMaybe [] boosterRes.logs ++ fromMaybe [] koreRes.logs)
                                 }
                     koreError ->
                         -- can only be an error
@@ -212,14 +211,16 @@ respondEither mbStatsVar booster kore req = case req of
                                         "kore depth-bound, continuing... (currently at "
                                             <> show (currentDepth + boosterResult.depth + koreResult.depth)
                                             <> ")"
+                                let accumulatedLogs =
+                                        rpcLogs
+                                            ++ fromMaybe [] boosterResult.logs
+                                            ++ fromMaybe [] boosterStateSimplificationLogs
+                                            ++ fromMaybe [] koreResult.logs
                                 executionLoop
                                     ( currentDepth + boosterResult.depth + koreResult.depth
                                     , time + bTime + kTime
                                     , koreTime + kTime
-                                    , maybe
-                                        rpcLogs
-                                        (rpcLogs ++)
-                                        (liftA3 (\a b c -> a ++ b ++ c) boosterResult.logs boosterStateSimplificationLogs koreResult.logs)
+                                    , accumulatedLogs
                                     )
                                     r{ExecuteRequest.state = execStateToKoreJson koreResult.state}
                             | otherwise -> do
@@ -234,7 +235,7 @@ respondEither mbStatsVar booster kore req = case req of
                                         Execute
                                             koreResult
                                                 { depth = currentDepth + boosterResult.depth + koreResult.depth
-                                                , logs = (rpcLogs ++) <$> liftA2 (++) boosterResult.logs koreResult.logs
+                                                , logs = Just (rpcLogs ++ fromMaybe [] boosterResult.logs ++ fromMaybe [] koreResult.logs)
                                                 }
                         -- can only be an error at this point
                         res -> pure res
