@@ -364,7 +364,7 @@ respondEither mbStatsVar booster kore req = case req of
                     pure $ case reason of
                         Branching
                             | null filteredNexts ->
-                                res{reason = Stuck, nextStates = Nothing}
+                                res{reason = Stuck, nextStates = Nothing, logs = combineLogs $ res.logs : simplifiedStateLogs : logsOnly}
                             | length filteredNexts == 1 ->
                                 res -- What now? would have to re-loop. Return as-is.
                                 -- otherwise falling through to _otherReason
