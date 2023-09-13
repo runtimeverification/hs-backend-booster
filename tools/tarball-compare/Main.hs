@@ -22,7 +22,8 @@ import Codec.Archive.Tar qualified as Tar
 import Codec.Archive.Tar.Check qualified as Tar
 import Codec.Compression.BZip qualified as BZ2
 import Codec.Compression.GZip qualified as GZip
-import Control.Monad.Trans.Except
+import Control.Monad (forM_, forM, when)
+import Control.Monad.Trans.Writer
 import Data.Aeson qualified as Json
 import Data.Aeson.KeyMap qualified as Json
 import Data.ByteString.Lazy.Char8 qualified as BS
@@ -30,12 +31,10 @@ import Data.List.Extra
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
+import System.Environment (getArgs)
 import System.FilePath
 
 import Kore.JsonRpc.Types
-import System.Environment (getArgs)
-import Control.Monad (forM_)
-import Control.Monad.Extra (when)
 
 data BugReportData = BugReportData {
     requests :: Map FilePath BS.ByteString
@@ -67,27 +66,20 @@ main = getArgs >>= \case
         contents <- Tar.checkSecurity . unpack tarFile <$> BS.readFile tarFile
         case unpackBugReports contents of
             Left err -> either print print err
-            Right bugReports -> forM_ (Map.toList bugReports) $ \(file, BugReportDiff{booster, koreRpc}) -> do
-                putStrLn $ "------------- " <> file <> " -------------"
-                if null $ Map.keys booster.requests then
-                    putStrLn $ "No Booster data... skipping..."
-                    else do
-                        when (Map.keys koreRpc.requests /= Map.keys booster.requests || Map.keys koreRpc.responses /= Map.keys booster.responses) $ 
-                            putStrLn "Booster and kore-rpc have different requests/responses"
-                        forM_ (Map.toList koreRpc.requests) $ \(koreRpcReqKey, koreRpcReqJson) -> do
-                            case Map.lookup koreRpcReqKey booster.requests of
-                                Nothing -> putStrLn $ "Request " <> koreRpcReqKey <> " does not exist in booster"
-                                Just boosterReqJson ->
-                                    when (koreRpcReqJson /= boosterReqJson) $
-                                        putStrLn $ "Request " <> koreRpcReqKey <> " differs in booster"
-                            case (Map.lookup koreRpcReqKey koreRpc.responses, Map.lookup koreRpcReqKey booster.responses) of
-                                (Just koreResp, Just boosterResp) ->
-                                    when (koreResp /= boosterResp) $
-                                        putStrLn $ "Response " <> koreRpcReqKey <> " differs in booster"
-                                (Just _, Nothing) -> putStrLn $ "Response " <> koreRpcReqKey <> " missing in booster"
-                                (Nothing, Just _) -> putStrLn $ "Response " <> koreRpcReqKey <> " missing in kore-rpc"
-                                (Nothing, Nothing) -> putStrLn $ "Response " <> koreRpcReqKey <> " missing"
-
+            Right bugReports -> forM_ (Map.toList bugReports) $
+                mapM_ BS.putStrLn . uncurry checkDiff
+    [tar1, tar2] -> do
+        let dataFrom f =
+                either (error . either show show) id
+                    . unpackBugReportDataFrom
+                    . Tar.checkSecurity
+                    . unpack f
+                    <$> BS.readFile f
+        bugReportDiff <-
+            BugReportDiff
+                <$> dataFrom tar1
+                <*> dataFrom tar2
+        mapM_ BS.putStrLn $ checkDiff (tar1 <> "<->" <> tar2) bugReportDiff
     _ -> putStrLn "incorrect args"
     where
         unpack tarFile
@@ -98,7 +90,7 @@ main = getArgs >>= \case
             | otherwise = Tar.read
 
 
-unpackBugReports :: 
+unpackBugReports ::
     Tar.Entries (Either Tar.FormatError Tar.FileNameError) ->
     Either (Either Tar.FormatError Tar.FileNameError) (Map FilePath BugReportDiff)
 unpackBugReports = Tar.foldEntries unpackBugReportData (Right mempty) Left
@@ -111,14 +103,14 @@ unpackBugReports = Tar.foldEntries unpackBugReportData (Right mempty) Left
         unpackBugReportData entry acc@(Right m)
             | Tar.NormalFile bs _size <- Tar.entryContent entry
             , ".tar" `isSuffixOf` file
-            , contents <- Tar.read bs = 
+            , contents <- Tar.read bs =
                 case unpackBugReportDataFrom contents of
                     Left err -> Left $ Left err
-                    Right bugReport -> Right $ Map.alter (insertBugReport bugReport) file m    
+                    Right bugReport -> Right $ Map.alter (insertBugReport bugReport) file m
             | otherwise = acc
          where
             (dir, file) = splitFileName (Tar.entryPath entry)
-            insertBugReport b bDiff = Just $ (\bugReportDiff -> if "booster" `isInfixOf` dir 
+            insertBugReport b bDiff = Just $ (\bugReportDiff -> if "booster" `isInfixOf` dir
                     then bugReportDiff {booster = b}
                     else bugReportDiff {koreRpc = b}) $ fromMaybe mempty bDiff
 
@@ -158,44 +150,28 @@ unpackBugReportDataFrom = Tar.foldEntries unpackRpc (Right mempty) Left
         requestSuffix = "_request.json"
         responseSuffix = "_response.json"
 
-data Interaction = Interaction
-    { method :: APIMethod
-    , request :: BS.ByteString
-    , response :: BS.ByteString
-    }
-    deriving (Eq, Ord, Show)
-
-mkInteractions ::
-    Map FilePath BS.ByteString ->
-    Map FilePath BS.ByteString ->
-    Except String (Map FilePath Interaction)
-mkInteractions requests responses
-    | not (Map.null surplusReqs) =
-        throwE $ "Surplus requests: " <> show (Map.keys surplusReqs)
-    | not (Map.null surplusResps) =
-        throwE $ "Surplus responses: " <> show (Map.keys surplusResps)
-    | otherwise =
-        pure $ Map.intersectionWith mkInteraction requests responses
+checkDiff :: FilePath -> BugReportDiff -> [BS.ByteString]
+checkDiff name BugReportDiff{booster, koreRpc} =
+    "------------- " <> BS.pack name <> " -------------"
+        : if null $ Map.keys booster.requests
+              then ["No Booster data... skipping..."]
+              else execWriter $ do
+                      when (Map.keys koreRpc.requests /= Map.keys booster.requests || Map.keys koreRpc.responses /= Map.keys booster.responses) $
+                          msg ("Booster and kore-rpc have different requests/responses" :: BS.ByteString)
+                      forM (Map.toList koreRpc.requests) $ \(koreRpcReqKey, koreRpcReqJson) -> do
+                          let keyBS = BS.pack koreRpcReqKey
+                          case Map.lookup koreRpcReqKey booster.requests of
+                              Nothing ->
+                                  msg $ "Request " <> keyBS <> " does not exist in booster"
+                              Just boosterReqJson ->
+                                  when (koreRpcReqJson /= boosterReqJson) $
+                                      msg $ "Request " <> keyBS <> " differs in booster"
+                          case (Map.lookup koreRpcReqKey koreRpc.responses, Map.lookup koreRpcReqKey booster.responses) of
+                              (Just koreResp, Just boosterResp) ->
+                                  when (koreResp /= boosterResp) $
+                                        msg $ "Response " <> keyBS <> " differs in booster"
+                              (Just _, Nothing) -> msg $ "Response " <> keyBS <> " missing in booster"
+                              (Nothing, Just _) -> msg $ "Response " <> keyBS <> " missing in kore-rpc"
+                              (Nothing, Nothing) -> msg $ "Response " <> keyBS <> " missing"
   where
-    surplusReqs = Map.difference requests responses
-    surplusResps = Map.difference responses requests
-
-mkInteraction :: BS.ByteString -> BS.ByteString -> Interaction
-mkInteraction request response = Interaction{method, request, response}
-  where
-    method =
-        fromMaybe (error "Unknown RPC method in request file") $
-        either error getMethod requestData
-
-    requestData = Json.eitherDecode request :: Either String Json.Object
-
-    getMethod :: Json.Object -> Maybe APIMethod
-    getMethod obj = Json.lookup "method" obj >>= apiMethod
-
-apiMethod :: Json.Value -> Maybe APIMethod
-apiMethod (Json.String "execute") = Just ExecuteM
-apiMethod (Json.String "implies") = Just ImpliesM
-apiMethod (Json.String "simplify") = Just SimplifyM
-apiMethod (Json.String "add-module") = Just AddModuleM
-apiMethod (Json.String "get-model") = Just GetModelM
-apiMethod _other = Nothing
+    msg = tell . (:[])
