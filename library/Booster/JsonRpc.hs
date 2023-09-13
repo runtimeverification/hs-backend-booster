@@ -468,10 +468,11 @@ mkLogRewriteTrace
                                         , substitution = Nothing
                                         , ruleId = maybe "UNKNOWN" getUniqueId uid
                                         }
+                                , originalTerm = Nothing
                                 , origin = Booster
                                 }
             RewriteBranchingStep _ _ -> Nothing -- we may or may not want to emit a trace here in the future
-            RewriteStepFailed reason
+            RewriteStepFailed originalPattern reason
                 | logFailedRewrites ->
                     Just $
                         singleton $
@@ -505,6 +506,7 @@ mkLogRewriteTrace
                                             { reason = "Sort error while unifying"
                                             , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
                                             }
+                                , originalTerm = Just $ execStateToKoreJson $ toExecState originalPattern
                                 , origin = Booster
                                 }
             RewriteSimplified equationTraces Nothing

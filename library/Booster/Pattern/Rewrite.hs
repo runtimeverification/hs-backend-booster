@@ -410,7 +410,7 @@ data RewriteTrace pat
     | -- | branching step of execution
       RewriteBranchingStep pat (NonEmpty (Text, Maybe UniqueId))
     | -- | attempted rewrite failed
-      RewriteStepFailed (RewriteFailed "Rewrite")
+      RewriteStepFailed pat (RewriteFailed "Rewrite")
     | -- | Applied simplification to the pattern
       RewriteSimplified [EquationTrace] (Maybe EquationFailure)
     deriving stock (Eq, Show)
@@ -438,7 +438,7 @@ instance Pretty (RewriteTrace Pattern) where
                 , hang 2 $ vsep [pretty lbl | (lbl, _) <- toList branches]
                 ]
         RewriteSimplified{} -> "Applied simplification"
-        RewriteStepFailed failure -> pretty failure
+        RewriteStepFailed _ failure -> pretty failure
 
 diff :: Pattern -> Pattern -> (Pattern, Pattern)
 diff p1 p2 =
@@ -699,7 +699,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                         pure simplified
                     Right stuck@RewriteStuck{} -> do
                         logRewrite $ "Stopped after " <> showCounter counter
-                        rewriteTrace $ RewriteStepFailed $ NoApplicableRules pat'
+                        rewriteTrace $ RewriteStepFailed pat' $ NoApplicableRules pat'
                         if wasSimplified
                             then pure stuck
                             else withSimplified pat' "Retrying with simplified pattern" (doSteps True)
@@ -713,10 +713,10 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                     -- unsimplified, simplify and retry rewriting once
                     Left failure@RuleApplicationUnclear{}
                         | not wasSimplified -> do
-                            rewriteTrace $ RewriteStepFailed failure
+                            rewriteTrace $ RewriteStepFailed pat' failure
                             withSimplified pat' "Retrying with simplified pattern" (doSteps True)
                     Left failure -> do
-                        rewriteTrace $ RewriteStepFailed failure
+                        rewriteTrace $ RewriteStepFailed pat' failure
                         let msg = "Aborted after " <> showCounter counter
                         if wasSimplified
                             then logRewrite msg >> pure (RewriteAborted pat')
