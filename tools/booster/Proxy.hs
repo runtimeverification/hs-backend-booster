@@ -66,16 +66,15 @@ respondEither mbStatsVar booster kore req = case req of
         | isJust execReq.stepTimeout || isJust execReq.movingAverageStepTimeout ->
             loggedKore ExecuteM req
         | otherwise ->
-            handleExecute execReq
-                >>= traverse
-                    ( postExecSimplify
-                        ( execReq.logSuccessfulSimplifications
-                        , execReq.logFailedSimplifications
-                        , execReq.logSuccessfulRewrites
-                        , execReq.logFailedRewrites
-                        )
-                        execReq._module
-                    )
+            let logSettings =
+                    LogSettings
+                        { logSuccessfulSimplifications = execReq.logSuccessfulSimplifications
+                        , logFailedSimplifications = execReq.logFailedSimplifications
+                        , logSuccessfulRewrites = execReq.logSuccessfulRewrites
+                        , logFailedRewrites = execReq.logFailedRewrites
+                        }
+             in handleExecute logSettings execReq
+                    >>= traverse (postExecSimplify logSettings execReq._module)
     Implies _ ->
         loggedKore ImpliesM req
     Simplify simplifyReq -> handleSimplify simplifyReq
@@ -153,12 +152,15 @@ respondEither mbStatsVar booster kore req = case req of
         | otherwise =
             pure ()
 
-    handleExecute :: ExecuteRequest -> m (Either ErrorObj (API 'Res))
-    handleExecute = executionLoop (0, 0.0, 0.0, Nothing)
+    handleExecute :: LogSettings -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
+    handleExecute logSettings = executionLoop logSettings (0, 0.0, 0.0, Nothing)
 
     executionLoop ::
-        (Depth, Double, Double, Maybe [RPCLog.LogEntry]) -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
-    executionLoop (!currentDepth, !time, !koreTime, !rpcLogs) r = do
+        LogSettings ->
+        (Depth, Double, Double, Maybe [RPCLog.LogEntry]) ->
+        ExecuteRequest ->
+        m (Either ErrorObj (API 'Res))
+    executionLoop logSettings (!currentDepth, !time, !koreTime, !rpcLogs) r = do
         Log.logInfoNS "proxy" . Text.pack $
             if currentDepth == 0
                 then "Starting execute request"
@@ -178,14 +180,8 @@ respondEither mbStatsVar booster kore req = case req of
                     -- simplify Booster's state with Kore's simplifier
                     Log.logInfoNS "proxy" . Text.pack $ "Simplifying booster state and falling back to Kore "
                     (simplifiedBoosterState, boosterStateSimplificationLogs) <-
-                        simplifyExecuteState
-                            ( r.logSuccessfulSimplifications
-                            , r.logFailedSimplifications
-                            , r.logSuccessfulRewrites
-                            , r.logFailedRewrites
-                            )
-                            r._module
-                            boosterResult.state
+                        simplifyExecuteState logSettings r._module boosterResult.state
+
                     -- attempt to do one step in the old backend
                     (kResult, kTime) <-
                         withTime $
@@ -219,6 +215,7 @@ respondEither mbStatsVar booster kore req = case req of
                                             , koreResult.logs
                                             ]
                                 executionLoop
+                                    logSettings
                                     ( currentDepth + boosterResult.depth + koreResult.depth
                                     , time + bTime + kTime
                                     , koreTime + kTime
@@ -259,16 +256,12 @@ respondEither mbStatsVar booster kore req = case req of
             res -> pure res
 
     simplifyExecuteState ::
-        (Maybe Bool, Maybe Bool, Maybe Bool, Maybe Bool) ->
+        LogSettings ->
         Maybe Text ->
         ExecuteState ->
         m (ExecuteState, Maybe [RPCLog.LogEntry])
     simplifyExecuteState
-        ( logSuccessfulSimplifications
-            , logFailedSimplifications
-            , _logSuccessfulRewrites
-            , _logFailedRewrites
-            )
+        LogSettings{logSuccessfulSimplifications, logFailedSimplifications}
         mbModule
         s = do
             Log.logInfoNS "proxy" "Simplifying execution state"
@@ -326,7 +319,7 @@ respondEither mbStatsVar booster kore req = case req of
                     }
 
     postExecSimplify ::
-        (Maybe Bool, Maybe Bool, Maybe Bool, Maybe Bool) -> Maybe Text -> API 'Res -> m (API 'Res)
+        LogSettings -> Maybe Text -> API 'Res -> m (API 'Res)
     postExecSimplify logSettings mbModule = \case
         Execute res -> Execute <$> simplifyResult res
         other -> pure other
@@ -365,6 +358,13 @@ respondEither mbStatsVar booster kore req = case req of
         isBottom ExecuteState{predicate = Just p}
             | KoreJson.KJBottom _ <- p.term = True
         isBottom _ = False
+
+data LogSettings = LogSettings
+    { logSuccessfulSimplifications :: Maybe Bool
+    , logFailedSimplifications :: Maybe Bool
+    , logSuccessfulRewrites :: Maybe Bool
+    , logFailedRewrites :: Maybe Bool
+    }
 
 -- | Combine multiple, possibly empty/non-existent (Nothing) lists of logs into one
 combineLogs :: [Maybe [RPCLog.LogEntry]] -> Maybe [RPCLog.LogEntry]
