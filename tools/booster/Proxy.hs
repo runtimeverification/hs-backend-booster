@@ -1,5 +1,4 @@
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
 
 {- |
 Module      : Proxy
@@ -19,7 +18,7 @@ import Control.Monad.Logger qualified as Log
 import Data.Aeson (ToJSON (..))
 import Data.Aeson.KeyMap qualified as Aeson
 import Data.Aeson.Types (Value (..))
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (catMaybes, isJust, isNothing)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Network.JSONRPC
@@ -155,10 +154,10 @@ respondEither mbStatsVar booster kore req = case req of
             pure ()
 
     handleExecute :: ExecuteRequest -> m (Either ErrorObj (API 'Res))
-    handleExecute = executionLoop (0, 0.0, 0.0, [])
+    handleExecute = executionLoop (0, 0.0, 0.0, Nothing)
 
     executionLoop ::
-        (Depth, Double, Double, [RPCLog.LogEntry]) -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
+        (Depth, Double, Double, Maybe [RPCLog.LogEntry]) -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
     executionLoop (!currentDepth, !time, !koreTime, !rpcLogs) r = do
         Log.logInfoNS "proxy" . Text.pack $
             if currentDepth == 0
@@ -213,9 +212,12 @@ respondEither mbStatsVar booster kore req = case req of
                                             <> show (currentDepth + boosterResult.depth + koreResult.depth)
                                             <> ")"
                                 let accumulatedLogs =
-                                        fromMaybe [] $
-                                            combineLogs
-                                                [Just rpcLogs, boosterResult.logs, boosterStateSimplificationLogs, koreResult.logs]
+                                        combineLogs
+                                            [ rpcLogs
+                                            , boosterResult.logs
+                                            , boosterStateSimplificationLogs
+                                            , koreResult.logs
+                                            ]
                                 executionLoop
                                     ( currentDepth + boosterResult.depth + koreResult.depth
                                     , time + bTime + kTime
@@ -235,7 +237,7 @@ respondEither mbStatsVar booster kore req = case req of
                                         Execute
                                             koreResult
                                                 { depth = currentDepth + boosterResult.depth + koreResult.depth
-                                                , logs = combineLogs [Just rpcLogs, boosterResult.logs, koreResult.logs]
+                                                , logs = combineLogs [rpcLogs, boosterResult.logs, koreResult.logs]
                                                 }
                         -- can only be an error at this point
                         res -> pure res
@@ -251,7 +253,7 @@ respondEither mbStatsVar booster kore req = case req of
                             Execute
                                 boosterResult
                                     { depth = currentDepth + boosterResult.depth
-                                    , logs = combineLogs [Just rpcLogs, boosterResult.logs]
+                                    , logs = combineLogs [rpcLogs, boosterResult.logs]
                                     }
             -- can only be an error at this point
             res -> pure res
@@ -366,15 +368,10 @@ respondEither mbStatsVar booster kore req = case req of
 
 -- | Combine multiple, possibly empty/non-existent (Nothing) lists of logs into one
 combineLogs :: [Maybe [RPCLog.LogEntry]] -> Maybe [RPCLog.LogEntry]
-combineLogs logSources = case combineLogsImpl [] logSources of
-    [] -> Nothing
-    xs -> Just xs
-  where
-    combineLogsImpl :: [RPCLog.LogEntry] -> [Maybe [RPCLog.LogEntry]] -> [RPCLog.LogEntry]
-    combineLogsImpl acc = \case
-        [] -> acc
-        (Nothing : rest) -> combineLogsImpl acc rest
-        (Just logs : rest) -> combineLogsImpl (acc ++ logs) rest
+combineLogs logSources
+    | all isNothing logSources = Nothing
+    | otherwise = Just $ concat $ catMaybes logSources
 
 appendLogs :: ExecuteResult -> Maybe [RPCLog.LogEntry] -> ExecuteResult
-appendLogs ExecuteResult{..} newLogs = ExecuteResult{logs = combineLogs [logs, newLogs], ..}
+appendLogs res@ExecuteResult{reason, logs} newLogs =
+    res{reason, logs = combineLogs [logs, newLogs]}
