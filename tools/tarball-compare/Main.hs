@@ -157,21 +157,51 @@ checkDiff name BugReportDiff{booster, koreRpc} =
               then ["No Booster data... skipping..."]
               else execWriter $ do
                       when (Map.keys koreRpc.requests /= Map.keys booster.requests || Map.keys koreRpc.responses /= Map.keys booster.responses) $
-                          msg ("Booster and kore-rpc have different requests/responses" :: BS.ByteString)
+                          msg "Booster and kore-rpc have different requests/responses"
                       forM (Map.toList koreRpc.requests) $ \(koreRpcReqKey, koreRpcReqJson) -> do
                           let keyBS = BS.pack koreRpcReqKey
                           case Map.lookup koreRpcReqKey booster.requests of
                               Nothing ->
                                   msg $ "Request " <> keyBS <> " does not exist in booster"
                               Just boosterReqJson ->
-                                  when (koreRpcReqJson /= boosterReqJson) $
-                                      msg $ "Request " <> keyBS <> " differs in booster"
+                                  compareJson
+                                      "Requests"
+                                      koreRpcReqKey
+                                      koreRpcReqJson
+                                      boosterReqJson
                           case (Map.lookup koreRpcReqKey koreRpc.responses, Map.lookup koreRpcReqKey booster.responses) of
                               (Just koreResp, Just boosterResp) ->
-                                  when (koreResp /= boosterResp) $
-                                        msg $ "Response " <> keyBS <> " differs in booster"
-                              (Just _, Nothing) -> msg $ "Response " <> keyBS <> " missing in booster"
-                              (Nothing, Just _) -> msg $ "Response " <> keyBS <> " missing in kore-rpc"
-                              (Nothing, Nothing) -> msg $ "Response " <> keyBS <> " missing"
+                                  compareJson
+                                      "Responses"
+                                      koreRpcReqKey
+                                      koreResp
+                                      boosterResp
+                              (Just _, Nothing) ->
+                                  msg $ "Response " <> keyBS <> " missing in booster"
+                              (Nothing, Just _) ->
+                                  msg $ "Response " <> keyBS <> " missing in kore-rpc"
+                              (Nothing, Nothing) ->
+                                  msg $ "Response " <> keyBS <> " missing"
   where
     msg = tell . (:[])
+
+    compareJson ::
+        BS.ByteString ->
+        String ->
+        BS.ByteString ->
+        BS.ByteString ->
+        Writer [BS.ByteString] ()
+    compareJson prefix key koreJson boosterJson = do
+        let koreSize = BS.length koreJson
+            boosSize = BS.length boosterJson
+            keyBS = BS.pack key
+        when (compare koreSize boosSize /= EQ) $
+            msg $ BS.unwords [prefix, "for", keyBS, "have different size."]
+        when (koreJson /= boosterJson) $
+            msg $ BS.unwords
+            [ prefix, "for", keyBS, "are different"
+            , case compare koreSize boosSize of
+                    EQ -> "(same size)"
+                    GT -> "(kore bigger)"
+                    LT -> "(booster bigger)"
+            ]
