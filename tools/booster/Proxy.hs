@@ -430,8 +430,12 @@ mkFallbackLogEntry boosterResult koreResult =
         lastBoosterRewriteLogEntry = case boosterRewriteFailureLog of
             [] -> Nothing
             xs -> Just $ last xs
-        fallbackRuleId = fromMaybe "UNKNOWN: log-failed-rewrites not enabled" $ getRewriteFailureRuleId =<< lastBoosterRewriteLogEntry
-        fallbackReason = fromMaybe "UNKNOWN: log-failed-rewrites not enabled" $ getRewriteFailureReason =<< lastBoosterRewriteLogEntry
+        fallbackRuleId =
+            fromMaybe "UNKNOWN: log-failed-rewrites not enabled" $
+                getRewriteFailureRuleId =<< lastBoosterRewriteLogEntry
+        fallbackReason =
+            fromMaybe "UNKNOWN: log-failed-rewrites not enabled" $
+                getRewriteFailureReason =<< lastBoosterRewriteLogEntry
 
         koreRewriteSuccessLog = filter isRewriteSuccessLogEntry . fromMaybe [] $ koreResult.logs
         koreRuleIds = mapMaybe getRewriteSuccessRuleId koreRewriteSuccessLog
