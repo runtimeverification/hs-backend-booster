@@ -94,6 +94,7 @@ respond stateVar =
                                 , req.logFailedRewrites
                                 , req.logSuccessfulSimplifications
                                 , req.logFailedSimplifications
+                                , req.logFallbacks
                                 ]
                     execResponse req <$> performRewrite doTracing def mLlvmLibrary mbDepth cutPoints terminals pat
         RpcTypes.AddModule req -> do
