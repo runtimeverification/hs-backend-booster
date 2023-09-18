@@ -154,7 +154,7 @@ respond stateVar =
                 mkTraces duration traceData
                     | Just True <- req.logTiming =
                         Just $
-                            [ProcessingTime [(Nothing, duration)]]
+                            [ProcessingTime (Just Booster) duration]
                                 <> fromMaybe [] (mkEquationTraces traceData)
                     | otherwise =
                         mkEquationTraces traceData
@@ -383,7 +383,7 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                         )
                     $ toList traces
             timingLog =
-                fmap (\duration -> ProcessingTime [(Nothing, duration)]) mbDuration
+                fmap (ProcessingTime $ Just Booster) mbDuration
          in case (timingLog, traceLogs) of
                 (Nothing, Nothing) -> Nothing
                 (Nothing, Just []) -> Nothing
