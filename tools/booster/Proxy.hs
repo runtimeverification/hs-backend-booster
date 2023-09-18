@@ -317,6 +317,7 @@ respondEither mbStatsVar booster kore req = case req of
                     , _module = mbModule
                     , logSuccessfulSimplifications
                     , logFailedSimplifications
+                    , logTiming = Nothing
                     }
 
             emptyExecuteRequest :: KoreJson.KoreJson -> ExecuteRequest
@@ -333,6 +334,7 @@ respondEither mbStatsVar booster kore req = case req of
                     , logFailedSimplifications = Nothing
                     , logSuccessfulRewrites = Nothing
                     , logFailedRewrites = Nothing
+                    , logTiming = Nothing
                     }
 
     postExecSimplify ::
