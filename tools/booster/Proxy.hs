@@ -78,7 +78,7 @@ respondEither mbStatsVar booster kore req = case req of
                         , logTiming = execReq.logTiming
                         }
              in liftIO (getTime Monotonic) >>= \start ->
-                    handleExecute logSettings execReq{ExecuteRequest.logTiming = Just False}
+                    handleExecute logSettings execReq
                         >>= traverse (postExecSimplify logSettings start execReq._module)
     Implies _ ->
         loggedKore ImpliesM req
@@ -100,16 +100,16 @@ respondEither mbStatsVar booster kore req = case req of
   where
     handleSimplify :: SimplifyRequest -> m (Either ErrorObj (API 'Res))
     handleSimplify simplifyReq = do
+        start <- liftIO $ getTime Monotonic
         -- execute in booster first, then in kore. Log the difference
         (boosterResult, boosterTime) <-
-            Stats.timed $ booster (Simplify simplifyReq{SimplifyRequest.logTiming = Just False})
+            Stats.timed $ booster (Simplify simplifyReq)
         case boosterResult of
             Right (Simplify boosterRes) -> do
                 let koreReq =
                         Simplify
                             simplifyReq
                                 { SimplifyRequest.state = boosterRes.state
-                                , SimplifyRequest.logTiming = Just False
                                 }
                 (koreResult, koreTime) <- Stats.timed $ kore koreReq
                 case koreResult of
@@ -123,21 +123,19 @@ respondEither mbStatsVar booster kore req = case req of
                                 , "to"
                                 , show koreRes.state
                                 ]
-                        let timings
+                        stop <- liftIO $ getTime Monotonic
+                        let timing
                                 | fromMaybe False simplifyReq.logTiming =
                                     Just
                                         [ RPCLog.ProcessingTime
-                                            (Just RPCLog.Booster)
-                                            (boosterTime / 1e6)
-                                        , RPCLog.ProcessingTime
-                                            (Just RPCLog.KoreRpc)
-                                            (koreTime / 1e6)
+                                            Nothing
+                                            (fromIntegral (toNanoSecs (diffTimeSpec stop start)) / 1e9)
                                         ]
                                 | otherwise = Nothing
                         pure . Right . Simplify $
                             SimplifyResult
                                 { state = koreRes.state
-                                , logs = combineLogs [timings, boosterRes.logs, koreRes.logs]
+                                , logs = combineLogs [timing, boosterRes.logs, koreRes.logs]
                                 }
                     koreError ->
                         -- can only be an error
