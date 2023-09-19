@@ -224,7 +224,7 @@ jobs:
           export CLIENT=$(nix build .#hs-backend-booster:exe:rpc-client --no-link --json | $JQ -r '.[].outputs | to_entries[].value')/bin/rpc-client
 
           cd test/rpc-integration
-          for dir in $(ls -d test-*); do
+          for dir in $(ls -d test-*/); do
               name=${dir##test-}
               echo "Running $name..."
               if [ "$name" = "a-to-f" ] || [ "$name" = "diamond" ]; then
