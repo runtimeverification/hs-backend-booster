@@ -70,7 +70,11 @@ echo "Server PID ${server_pid}"
 
 sleep 5
 
-if [ -d $dir ]; then
+if [ -d $dir ] && [ -f "${dir}.sh" ]; then
+    echo "shell-scripted test, running $dir.sh as-is"
+    . ./${dir}.sh
+elif [ -d $dir ]; then
+    echo "Directory test"
     for test in $( ls $dir/state-*.{execute,send,simplify,add-module,get-model} 2>/dev/null ); do
         tmp=${test#$dir/state-}
         testname=${tmp%.*}
