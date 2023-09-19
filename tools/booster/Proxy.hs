@@ -257,8 +257,17 @@ respondEither mbStatsVar booster kore req = case req of
                                             Right $
                                                 Execute
                                                     koreResult
-                                                        { depth = currentDepth + boosterResult.depth + koreResult.depth
-                                                        , logs = combineLogs [rpcLogs, boosterResult.logs, koreResult.logs]
+                                                        { depth =
+                                                            currentDepth
+                                                                + boosterResult.depth
+                                                                + koreResult.depth
+                                                        , logs =
+                                                            combineLogs
+                                                                [ rpcLogs
+                                                                , boosterResult.logs
+                                                                , boosterStateSimplificationLogs
+                                                                , koreResult.logs
+                                                                ]
                                                         }
                                 -- can only be an error at this point
                                 res -> pure res
