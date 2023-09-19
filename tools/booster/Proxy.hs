@@ -82,7 +82,8 @@ respondEither mbStatsVar booster kore req = case req of
                         >>= traverse (postExecSimplify logSettings start execReq._module)
     Implies _ ->
         loggedKore ImpliesM req
-    Simplify simplifyReq -> handleSimplify simplifyReq
+    Simplify simplifyReq ->
+        liftIO (getTime Monotonic) >>= handleSimplify simplifyReq . Just
     AddModule _ -> do
         -- execute in booster first, assuming that kore won't throw an
         -- error if booster did not. The response is empty anyway.
@@ -98,9 +99,8 @@ respondEither mbStatsVar booster kore req = case req of
     Cancel ->
         pure $ Left $ ErrorObj "Cancel not supported" (-32601) Null
   where
-    handleSimplify :: SimplifyRequest -> m (Either ErrorObj (API 'Res))
-    handleSimplify simplifyReq = do
-        start <- liftIO $ getTime Monotonic
+    handleSimplify :: SimplifyRequest -> Maybe TimeSpec -> m (Either ErrorObj (API 'Res))
+    handleSimplify simplifyReq mbStart = do
         -- execute in booster first, then in kore. Log the difference
         (boosterResult, boosterTime) <-
             Stats.timed $ booster (Simplify simplifyReq)
@@ -125,7 +125,8 @@ respondEither mbStatsVar booster kore req = case req of
                                 ]
                         stop <- liftIO $ getTime Monotonic
                         let timing
-                                | fromMaybe False simplifyReq.logTiming =
+                                | Just start <- mbStart
+                                , fromMaybe False simplifyReq.logTiming =
                                     Just
                                         [ RPCLog.ProcessingTime
                                             Nothing
@@ -288,12 +289,12 @@ respondEither mbStatsVar booster kore req = case req of
         ExecuteState ->
         m (Either (Maybe [RPCLog.LogEntry]) (ExecuteState, Maybe [RPCLog.LogEntry]))
     simplifyExecuteState
-        LogSettings{logSuccessfulSimplifications, logFailedSimplifications}
+        LogSettings{logSuccessfulSimplifications, logFailedSimplifications, logTiming}
         mbModule
         s = do
             Log.logInfoNS "proxy" "Simplifying execution state"
             simplResult <-
-                handleSimplify $ toSimplifyRequest s
+                handleSimplify (toSimplifyRequest s) Nothing
             case simplResult of
                 -- This request should not fail, as the only possible
                 -- failure mode would be malformed or invalid kore
@@ -334,7 +335,7 @@ respondEither mbStatsVar booster kore req = case req of
                     , _module = mbModule
                     , logSuccessfulSimplifications
                     , logFailedSimplifications
-                    , logTiming = Nothing
+                    , logTiming
                     }
 
             emptyExecuteRequest :: KoreJson.KoreJson -> ExecuteRequest
@@ -361,27 +362,32 @@ respondEither mbStatsVar booster kore req = case req of
         Execute res -> Execute <$> simplifyResult res
         other -> pure other
       where
+        -- timeLog :: TimeDiff -> Maybe [LogEntry]
+        timeLog stop
+            | fromMaybe False logSettings.logTiming =
+                let duration =
+                        fromIntegral (toNanoSecs (diffTimeSpec stop start)) / 1e9
+                 in Just [RPCLog.ProcessingTime Nothing duration]
+            | otherwise =
+                Nothing
+
         simplifyResult :: ExecuteResult -> m ExecuteResult
         simplifyResult res@ExecuteResult{reason, state, nextStates} = do
             Log.logInfoNS "proxy" . Text.pack $ "Simplifying state in " <> show reason <> " result"
             simplified <- simplifyExecuteState logSettings mbModule state
-            stop <- liftIO $ getTime Monotonic
-            let duration = fromIntegral (toNanoSecs (diffTimeSpec stop start)) / 1e9
-                timeLog =
-                    if fromMaybe False logSettings.logTiming
-                        then Just [RPCLog.ProcessingTime Nothing duration]
-                        else Nothing
             case simplified of
                 Left logsOnly -> do
                     -- state simplified to \bottom, return vacuous
                     Log.logInfoNS "proxy" "Vacuous after simplifying result state"
-                    pure $ makeVacuous (combineLogs [timeLog, logsOnly]) res
+                    stop <- liftIO $ getTime Monotonic
+                    pure $ makeVacuous (combineLogs [timeLog stop, logsOnly]) res
                 Right (simplifiedState, simplifiedStateLogs) -> do
                     simplifiedNexts <-
                         maybe
                             (pure [])
                             (mapM $ simplifyExecuteState logSettings mbModule)
                             nextStates
+                    stop <- liftIO $ getTime Monotonic
                     let (logsOnly, (filteredNexts, filteredNextLogs)) =
                             second unzip $ partitionEithers simplifiedNexts
                         newLogs = simplifiedStateLogs : logsOnly <> filteredNextLogs
@@ -392,14 +398,14 @@ respondEither mbStatsVar booster kore req = case req of
                                 res
                                     { reason = Stuck
                                     , nextStates = Nothing
-                                    , logs = combineLogs $ timeLog : res.logs : simplifiedStateLogs : logsOnly
+                                    , logs = combineLogs $ timeLog stop : res.logs : simplifiedStateLogs : logsOnly
                                     }
                             | length filteredNexts == 1 ->
                                 res -- What now? would have to re-loop. Return as-is.
                                 -- otherwise falling through to _otherReason
                         CutPointRule
                             | null filteredNexts ->
-                                makeVacuous (combineLogs $ timeLog : newLogs) res
+                                makeVacuous (combineLogs $ timeLog stop : newLogs) res
                         _otherReason ->
                             res
                                 { state = simplifiedState
@@ -407,7 +413,7 @@ respondEither mbStatsVar booster kore req = case req of
                                     if null filteredNexts
                                         then Nothing
                                         else Just filteredNexts
-                                , logs = combineLogs $ timeLog : res.logs : newLogs
+                                , logs = combineLogs $ timeLog stop : res.logs : newLogs
                                 }
 
 data LogSettings = LogSettings
