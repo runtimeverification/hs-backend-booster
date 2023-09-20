@@ -6,6 +6,13 @@ echo "client=$client"
 echo "dir=$dir"
 echo "arguments=$*"
 
+if [ -x $(which jq) ] ; then
+   JQ=$(which jq)
+   echo "Using jq from PATH at $JQ"
+else
+   echo "Using Nix-build jq (hope it's there...) "
+fi
+
 
 diff="diff -s -"
 # remove "--regenerate" and tweak $diff if it is present
