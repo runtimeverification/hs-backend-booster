@@ -431,12 +431,13 @@ mkFallbackLogEntry boosterResult koreResult =
             [] -> Nothing
             xs -> Just $ last xs
         fallbackRuleId =
-            fromMaybe "UNKNOWN: log-failed-rewrites not enabled" $
-                getRewriteFailureRuleId =<< lastBoosterRewriteLogEntry
+            case lastBoosterRewriteLogEntry of
+                Nothing -> "UNKNOWN"
+                Just logEntry -> fromMaybe "UNKNOWN" $ getRewriteFailureRuleId logEntry
         fallbackReason =
-            fromMaybe "UNKNOWN: log-failed-rewrites not enabled" $
-                getRewriteFailureReason =<< lastBoosterRewriteLogEntry
-
+            case lastBoosterRewriteLogEntry of
+                Nothing -> "UNKNOWN"
+                Just logEntry -> fromMaybe "UNKNOWN" $ getRewriteFailureReason logEntry
         koreRewriteSuccessLog = filter isRewriteSuccessLogEntry . fromMaybe [] $ koreResult.logs
         koreRuleIds = mapMaybe getRewriteSuccessRuleId koreRewriteSuccessLog
      in RPCLog.Fallback
