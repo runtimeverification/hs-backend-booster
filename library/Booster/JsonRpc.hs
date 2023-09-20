@@ -356,13 +356,21 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     , nextStates = Nothing
                     , rule = Nothing
                     }
-    RewriteAborted p ->
+    RewriteAborted failure p -> do
         Right $
             RpcTypes.Execute
                 RpcTypes.ExecuteResult
                     { reason = RpcTypes.Aborted
                     , depth
-                    , logs
+                    , logs =
+                        let abortRewriteLog =
+                                mkLogRewriteTrace
+                                    (logSuccessfulRewrites, logFailedRewrites)
+                                    (logSuccessfulSimplifications, logFailedSimplifications)
+                                    (RewriteStepFailed failure)
+                         in case logs of
+                                Nothing -> abortRewriteLog
+                                Just xs -> (++ xs) <$> abortRewriteLog
                     , state = toExecState p
                     , nextStates = Nothing
                     , rule = Nothing
