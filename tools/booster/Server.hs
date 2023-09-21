@@ -229,13 +229,14 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
                 , loggerEnv
                 }
   where
-    KoreSolverOptions{timeOut, rLimit, resetInterval, prelude} = koreSolverOptions
+    KoreSolverOptions{timeOut, rLimit, resetInterval, prelude, tactic} = koreSolverOptions
     smtConfig =
         SMT.defaultConfig
             { SMT.timeOut = timeOut
             , SMT.rLimit = rLimit
             , SMT.resetInterval = resetInterval
             , SMT.prelude = prelude
+            , SMT.tactic = tactic
             }
 
     -- SMT solver with user declared lemmas
