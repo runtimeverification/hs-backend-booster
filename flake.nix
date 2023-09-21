@@ -67,6 +67,7 @@
               nixpkgs-fmt
               hpack
               zlib
+              secp256k1
             ];
             shellHook = "rm -f *.cabal && hpack";
           };
