@@ -17,6 +17,7 @@ ARG HLINT_VERSION
 RUN    apt-get update        \
     && apt-get install --yes \
         curl                 \
+        libsecp256k1-dev     \
         libtinfo5            \
         locales              \
         git                  \
