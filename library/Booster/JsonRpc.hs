@@ -14,6 +14,7 @@ module Booster.JsonRpc (
     execStateToKoreJson,
 ) where
 
+import Control.Applicative ((<|>))
 import Control.Concurrent (MVar, newMVar, putMVar, readMVar, takeMVar)
 import Control.Monad
 import Control.Monad.IO.Class
@@ -368,9 +369,7 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                                     (logSuccessfulRewrites, logFailedRewrites)
                                     (logSuccessfulSimplifications, logFailedSimplifications)
                                     (RewriteStepFailed failure)
-                         in case logs of
-                                Nothing -> abortRewriteLog
-                                Just xs -> (++ xs) <$> abortRewriteLog
+                         in logs <|> abortRewriteLog
                     , state = toExecState p
                     , nextStates = Nothing
                     , rule = Nothing
