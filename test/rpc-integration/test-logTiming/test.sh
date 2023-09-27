@@ -36,5 +36,5 @@ done
 echo "Running a request which gets stuck, with logTiming enabled"
 ${client} \
     execute $dir/state-c.execute ${client_args} -O log-timing=true | \
-    jq 'del(.result.logs[].time)' | \
+    $JQ 'del(.result.logs[].time)' | \
     ${diff} $dir/response-c.json
