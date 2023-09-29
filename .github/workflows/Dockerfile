@@ -5,7 +5,7 @@ ARG FOURMOLU_VERSION
 ARG HLINT_VERSION
 ARG GHC_VERSION
 
-FROM haskell:${GHC_VERSION}-slim-buster
+FROM haskell:${GHC_VERSION}-buster
 
 ENV TZ America/Chicago
 ENV DEBIAN_FRONTEND=noninteractive
