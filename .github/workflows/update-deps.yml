@@ -54,7 +54,7 @@ jobs:
 
       - name: 'Install libsecp256k1'
         run: |
-          apt-get update        \
+          apt-get update
           apt-get install --yes \
               libsecp256k1-0    \
               libsecp256k1-dev
