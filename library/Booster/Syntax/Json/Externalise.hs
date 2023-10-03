@@ -41,7 +41,7 @@ externalisePattern Internal.Pattern{term = term, constraints} =
   where
     multiAnd :: Syntax.Sort -> [Syntax.KorePattern] -> Syntax.KorePattern
     multiAnd _ [] = error "multiAnd: empty"
-    multiAnd sort ps = foldl1 (Syntax.KJAnd sort) ps
+    multiAnd sort ps = Syntax.KJAnd sort ps
 
     isSubstitutionItem :: Internal.Predicate -> Bool
     isSubstitutionItem (Internal.EqualsTerm lhs _rhs) = isVariable lhs
@@ -58,8 +58,8 @@ externaliseTerm = \case
     Internal.AndTerm first' second' ->
         Syntax.KJAnd
             (externaliseSort $ sortOfTerm second')
-            (externaliseTerm first')
-            (externaliseTerm second')
+            [externaliseTerm first',
+            externaliseTerm second']
     Internal.SymbolApplication symbol sorts args ->
         Syntax.KJApp
             (symbolNameToId symbol.name)
@@ -85,7 +85,7 @@ externalisePredicate sort =
     let recursion = externalisePredicate sort
      in \case
             Internal.AndPredicate p1 p2 ->
-                Syntax.KJAnd{sort, first = recursion p1, second = recursion p2}
+                Syntax.KJAnd{sort, patterns = [recursion p1, recursion p2]}
             Internal.Bottom ->
                 Syntax.KJBottom{sort}
             Internal.Ceil term ->
@@ -131,7 +131,7 @@ externalisePredicate sort =
             Internal.Not p1 ->
                 Syntax.KJNot{sort, arg = recursion p1}
             Internal.Or p1 p2 ->
-                Syntax.KJOr{sort, first = recursion p1, second = recursion p2}
+                Syntax.KJOr{sort, patterns = [recursion p1, recursion p2]}
             Internal.Top ->
                 Syntax.KJTop{sort}
 
