@@ -231,9 +231,9 @@ ApplicationPattern :: { KorePattern }
                     | not '{' Sort '}' '(' Pattern ')'
                       { KJNot{sort = $3, arg = $6} }
                     | and '{' Sort '}' Patterns
-                      { KJAnd{sort = $3, patterns = $5} }
+                      { mkAnd $3 $5 }
                     | or '{' Sort '}' Patterns
-                      { KJOr{sort = $3, patterns = $5} }
+                      { mkOr $3 $5 }
                     | implies '{' Sort '}' '(' Pattern ',' Pattern ')'
                       { KJImplies{sort = $3, first = $6, second = $8} }
                     | iff '{' Sort '}' '(' Pattern ',' Pattern ')'
