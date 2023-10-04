@@ -2,7 +2,7 @@
   description = "hs-backend-booster";
 
   inputs = {
-    haskell-backend.url = "github:runtimeverification/haskell-backend/85b5d086840a0f1e89499f086b50d7258598fc8b";
+    haskell-backend.url = "github:runtimeverification/haskell-backend/a62ea52492519ef3813227796b318cfce001e3c8";
     haskell-nix.follows = "haskell-backend/haskell-nix";
     nixpkgs.follows = "haskell-backend/haskell-nix/nixpkgs-unstable";
     flake-compat = {
@@ -67,6 +67,7 @@
               nixpkgs-fmt
               hpack
               zlib
+              secp256k1
             ];
             shellHook = "rm -f *.cabal && hpack";
           };
