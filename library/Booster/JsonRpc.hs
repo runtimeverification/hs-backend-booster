@@ -14,6 +14,7 @@ module Booster.JsonRpc (
     execStateToKoreJson,
 ) where
 
+import Control.Applicative ((<|>))
 import Control.Concurrent (MVar, newMVar, putMVar, readMVar, takeMVar)
 import Control.Monad
 import Control.Monad.IO.Class
@@ -97,6 +98,7 @@ respond stateVar =
                                 , req.logFailedRewrites
                                 , req.logSuccessfulSimplifications
                                 , req.logFailedSimplifications
+                                , req.logFallbacks
                                 ]
                     result <- performRewrite doTracing def mLlvmLibrary mbDepth cutPoints terminals pat
                     stop <- liftIO $ getTime Monotonic
@@ -135,7 +137,7 @@ respond stateVar =
                                 liftIO $ putMVar stateVar state{definitions = newDefinitions}
                                 Log.logInfo $
                                     "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
-                                pure $ Right $ RpcTypes.AddModule ()
+                                pure $ Right $ RpcTypes.AddModule $ RpcTypes.AddModuleResult $ getId newModule.name
         RpcTypes.Simplify req -> withContext req._module $ \(def, mLlvmLibrary) -> do
             start <- liftIO $ getTime Monotonic
             let internalised =
@@ -355,13 +357,19 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     , nextStates = Nothing
                     , rule = Nothing
                     }
-    RewriteAborted p ->
+    RewriteAborted failure p -> do
         Right $
             RpcTypes.Execute
                 RpcTypes.ExecuteResult
                     { reason = RpcTypes.Aborted
                     , depth
-                    , logs
+                    , logs =
+                        let abortRewriteLog =
+                                mkLogRewriteTrace
+                                    (logSuccessfulRewrites, logFailedRewrites)
+                                    (logSuccessfulSimplifications, logFailedSimplifications)
+                                    (RewriteStepFailed failure)
+                         in logs <|> abortRewriteLog
                     , state = toExecState p
                     , nextStates = Nothing
                     , rule = Nothing
