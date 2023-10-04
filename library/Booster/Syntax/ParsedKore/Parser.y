@@ -410,7 +410,7 @@ mkAnd s ps = KJAnd s ps
 mkOr :: Sort -> [KorePattern] -> KorePattern
 mkOr s [] = KJBottom s
 mkOr s [p] = p
-mkOr s ps = KJAnd s ps
+mkOr s ps = KJOr s ps
 
 {- | Helper function to expand a \\left-assoc or \\right-assoc directive for
 a particular type of pattern. Only implemented for Application patterns and
