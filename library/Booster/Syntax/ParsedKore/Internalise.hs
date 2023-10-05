@@ -609,7 +609,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
                 Just . FunctionAxiom' requires argTuples lhs rhs sortVars
                     <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
             -- antiLeft (discarded), requires and argument predicate
-            | Syntax.KJAnd _ [_antiLeft, Syntax.KJAnd{patterns=[reqs, argPred]}] <- req
+            | Syntax.KJAnd _ [_antiLeft, Syntax.KJAnd{patterns = [reqs, argPred]}] <- req
             , all isVar args -> do
                 argTuples <- extractBinders argPred
                 Just . FunctionAxiom' reqs argTuples lhs rhs sortVars

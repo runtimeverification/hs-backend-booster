@@ -22,8 +22,8 @@ import Data.ByteString.Lazy.Char8 qualified as BS
 import Data.Maybe (fromMaybe)
 import Network.JSONRPC
 import System.IO (hFlush)
-import System.IO.Unsafe (unsafePerformIO)
 import System.IO.Temp (withSystemTempFile)
+import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readProcessWithExitCode)
 
 import Kore.JsonRpc.Types
@@ -45,7 +45,10 @@ diffJson file1 file2 =
             | rpcTypeOf other1 /= rpcTypeOf other2 ->
                 DifferentType (rpcTypeOf other1) (rpcTypeOf other2)
             | otherwise -> do
-                JsonDiff (rpcTypeOf other1) (encodePretty' rpcJsonConfig other1) (encodePretty' rpcJsonConfig other2)
+                JsonDiff
+                    (rpcTypeOf other1)
+                    (encodePretty' rpcJsonConfig other1)
+                    (encodePretty' rpcJsonConfig other2)
   where
     -- \| Branching execution results are considered equivalent if
     -- \* they both have two branches
