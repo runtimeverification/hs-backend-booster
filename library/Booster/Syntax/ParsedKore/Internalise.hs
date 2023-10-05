@@ -578,7 +578,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
     case axiom of
         -- rewrite: an actual rewrite rule
         Syntax.KJRewrites _ lhs rhs
-            | Syntax.KJAnd _ [(Syntax.KJNot _ _), (Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs)] <- lhs ->
+            | Syntax.KJAnd _ [Syntax.KJNot _ _, Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs] <- lhs ->
                 Just . RewriteRuleAxiom' aliasName aliasArgs rhs
                     <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
             | Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs <- lhs ->
