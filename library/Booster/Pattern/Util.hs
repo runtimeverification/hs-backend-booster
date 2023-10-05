@@ -9,6 +9,7 @@ module Booster.Pattern.Util (
     sortOfPattern,
     retractPattern,
     substituteInTerm,
+    substituteTermsInTerm,
     substituteInPredicate,
     modifyVariables,
     modifyVariablesInT,
@@ -25,6 +26,7 @@ module Booster.Pattern.Util (
     isBottom,
     isConcrete,
     filterTermSymbols,
+    checkSubterms,
 ) where
 
 import Data.Bifunctor (bimap, first)
@@ -95,6 +97,36 @@ substituteInTerm substitution = goSubst
                 KList def (map goSubst heads) (bimap goSubst (map goSubst) <$> rest)
             KSet def elements rest ->
                 KSet def (map goSubst elements) (goSubst <$> rest)
+
+checkSubterms :: Set.Set Term -> Term -> Bool
+checkSubterms substitution = goSubst
+  where
+    goSubst t = case t of
+        Var{} -> Set.member t substitution
+        DomainValue{} -> Set.member t substitution
+        SymbolApplication sym sorts args ->
+            if Set.member t substitution then True else any id (map goSubst args)
+        AndTerm t1 t2 -> Set.member t substitution || goSubst t1 || goSubst t2
+        Injection ss s sub -> goSubst sub || Set.member t substitution
+        KMap attrs keyVals rest -> False
+        KList def heads rest -> False
+        KSet def elements rest -> False
+
+substituteTermsInTerm :: Map Term Term -> Term -> Term
+substituteTermsInTerm substitution = goSubst
+  where
+    goSubst t = case t of
+        Var{} -> fromMaybe t (Map.lookup t substitution)
+        DomainValue{} -> fromMaybe t (Map.lookup t substitution)
+        SymbolApplication sym sorts args ->
+            fromMaybe (SymbolApplication sym sorts $ map goSubst args) (Map.lookup t substitution)
+        AndTerm t1 t2 -> fromMaybe (AndTerm (goSubst t1) (goSubst t2)) (Map.lookup t substitution)
+        Injection ss s sub -> fromMaybe (Injection ss s (goSubst sub)) (Map.lookup t substitution)
+        KMap attrs keyVals rest -> fromMaybe (KMap attrs (bimap goSubst goSubst <$> keyVals) (goSubst <$> rest)) (Map.lookup t substitution)
+        KList def heads rest ->
+            fromMaybe (KList def (map goSubst heads) (bimap goSubst (map goSubst) <$> rest)) (Map.lookup t substitution)
+        KSet def elements rest ->
+            fromMaybe (KSet def (map goSubst elements) (goSubst <$> rest)) (Map.lookup t substitution)
 
 substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
 substituteInPredicate substitution = cata $ \case

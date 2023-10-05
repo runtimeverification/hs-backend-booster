@@ -23,9 +23,11 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State.Strict (StateT (runStateT), get, modify)
+import Data.Either (fromRight, isRight)
 import Data.Hashable qualified as Hashable
 import Data.List.NonEmpty (NonEmpty (..), toList)
 import Data.List.NonEmpty qualified as NE
+import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Sequence (Seq, (|>))
@@ -38,9 +40,11 @@ import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.ApplyEquations (
+    Direction (..),
     EquationFailure (..),
     EquationTrace,
     evaluatePattern,
+    evaluateTerm,
     simplifyConstraint,
  )
 import Booster.Pattern.Base
@@ -70,6 +74,9 @@ throw = RewriteT . lift . throwE
 
 getDefinition :: MonadLoggerIO io => RewriteT io err KoreDefinition
 getDefinition = RewriteT $ definition <$> ask
+
+getConfig :: MonadLoggerIO io => RewriteT io err RewriteConfig
+getConfig = RewriteT ask
 
 {- | Performs a rewrite step (using suitable rewrite rules from the
    definition).
@@ -229,23 +236,48 @@ applyRule pat rule = runRewriteRuleAppT $ do
     def <- lift getDefinition
     -- unify terms
     let unified = unifyTerms def rule.lhs pat.term
-    subst <- case unified of
+    (subst, pat') <- case unified of
         UnificationFailed _reason ->
             fail "Unification failed"
         UnificationSortError sortError ->
             failRewrite $ RewriteSortError rule pat.term sortError
-        UnificationRemainder remainder ->
-            -- simplify the rhs of remainders and try applying the rule again,
-            -- substituting the remainder subterm in the configuration with the simplified remainder
-            failRewrite $ RuleApplicationUnclear rule pat.term remainder
+        UnificationRemainder remainders -> do
+            RewriteConfig{definition, llvmApi, doTracing} <- lift getConfig
+            -- simplify the rhs of remainders and try applying the rule again
+            simplifiedRemainders <- mapM (evaluateTerm doTracing TopDown definition llvmApi . snd) . NonEmpty.toList $ remainders
+            let remaindersMap = map (\(a, b) -> (a, fromRight a b)) . filter (isRight . snd) $ zip (map snd $ NonEmpty.toList remainders) (map fst simplifiedRemainders)
+            case remaindersMap of
+                [] ->
+                    -- failed to simplify any of the remainders: fail the rewrite
+                    failRewrite $ RuleApplicationUnclear rule pat.term remainders
+                xs -> do
+                    -- successfully simplifying some of the remainders:
+                    -- substitute them and try applying the rule again
+                    let ys = Map.fromList xs
+                    logOther (LevelOther "Depth") $ "Simplified remainders: " <> (Text.pack $ renderDefault $ pretty xs)
+                    let term' = substituteTermsInTerm ys pat.term
+                    -- let remainderSet = Set.fromList . map fst $ xs
+                    -- logOther (LevelOther "Rewrite") $ "Found remainders in the term " <> (Text.pack $ renderDefault $ pretty $ checkSubterms remainderSet pat.term)
+                    logOther (LevelOther "Rewrite") $ "Term after substituting simplified remainders: " <> (Text.pack $ renderDefault $ pretty $ term')
+                    case unifyTerms def rule.lhs term' of
+                        UnificationFailed _reason ->
+                            fail "Unification failed"
+                        UnificationSortError sortError ->
+                            failRewrite $ RewriteSortError rule term' sortError
+                        UnificationRemainder remainders' -> do
+                            failRewrite $ RuleApplicationUnclear rule term' remainders'
+                        UnificationSuccess substitution ->
+                            pure (substitution, pat{term = term'})
+        -- failRewrite $
+        --     RuleApplicationUnclear rule pat.term remainders
         UnificationSuccess substitution ->
-            pure substitution
+            pure (substitution, pat)
 
     -- check it is a "matching" substitution (substitutes variable
     -- from the subject term only). Fail the entire rewrite if not.
     unless (Map.keysSet subst == freeVariables rule.lhs) $
         failRewrite $
-            UnificationIsNotMatch rule pat.term subst
+            UnificationIsNotMatch rule pat'.term subst
 
     -- Also fail the whole rewrite if a rule applies but may introduce
     -- an undefined term.
@@ -253,7 +285,7 @@ applyRule pat rule = runRewriteRuleAppT $ do
         failRewrite $
             DefinednessUnclear
                 rule
-                pat
+                pat'
                 rule.computedAttributes.notPreservesDefinednessReasons
 
     -- apply substitution to rule requires constraints and simplify (one by one
@@ -280,7 +312,7 @@ applyRule pat rule = runRewriteRuleAppT $ do
             Pattern
                 (substituteInTerm (refreshExistentials subst) rule.rhs)
                 -- adding new constraints that have not been trivially `Top`
-                (newConstraints <> map (substituteInPredicate subst) pat.constraints)
+                (newConstraints <> map (substituteInPredicate subst) pat'.constraints)
     return (rule, rewritten)
   where
     failRewrite = lift . throw
