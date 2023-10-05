@@ -235,11 +235,13 @@ applyRule pat rule = runRewriteRuleAppT $ do
         UnificationSortError sortError ->
             failRewrite $ RewriteSortError rule pat.term sortError
         UnificationRemainder remainder ->
+            -- simplify the rhs of remainders and try applying the rule again,
+            -- substituting the remainder subterm in the configuration with the simplified remainder
             failRewrite $ RuleApplicationUnclear rule pat.term remainder
         UnificationSuccess substitution ->
             pure substitution
 
-    -- check it is a "matching" substitution (substitutes variables
+    -- check it is a "matching" substitution (substitutes variable
     -- from the subject term only). Fail the entire rewrite if not.
     unless (Map.keysSet subst == freeVariables rule.lhs) $
         failRewrite $
@@ -566,13 +568,16 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
 
     showCounter = (<> " steps.") . pack . show
 
-    rewriteTrace t = do
-        logRewrite $ pack $ renderDefault $ pretty t
-        when doTracing $ modify $ \(counter, traces) -> (counter, traces |> t)
+    rewriteTrace t =
+        {-# SCC "performRewrite.rewriteTrace" #-}
+        do
+            logRewrite $ pack $ renderDefault $ pretty t
+            when doTracing $ modify $ \(counter, traces) -> (counter, traces |> t)
     incrementCounter = modify $ \(counter, traces) -> (counter + 1, traces)
 
     simplifyP :: Pattern -> StateT (Natural, Seq (RewriteTrace Pattern)) io (Maybe Pattern)
     simplifyP p =
+        {-# SCC "performRewrite.simplifyP" #-}
         evaluatePattern doTracing def mLlvmLibrary p >>= \(res, traces) -> do
             logTraces traces
             case res of
@@ -641,6 +646,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
             maybe (RewriteTrivial orig) (RewriteAborted reason) <$> simplifyP p
 
     logTraces =
+        {-# SCC "logTraces" #-}
         mapM_ (logSimplify . pack . renderDefault . pretty)
 
     doSteps ::
@@ -722,11 +728,13 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                             then logRewrite msg >> pure (RewriteAborted failure pat')
                             else withSimplified pat' msg (pure . RewriteAborted failure)
       where
-        withSimplified p msg cont = do
-            simplifyP p >>= \case
-                Nothing -> do
-                    logRewrite "Rewrite stuck after simplification."
-                    pure $ RewriteStuck p
-                Just simplifiedPat -> do
-                    logRewrite msg
-                    cont simplifiedPat
+        withSimplified p msg cont =
+            {-# SCC "performRewrite.withSimplified" #-}
+            do
+                simplifyP p >>= \case
+                    Nothing -> do
+                        logRewrite "Rewrite stuck after simplification."
+                        pure $ RewriteStuck p
+                    Just simplifiedPat -> do
+                        logRewrite msg
+                        cont simplifiedPat

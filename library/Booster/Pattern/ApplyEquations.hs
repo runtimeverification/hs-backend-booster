@@ -222,19 +222,21 @@ iterateEquations maxIterations direction preference startTerm =
   where
     go :: MonadLoggerIO io => Term -> EquationT io Term
     go currentTerm
-        | (getAttributes currentTerm).isEvaluated = pure currentTerm
-        | otherwise = do
-            currentCount <- countSteps
-            when (currentCount > maxIterations) $
-                throw $
-                    TooManyIterations currentCount startTerm currentTerm
-            pushTerm currentTerm
-            -- evaluate functions and simplify (recursively at each level)
-            newTerm <- applyTerm direction preference currentTerm
-            changeFlag <- getChanged
-            if changeFlag
-                then checkForLoop newTerm >> resetChanged >> go newTerm
-                else pure currentTerm
+        | (getAttributes currentTerm).isEvaluated = {-# SCC "iterateEquations.go.1" #-} pure currentTerm
+        | otherwise =
+            {-# SCC "iterateEquations.go.2" #-}
+            do
+                currentCount <- countSteps
+                when (currentCount > maxIterations) $
+                    throw $
+                        TooManyIterations currentCount startTerm currentTerm
+                pushTerm currentTerm
+                -- evaluate functions and simplify (recursively at each level)
+                newTerm <- applyTerm direction preference currentTerm
+                changeFlag <- getChanged
+                if changeFlag
+                    then checkForLoop newTerm >> resetChanged >> go newTerm
+                    else pure currentTerm
 
 ----------------------------------------
 -- Interface functions
@@ -289,12 +291,14 @@ evaluatePattern' Pattern{term, constraints} = do
     pure Pattern{constraints = Set.toList evaluatedConstraints, term = newTerm}
   where
     -- evaluate the given predicate assuming all others
-    simplifyAssumedPredicate p = do
-        allPs <- predicates <$> getState
-        let otherPs = Set.delete p allPs
-        EquationT $ lift $ lift $ modify $ \s -> s{predicates = otherPs}
-        newP <- simplifyConstraint' p
-        pushConstraints [newP]
+    simplifyAssumedPredicate p =
+        {-# SCC "evaluatePattern'.simplifyAssumedPredicate" #-}
+        do
+            allPs <- predicates <$> getState
+            let otherPs = Set.delete p allPs
+            EquationT $ lift $ lift $ modify $ \s -> s{predicates = otherPs}
+            newP <- simplifyConstraint' p
+            pushConstraints [newP]
 
 ----------------------------------------
 
@@ -311,6 +315,7 @@ applyTerm ::
     Term ->
     EquationT io Term
 applyTerm BottomUp pref =
+    {-# SCC "applyTerm.BottomUp" #-}
     cataA $ \case
         DomainValueF s val ->
             pure $ DomainValue s val
@@ -334,17 +339,20 @@ applyTerm BottomUp pref =
                 <$> sequence heads
                 <*> sequence rest
 applyTerm TopDown pref = \t@(Term attributes _) ->
+    {-# SCC "applyTerm.TopDown" #-}
     if attributes.isEvaluated
         then pure t
         else do
             config <- getConfig
             -- All fully concrete values go to the LLVM backend (top-down only)
             if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
-                then do
-                    let result = simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
-                    when (result /= t) setChanged
-                    pure result
-                else apply t
+                then
+                    {-# SCC "applyTerm.TopDown.concrete" #-}
+                    do
+                        let result = simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
+                        when (result /= t) setChanged
+                        pure result
+                else {-# SCC "applyTerm.TopDown.symbolic" #-} apply t
   where
     apply = \case
         dv@DomainValue{} ->
@@ -466,40 +474,46 @@ applyEquations ::
     ResultHandler io ->
     Term ->
     EquationT io Term
-applyEquations theory handler term = do
-    let index = termTopIndex term
-    when (index == None) $
-        throw (IndexIsNone term)
-    let idxEquations, anyEquations :: Map Priority [RewriteRule tag]
-        idxEquations = fromMaybe Map.empty $ Map.lookup index theory
-        anyEquations = fromMaybe Map.empty $ Map.lookup Anything theory
-        -- neither simplification nor function equations should need groups,
-        -- since simplification priority is just a suggestion and function equations
-        -- should not contain non-determinism except for the [owise] equation,
-        -- which should be attempted last. Thus, sorting and then applying sequentially is fine.
-        -- Doing this loses the runtime check of InconsistentFunctionRules, however,
-        -- most function rules are in the same priority group and thus,
-        -- we would be applying all of them before checking for inconsistency,
-        -- which is inefficient
-        equations :: [RewriteRule tag]
-        equations =
-            concatMap snd . Map.toAscList $
-                if index == Anything
-                    then idxEquations
-                    else Map.unionWith (<>) idxEquations anyEquations
+applyEquations theory handler term =
+    {-# SCC "applyEquations" #-}
+    do
+        let index = termTopIndex term
+        when (index == None) $
+            throw (IndexIsNone term)
+        let idxEquations, anyEquations :: Map Priority [RewriteRule tag]
+            idxEquations = fromMaybe Map.empty $ Map.lookup index theory
+            anyEquations = fromMaybe Map.empty $ Map.lookup Anything theory
+            -- neither simplification nor function equations should need groups,
+            -- since simplification priority is just a suggestion and function equations
+            -- should not contain non-determinism except for the [owise] equation,
+            -- which should be attempted last. Thus, sorting and then applying sequentially is fine.
+            -- Doing this loses the runtime check of InconsistentFunctionRules, however,
+            -- most function rules are in the same priority group and thus,
+            -- we would be applying all of them before checking for inconsistency,
+            -- which is inefficient
+            equations :: [RewriteRule tag]
+            equations =
+                {-# SCC "applyEquations.equations" #-}
+                concatMap snd . Map.toAscList $
+                    if index == Anything
+                        then idxEquations
+                        else Map.unionWith (<>) idxEquations anyEquations
 
-    processEquations equations
+        processEquations equations
   where
     -- process one equation at a time, until something has happened
     processEquations ::
         [RewriteRule tag] ->
         EquationT io Term
     processEquations [] =
+        {-# SCC "applyEquations.processEquations.empty" #-}
         pure term -- nothing to do, term stays the same
-    processEquations (eq : rest) = do
-        res <- applyEquation term eq
-        traceRuleApplication term eq.attributes.location eq.attributes.ruleLabel eq.attributes.uniqueId res
-        handler (\t -> setChanged >> pure t) (processEquations rest) (pure term) res
+    processEquations (eq : rest) =
+        {-# SCC "applyEquations.processEquations.cons" #-}
+        do
+            res <- applyEquation term eq
+            traceRuleApplication term eq.attributes.location eq.attributes.ruleLabel eq.attributes.uniqueId res
+            handler (\t -> setChanged >> pure t) (processEquations rest) (pure term) res
 
 traceRuleApplication ::
     MonadLoggerIO io =>
@@ -509,13 +523,15 @@ traceRuleApplication ::
     Maybe UniqueId ->
     ApplyEquationResult ->
     EquationT io ()
-traceRuleApplication t loc lbl uid res = do
-    let newTraceItem = EquationTrace t loc lbl uid res
-    logOther (LevelOther "Simplify") (pack . renderDefault . pretty $ newTraceItem)
-    config <- getConfig
-    when config.doTracing $
-        EquationT . lift . lift . modify $
-            \s -> s{trace = s.trace :|> newTraceItem}
+traceRuleApplication t loc lbl uid res =
+    {-# SCC "traceRuleApplication" #-}
+    do
+        let newTraceItem = EquationTrace t loc lbl uid res
+        logOther (LevelOther "Simplify") (pack . renderDefault . pretty $ newTraceItem)
+        config <- getConfig
+        when config.doTracing $
+            EquationT . lift . lift . modify $
+                \s -> s{trace = s.trace :|> newTraceItem}
 
 applyEquation ::
     forall io tag.
@@ -667,16 +683,19 @@ simplifyConstraint' :: MonadLoggerIO io => Predicate -> EquationT io Predicate
 -- Non-concrete \equals predicates are simplified using evaluateTerm.
 simplifyConstraint' = \case
     EqualsTerm t@(Term attributes _) TrueBool
-        | isConcrete t && attributes.canBeEvaluated -> do
-            mbApi <- (.llvmApi) <$> getConfig
-            case mbApi of
-                Just api ->
-                    if simplifyBool api t
-                        then pure Top
-                        else pure Bottom
-                Nothing ->
-                    evalBool t >>= prune
+        | isConcrete t && attributes.canBeEvaluated ->
+            {-# SCC "simplifyConstraint.concrete" #-}
+            do
+                mbApi <- (.llvmApi) <$> getConfig
+                case mbApi of
+                    Just api ->
+                        if simplifyBool api t
+                            then pure Top
+                            else pure Bottom
+                    Nothing ->
+                        evalBool t >>= prune
         | otherwise ->
+            {-# SCC "simplifyConstraint.symbolic" #-}
             evalBool t >>= prune
     EqualsTerm TrueBool t ->
         -- although "true" is usually 2nd
@@ -691,8 +710,10 @@ simplifyConstraint' = \case
             other -> EqualsTerm other TrueBool
 
     evalBool :: MonadLoggerIO io => Term -> EquationT io Term
-    evalBool t = do
-        prior <- getState -- save prior state so we can revert
-        result <- iterateEquations 100 TopDown PreferFunctions t
-        EquationT $ lift $ lift $ put prior
-        pure result
+    evalBool t =
+        {-# SCC "simplifyConstraint.symbolic.evalBool" #-}
+        do
+            prior <- getState -- save prior state so we can revert
+            result <- iterateEquations 100 TopDown PreferFunctions t
+            EquationT $ lift $ lift $ put prior
+            pure result
