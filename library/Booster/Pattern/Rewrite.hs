@@ -572,6 +572,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
             $ doSteps pat
     pure (counter, traces, rr)
   where
+    logDepth = logOther (LevelOther "Depth")
     logRewrite = logOther (LevelOther "Rewrite")
     logSimplify = logOther (LevelOther "Simplify")
 
@@ -702,6 +703,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
         Pattern -> StateT RewriteStepsState io (RewriteResult Pattern)
     doSteps pat' = do
         RewriteStepsState{counter, patternWasSimplified, remaindersWereSimplified} <- get
+        logDepth $ showCounter counter
         let wasSimplified = patternWasSimplified
         if depthReached counter
             then do
