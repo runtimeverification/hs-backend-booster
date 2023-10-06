@@ -528,6 +528,9 @@ traceRuleApplication t loc lbl uid res =
     do
         let newTraceItem = EquationTrace t loc lbl uid res
         logOther (LevelOther "Simplify") (pack . renderDefault . pretty $ newTraceItem)
+        case res of
+            Success{} -> logOther (LevelOther "SimplifyLight") (pack . renderDefault . pretty $ lbl)
+            _ -> pure ()
         config <- getConfig
         when config.doTracing $
             EquationT . lift . lift . modify $
