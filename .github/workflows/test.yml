@@ -134,16 +134,8 @@ jobs:
           ghc: ${{ env.ghc_version }}
 
       - name: 'Check formatting'
-        run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/fourmolu.sh && git diff --exit-code'
+        run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/fourmolu.sh'
 
-      - name: 'Run hlint'
-        run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/hlint.sh'
-
-      - name: 'Tear down Docker'
-        if: always()
-        run: |
-          docker stop --time=0 hs-booster-ci-formatting-style-buster-${{ github.run_id }}
-          
       - name: Update branch
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
@@ -163,6 +155,15 @@ jobs:
             echo "Reformatted code pushed, aborting this workflow" | tee -a $GITHUB_STEP_SUMMARY
             exit 1
           fi
+          
+      - name: 'Run hlint'
+        run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/hlint.sh'
+
+      - name: 'Tear down Docker'
+        if: always()
+        run: |
+          docker stop --time=0 hs-booster-ci-formatting-style-buster-${{ github.run_id }}
+
 
   nix-build:
     name: 'Nix / All Tests'
