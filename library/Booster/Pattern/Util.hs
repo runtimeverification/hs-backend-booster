@@ -9,6 +9,7 @@ module Booster.Pattern.Util (
     sortOfPattern,
     retractPattern,
     substituteInTerm,
+    substituteTermsInTerm,
     substituteInPredicate,
     modifyVariables,
     modifyVariablesInT,
@@ -95,6 +96,22 @@ substituteInTerm substitution = goSubst
                 KList def (map goSubst heads) (bimap goSubst (map goSubst) <$> rest)
             KSet def elements rest ->
                 KSet def (map goSubst elements) (goSubst <$> rest)
+
+substituteTermsInTerm :: Map Term Term -> Term -> Term
+substituteTermsInTerm substitution = goSubst
+  where
+    goSubst t = case t of
+        Var{} -> fromMaybe t (Map.lookup t substitution)
+        DomainValue{} -> fromMaybe t (Map.lookup t substitution)
+        SymbolApplication sym sorts args ->
+            fromMaybe (SymbolApplication sym sorts $ map goSubst args) (Map.lookup t substitution)
+        AndTerm t1 t2 -> fromMaybe (AndTerm (goSubst t1) (goSubst t2)) (Map.lookup t substitution)
+        Injection ss s sub -> fromMaybe (Injection ss s (goSubst sub)) (Map.lookup t substitution)
+        KMap attrs keyVals rest -> fromMaybe (KMap attrs (bimap goSubst goSubst <$> keyVals) (goSubst <$> rest)) (Map.lookup t substitution)
+        KList def heads rest ->
+            fromMaybe (KList def (map goSubst heads) (bimap goSubst (map goSubst) <$> rest)) (Map.lookup t substitution)
+        KSet def elements rest ->
+            fromMaybe (KSet def (map goSubst elements) (goSubst <$> rest)) (Map.lookup t substitution)
 
 substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
 substituteInPredicate substitution = cata $ \case
