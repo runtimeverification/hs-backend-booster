@@ -140,6 +140,7 @@ jobs:
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
+          git status -s -b
           if git status -s -b | grep -q '^##.*(no branch)$'; then
             echo 2>&1 "Error: Git is in detached HEAD state"
             exit 1
