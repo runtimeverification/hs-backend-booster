@@ -97,6 +97,7 @@ substituteInTerm substitution = goSubst
             KSet def elements rest ->
                 KSet def (map goSubst elements) (goSubst <$> rest)
 
+-- | Walk the term top-down and substitute subterms from keys to the values of the supplied map
 substituteTermsInTerm :: Map Term Term -> Term -> Term
 substituteTermsInTerm substitution = goSubst
   where
