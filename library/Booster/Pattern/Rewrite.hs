@@ -669,6 +669,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                         whenJust mlbl $ \lbl ->
                             rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
                         incrementCounter
+                        resetPatternWasSimplified
                         doSteps single
                     Right terminal@(RewriteTerminal lbl uniqueId single) -> do
                         rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
@@ -691,6 +692,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                                 whenJust mlbl $ \lbl ->
                                     rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
                                 incrementCounter
+                                resetPatternWasSimplified
                                 doSteps single
                             RewriteBranch pat'' branches -> do
                                 rewriteTrace $ RewriteBranchingStep pat'' $ fmap (\(lbl, uid, _) -> (lbl, uid)) branches
