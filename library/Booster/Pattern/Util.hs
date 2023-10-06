@@ -107,9 +107,14 @@ substituteTermsInTerm substitution = goSubst
             fromMaybe (SymbolApplication sym sorts $ map goSubst args) (Map.lookup t substitution)
         AndTerm t1 t2 -> fromMaybe (AndTerm (goSubst t1) (goSubst t2)) (Map.lookup t substitution)
         Injection ss s sub -> fromMaybe (Injection ss s (goSubst sub)) (Map.lookup t substitution)
-        KMap attrs keyVals rest -> fromMaybe (KMap attrs (bimap goSubst goSubst <$> keyVals) (goSubst <$> rest)) (Map.lookup t substitution)
+        KMap attrs keyVals rest ->
+            fromMaybe
+                (KMap attrs (bimap goSubst goSubst <$> keyVals) (goSubst <$> rest))
+                (Map.lookup t substitution)
         KList def heads rest ->
-            fromMaybe (KList def (map goSubst heads) (bimap goSubst (map goSubst) <$> rest)) (Map.lookup t substitution)
+            fromMaybe
+                (KList def (map goSubst heads) (bimap goSubst (map goSubst) <$> rest))
+                (Map.lookup t substitution)
         KSet def elements rest ->
             fromMaybe (KSet def (map goSubst elements) (goSubst <$> rest)) (Map.lookup t substitution)
 

@@ -558,7 +558,15 @@ performRewrite ::
     io (Natural, Seq (RewriteTrace Pattern), RewriteResult Pattern)
 performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
     (rr, RewriteStepsState{counter, traces}) <-
-        flip runStateT RewriteStepsState{counter = 0, traces = mempty, patternWasSimplified = False, remaindersWereSimplified = False} $ doSteps pat
+        flip
+            runStateT
+            RewriteStepsState
+                { counter = 0
+                , traces = mempty
+                , patternWasSimplified = False
+                , remaindersWereSimplified = False
+                } $
+            doSteps pat
     pure (counter, traces, rr)
   where
     logDepth = logOther (LevelOther "Depth")
@@ -666,7 +674,8 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
        * substitute the simplified remainders in the original term
        returns Nothing if failed to simplify any of the remainders
     -}
-    simplifyAndSubstituteRuleRemainders :: Term -> NonEmpty (Term, Term) -> StateT RewriteStepsState io (Maybe Term)
+    simplifyAndSubstituteRuleRemainders ::
+        Term -> NonEmpty (Term, Term) -> StateT RewriteStepsState io (Maybe Term)
     simplifyAndSubstituteRuleRemainders term remainders = do
         simplifiedRemainders <-
             mapM (evaluateTerm doTracing TopDown def mLlvmLibrary . snd) . NonEmpty.toList $ remainders
