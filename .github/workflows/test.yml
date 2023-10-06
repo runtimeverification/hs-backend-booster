@@ -143,6 +143,26 @@ jobs:
         if: always()
         run: |
           docker stop --time=0 hs-booster-ci-formatting-style-buster-${{ github.run_id }}
+          
+      - name: Update branch
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if git status -s -b | grep -q '^##.*(no branch)$'; then
+            echo 2>&1 "Error: Git is in detached HEAD state"
+            exit 1
+          fi
+
+          if [ -n "$(git status --porcelain '*.hs')" ]; then
+            git config --global user.name github-actions
+            git config --global user.email github-actions@github.com
+            git add '*.hs'
+            git commit -m "Format with fourmolu"
+            git show --stat
+            git push
+            echo "Reformatted code pushed, aborting this workflow" | tee -a $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
 
   nix-build:
     name: 'Nix / All Tests'
