@@ -569,7 +569,6 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
             doSteps pat
     pure (counter, traces, rr)
   where
-    logDepth = logOther (LevelOther "Depth")
     logRewrite = logOther (LevelOther "Rewrite")
     logSimplify = logOther (LevelOther "Simplify")
 
@@ -701,7 +700,6 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
     doSteps pat' = do
         RewriteStepsState{counter, patternWasSimplified, remaindersWereSimplified} <- get
         let wasSimplified = patternWasSimplified
-        logDepth $ showCounter counter
         if depthReached counter
             then do
                 let title =
@@ -728,7 +726,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                         simplified <- simplifyResult pat' branching
                         case simplified of
                             RewriteStuck{} -> do
-                                logRewrite "Rewrite stuck after pruning branches"
+s                                logRewrite "Rewrite stuck after pruning branches"
                                 pure simplified
                             RewriteTrivial{} -> do
                                 logRewrite $ "Simplified to bottom after " <> showCounter counter
