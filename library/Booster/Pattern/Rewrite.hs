@@ -487,7 +487,7 @@ showPattern title pat = hang 4 $ vsep [title, pretty pat.term]
     This flow chart should represent the actions of this function:
 
 
-                                Receive pattern P (P /= _+_)
+                                Receive pattern P (P /= _|_)
 
                                              +
                                              |   +--------------------------------------------------------------------------------------------------+
@@ -512,7 +512,7 @@ showPattern title pat = hang 4 $ vsep [title, pretty pat.term]
 |                             |                           |              |                    |      +----------+          |       |             |  |
 |              +----------------------------+             v              v                    v                 v          |       v             |  |
 |              |              |             |                                                                              |                     |  |
-|              v              v             v           P' == _+_    P' /= _+_           /\ PS == _+_      PS simplify to  |   PS simplify to  +-+  |
+|              v              v             v           P' == _|_    P' /= _|_           /\ PS == _|_      PS simplify to  |   PS simplify to  +-+  |
 |          Remainders     Already         Remainders                                                              []       |      single P'         |
 |          simplify       simplified      do not            +           + +                   +                            |                        |
 |              +              +           simplify          |           | |                   |                   +        |                        |
