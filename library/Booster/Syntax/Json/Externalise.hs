@@ -41,6 +41,7 @@ externalisePattern Internal.Pattern{term = term, constraints} =
   where
     multiAnd :: Syntax.Sort -> [Syntax.KorePattern] -> Syntax.KorePattern
     multiAnd _ [] = error "multiAnd: empty"
+    multiAnd _ [p] = p
     multiAnd sort ps = Syntax.KJAnd sort ps
 
     isSubstitutionItem :: Internal.Predicate -> Bool

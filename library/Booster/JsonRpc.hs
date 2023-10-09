@@ -282,7 +282,7 @@ execStateToKoreJson RpcTypes.ExecuteState{term = t, substitution, predicate} =
                     else KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []
      in t
             { KoreJson.term =
-                KoreJson.KJAnd topLevelSort (t.term : subAndPred)
+                if null subAndPred then t.term else KoreJson.KJAnd topLevelSort (t.term : subAndPred)
             }
 
 execResponse ::
