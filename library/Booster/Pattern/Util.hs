@@ -101,23 +101,19 @@ substituteInTerm substitution = goSubst
 substituteTermsInTerm :: Map Term Term -> Term -> Term
 substituteTermsInTerm substitution = goSubst
   where
-    goSubst t = case t of
-        Var{} -> fromMaybe t (Map.lookup t substitution)
-        DomainValue{} -> fromMaybe t (Map.lookup t substitution)
+    goSubst t = flip fromMaybe (Map.lookup t substitution) $ case t of
+        Var{} -> t
+        DomainValue{} -> t
         SymbolApplication sym sorts args ->
-            fromMaybe (SymbolApplication sym sorts $ map goSubst args) (Map.lookup t substitution)
-        AndTerm t1 t2 -> fromMaybe (AndTerm (goSubst t1) (goSubst t2)) (Map.lookup t substitution)
-        Injection ss s sub -> fromMaybe (Injection ss s (goSubst sub)) (Map.lookup t substitution)
+            SymbolApplication sym sorts $ map goSubst args
+        AndTerm t1 t2 -> AndTerm (goSubst t1) (goSubst t2)
+        Injection ss s sub -> Injection ss s (goSubst sub)
         KMap attrs keyVals rest ->
-            fromMaybe
-                (KMap attrs (bimap goSubst goSubst <$> keyVals) (goSubst <$> rest))
-                (Map.lookup t substitution)
+            KMap attrs (bimap goSubst goSubst <$> keyVals) (goSubst <$> rest)
         KList def heads rest ->
-            fromMaybe
-                (KList def (map goSubst heads) (bimap goSubst (map goSubst) <$> rest))
-                (Map.lookup t substitution)
+            KList def (map goSubst heads) (bimap goSubst (map goSubst) <$> rest)
         KSet def elements rest ->
-            fromMaybe (KSet def (map goSubst elements) (goSubst <$> rest)) (Map.lookup t substitution)
+            KSet def (map goSubst elements) (goSubst <$> rest)
 
 substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
 substituteInPredicate substitution = cata $ \case
