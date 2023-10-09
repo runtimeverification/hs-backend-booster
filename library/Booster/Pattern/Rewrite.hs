@@ -487,58 +487,61 @@ showPattern title pat = hang 4 $ vsep [title, pretty pat.term]
     This flow chart should represent the actions of this function:
 
 
-                                Receive pattern P (P /= _|_)
+                                Receive pattern P (P /= _+_)
 
-                                             |
+                                             +
                                              |   +--------------------------------------------------------------------------------------------------+
 +----------------------------------------+   |   |                                                                                                  |
 |                                        v   v   v                                                                                                  |
 |                                                                                                                                                   |
-|         +----------------------------  Apply rule  <-------------------------------------------------------------------------------------------+  |
+|         +---------------------------+  Apply rule  <-------------------------------------------------------------------------------------------+  |
 |         |                                                                                                                                      |  |
-|         |                                    |                                                                                                 |  |
+|         |                                    +                                                                                                 |  |
 |         |                                    +-------------+                                                                                   |  |
 |         v                                                  v                                                                                   |  |
 |                                                                                                                                                |  |
-|  Rewrite aborted            +--------------------  Rewrite finished  -------------------------+                                                |  |
+|  Rewrite aborted            +-------------------+  Rewrite finished  +------------------------+                                                |  |
 |                             |                                                                 |                                                |  |
-|         |                   |                               |                                 |                                                |  |
-|         |                   |                               |                                 |                                                |  |
-|         v                   v                               v                                 v                                                |  |
-|                                                                                                                                                |  |
-|  Return aborted       No rules apply                 Rewrite to P'  ---+                  Rewrite to PS -----------------+-------+             |  |
-|                                                                        |                                                 |       |             |  |
-|                             |                           |              |                    |      |                     |       |             |  |
+|         +                                                   +                                 |                                                |  |
+|         |                                                   |                                 |                                                |  |
+|         v            Rule application                       v                                 v                                                |  |
+|                           unclear                                                                                                              |  |
+|  Return aborted    (simplify remainders)             Rewrite to P'  +--+                  Rewrite to PS +----------------+-------+             |  |
+|                             +                                          |                                                 |       |             |  |
+|                             |                           +              |                    +      +                     |       |             |  |
 |                             |                           |              |                    |      +----------+          |       |             |  |
-|                             |                           v              v                    v                 v          |       v             |  |
-|                             |                                                                                            |                     |  |
-|                             |                         P' == _|_    P' /= _|_           /\ PS == _|_      PS simplify to  |   PS simplify to  --+  |
-|                             |                                                                                   []       |      single P'         |
-|              +--------------+-------------+               |           | |                   |                            |                        |
-|              |              |             |               |           | |                   |                   |        |                        |
-|              v              v             v               |           | |                   |                   |        +-------+                |
-|                                                           |           | |                   |                   |                v                |
-|          Does not     Simplified      Simplifies          |  +--------+-+-------------------+                   |                                 |
-|          simplify      already                            |  |        | |                                       |          PS simplify to         |
-|                                                           |  |        | |                                       |                PS'              |
-|              |              |             |               |  |        | |                                       |                                 |
-|              |              |             |               v  v        | |                                       |                 |               |
-|              |              |             |                           | +-----------------+                     |                 v               |
-|              |              |             |        Return vacuous P   |                   |                     |                                 |
-|              |              |             |                           |                   |                     |         Return branching        |
+|              +----------------------------+             v              v                    v                 v          |       v             |  |
+|              |              |             |                                                                              |                     |  |
+|              v              v             v           P' == _+_    P' /= _+_           /\ PS == _+_      PS simplify to  |   PS simplify to  +-+  |
+|          Remainders     Already         Remainders                                                              []       |      single P'         |
+|          simplify       simplified      do not            +           + +                   +                            |                        |
+|              +              +           simplify          |           | |                   |                   +        |                        |
+|              |              |              +              |           | |                   |                   |        +-------+                |
++<-------------+              |              |              |           | |                   |                   |                v                |
+|                             |    +---------+              |  +------------------------------+                   |                                 |
+|                             |    |                        |  |        | |                                       |          PS simplify to         |
+|                             v    v                        |  |        | |                                       |                PS'              |
+|                       No rules apply                      |  |        | |                                       |                                 |
+|                   (simplify whole pattern)                v  v        | |                                       |                 +               |
+|                             +                                         | +-----------------+                     |                 v               |
+|                             |                      Return vacuous P   |                   |                     |                                 |
+|              +----------------------------+                           |                   |                     |         Return branching        |
 |              |              |             |                           |                   |                     |                                 |
-|              +-------+      |             |                           v                   v                     |                                 |
-|                      v      v             |                                                                     |                                 |
-|                                           |                    Depth/rule bound       Unbounded  ---------------+---------------------------------+
-|                     Return stuck P        |                                                                     |
-|                                           |                           |                                         |
-|                            ^              |                           |                                         |
-|                            |              |                           |                                         |
-+----------------------------+--------------+                           v                                         |
-                             |                                                                                    |
-                             |                                    Return simplified P'                            |
-                             |                                                                                    |
-                             |                                                                                    |
+|              v              v             v                           v                   v                     |                                 |
+|          Simplifies     Simplified    Does not                                                                  |                                 |
+|                          already      simplify                 Depth/rule bound       Unbounded  +------------------------------------------------+
+|              +              +             +                                                                     |
+|              |              |             |                           +                                         |
+|              |              |             |                           |                                         |
+|              |              |             |                           |                                         |
++---------------              |  +----------+                           |                                         |
+                              |  |                                      |                                         |
+                              |  |                                      |                                         |
+                              v  v                                      v                                         |
+                                                                                                                  |
+                     Return stuck P                              Return simplified P'                             |
+                                                                                                                  |
+                             ^                                                                                    |
                              +------------------------------------------------------------------------------------+
 -}
 performRewrite ::
