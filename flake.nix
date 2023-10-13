@@ -74,25 +74,37 @@
           modules = [{
             enableProfiling = profiling;
             enableLibraryProfiling = profiling;
-            packages.hs-backend-booster.components.exes.kore-rpc-booster = {
-              build-tools = with pkgs; lib.mkForce [ makeWrapper ];
-              postInstall = ''
-                wrapProgram $out/bin/kore-rpc-booster --prefix PATH : ${
-                  with pkgs;
-                  lib.makeBinPath [ z3 ]
-                }
-              '';
+            packages = {
+              hs-backend-booster = {
+                components.exes.kore-rpc-booster = {
+                  build-tools = with pkgs; lib.mkForce [ makeWrapper ];
+                  postInstall = ''
+                    wrapProgram $out/bin/kore-rpc-booster --prefix PATH : ${
+                      with pkgs;
+                      lib.makeBinPath [ z3 ]
+                    }
+                  '';
+                };
+                components.exes.kore-rpc-dev = {
+                  build-tools = with pkgs; lib.mkForce [ makeWrapper ];
+                  postInstall = ''
+                    wrapProgram $out/bin/kore-rpc-dev --prefix PATH : ${
+                      with pkgs;
+                      lib.makeBinPath [ z3 ]
+                    }
+                  '';
+                };
+                components.tests.unit-tests = {
+                  postInstall = ''
+                    wrapProgram $out/bin/unit-tests --prefix PATH : ${
+                      with pkgs;
+                      lib.makeBinPath [ nixpkgs.legacyPackages.${pkgs.system}.diffutils ]
+                    }
+                  '';
+                };
+              };
+              ghc.components.library.doHaddock = false;
             };
-            packages.hs-backend-booster.components.exes.kore-rpc-dev = {
-              build-tools = with pkgs; lib.mkForce [ makeWrapper ];
-              postInstall = ''
-                wrapProgram $out/bin/kore-rpc-dev --prefix PATH : ${
-                  with pkgs;
-                  lib.makeBinPath [ z3 ]
-                }
-              '';
-            };
-            packages = { ghc.components.library.doHaddock = false; };
           }];
         };
 
