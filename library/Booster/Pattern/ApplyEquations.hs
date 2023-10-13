@@ -55,6 +55,9 @@ import Booster.Pattern.Match
 import Booster.Pattern.Simplify
 import Booster.Pattern.Util
 import Booster.Prettyprinter (renderDefault)
+import Data.IntSet (IntSet)
+import qualified Data.IntSet as IntSet
+import qualified Debug.Trace as Trace
 
 newtype EquationT io a
     = EquationT (ReaderT EquationConfig (ExceptT EquationFailure (StateT EquationState io)) a)
@@ -83,6 +86,7 @@ data EquationState = EquationState
     , changed :: Bool
     , predicates :: Set Predicate
     , trace :: Seq EquationTrace
+    , simplified :: IntSet
     }
 
 data EquationTrace = EquationTrace
@@ -108,14 +112,14 @@ instance Pretty EquationTrace where
             vsep ["Term did not match rule " <> locationInfo, prettyTerm, pretty reason]
         IndeterminateMatch ->
             vsep ["Term had indeterminate match for rule " <> locationInfo, prettyTerm]
-        RuleNotPreservingDefinedness ->
-            vsep
+        RuleNotPreservingDefinedness reasons ->
+            vsep $
                 [ "Simplifying term"
                 , prettyTerm
                 , "failed because the rule at"
                 , locationInfo
-                , "does not preserve definedness"
-                ]
+                , "does not preserve definedness:"
+                ] ++ map pretty reasons
         IndeterminateCondition cs ->
             vsep $
                 [ "Simplifying term"
@@ -160,7 +164,7 @@ isSuccess _ = False
 
 startState :: EquationState
 startState =
-    EquationState{termStack = [], changed = False, predicates = mempty, trace = mempty}
+    EquationState{termStack = [], changed = False, predicates = mempty, trace = mempty, simplified = mempty}
 
 getState :: MonadLoggerIO io => EquationT io EquationState
 getState = EquationT (lift $ lift get)
@@ -180,6 +184,9 @@ pushConstraints ps = EquationT . lift . lift . modify $ \s -> s{predicates = s.p
 setChanged, resetChanged :: MonadLoggerIO io => EquationT io ()
 setChanged = EquationT . lift . lift . modify $ \s -> s{changed = True}
 resetChanged = EquationT . lift . lift . modify $ \s -> s{changed = False}
+
+setSimplified :: Monad io => IntSet -> EquationT io ()
+setSimplified simplified = EquationT . lift . lift . modify $ \s -> s{simplified}
 
 getChanged :: MonadLoggerIO io => EquationT io Bool
 getChanged = EquationT $ lift $ lift $ gets (.changed)
@@ -201,14 +208,15 @@ runEquationT ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    IntSet ->
     EquationT io a ->
-    io (Either EquationFailure a, [EquationTrace])
-runEquationT doTracing definition llvmApi (EquationT m) = do
-    (res, endState) <-
-        flip runStateT startState $
+    io (Either EquationFailure a, [EquationTrace], IntSet)
+runEquationT doTracing definition llvmApi simplifiedStart (EquationT m) = do
+    (res, EquationState{trace, simplified}) <-
+        flip runStateT startState{simplified = simplifiedStart} $
             runExceptT $
                 runReaderT m EquationConfig{definition, llvmApi, doTracing}
-    pure (res, toList $ trace endState)
+    pure (res, toList trace, simplified)
 
 iterateEquations ::
     MonadLoggerIO io =>
@@ -246,10 +254,11 @@ evaluateTerm ::
     Direction ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    IntSet ->
     Term ->
-    io (Either EquationFailure Term, [EquationTrace])
-evaluateTerm doTracing direction def llvmApi =
-    runEquationT doTracing def llvmApi
+    io (Either EquationFailure Term, [EquationTrace], IntSet)
+evaluateTerm doTracing direction def llvmApi simplifiedStart =
+    runEquationT doTracing def llvmApi simplifiedStart
         . evaluateTerm' direction
 
 -- version for internal nested evaluation
@@ -268,10 +277,11 @@ evaluatePattern ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    IntSet ->
     Pattern ->
-    io (Either EquationFailure Pattern, [EquationTrace])
-evaluatePattern doTracing def mLlvmLibrary =
-    runEquationT doTracing def mLlvmLibrary . evaluatePattern'
+    io (Either EquationFailure Pattern, [EquationTrace], IntSet)
+evaluatePattern doTracing def mLlvmLibrary simplifiedStart =
+    runEquationT doTracing def mLlvmLibrary simplifiedStart . evaluatePattern'
 
 -- version for internal nested evaluation
 evaluatePattern' ::
@@ -423,7 +433,7 @@ data ApplyEquationResult
     | IndeterminateCondition [Predicate]
     | ConditionFalse
     | EnsuresFalse [Predicate]
-    | RuleNotPreservingDefinedness
+    | RuleNotPreservingDefinedness [NotPreservesDefinednessReason]
     | MatchConstraintViolated Constrained VarName
     deriving stock (Eq, Show)
 
@@ -445,7 +455,7 @@ handleFunctionEquation success continue abort = \case
     IndeterminateCondition{} -> abort
     ConditionFalse -> continue
     EnsuresFalse ps -> throw $ SideConditionsFalse ps
-    RuleNotPreservingDefinedness -> abort
+    RuleNotPreservingDefinedness{} -> abort
     MatchConstraintViolated{} -> continue
 
 handleSimplificationEquation :: MonadLoggerIO io => ResultHandler io
@@ -456,7 +466,7 @@ handleSimplificationEquation success continue _abort = \case
     IndeterminateCondition{} -> continue
     ConditionFalse -> continue
     EnsuresFalse ps -> throw $ SideConditionsFalse ps
-    RuleNotPreservingDefinedness -> continue
+    RuleNotPreservingDefinedness{} -> continue
     MatchConstraintViolated{} -> continue
 
 applyEquations ::
@@ -467,28 +477,35 @@ applyEquations ::
     Term ->
     EquationT io Term
 applyEquations theory handler term = do
-    let index = termTopIndex term
-    when (index == None) $
-        throw (IndexIsNone term)
-    let idxEquations, anyEquations :: Map Priority [RewriteRule tag]
-        idxEquations = fromMaybe Map.empty $ Map.lookup index theory
-        anyEquations = fromMaybe Map.empty $ Map.lookup Anything theory
-        -- neither simplification nor function equations should need groups,
-        -- since simplification priority is just a suggestion and function equations
-        -- should not contain non-determinism except for the [owise] equation,
-        -- which should be attempted last. Thus, sorting and then applying sequentially is fine.
-        -- Doing this loses the runtime check of InconsistentFunctionRules, however,
-        -- most function rules are in the same priority group and thus,
-        -- we would be applying all of them before checking for inconsistency,
-        -- which is inefficient
-        equations :: [RewriteRule tag]
-        equations =
-            concatMap snd . Map.toAscList $
-                if index == Anything
-                    then idxEquations
-                    else Map.unionWith (<>) idxEquations anyEquations
-
-    processEquations equations
+    EquationState{simplified} <- getState
+    --Trace.trace ("cache size " <> show (IntSet.size simplified)) $ 
+    if (getAttributes term).childHashes `IntSet.isSubsetOf` simplified
+        then --Trace.trace ("cache hit!!") $ 
+            pure term
+        else --Trace.trace ("cache miss!!") $  
+          do
+            let index = termTopIndex term
+            when (index == None) $
+                throw (IndexIsNone term)
+            let idxEquations, anyEquations :: Map Priority [RewriteRule tag]
+                idxEquations = fromMaybe Map.empty $ Map.lookup index theory
+                anyEquations = fromMaybe Map.empty $ Map.lookup Anything theory
+                -- neither simplification nor function equations should need groups,
+                -- since simplification priority is just a suggestion and function equations
+                -- should not contain non-determinism except for the [owise] equation,
+                -- which should be attempted last. Thus, sorting and then applying sequentially is fine.
+                -- Doing this loses the runtime check of InconsistentFunctionRules, however,
+                -- most function rules are in the same priority group and thus,
+                -- we would be applying all of them before checking for inconsistency,
+                -- which is inefficient
+                equations :: [RewriteRule tag]
+                equations =
+                    concatMap snd . Map.toAscList $
+                        if index == Anything
+                            then idxEquations
+                            else Map.unionWith (<>) idxEquations anyEquations
+            setSimplified $ IntSet.insert ((getAttributes term).hash) simplified
+            processEquations equations
   where
     -- process one equation at a time, until something has happened
     processEquations ::
@@ -530,7 +547,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
             "Equation with existentials: " <> Text.pack (show rule)
     -- immediately cancel if not preserving definedness
     unless (null rule.computedAttributes.notPreservesDefinednessReasons) $
-        throwE RuleNotPreservingDefinedness
+        throwE $ RuleNotPreservingDefinedness rule.computedAttributes.notPreservesDefinednessReasons
     -- immediately cancel if rule has concrete() flag and term has variables
     when (allMustBeConcrete rule.attributes.concreteness && not (Set.null (freeVariables term))) $
         throwE (MatchConstraintViolated Concrete "* (term has variables)")
@@ -581,8 +598,10 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
         Predicate ->
         MaybeT (ExceptT ApplyEquationResult (EquationT io)) (Maybe Predicate)
     checkConstraint p = do
-        mApi <- (.llvmApi) <$> lift (lift getConfig)
-        case simplifyPredicate mApi p of
+        -- mApi <- (.llvmApi) <$> lift (lift getConfig)
+        -- case simplifyPredicate mApi p of
+        lift (lift (simplifyConstraint' p)) >>= \case
+
             Bottom -> fail "side condition was false"
             Top -> pure Nothing
             _other -> pure $ Just p
@@ -655,10 +674,11 @@ simplifyConstraint ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    IntSet ->
     Predicate ->
-    io (Either EquationFailure Predicate, [EquationTrace])
-simplifyConstraint doTracing def mbApi p =
-    runEquationT doTracing def mbApi $ simplifyConstraint' p
+    io (Either EquationFailure Predicate, [EquationTrace], IntSet)
+simplifyConstraint doTracing def mbApi simplifiedStart p =
+    runEquationT doTracing def mbApi simplifiedStart $ simplifyConstraint' p
 
 -- version for internal nested evaluation
 simplifyConstraint' :: MonadLoggerIO io => Predicate -> EquationT io Predicate

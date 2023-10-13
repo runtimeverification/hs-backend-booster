@@ -26,6 +26,7 @@ module Booster.Pattern.Util (
     isBottom,
     isConcrete,
     filterTermSymbols,
+    size
 ) where
 
 import Data.Bifunctor (bimap, first)
@@ -48,6 +49,7 @@ import Booster.Definition.Attributes.Base (
     SymbolType (..),
  )
 import Booster.Pattern.Base
+import qualified Data.ByteString as BS
 
 -- | Returns the sort of a term
 sortOfTerm :: Term -> Sort
@@ -259,3 +261,15 @@ filterTermSymbols check = cata $ \case
 
 isBottom :: Pattern -> Bool
 isBottom = (Bottom `elem`) . constraints
+
+
+size :: Term -> Int
+size = cata $ \case
+    SymbolApplicationF symbol _ ts -> sum ts + BS.length symbol.name
+    AndTermF t1 t2 -> t1 + t2
+    DomainValueF _ v -> BS.length v
+    VarF _ -> 1
+    InjectionF _ _ t -> t
+    KMapF _ xs mr -> sum (map (uncurry (+)) xs) + fromMaybe 0 mr
+    KListF _ xs mr -> sum xs + maybe 0 (\(a, bs) -> a + sum bs) mr
+    KSetF  _ xs mr -> sum xs + fromMaybe 0 mr

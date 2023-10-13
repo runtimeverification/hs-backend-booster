@@ -4,6 +4,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -50,6 +51,9 @@ import GHC.Generics (Generic)
 import Language.Haskell.TH.Syntax (Lift (..))
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
+import Data.IntSet (IntSet)
+import Data.Maybe (fromMaybe)
+import qualified Data.IntSet as IntSet
 
 type VarName = ByteString
 type SymbolName = ByteString
@@ -127,6 +131,7 @@ data TermAttributes = TermAttributes
     -- ^ false for function calls, true for
     -- variables, recursive through AndTerm
     , hash :: !Int
+    , childHashes :: !IntSet
     , isConstructorLike :: !Bool
     , canBeEvaluated :: !Bool
     -- ^ false for function calls, variables, and AndTerms
@@ -134,21 +139,27 @@ data TermAttributes = TermAttributes
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
+instance Lift IntSet where
+    lift s = let s' = IntSet.toList s in [|IntSet.fromList s'|]
+    liftTyped s = let s' = IntSet.toList s in [||IntSet.fromList s'||]
+
 instance Lift (Set Variable) where
     lift s = let s' = toList s in [|fromList s'|]
     liftTyped s = let s' = toList s in [||fromList s'||]
+
 instance Semigroup TermAttributes where
     a1 <> a2 =
         TermAttributes
             { variables = a1.variables <> a2.variables
             , isEvaluated = a1.isEvaluated && a2.isEvaluated
             , hash = 0
+            , childHashes = a1.childHashes <> a2.childHashes
             , isConstructorLike = a1.isConstructorLike && a2.isConstructorLike
             , canBeEvaluated = a1.canBeEvaluated && a2.canBeEvaluated
             }
 
 instance Monoid TermAttributes where
-    mempty = TermAttributes Set.empty True 0 False True
+    mempty = TermAttributes Set.empty True 0 mempty False True
 
 -- | A term together with its attributes.
 data Term = Term TermAttributes (TermF Term)
@@ -472,6 +483,10 @@ instance Corecursive Term where
     embed (KListF def heads rest) = KList def heads rest
     embed (KSetF def heads rest) = KSet def heads rest
 
+
+setHash :: Int -> TermAttributes -> TermAttributes
+setHash hash attrs@TermAttributes{childHashes} = attrs{hash, childHashes = IntSet.insert hash childHashes}
+
 -- smart term constructors, as bidirectional patterns
 pattern AndTerm :: Term -> Term -> Term
 pattern AndTerm t1 t2 <- Term _ (AndTermF t1 t2)
@@ -511,14 +526,12 @@ pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts
                     symIsConstructor =
                         sym.attributes.symbolType `elem` [Constructor, SortInjection]
                  in Term
-                        argAttributes
+                        (setHash (Hashable.hash ("SymbolApplication" :: ByteString, sym, sorts, map (hash . getAttributes) args)) argAttributes)
                             { isEvaluated =
                                 -- Constructors and injections are
                                 -- evaluated if their arguments are.
                                 -- Function calls are not evaluated.
                                 symIsConstructor && argAttributes.isEvaluated
-                            , hash =
-                                Hashable.hash ("SymbolApplication" :: ByteString, sym, sorts, map (hash . getAttributes) args)
                             , isConstructorLike =
                                 symIsConstructor && argAttributes.isConstructorLike
                             , canBeEvaluated =
@@ -585,13 +598,6 @@ pattern KMap def keyVals rest <- Term _ (KMapF def keyVals rest)
                             -- Constructors and injections are evaluated if their arguments are.
                             -- Function calls are not evaluated.
                             argAttributes.isEvaluated
-                        , hash =
-                            Hashable.hash
-                                ( "KMap" :: ByteString
-                                , def
-                                , map (\(k, v) -> (hash $ getAttributes k, hash $ getAttributes v)) keyVals
-                                , hash . getAttributes <$> rest
-                                )
                         , isConstructorLike =
                             argAttributes.isConstructorLike
                         , canBeEvaluated =

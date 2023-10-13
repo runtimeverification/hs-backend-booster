@@ -100,7 +100,7 @@ respond stateVar =
                                 , req.logFailedSimplifications
                                 , req.logFallbacks
                                 ]
-                    result <- performRewrite doTracing def mLlvmLibrary mbDepth cutPoints terminals pat
+                    result <- performRewrite doTracing def mLlvmLibrary mbDepth cutPoints terminals mempty pat
                     stop <- liftIO $ getTime Monotonic
                     let duration =
                             if fromMaybe False req.logTiming
@@ -173,8 +173,8 @@ respond stateVar =
                 -- term and predicate (pattern)
                 Right (TermAndPredicate pat) -> do
                     Log.logInfoNS "booster" "Simplifying a pattern"
-                    ApplyEquations.evaluatePattern doTracing def mLlvmLibrary pat >>= \case
-                        (Right newPattern, patternTraces) -> do
+                    ApplyEquations.evaluatePattern doTracing def mLlvmLibrary mempty pat >>= \case
+                        (Right newPattern, patternTraces, _simplified) -> do
                             let (term, mbPredicate, mbSubstitution) = externalisePattern newPattern
                                 tSort = externaliseSort (sortOfPattern newPattern)
                                 predicate = fromMaybe (KoreJson.KJTop tSort) mbPredicate
@@ -186,7 +186,7 @@ respond stateVar =
                             --         , logs = mkTraces patternTraces
                             --         }
                             pure $ Right (addHeader result, patternTraces)
-                        (Left ApplyEquations.SideConditionsFalse{}, patternTraces) -> do
+                        (Left ApplyEquations.SideConditionsFalse{}, patternTraces, _simplified) -> do
                             let tSort = fromMaybe (error "unknown sort") $ sortOfJson req.state.term
                             -- pure . Right . RpcTypes.Simplify $
                             --     RpcTypes.SimplifyResult
@@ -194,15 +194,15 @@ respond stateVar =
                             --         , logs = mkTraces patternTraces
                             --         }
                             pure $ Right (addHeader $ KoreJson.KJBottom tSort, patternTraces)
-                        (Left (ApplyEquations.EquationLoop terms), _traces) ->
+                        (Left (ApplyEquations.EquationLoop terms), _traces, _simplified) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
-                        (Left other, _traces) ->
+                        (Left other, _traces, _simplified) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ show other -- FIXME
                             -- predicate only
                 Right (APredicate predicate) -> do
                     Log.logInfoNS "booster" "Simplifying a predicate"
-                    ApplyEquations.simplifyConstraint doTracing def mLlvmLibrary predicate >>= \case
-                        (Right newPred, traces) -> do
+                    ApplyEquations.simplifyConstraint doTracing def mLlvmLibrary mempty predicate >>= \case
+                        (Right newPred, traces, _simplified) -> do
                             let predicateSort =
                                     fromMaybe (error "not a predicate") $
                                         sortOfJson req.state.term
@@ -213,7 +213,7 @@ respond stateVar =
                             --         , logs = mkTraces traces
                             --         }
                             pure $ Right (addHeader result, traces)
-                        (Left something, _traces) ->
+                        (Left something, _traces, _simplified) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ show something -- FIXME
             stop <- liftIO $ getTime Monotonic
 
@@ -464,7 +464,7 @@ mkLogEquationTrace
                             , origin
                             , result = Failure{reason = "Side-condition is false", _ruleId}
                             }
-            ApplyEquations.RuleNotPreservingDefinedness
+            ApplyEquations.RuleNotPreservingDefinedness{}
                 | logFailedSimplifications ->
                     Just $
                         Simplification

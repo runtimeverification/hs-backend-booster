@@ -53,6 +53,9 @@ import Booster.Pattern.Simplify
 import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
+import Data.IntSet (IntSet)
+import qualified Data.IntSet as IntSet
+import qualified Debug.Trace as Trace
 
 newtype RewriteT io err a = RewriteT {unRewriteT :: ReaderT RewriteConfig (ExceptT err io) a}
     deriving newtype (Functor, Applicative, Monad, MonadLogger, MonadIO, MonadLoggerIO)
@@ -61,12 +64,13 @@ data RewriteConfig = RewriteConfig
     { definition :: KoreDefinition
     , llvmApi :: Maybe LLVM.API
     , doTracing :: Bool
+    , simplifiedSet :: IntSet
     }
 
-runRewriteT :: Bool -> KoreDefinition -> Maybe LLVM.API -> RewriteT io err a -> io (Either err a)
-runRewriteT doTracing def mLlvmLibrary =
+runRewriteT :: Bool -> KoreDefinition -> Maybe LLVM.API -> IntSet -> RewriteT io err a -> io (Either err a)
+runRewriteT doTracing def mLlvmLibrary simplifiedSet =
     runExceptT
-        . flip runReaderT RewriteConfig{definition = def, llvmApi = mLlvmLibrary, doTracing}
+        . flip runReaderT RewriteConfig{definition = def, llvmApi = mLlvmLibrary, doTracing, simplifiedSet}
         . unRewriteT
 
 throw :: MonadLoggerIO io => err -> RewriteT io err a
@@ -74,6 +78,9 @@ throw = RewriteT . lift . throwE
 
 getDefinition :: MonadLoggerIO io => RewriteT io err KoreDefinition
 getDefinition = RewriteT $ definition <$> ask
+
+getSimplified :: MonadLoggerIO io => RewriteT io err IntSet
+getSimplified = RewriteT $ simplifiedSet <$> ask
 
 {- | Performs a rewrite step (using suitable rewrite rules from the
    definition).
@@ -231,6 +238,7 @@ applyRule ::
     RewriteT io (RewriteFailed k) (RewriteRuleAppResult (RewriteRule k, Pattern))
 applyRule pat rule = runRewriteRuleAppT $ do
     def <- lift getDefinition
+    simplified <- lift getSimplified
     -- unify terms
     let unified = unifyTerms def rule.lhs pat.term
     subst <- case unified of
@@ -264,8 +272,8 @@ applyRule pat rule = runRewriteRuleAppT $ do
             concatMap (splitBoolPredicates . substituteInPredicate subst) rule.requires
         failIfUnclear = RuleConditionUnclear rule
         notAppliedIfBottom = RewriteRuleAppT $ pure NotApplied
-    unclearRequires <-
-        catMaybes <$> mapM (checkConstraint failIfUnclear notAppliedIfBottom) ruleRequires
+    unclearRequires <- Trace.trace ("checking requires size: " <> show (length ruleRequires)) $
+        catMaybes <$> mapM (checkConstraint failIfUnclear notAppliedIfBottom simplified) ruleRequires
     unless (null unclearRequires) $
         failRewrite $
             head unclearRequires
@@ -276,7 +284,7 @@ applyRule pat rule = runRewriteRuleAppT $ do
             concatMap (splitBoolPredicates . substituteInPredicate subst) rule.ensures
         trivialIfBottom = RewriteRuleAppT $ pure Trivial
     newConstraints <-
-        catMaybes <$> mapM (checkConstraint id trivialIfBottom) ruleEnsures
+        catMaybes <$> mapM (checkConstraint id trivialIfBottom simplified) ruleEnsures
 
     let rewritten =
             Pattern
@@ -300,12 +308,13 @@ applyRule pat rule = runRewriteRuleAppT $ do
     checkConstraint ::
         (Predicate -> a) ->
         RewriteRuleAppT (RewriteT io (RewriteFailed k)) (Maybe a) ->
+        IntSet ->
         Predicate ->
         RewriteRuleAppT (RewriteT io (RewriteFailed k)) (Maybe a)
-    checkConstraint onUnclear onBottom p = do
+    checkConstraint onUnclear onBottom simplified p = do
         RewriteConfig{definition, llvmApi, doTracing} <- lift $ RewriteT ask
-        (simplified, _traces) <- simplifyConstraint doTracing definition llvmApi p
-        case simplified of
+        (simplifiedC, _traces, _simplifiedNew) <- simplifyConstraint doTracing definition llvmApi simplified p
+        case simplifiedC of
             Right Bottom -> onBottom
             Right Top -> pure Nothing
             Right other -> pure $ Just $ onUnclear other
@@ -423,17 +432,19 @@ data RewriteTrace pat
 instance Pretty (RewriteTrace Pattern) where
     pretty = \case
         RewriteSingleStep lbl _uniqueId pat rewritten ->
-            let
-                (l, r) = diff pat rewritten
-             in
-                hang 4 . vsep $
-                    [ "Rewriting configuration"
-                    , pretty l.term
-                    , "to"
-                    , pretty r.term
-                    , "Using rule:"
-                    , pretty lbl
-                    ]
+            -- let
+            --     (l, r) = diff pat rewritten
+            --  in
+            --     hang 4 . vsep $
+            --         [ "Rewriting configuration"
+            --         , pretty l.term
+            --         , "to"
+            --         , pretty r.term
+            --         , "Using rule:"
+            --         , pretty lbl
+            --         ]
+            hang 4 . vsep $
+                "Rewriting configuration" : concat [ [pretty (size l) <+> ":" <+> pretty l, "->", pretty (size r) <+> ":" <+> pretty r, ";"] | (l, r) <- rewrites (pat.term, rewritten.term)]
         RewriteBranchingStep pat branches ->
             hang 4 . vsep $
                 [ "Configuration"
@@ -467,6 +478,19 @@ mkDiffTerms = \case
                             $ zip xs ys
                  in (SymbolApplication s1 ss1 xs', SymbolApplication s2 ss2 ys')
     r -> r
+
+
+rewrites :: (Term, Term) -> [(Term, Term)]
+rewrites = \case
+    (t1@(SymbolApplication s1 ss1 xs), t2@(SymbolApplication s2 ss2 ys)) ->
+        if Hashable.hash t1 == Hashable.hash t2
+            then []
+            else if s1 == s2 && ss1 == ss2
+                then concatMap rewrites $ zip xs ys
+                else [(t1, t2)]
+
+    (t1, t2) -> [(t1, t2) | Hashable.hash t1 /= Hashable.hash t2]
+
 
 showPattern :: Doc a -> Pattern -> Doc a
 showPattern title pat = hang 4 $ vsep [title, pretty pat.term]
@@ -554,9 +578,11 @@ performRewrite ::
     [Text] ->
     -- | terminal rule labels
     [Text] ->
+    -- | simplified subterms
+    IntSet ->
     Pattern ->
     io (Natural, Seq (RewriteTrace Pattern), RewriteResult Pattern)
-performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
+performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels simplifiedStart pat = do
     (rr, RewriteStepsState{counter, traces}) <-
         flip
             runStateT
@@ -565,12 +591,15 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                 , traces = mempty
                 , patternWasSimplified = False
                 , remaindersWereSimplified = False
+                , simplified = simplifiedStart
                 }
             $ doSteps pat
     pure (counter, traces, rr)
   where
     logRewrite = logOther (LevelOther "Rewrite")
     logSimplify = logOther (LevelOther "Simplify")
+    logSimplifySuccess = logOther (LevelOther "SimplifySuccess")
+    logDepth = logOther (LevelOther "Depth")
 
     prettyText :: Pretty a => a -> Text
     prettyText = pack . renderDefault . pretty
@@ -583,29 +612,39 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
         logRewrite $ pack $ renderDefault $ pretty t
         when doTracing $
             modify $
-                \RewriteStepsState{counter, traces, patternWasSimplified, remaindersWereSimplified} -> RewriteStepsState{counter, traces = traces |> t, patternWasSimplified, remaindersWereSimplified}
-    incrementCounter =
-        modify $ \RewriteStepsState{counter, traces, patternWasSimplified, remaindersWereSimplified} -> RewriteStepsState{counter = counter + 1, traces, patternWasSimplified, remaindersWereSimplified}
+                \st@RewriteStepsState{traces} -> st{traces = traces |> t}
+    incrementCounter = do
+        RewriteStepsState{counter = d} <- get
+        logDepth $ "Reached depth " <> pack (show (d + 1))
+        modify $ \st@RewriteStepsState{counter} -> st{counter = counter + 1}
 
     setPatternWasSimplified =
-        modify $ \RewriteStepsState{counter, traces, remaindersWereSimplified} -> RewriteStepsState{counter, traces, patternWasSimplified = True, remaindersWereSimplified}
+        modify $ \st -> st{patternWasSimplified = True}
 
     resetPatternWasSimplified =
-        modify $ \RewriteStepsState{counter, traces, remaindersWereSimplified} -> RewriteStepsState{counter, traces, patternWasSimplified = False, remaindersWereSimplified}
+        modify $ \st -> st{patternWasSimplified = False}
 
     setRemaindersWereSimplified =
-        modify $ \RewriteStepsState{counter, traces, patternWasSimplified} -> RewriteStepsState{counter, traces, patternWasSimplified, remaindersWereSimplified = True}
+        modify $ \st -> st{remaindersWereSimplified = True}
 
     resetRemaindersWereSimplified =
-        modify $ \RewriteStepsState{counter, traces, patternWasSimplified} -> RewriteStepsState{counter, traces, patternWasSimplified, remaindersWereSimplified = False}
+        modify $ \st -> st{remaindersWereSimplified = False}
+
+    setSimplified s = do
+        logDepth $ "Setting simplified " <> (pack $ show $ IntSet.size s)
+        modify $ \st -> st{simplified = s}
 
     simplifyP :: Pattern -> StateT RewriteStepsState io (Maybe Pattern)
-    simplifyP p =
-        evaluatePattern doTracing def mLlvmLibrary p >>= \(res, traces) -> do
+    simplifyP p = do
+        RewriteStepsState{simplified} <- get
+        evaluatePattern doTracing def mLlvmLibrary simplified p >>= \(res, traces, simplifiedNew) -> do
             logTraces traces
+            logDepth $ "no of attempted equation rewrites: " <> (pack $ show $ length traces)
+            setSimplified $ simplified <> simplifiedNew
             case res of
                 Right newPattern -> do
                     rewriteTrace $ RewriteSimplified traces Nothing
+                    logSimplifySuccess ""
                     pure $ Just newPattern
                 Left r@(SideConditionsFalse _ps) -> do
                     logSimplify "Side conditions were found to be false, pruning"
@@ -676,21 +715,20 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
     simplifyAndSubstituteRuleRemainders ::
         Term -> NonEmpty (Term, Term) -> StateT RewriteStepsState io (Maybe Term)
     simplifyAndSubstituteRuleRemainders term remainders = do
-        simplifiedRemainders <-
-            mapM (evaluateTerm doTracing TopDown def mLlvmLibrary . snd) . NonEmpty.toList $ remainders
-        let remaindersMap =
-                map (\(a, b) -> (a, fromRight a b))
-                    . filter (isRight . snd)
-                    $ zip (map snd $ NonEmpty.toList remainders) (map fst simplifiedRemainders)
-        case remaindersMap of
-            [] ->
-                -- failed to simplify any of the remainders
-                pure Nothing
-            xs -> do
-                -- successfully simplifying some of the remainders:
-                -- substitute them and try applying the rule again
-                let ys = Map.fromList xs
-                pure . Just $ substituteTermsInTerm ys term
+        RewriteStepsState{simplified} <- get
+        (simplifiedRemaindersMap, traces, simplifiedNew) <-
+            foldM (\(sMap, traces', simplified') (_, trm) ->
+                evaluateTerm doTracing TopDown def mLlvmLibrary simplified' trm >>= \case
+                    (Left _, t, s) -> pure (sMap, traces' <> t, s <> simplified')
+                    (Right trm', t, s) -> pure (Map.insert trm trm' sMap, traces' <> t, s <> simplified')
+              ) (mempty, mempty, simplified) remainders
+            -- mapM (evaluateTerm doTracing TopDown def mLlvmLibrary simplified . snd) . NonEmpty.toList $ remainders
+        logTraces traces
+        logDepth $ "no of attempted equation rewrites: " <> (pack $ show $ length traces)
+        setSimplified $ simplified <> simplifiedNew
+        if Map.null simplifiedRemaindersMap
+            then pure Nothing
+            else pure . Just $ substituteTermsInTerm simplifiedRemaindersMap term
 
     logTraces =
         mapM_ (logSimplify . pack . renderDefault . pretty)
@@ -698,7 +736,10 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
     doSteps ::
         Pattern -> StateT RewriteStepsState io (RewriteResult Pattern)
     doSteps pat' = do
-        RewriteStepsState{counter, patternWasSimplified, remaindersWereSimplified} <- get
+        RewriteStepsState{counter, patternWasSimplified, remaindersWereSimplified, simplified=sSet} <- get
+        logDepth $ "Pattern size " <> (pack $ show $ size pat'.term)
+        -- logDepth $ "No of constraints size " <> (pack $ show $ length pat'.constraints)
+        logDepth $ "No of simplified subterms " <> (pack $ show $ IntSet.size sSet)
         let wasSimplified = patternWasSimplified
         if depthReached counter
             then do
@@ -706,8 +747,8 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                         pretty $ "Reached maximum depth of " <> maybe "?" showCounter mbMaxDepth
                 logRewrite $ pack $ renderDefault $ showPattern title pat'
                 (if wasSimplified then pure else simplifyResult pat') $ RewriteFinished Nothing Nothing pat'
-            else
-                runRewriteT doTracing def mLlvmLibrary (rewriteStep cutLabels terminalLabels pat') >>= \case
+            else do
+                runRewriteT doTracing def mLlvmLibrary sSet (rewriteStep cutLabels terminalLabels pat') >>= \case
                     Right (RewriteFinished mlbl uniqueId single) -> do
                         whenJust mlbl $ \lbl ->
                             rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
@@ -812,4 +853,5 @@ data RewriteStepsState = RewriteStepsState
     , traces :: !(Seq (RewriteTrace Pattern))
     , patternWasSimplified :: !Bool
     , remaindersWereSimplified :: !Bool
+    , simplified :: IntSet
     }
