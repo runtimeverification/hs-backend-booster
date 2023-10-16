@@ -62,10 +62,11 @@ respondEither ::
     Log.MonadLogger m =>
     MonadIO m =>
     Maybe StatsVar ->
+    Maybe Depth ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res)
-respondEither mbStatsVar booster kore req = case req of
+respondEither mbStatsVar forceFallback booster kore req = case req of
     Execute execReq
         | isJust execReq.stepTimeout || isJust execReq.movingAverageStepTimeout ->
             loggedKore ExecuteM req
@@ -175,19 +176,27 @@ respondEither mbStatsVar booster kore req = case req of
             pure ()
 
     handleExecute :: LogSettings -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
-    handleExecute logSettings = executionLoop logSettings (0, 0.0, 0.0, Nothing)
+    handleExecute logSettings = executionLoop logSettings forceFallback (0, 0.0, 0.0, Nothing)
 
     executionLoop ::
         LogSettings ->
+        Maybe Depth ->
         (Depth, Double, Double, Maybe [RPCLog.LogEntry]) ->
         ExecuteRequest ->
         m (Either ErrorObj (API 'Res))
-    executionLoop logSettings (!currentDepth, !time, !koreTime, !rpcLogs) r = do
+    executionLoop logSettings mforceFallback (!currentDepth@(Depth cDepth), !time, !koreTime, !rpcLogs) r = do
         Log.logInfoNS "proxy" . Text.pack $
             if currentDepth == 0
                 then "Starting execute request"
                 else "Iterating execute request at " <> show currentDepth
-        let mbDepthLimit = flip (-) currentDepth <$> r.maxDepth
+        let (mbDepthLimit, wasForcedToFallback) = case (mforceFallback, r.maxDepth) of
+                (Just (Depth forceDepth), Just (Depth maxDepth)) ->
+                    if cDepth + forceDepth < maxDepth
+                        then (Just $ Depth forceDepth, True)
+                        else (Just $ Depth $ maxDepth - cDepth, False)
+                (Just forceDepth, _) -> (Just forceDepth, False)
+                (_, Just maxDepth) -> (Just $ maxDepth - currentDepth, False)
+                _ -> (Nothing, False)
         (bResult, bTime) <- Stats.timed $ booster (Execute r{maxDepth = mbDepthLimit})
         case bResult of
             Right (Execute boosterResult)
@@ -196,7 +205,7 @@ respondEither mbStatsVar booster kore req = case req of
                 -- if we are stuck in the new backend we try to re-run
                 -- in the old one to work around any potential
                 -- unification bugs.
-                | boosterResult.reason `elem` [Aborted, Stuck, Branching] -> do
+                | boosterResult.reason `elem` [Aborted, Stuck, Branching] || wasForcedToFallback -> do
                     Log.logInfoNS "proxy" . Text.pack $
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     -- simplify Booster's state with Kore's simplifier
@@ -249,6 +258,7 @@ respondEither mbStatsVar booster kore req = case req of
                                                         ]
                                             executionLoop
                                                 logSettings
+                                                mforceFallback
                                                 ( currentDepth + boosterResult.depth + koreResult.depth
                                                 , time + bTime + kTime
                                                 , koreTime + kTime
