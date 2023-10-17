@@ -184,7 +184,7 @@ respondEither mbStatsVar forceFallback booster kore req = case req of
         (Depth, Double, Double, Maybe [RPCLog.LogEntry]) ->
         ExecuteRequest ->
         m (Either ErrorObj (API 'Res))
-    executionLoop logSettings mforceFallback (!currentDepth@(Depth cDepth), !time, !koreTime, !rpcLogs) r = do
+    executionLoop logSettings mforceFallback (currentDepth@(Depth cDepth), !time, !koreTime, !rpcLogs) r = do
         Log.logInfoNS "proxy" . Text.pack $
             if currentDepth == 0
                 then "Starting execute request"
