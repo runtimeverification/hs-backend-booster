@@ -26,10 +26,12 @@ module Booster.Pattern.Util (
     isBottom,
     isConcrete,
     filterTermSymbols,
+    sizeOfTerm,
 ) where
 
 import Data.Bifunctor (bimap, first)
 import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
 import Data.Coerce (coerce)
 import Data.Functor.Foldable (Corecursive (embed), cata)
 import Data.Map (Map)
@@ -255,3 +257,14 @@ filterTermSymbols check = cata $ \case
 
 isBottom :: Pattern -> Bool
 isBottom = (Bottom `elem`) . constraints
+
+sizeOfTerm :: Term -> Int
+sizeOfTerm = cata $ \case
+    SymbolApplicationF symbol _ ts -> sum ts + BS.length symbol.name
+    AndTermF t1 t2 -> t1 + t2
+    DomainValueF _ v -> BS.length v
+    VarF _ -> 1
+    InjectionF _ _ t -> t
+    KMapF _ xs mr -> sum (map (uncurry (+)) xs) + fromMaybe 0 mr
+    KListF _ xs mr -> sum xs + maybe 0 (\(a, bs) -> a + sum bs) mr
+    KSetF _ xs mr -> sum xs + fromMaybe 0 mr

@@ -200,12 +200,37 @@ respondEither mbStatsVar forceFallback booster kore req = case req of
         (bResult, bTime) <- Stats.timed $ booster (Execute r{maxDepth = mbDepthLimit})
         case bResult of
             Right (Execute boosterResult)
+                | wasForcedToFallback -> do
+                    Log.logInfoNS "proxy" . Text.pack $
+                        "Forced simplification at " <> show (currentDepth + boosterResult.depth)
+                    simplifyResult <- simplifyExecuteState logSettings r._module boosterResult.state
+                    case simplifyResult of
+                        Left logsOnly -> do
+                            -- state was simplified to \bottom, return vacuous
+                            Log.logInfoNS "proxy" "Vacuous state after simplification"
+                            pure . Right . Execute $ makeVacuous logsOnly boosterResult
+                        Right (simplifiedBoosterState, boosterStateSimplificationLogs) -> do
+                            let accumulatedLogs =
+                                    combineLogs
+                                        [ rpcLogs
+                                        , boosterResult.logs
+                                        , boosterStateSimplificationLogs
+                                        ]
+                            executionLoop
+                                logSettings
+                                mforceFallback
+                                ( currentDepth + boosterResult.depth
+                                , time + bTime
+                                , koreTime
+                                , accumulatedLogs
+                                )
+                                r{ExecuteRequest.state = execStateToKoreJson simplifiedBoosterState}
                 -- if the new backend aborts, branches or gets stuck, revert to the old one
                 --
                 -- if we are stuck in the new backend we try to re-run
                 -- in the old one to work around any potential
                 -- unification bugs.
-                | boosterResult.reason `elem` [Aborted, Stuck, Branching] || wasForcedToFallback -> do
+                | boosterResult.reason `elem` [Aborted, Stuck, Branching] -> do
                     Log.logInfoNS "proxy" . Text.pack $
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     -- simplify Booster's state with Kore's simplifier
