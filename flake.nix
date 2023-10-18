@@ -125,6 +125,7 @@
             pkgs.haskell.packages.ghc928.cabal-install
             pkgs.hpack
             pkgs.jq
+            pkgs.nix
             pkgs.z3
           ];
         };
