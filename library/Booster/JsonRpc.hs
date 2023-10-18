@@ -14,22 +14,27 @@ module Booster.JsonRpc (
     execStateToKoreJson,
 ) where
 
+import Control.Applicative ((<|>))
 import Control.Concurrent (MVar, newMVar, putMVar, readMVar, takeMVar)
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Logger.CallStack (LogLevel (LevelError), MonadLoggerIO)
 import Control.Monad.Logger.CallStack qualified as Log
 import Control.Monad.Trans.Except (runExcept, throwE)
+import Data.Bifunctor (second)
 import Data.Conduit.Network (serverSettings)
 import Data.Foldable
+import Data.List (singleton)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
+import Data.Sequence (Seq)
 import Data.Text (Text, pack)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Records
 import Numeric.Natural
+import System.Clock (Clock (Monotonic), diffTimeSpec, getTime, toNanoSecs)
 
 import Booster.Definition.Attributes.Base (getUniqueId, uniqueId)
 import Booster.Definition.Base (KoreDefinition (..))
@@ -55,8 +60,6 @@ import Booster.Syntax.Json.Internalise (
 import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base
 import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinitions)
-import Data.List (singleton)
-import Data.Sequence (Seq)
 import Kore.JsonRpc.Error qualified as RpcError
 import Kore.JsonRpc.Server
 import Kore.JsonRpc.Types qualified as RpcTypes
@@ -76,6 +79,7 @@ respond stateVar =
             | isJust req.movingAverageStepTimeout ->
                 pure $ Left $ RpcError.unsupportedOption ("moving-average-step-timeout" :: String)
         RpcTypes.Execute req -> withContext req._module $ \(def, mLlvmLibrary) -> do
+            start <- liftIO $ getTime Monotonic
             -- internalise given constrained term
             let internalised = runExcept $ internalisePattern DisallowAlias CheckSubsorts Nothing def req.state.term
 
@@ -94,8 +98,17 @@ respond stateVar =
                                 , req.logFailedRewrites
                                 , req.logSuccessfulSimplifications
                                 , req.logFailedSimplifications
+                                , req.logFallbacks
                                 ]
-                    execResponse req <$> performRewrite doTracing def mLlvmLibrary mbDepth cutPoints terminals pat
+                    result <- performRewrite doTracing def mLlvmLibrary mbDepth cutPoints terminals pat
+                    stop <- liftIO $ getTime Monotonic
+                    let duration =
+                            if fromMaybe False req.logTiming
+                                then
+                                    Just $
+                                        fromIntegral (toNanoSecs (diffTimeSpec stop start)) / 1e9
+                                else Nothing
+                    pure $ execResponse duration req result
         RpcTypes.AddModule req -> do
             -- block other request executions while modifying the server state
             state <- liftIO $ takeMVar stateVar
@@ -124,25 +137,36 @@ respond stateVar =
                                 liftIO $ putMVar stateVar state{definitions = newDefinitions}
                                 Log.logInfo $
                                     "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
-                                pure $ Right $ RpcTypes.AddModule ()
+                                pure $ Right $ RpcTypes.AddModule $ RpcTypes.AddModuleResult $ getId newModule.name
         RpcTypes.Simplify req -> withContext req._module $ \(def, mLlvmLibrary) -> do
+            start <- liftIO $ getTime Monotonic
             let internalised =
                     runExcept $ internaliseTermOrPredicate DisallowAlias CheckSubsorts Nothing def req.state.term
-            let mkTraces
-                    | all not . catMaybes $
-                        [req.logSuccessfulSimplifications, req.logFailedSimplifications] =
-                        const Nothing
-                    | otherwise =
+            let mkEquationTraces
+                    | doTracing =
                         Just
-                            . mapMaybe (mkLogEquationTrace (req.logSuccessfulSimplifications, req.logFailedSimplifications))
-                            . toList
+                            . mapMaybe
+                                ( mkLogEquationTrace
+                                    ( fromMaybe False req.logSuccessfulSimplifications
+                                    , fromMaybe False req.logFailedSimplifications
+                                    )
+                                )
+                    | otherwise =
+                        const Nothing
+                mkTraces duration traceData
+                    | Just True <- req.logTiming =
+                        Just $
+                            [ProcessingTime (Just Booster) duration]
+                                <> fromMaybe [] (mkEquationTraces traceData)
+                    | otherwise =
+                        mkEquationTraces traceData
                 doTracing =
                     any
                         (fromMaybe False)
                         [ req.logSuccessfulSimplifications
                         , req.logFailedSimplifications
                         ]
-            case internalised of
+            result <- case internalised of
                 Left patternErrors -> do
                     Log.logError $ "Error internalising cterm: " <> Text.pack (show patternErrors)
                     pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternErrors
@@ -155,19 +179,21 @@ respond stateVar =
                                 tSort = externaliseSort (sortOfPattern newPattern)
                                 predicate = fromMaybe (KoreJson.KJTop tSort) mbPredicate
                                 substitution = fromMaybe (KoreJson.KJTop tSort) mbSubstitution
-                                result = KoreJson.KJAnd tSort (KoreJson.KJAnd tSort term predicate) substitution
-                            pure . Right . RpcTypes.Simplify $
-                                RpcTypes.SimplifyResult
-                                    { state = addHeader result
-                                    , logs = mkTraces patternTraces
-                                    }
+                                result = KoreJson.KJAnd tSort [term, predicate, substitution]
+                            -- pure . Right . RpcTypes.Simplify $
+                            --     RpcTypes.SimplifyResult
+                            --         { state = addHeader result
+                            --         , logs = mkTraces patternTraces
+                            --         }
+                            pure $ Right (addHeader result, patternTraces)
                         (Left ApplyEquations.SideConditionsFalse{}, patternTraces) -> do
                             let tSort = fromMaybe (error "unknown sort") $ sortOfJson req.state.term
-                            pure . Right . RpcTypes.Simplify $
-                                RpcTypes.SimplifyResult
-                                    { state = addHeader $ KoreJson.KJBottom tSort
-                                    , logs = mkTraces patternTraces
-                                    }
+                            -- pure . Right . RpcTypes.Simplify $
+                            --     RpcTypes.SimplifyResult
+                            --         { state = addHeader $ KoreJson.KJBottom tSort
+                            --         , logs = mkTraces patternTraces
+                            --         }
+                            pure $ Right (addHeader $ KoreJson.KJBottom tSort, patternTraces)
                         (Left (ApplyEquations.EquationLoop terms), _traces) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
                         (Left other, _traces) ->
@@ -181,13 +207,22 @@ respond stateVar =
                                     fromMaybe (error "not a predicate") $
                                         sortOfJson req.state.term
                                 result = externalisePredicate predicateSort newPred
-                            pure . Right . RpcTypes.Simplify $
-                                RpcTypes.SimplifyResult
-                                    { state = addHeader result
-                                    , logs = mkTraces traces
-                                    }
+                            -- pure . Right . RpcTypes.Simplify $
+                            --     RpcTypes.SimplifyResult
+                            --         { state = addHeader result
+                            --         , logs = mkTraces traces
+                            --         }
+                            pure $ Right (addHeader result, traces)
                         (Left something, _traces) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ show something -- FIXME
+            stop <- liftIO $ getTime Monotonic
+
+            let duration =
+                    fromIntegral (toNanoSecs (diffTimeSpec stop start)) / 1e9
+                mkSimplifyResponse state traceData =
+                    RpcTypes.Simplify
+                        RpcTypes.SimplifyResult{state, logs = mkTraces duration traceData}
+            pure $ second (uncurry mkSimplifyResponse) result
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         RpcTypes.Cancel -> pure $ Left RpcError.cancelUnsupportedInBatchMode
@@ -247,14 +282,15 @@ execStateToKoreJson RpcTypes.ExecuteState{term = t, substitution, predicate} =
                     else KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []
      in t
             { KoreJson.term =
-                foldr (KoreJson.KJAnd topLevelSort) t.term subAndPred
+                if null subAndPred then t.term else KoreJson.KJAnd topLevelSort (t.term : subAndPred)
             }
 
 execResponse ::
+    Maybe Double ->
     RpcTypes.ExecuteRequest ->
     (Natural, Seq (RewriteTrace Pattern), RewriteResult Pattern) ->
     Either ErrorObj (RpcTypes.API 'RpcTypes.Res)
-execResponse req (d, traces, rr) = case rr of
+execResponse mbDuration req (d, traces, rr) = case rr of
     RewriteBranch p nexts ->
         Right $
             RpcTypes.Execute
@@ -321,42 +357,47 @@ execResponse req (d, traces, rr) = case rr of
                     , nextStates = Nothing
                     , rule = Nothing
                     }
-    RewriteAborted p ->
+    RewriteAborted failure p -> do
         Right $
             RpcTypes.Execute
                 RpcTypes.ExecuteResult
                     { reason = RpcTypes.Aborted
                     , depth
-                    , logs
+                    , logs =
+                        let abortRewriteLog =
+                                mkLogRewriteTrace
+                                    (logSuccessfulRewrites, logFailedRewrites)
+                                    (logSuccessfulSimplifications, logFailedSimplifications)
+                                    (RewriteStepFailed failure)
+                         in logs <|> abortRewriteLog
                     , state = toExecState p
                     , nextStates = Nothing
                     , rule = Nothing
                     }
   where
-    RpcTypes.ExecuteRequest
-        { logSuccessfulRewrites
-        , logFailedRewrites
-        , logSuccessfulSimplifications
-        , logFailedSimplifications
-        } = req
+    logSuccessfulRewrites = fromMaybe False req.logSuccessfulRewrites
+    logFailedRewrites = fromMaybe False req.logFailedRewrites
+    logSuccessfulSimplifications = fromMaybe False req.logSuccessfulSimplifications
+    logFailedSimplifications = fromMaybe False req.logFailedSimplifications
     depth = RpcTypes.Depth d
 
-    logs
-        | not
-            ( fromMaybe False logSuccessfulRewrites
-                || fromMaybe False logFailedRewrites
-                || fromMaybe False logSuccessfulSimplifications
-                || fromMaybe False logFailedSimplifications
-            ) =
-            Nothing
-        | otherwise =
-            fmap concat
-                . mapM
-                    ( mkLogRewriteTrace
-                        (logSuccessfulRewrites, logFailedRewrites)
-                        (logSuccessfulSimplifications, logFailedSimplifications)
-                    )
-                $ toList traces
+    logs =
+        let traceLogs =
+                fmap concat
+                    . mapM
+                        ( mkLogRewriteTrace
+                            (logSuccessfulRewrites, logFailedRewrites)
+                            (logSuccessfulSimplifications, logFailedSimplifications)
+                        )
+                    $ toList traces
+            timingLog =
+                fmap (ProcessingTime $ Just Booster) mbDuration
+         in case (timingLog, traceLogs) of
+                (Nothing, Nothing) -> Nothing
+                (Nothing, Just []) -> Nothing
+                (Nothing, Just xs@(_ : _)) -> Just xs
+                (Just t, Nothing) -> Just [t]
+                (Just t, Just xs) -> Just (t : xs)
 
 toExecState :: Pattern -> RpcTypes.ExecuteState
 toExecState pat =
@@ -368,13 +409,13 @@ toExecState pat =
   where
     (t, p, s) = externalisePattern pat
 
-mkLogEquationTrace :: (Maybe Bool, Maybe Bool) -> ApplyEquations.EquationTrace -> Maybe LogEntry
+mkLogEquationTrace :: (Bool, Bool) -> ApplyEquations.EquationTrace -> Maybe LogEntry
 mkLogEquationTrace
     (logSuccessfulSimplifications, logFailedSimplifications)
     ApplyEquations.EquationTrace{subjectTerm, ruleId = uid, result} =
         case result of
             ApplyEquations.Success rewrittenTrm
-                | fromMaybe False logSuccessfulSimplifications ->
+                | logSuccessfulSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -388,7 +429,7 @@ mkLogEquationTrace
                                     }
                             }
             ApplyEquations.FailedMatch _failReason
-                | fromMaybe False logFailedSimplifications ->
+                | logFailedSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -397,7 +438,7 @@ mkLogEquationTrace
                             , result = Failure{reason = "Failed match", _ruleId}
                             }
             ApplyEquations.IndeterminateMatch
-                | fromMaybe False logFailedSimplifications ->
+                | logFailedSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -406,7 +447,7 @@ mkLogEquationTrace
                             , result = Failure{reason = "Indeterminate match", _ruleId}
                             }
             ApplyEquations.IndeterminateCondition _failedConditions
-                | fromMaybe False logFailedSimplifications ->
+                | logFailedSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -415,7 +456,7 @@ mkLogEquationTrace
                             , result = Failure{reason = "Indeterminate side-condition", _ruleId}
                             }
             ApplyEquations.ConditionFalse
-                | fromMaybe False logFailedSimplifications ->
+                | logFailedSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -424,7 +465,7 @@ mkLogEquationTrace
                             , result = Failure{reason = "Side-condition is false", _ruleId}
                             }
             ApplyEquations.RuleNotPreservingDefinedness
-                | fromMaybe False logFailedSimplifications ->
+                | logFailedSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -433,7 +474,7 @@ mkLogEquationTrace
                             , result = Failure{reason = "The equation does not preserve definedness", _ruleId}
                             }
             ApplyEquations.MatchConstraintViolated _ varName
-                | fromMaybe False logFailedSimplifications ->
+                | logFailedSimplifications ->
                     Just $
                         Simplification
                             { originalTerm
@@ -453,8 +494,8 @@ mkLogEquationTrace
         _ruleId = fmap getUniqueId uid
 
 mkLogRewriteTrace ::
-    (Maybe Bool, Maybe Bool) ->
-    (Maybe Bool, Maybe Bool) ->
+    (Bool, Bool) ->
+    (Bool, Bool) ->
     RewriteTrace Pattern ->
     Maybe [LogEntry]
 mkLogRewriteTrace
@@ -462,7 +503,7 @@ mkLogRewriteTrace
     equationLogOpts@(logSuccessfulSimplifications, logFailedSimplifications) =
         \case
             RewriteSingleStep _ uid _ res
-                | fromMaybe False logSuccessfulRewrites ->
+                | logSuccessfulRewrites ->
                     Just $
                         singleton $
                             Rewrite
@@ -476,7 +517,7 @@ mkLogRewriteTrace
                                 }
             RewriteBranchingStep _ _ -> Nothing -- we may or may not want to emit a trace here in the future
             RewriteStepFailed reason
-                | fromMaybe False logFailedRewrites ->
+                | logFailedRewrites ->
                     Just $
                         singleton $
                             Rewrite
@@ -512,10 +553,11 @@ mkLogRewriteTrace
                                 , origin = Booster
                                 }
             RewriteSimplified equationTraces Nothing
-                | fromMaybe False logSuccessfulSimplifications || fromMaybe False logFailedSimplifications ->
+                | logSuccessfulSimplifications || logFailedSimplifications ->
                     mapM (mkLogEquationTrace equationLogOpts) equationTraces
+                | otherwise -> Just []
             RewriteSimplified equationTraces (Just failure)
-                | fromMaybe False logFailedSimplifications -> do
+                | logFailedSimplifications -> do
                     let final = singleton $ case failure of
                             ApplyEquations.IndexIsNone trm ->
                                 Simplification
@@ -553,4 +595,5 @@ mkLogRewriteTrace
                                     , result = Failure{reason = "Side conditions false", _ruleId = Nothing}
                                     }
                     (<> final) <$> mapM (mkLogEquationTrace equationLogOpts) equationTraces
+                | otherwise -> Just []
             _ -> Nothing

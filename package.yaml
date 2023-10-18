@@ -65,6 +65,7 @@ library:
   - binary
   - bytestring
   - casing
+  - clock
   - conduit
   - conduit-extra
   - containers
@@ -84,6 +85,7 @@ library:
   - monad-logger
   - optparse-applicative
   - prettyprinter
+  - process
   - recursion-schemes >= 5.2.2.3
   - regex-base
   - regex-pcre-builtin
@@ -91,6 +93,7 @@ library:
   - stm-conduit
   - syb
   - template-haskell
+  - temporary
   - text
   - transformers
   - unix

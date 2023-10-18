@@ -119,8 +119,8 @@ jobs:
       - name: 'Checkout Code'
         uses: actions/checkout@v3
         with:
-          # Check out pull request HEAD instead of merge commit.
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.JENKINS_GITHUB_PAT }}
 
       - name: 'Set up Docker'
         uses: ./.github/actions/with-docker
@@ -134,7 +134,27 @@ jobs:
           ghc: ${{ env.ghc_version }}
 
       - name: 'Check formatting'
-        run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/fourmolu.sh && git diff --exit-code'
+        run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/fourmolu.sh'
+
+      - name: Update branch
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if git status -s -b | grep -q '^##.*(no branch)$'; then
+            echo 2>&1 "Error: Git is in detached HEAD state"
+            exit 1
+          fi
+
+          if [ -n "$(git status --porcelain '*.hs')" ]; then
+            git config --global user.name github-actions
+            git config --global user.email github-actions@github.com
+            git add '*.hs'
+            git commit -m "Format with fourmolu"
+            git show --stat
+            git push
+            echo "Reformatted code pushed, aborting this workflow" | tee -a $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
 
       - name: 'Run hlint'
         run: docker exec -t hs-booster-ci-formatting-style-buster-${{ github.run_id }} /bin/bash -c './scripts/hlint.sh'
@@ -143,6 +163,7 @@ jobs:
         if: always()
         run: |
           docker stop --time=0 hs-booster-ci-formatting-style-buster-${{ github.run_id }}
+
 
   nix-build:
     name: 'Nix / All Tests'
@@ -215,14 +236,14 @@ jobs:
           PLUGIN_VERSION=$(cat deps/blockchain-k-plugin_release)
           export PATH="$(nix build github:runtimeverification/k/v$K_VERSION#k.openssl.procps --no-link --json | $JQ -r '.[].outputs | to_entries[].value')/bin:$PATH"
           nix run .#hs-backend-booster:test:llvm-integration --extra-experimental-features 'nix-command flakes' --print-build-logs
-          
+
           # The runDirectoryTest.sh script expects the following env vars to be set
           export PLUGIN_DIR=$(nix build github:runtimeverification/blockchain-k-plugin/$PLUGIN_VERSION --no-link --json | $JQ -r '.[].outputs | to_entries[].value')
           KORE_RPC_BOOSTER=$(nix build .#kore-rpc-booster --no-link --json | $JQ -r '.[].outputs | to_entries[].value')/bin/kore-rpc-booster
           BOOSTER_DEV=$(nix build .#hs-backend-booster:exe:booster-dev --no-link --json | $JQ -r '.[].outputs | to_entries[].value')/bin/booster-dev
           KORE_RPC_DEV=$(nix build .#hs-backend-booster:exe:kore-rpc-dev --no-link --json | $JQ -r '.[].outputs | to_entries[].value')/bin/kore-rpc-dev
           export CLIENT=$(nix build .#hs-backend-booster:exe:rpc-client --no-link --json | $JQ -r '.[].outputs | to_entries[].value')/bin/rpc-client
-          
+
           cd test/rpc-integration
           for dir in $(ls -d test-*); do
               name=${dir##test-}
@@ -231,13 +252,16 @@ jobs:
                   SERVER=$BOOSTER_DEV ./runDirectoryTest.sh test-$name --time
                   SERVER=$KORE_RPC_DEV ./runDirectoryTest.sh test-$name --time
                   SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time
+              elif [ "$name" = "vacuous" ]; then
+                  SERVER=$KORE_RPC_DEV ./runDirectoryTest.sh test-$name
+                  SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name
               elif [ "$name" = "substitutions" ]; then
                   SERVER=$KORE_RPC_DEV ./runDirectoryTest.sh test-$name --time
                   SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time
+              elif [ "$name" = "no-evaluator" ]; then
+                  SERVER=$BOOSTER_DEV ./runDirectoryTest.sh test-$name --time
               else
                   SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time
               fi
           done
 
-      - name: Check shell
-        run: GC_DONT_GC=1 nix develop --print-build-logs --command cabal --version
