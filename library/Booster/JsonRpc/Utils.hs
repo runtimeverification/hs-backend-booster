@@ -210,5 +210,8 @@ renderDiff first second = unsafePerformIO . withTempDir $ \dir -> do
         path2 = dir </> "diff_file2.txt"
     BS.writeFile path1 first
     BS.writeFile path2 second
-    (_, str, _) <- readProcessWithExitCode "diff" ["-w", path1, path2] ""
-    return $ BS.pack str
+    (result, str, _) <- readProcessWithExitCode "diff" ["-w", path1, path2] ""
+    case result of
+        ExitSuccess -> error "Unexpected result: identical content"
+        ExitFailure 1 -> pure $ BS.pack str
+        ExitFailure n -> error $ "diff process exited with code " <> show n
