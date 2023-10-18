@@ -177,8 +177,8 @@ jobs:
             cabal-nix-${{ runner.os }}-ghc-${{ env.ghc_version }}-
 
       - name: Unit Tests
-        run: GC_DONT_GC=1 nix develop .#cabal --command bash -c "hpack && cabal update && cabal test --enable-tests --test-show-details=direct all"
+        run: GC_DONT_GC=1 nix develop .#cabal --command bash -c "hpack && cabal update && cabal test unit-tests --enable-tests --test-show-details=direct"
 
-      - name: Integration tests
+      - name: Integration Tests
         if: ${{ matrix.os != 'macos-12' }}  ## takes long on public runner, already tested in MacM1
         run: GC_DONT_GC=1 nix develop .#cabal --command bash -c "scripts/integration-tests.sh"
