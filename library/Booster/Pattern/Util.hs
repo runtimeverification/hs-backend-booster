@@ -27,6 +27,8 @@ module Booster.Pattern.Util (
     isConcrete,
     filterTermSymbols,
     sizeOfTerm,
+    termVarStats,
+    termSymbolStats,
     freshenVar,
     abstractTerm,
     abstractSymbolicConstructorArguments,
@@ -308,6 +310,7 @@ filterTermSymbols check = cata $ \case
 isBottom :: Pattern -> Bool
 isBottom = (Bottom `elem`) . constraints
 
+-- | Calculate size of a term in bytes
 sizeOfTerm :: Term -> Int
 sizeOfTerm = cata $ \case
     SymbolApplicationF symbol _ ts -> sum ts + BS.length symbol.name
@@ -318,3 +321,51 @@ sizeOfTerm = cata $ \case
     KMapF _ xs mr -> sum (map (uncurry (+)) xs) + fromMaybe 0 mr
     KListF _ xs mr -> sum xs + maybe 0 (\(a, bs) -> a + sum bs) mr
     KSetF _ xs mr -> sum xs + fromMaybe 0 mr
+
+-- | Calculate variable statistics: "variable name" -> "number of its occurrences"
+termVarStats :: Term -> Map Variable Int
+termVarStats = cata $ \case
+    SymbolApplicationF _ _ vars -> Map.unionsWith (+) vars
+    AndTermF vars1 vars2 -> Map.unionWith (+) vars1 vars2
+    DomainValueF _ _ -> Map.empty
+    VarF var -> Map.singleton var 1
+    InjectionF _ _ t -> t
+    KMapF _ xs mr ->
+        Map.unionWith
+            (+)
+            (Map.unionsWith (+) (map (uncurry (Map.unionWith (+))) xs))
+            (fromMaybe Map.empty mr)
+    KListF _ xs mr ->
+        Map.unionWith
+            (+)
+            (Map.unionsWith (+) xs)
+            (maybe Map.empty (\(a, bs) -> Map.unionWith (+) a (Map.unionsWith (+) bs)) mr)
+    KSetF _ xs mr ->
+        Map.unionWith
+            (+)
+            (Map.unionsWith (+) xs)
+            (fromMaybe Map.empty mr)
+
+-- | Calculate symbol application statistics: "symbol name" -> "number of its applications"
+termSymbolStats :: Term -> Map Symbol Int
+termSymbolStats = cata $ \case
+    SymbolApplicationF symbol _ symbols -> Map.unionsWith (+) (Map.singleton symbol 1 : symbols)
+    AndTermF symbols1 symbols2 -> Map.unionWith (+) symbols1 symbols2
+    DomainValueF _ _ -> Map.empty
+    VarF _ -> Map.empty
+    InjectionF _ _ t -> t
+    KMapF _ xs mr ->
+        Map.unionWith
+            (+)
+            (Map.unionsWith (+) (map (uncurry (Map.unionWith (+))) xs))
+            (fromMaybe Map.empty mr)
+    KListF _ xs mr ->
+        Map.unionWith
+            (+)
+            (Map.unionsWith (+) xs)
+            (maybe Map.empty (\(a, bs) -> Map.unionWith (+) a (Map.unionsWith (+) bs)) mr)
+    KSetF _ xs mr ->
+        Map.unionWith
+            (+)
+            (Map.unionsWith (+) xs)
+            (fromMaybe Map.empty mr)
