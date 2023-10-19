@@ -291,11 +291,7 @@ applyRule pat rule = runRewriteRuleAppT $ do
         | Set.null (rule.existentials `Set.intersection` Map.keysSet subst) = subst
         | otherwise =
             let substVars = Map.keysSet subst
-             in subst `Map.union` Map.fromSet (\v -> Var $ freshen v substVars) rule.existentials
-
-    freshen v@Variable{variableName = vn} vs
-        | v `Set.member` vs = freshen v{variableName = vn <> "'"} vs
-        | otherwise = v
+             in subst `Map.union` Map.fromSet (\v -> Var $ freshenVar v substVars) rule.existentials
 
     checkConstraint ::
         (Predicate -> a) ->

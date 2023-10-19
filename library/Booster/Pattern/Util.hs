@@ -27,6 +27,7 @@ module Booster.Pattern.Util (
     isConcrete,
     filterTermSymbols,
     sizeOfTerm,
+    freshenVar,
 ) where
 
 import Data.Bifunctor (bimap, first)
@@ -151,6 +152,11 @@ modifyVariablesInP f = cata $ \case
 
 modifyVarName :: (VarName -> VarName) -> Variable -> Variable
 modifyVarName f v = v{variableName = f v.variableName}
+
+freshenVar :: Variable -> Set Variable -> Variable
+freshenVar v@Variable{variableName = vn} vs
+    | v `Set.member` vs = freshenVar v{variableName = vn <> "'"} vs
+    | otherwise = v
 
 modifyVarNameConcreteness :: (ByteString -> ByteString) -> Concreteness -> Concreteness
 modifyVarNameConcreteness f = \case
