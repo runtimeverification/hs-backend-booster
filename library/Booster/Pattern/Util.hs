@@ -28,11 +28,14 @@ module Booster.Pattern.Util (
     filterTermSymbols,
     sizeOfTerm,
     freshenVar,
+    abstractTerm,
+    abstractSymbolicConstructorArguments,
 ) where
 
 import Data.Bifunctor (bimap, first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
+import Data.Char (ord)
 import Data.Coerce (coerce)
 import Data.Functor.Foldable (Corecursive (embed), cata)
 import Data.Map (Map)
@@ -158,6 +161,47 @@ freshenVar v@Variable{variableName = vn} vs
     | v `Set.member` vs = freshenVar v{variableName = vn <> "'"} vs
     | otherwise = v
 
+{- | Abstract a term into a variable, making sure the variable name is disjoint from the given set of variables.
+     Return the resulting singleton substitution.
+-}
+abstractTerm :: Set Variable -> Term -> (Term, Term)
+abstractTerm vs term =
+    let
+        varName = BS.pack . map (fromIntegral . ord) $ "HSVAR" <> show (abs (getAttributes term).hash)
+        var = Variable (sortOfTerm term) varName
+     in
+        (Var (freshenVar var vs), term)
+
+{- | Abstract the _arguments_ of given symbols in a term, making sure that they symbols are constructors.
+     Return the original term if abstraction failed.
+
+     Example (KEVM):
+       abstractSymbolicConstructorArguments (<kevm> ... <gas> LARGE_EXPR </gas> ... </kevm> ['<gas>'])
+       should turn LARGE_EXPR into a fresh variable
+-}
+abstractSymbolicConstructorArguments :: Set SymbolName -> Term -> Term
+abstractSymbolicConstructorArguments constructorNames term = goSubst (freeVariables term) term
+  where
+    goSubst freeVars t = case t of
+        Var{} -> t
+        DomainValue{} -> t
+        SymbolApplication sym sorts args ->
+            if sym.attributes.symbolType == Constructor && sym.name `Set.member` constructorNames
+                then
+                    SymbolApplication sym sorts $
+                        map (\x -> if not (isConcrete x) then fst . abstractTerm freeVars $ x else x) args
+                else SymbolApplication sym sorts $ map (goSubst freeVars) args
+        AndTerm t1 t2 -> AndTerm (goSubst freeVars t1) (goSubst freeVars t2)
+        Injection ss s sub -> Injection ss s (goSubst freeVars sub)
+        KMap attrs keyVals rest ->
+            KMap attrs (bimap (goSubst freeVars) (goSubst freeVars) <$> keyVals) (goSubst freeVars <$> rest)
+        KList def heads rest ->
+            KList
+                def
+                (map (goSubst freeVars) heads)
+                (bimap (goSubst freeVars) (map (goSubst freeVars)) <$> rest)
+        KSet def elements rest ->
+            KSet def (map (goSubst freeVars) elements) (goSubst freeVars <$> rest)
 modifyVarNameConcreteness :: (ByteString -> ByteString) -> Concreteness -> Concreteness
 modifyVarNameConcreteness f = \case
     SomeConstrained m -> SomeConstrained $ Map.mapKeys (first f) m
