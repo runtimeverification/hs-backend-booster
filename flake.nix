@@ -57,20 +57,7 @@
                   buildTarget = "kore-rpc-booster";
                 });
               json-rpc = dontCheck hprev.json-rpc;
-              kore = (overrideCabal hprev.kore (drv: {
-                doCheck = false;
-                buildTarget = "kore";
-                # Patch kore to remove Paths_kore from GlobalMain, which prevents nix stripping kore as a runtime dependency.
-                # This happens because Paths_kore hard-codes paths to the kore library in the nix store and
-                # ghc does not optimise these away even though they are not used by the booster; hence they end up in the executables
-                postPatch = ''
-                  ${drv.postPatch or ""}
-                  substituteInPlace kore.cabal \
-                    --replace 'Paths_kore' ' '
-                  sed -i -z 's|import Paths_kore qualified as MetaData (\n    version,\n )||' app/share/GlobalMain.hs
-                  sed -i 's|packageVersion = showVersion MetaData.version|packageVersion = ""|' app/share/GlobalMain.hs
-                '';
-              })).override {
+              kore = (dontCheck hprev.kore).override {
                 # bit pathological, but ghc-compact is already included with the ghc compiler
                 # and depending on another copy of ghc-compact breaks HLS in the dev shell.
                 ghc-compact = null;
