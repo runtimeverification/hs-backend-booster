@@ -62,10 +62,11 @@ respondEither ::
     Log.MonadLogger m =>
     MonadIO m =>
     Maybe StatsVar ->
+    Depth ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res)
-respondEither mbStatsVar booster kore req = case req of
+respondEither mbStatsVar koreFallbackDepth booster kore req = case req of
     Execute execReq
         | isJust execReq.stepTimeout || isJust execReq.movingAverageStepTimeout ->
             loggedKore ExecuteM req
@@ -215,7 +216,7 @@ respondEither mbStatsVar booster kore req = case req of
                                         ( Execute
                                             r
                                                 { state = execStateToKoreJson simplifiedBoosterState
-                                                , maxDepth = Just $ Depth 1
+                                                , maxDepth = Just koreFallbackDepth
                                                 }
                                         )
                             when (isJust mbStatsVar) $

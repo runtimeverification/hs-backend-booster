@@ -51,7 +51,7 @@ import Kore.JsonRpc (ServerState (..))
 import Kore.JsonRpc qualified as Kore
 import Kore.JsonRpc.Error
 import Kore.JsonRpc.Server
-import Kore.JsonRpc.Types (API, ReqOrRes (Req, Res))
+import Kore.JsonRpc.Types (API, Depth (..), ReqOrRes (Req, Res))
 import Kore.Log (
     ExeName (..),
     KoreLogType (LogSomeAction),
@@ -63,6 +63,7 @@ import Kore.Log (
  )
 import Kore.Log qualified as Log
 import Kore.Log.DebugSolver qualified as Log
+import Kore.Parser.ParserUtils (readPositiveIntegral)
 import Kore.Rewrite.SMT.Lemma (declareSMTLemmas)
 import Kore.Syntax.Definition (ModuleName (ModuleName), SentenceAxiom)
 import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
@@ -86,7 +87,7 @@ main = do
                     , eventlogEnabledUserEvents
                     }
             , koreSolverOptions
-            , proxyOptions = ProxyOptions{printStats}
+            , proxyOptions = ProxyOptions{printStats, koreFallbackDepth}
             , debugSolverOptions
             } = options
         (logLevel, customLevels) = adjustLogLevels logLevels
@@ -145,7 +146,7 @@ main = do
                         server =
                             jsonRpcServer
                                 srvSettings
-                                (const $ Proxy.respondEither statVar boosterRespond koreRespond)
+                                (const $ Proxy.respondEither statVar koreFallbackDepth boosterRespond koreRespond)
                                 [handleErrorCall, handleSomeException]
                         interruptHandler _ = do
                             when (logLevel >= LevelInfo) $
@@ -180,9 +181,11 @@ data CLProxyOptions = CLProxyOptions
     , debugSolverOptions :: !Log.DebugSolverOptions
     }
 
-newtype ProxyOptions = ProxyOptions
+data ProxyOptions = ProxyOptions
     { printStats :: Bool
     -- ^ print timing statistics per request and on shutdown
+    , koreFallbackDepth :: Depth
+    -- ^ maximum number of rewriting steps to be preformed when falling back to Kore
     }
 
 parserInfoModifiers :: InfoMod options
@@ -204,6 +207,23 @@ clProxyOptionsParser =
                 ( long "print-stats"
                     <> help "(development) Print timing information per request and on shutdown"
                 )
+            <*> option
+                readKoreFallpackLimit
+                ( long "kore-fallback-depth"
+                    <> help "Maximum number of rewriting steps to be preformed when falling back to Kore"
+                    <> value defaultKoreFallpackLimit
+                )
+      where
+        readKoreFallpackLimit = readPositiveIntegral Depth "kore-fallback-depth"
+        defaultKoreFallpackLimit = 1
+
+-- option
+--     readRetryLimit
+--     ( metavar "SMT_RETRY_LIMIT"
+--         <> long "smt-retry-limit"
+--         <> help "Limit how many times an SMT query can be retried (with scaling timeouts)"
+--         <> value defaultRetryLimit
+--     )
 
 mkKoreServer :: Log.LoggerEnv IO -> CLOptions -> KoreSolverOptions -> IO KoreServer
 mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainModuleName} koreSolverOptions =
