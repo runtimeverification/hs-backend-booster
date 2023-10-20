@@ -121,10 +121,10 @@ unpackBugReports = Tar.foldEntries unpackBugReportData (Right mempty) Left
                 $ fromMaybe mempty bDiff
 
 {- Unpack all files inside rpc_* directories in a tarball, into maps
-   of file prefixes (numbers) to requests and resp. responses.
+   of file prefixes (dir.name and number) to requests and resp. responses.
 
-   Assumes there is a single rpc_* directory in the tarball (fails on
-   duplicate file base names).
+   There may be multiple rpc_* directories in a single tarball, therefore
+   the map keys have to contain the directory name.
 -}
 unpackBugReportDataFrom ::
     Tar.Entries err ->
@@ -138,21 +138,22 @@ unpackBugReportDataFrom = Tar.foldEntries unpackRpc (Right mempty) Left
     unpackRpc _ err@(Left _) = err
     unpackRpc entry acc@(Right BugReportData{requests, responses})
         | Tar.NormalFile bs _size <- Tar.entryContent entry
-        , "rpc_" `isPrefixOf` dir
+        , Just dir <- stripPrefix dirPrefix rpcDir
         , ".json" `isSuffixOf` file =
             let (isRequest, number, json)
                     | Just num <- stripSuffix requestSuffix file =
                         (True, num, bs)
                     | Just num <- stripSuffix responseSuffix file =
                         (False, num, bs)
-                    | otherwise = error $ "Bad file in tarball: " <> show (dir </> file)
+                    | otherwise = error $ "Bad file in tarball: " <> show (rpcDir </> file)
              in Right $
                     if isRequest
-                        then BugReportData{requests = Map.insert number json requests, responses}
-                        else BugReportData{requests, responses = Map.insert number json responses}
+                        then BugReportData{requests = Map.insert (dir <> number) json requests, responses}
+                        else BugReportData{requests, responses = Map.insert (dir <> number) json responses}
         | otherwise = acc
       where
-        (dir, file) = splitFileName (Tar.entryPath entry)
+        (rpcDir, file) = splitFileName (Tar.entryPath entry)
+        dirPrefix = "rpc_"
         requestSuffix = "_request.json"
         responseSuffix = "_response.json"
 
