@@ -26,7 +26,7 @@ NAMETGZ=$(basename ${0%.kompile})
 cp foundry-bug-report.haskell.kore foundry-bug-report.kore
 
 # Regenerate llvm backend decision tree
-llvm-backend-matching foundry-bug-report.llvm.kore qbaL ./dt 0
+llvm-kompile-matching foundry-bug-report.llvm.kore qbaL ./dt 0
 
 # kompile llvm-definition to interpreter
 
