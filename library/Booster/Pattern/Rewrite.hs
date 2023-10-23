@@ -104,17 +104,20 @@ rewriteStep cutLabels terminalLabels pat = do
 
     -- process one priority group at a time (descending priority),
     -- until a result is obtained or the entire rewrite fails.
-    processGroups rules
+    processGroups pat rules
   where
     processGroups ::
-        MonadLoggerIO io => [[RewriteRule k]] -> RewriteT io (RewriteFailed k) (RewriteResult Pattern)
-    processGroups [] =
-        pure $ RewriteStuck pat
-    processGroups (rules : rest) = do
+        MonadLoggerIO io =>
+        Pattern ->
+        [[RewriteRule k]] ->
+        RewriteT io (RewriteFailed k) (RewriteResult Pattern)
+    processGroups pattr [] =
+        pure $ RewriteStuck pattr
+    processGroups pattr (rules : rest) = do
         -- try all rules of the priority group. This will immediately
         -- fail the rewrite if anything is uncertain (unification,
         -- definedness, rule conditions)
-        results <- filter (/= NotApplied) <$> mapM (applyRule pat) rules
+        results <- filter (/= NotApplied) <$> mapM (applyRule pattr) rules
 
         -- simplify and filter out bottom states
 
@@ -131,13 +134,13 @@ rewriteStep cutLabels terminalLabels pat = do
 
         case results of
             -- no rules in this group were applicable
-            [] -> processGroups rest
+            [] -> processGroups pattr rest
             _ -> case concatMap (\case Applied x -> [x]; _ -> []) results of
                 [] ->
                     -- all remaining branches are trivial, i.e. rules which did apply had an ensures condition which evaluated to false
                     -- if, all the other groups only generate a not applicable or trivial rewrites,
                     -- then we return a `RewriteTrivial`.
-                    processGroups rest >>= \case
+                    processGroups pattr rest >>= \case
                         RewriteStuck{} -> pure $ RewriteTrivial pat
                         other -> pure other
                 -- all branches but one were either not applied or trivial
