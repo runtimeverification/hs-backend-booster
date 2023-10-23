@@ -7,9 +7,10 @@ comparisons are performed until a comparison fails:
 
 1) tarballs contain the same number of request/response files
 Then, for each pair of responses to an execute request:
-  2) the responses have the same number of steps
-  3) the file size is the same (?)
-  4) the contained json is the same (?)
+  . the file size is the same (?)
+  . the responses have the same number of steps (depth) if the request
+    is an execute request
+  . the contained json is the same (?)
 
 The tool takes two tarballs as arguments, and program options to
 determine what checks to perform (1-4 above).
@@ -24,8 +25,6 @@ import Codec.Compression.BZip qualified as BZ2
 import Codec.Compression.GZip qualified as GZip
 import Control.Monad (forM, forM_, when)
 import Control.Monad.Trans.Writer
-import Data.Aeson qualified as Json
-import Data.Aeson.KeyMap qualified as Json
 import Data.ByteString.Lazy.Char8 qualified as BS
 import Data.List.Extra
 import Data.Map (Map)
@@ -34,6 +33,7 @@ import Data.Maybe (fromMaybe)
 import System.Environment (getArgs)
 import System.FilePath
 
+import Booster.JsonRpc.Utils
 import Kore.JsonRpc.Types
 
 data BugReportData = BugReportData
@@ -173,19 +173,32 @@ checkDiff name BugReportDiff{booster, koreRpc} =
                     case Map.lookup koreRpcReqKey booster.requests of
                         Nothing ->
                             msg $ "Request " <> keyBS <> " does not exist in booster"
-                        Just boosterReqJson ->
+                        Just boosterReqJson -> do
+                            let koreTp = requestType koreRpcReqJson
+                                boosTp = requestType boosterReqJson
+                            when (koreTp /= boosTp) $
+                                strMsg $
+                                    "Requests have different type: " <> show (boosTp, koreTp)
                             compareJson
                                 "Requests"
                                 koreRpcReqKey
                                 koreRpcReqJson
                                 boosterReqJson
                     case (Map.lookup koreRpcReqKey koreRpc.responses, Map.lookup koreRpcReqKey booster.responses) of
-                        (Just koreResp, Just boosterResp) ->
+                        (Just koreResp, Just boosterResp) -> do
                             compareJson
                                 "Responses"
                                 koreRpcReqKey
                                 koreResp
                                 boosterResp
+                            let koreDepth = responseDepth koreResp
+                                boosDepth = responseDepth boosterResp
+                            when (koreDepth /= boosDepth) $
+                                strMsg $
+                                    "Execution depth differs: "
+                                        <> show boosDepth
+                                        <> " vs "
+                                        <> show koreDepth
                         (Just _, Nothing) ->
                             msg $ "Response " <> keyBS <> " missing in booster"
                         (Nothing, Just _) ->
@@ -194,6 +207,7 @@ checkDiff name BugReportDiff{booster, koreRpc} =
                             msg $ "Response " <> keyBS <> " missing"
   where
     msg = tell . (: [])
+    strMsg = msg . BS.pack
 
     compareJson ::
         BS.ByteString ->
@@ -220,3 +234,11 @@ checkDiff name BugReportDiff{booster, koreRpc} =
                         GT -> "(kore bigger)"
                         LT -> "(booster bigger)"
                     ]
+    requestType :: BS.ByteString -> KoreRpcType
+    requestType = rpcTypeOf . decodeKoreRpc
+
+    responseDepth :: BS.ByteString -> Maybe Depth
+    responseDepth json =
+        case decodeKoreRpc json of
+            RpcResponse (Execute r) -> Just r.depth
+            _other -> Nothing
