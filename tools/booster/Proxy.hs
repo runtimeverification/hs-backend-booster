@@ -184,23 +184,27 @@ respondEither mbStatsVar forceFallback booster kore req = case req of
         (Depth, Double, Double, Maybe [RPCLog.LogEntry]) ->
         ExecuteRequest ->
         m (Either ErrorObj (API 'Res))
-    executionLoop logSettings mforceFallback (currentDepth@(Depth cDepth), !time, !koreTime, !rpcLogs) r = do
+    executionLoop logSettings mforceSimplification (currentDepth@(Depth cDepth), !time, !koreTime, !rpcLogs) r = do
         Log.logInfoNS "proxy" . Text.pack $
             if currentDepth == 0
                 then "Starting execute request"
                 else "Iterating execute request at " <> show currentDepth
-        let (mbDepthLimit, wasForcedToFallback) = case (mforceFallback, r.maxDepth) of
+        -- calculate depth limit, considering possible forced Kore simplification
+        let mbDepthLimit = case (mforceSimplification, r.maxDepth) of
                 (Just (Depth forceDepth), Just (Depth maxDepth)) ->
                     if cDepth + forceDepth < maxDepth
-                        then (Just $ Depth forceDepth, True)
-                        else (Just $ Depth $ maxDepth - cDepth, False)
-                (Just forceDepth, _) -> (Just forceDepth, False)
-                (_, Just maxDepth) -> (Just $ maxDepth - currentDepth, False)
-                _ -> (Nothing, False)
+                        then Just $ Depth forceDepth
+                        else Just $ Depth $ maxDepth - cDepth
+                (Just forceDepth, _) -> Just forceDepth
+                (_, Just maxDepth) -> Just $ maxDepth - currentDepth
+                _ -> Nothing
         (bResult, bTime) <- Stats.timed $ booster (Execute r{maxDepth = mbDepthLimit})
         case bResult of
             Right (Execute boosterResult)
-                | wasForcedToFallback -> do
+                -- the execution reached the depth bound due to a forced Kore simplification
+                | boosterResult.reason == DepthBound
+                    && isJust mforceSimplification
+                    && boosterResult.depth == currentDepth + fromMaybe 0 mforceSimplification -> do
                     Log.logInfoNS "proxy" . Text.pack $
                         "Forced simplification at " <> show (currentDepth + boosterResult.depth)
                     simplifyResult <- simplifyExecuteState logSettings r._module boosterResult.state
@@ -218,7 +222,7 @@ respondEither mbStatsVar forceFallback booster kore req = case req of
                                         ]
                             executionLoop
                                 logSettings
-                                mforceFallback
+                                mforceSimplification
                                 ( currentDepth + boosterResult.depth
                                 , time + bTime
                                 , koreTime
@@ -283,7 +287,7 @@ respondEither mbStatsVar forceFallback booster kore req = case req of
                                                         ]
                                             executionLoop
                                                 logSettings
-                                                mforceFallback
+                                                mforceSimplification
                                                 ( currentDepth + boosterResult.depth + koreResult.depth
                                                 , time + bTime + kTime
                                                 , koreTime + kTime
