@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 
+set -exuo pipefail
+
 # using variables from runDirectoryTest.sh
 
 echo "client=$client"
 echo "dir=$dir"
 echo "arguments=$*"
 
-
-diff="diff -s -"
+diff="git diff --no-index -"
 # remove "--regenerate" and tweak $diff if it is present
 
 client_args=""
@@ -27,5 +28,5 @@ done
 echo "Running a request which gets stuck, with logTiming enabled"
 ${client} \
     execute $dir/state-c.execute ${client_args} -O log-timing=true | \
-    $JQ 'del(.result.logs[].time)' | \
+    jq 'del(.result.logs[].time)' | \
     ${diff} $dir/response-c.json
