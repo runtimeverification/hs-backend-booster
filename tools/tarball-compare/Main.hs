@@ -100,12 +100,10 @@ main =
                     -- files and subdirectories)
                     subdirs <-
                         filter (dirPrefix `isPrefixOf`) . map takeFileName <$> listDirectories "."
-                    putStrLn $ "DEBUG: " <> show subdirs
                     let hasCorrectSuffix f =
                             requestSuffix `isSuffixOf` f || responseSuffix `isSuffixOf` f
                     files <-
                         filter hasCorrectSuffix . concat <$> mapM listFiles subdirs
-                    putStrLn $ "DEBUG: " <> show file <> ": " <> show files
                     entries <- Tar.pack "." files
                     -- need to force the tar entries, withCurrentDirectory is not retained
                     mapM_ (`seq` pure ()) entries
