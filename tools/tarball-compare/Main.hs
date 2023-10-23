@@ -41,14 +41,12 @@ import Kore.JsonRpc.Types
 data BugReportData = BugReportData
     { requests :: Map FilePath BS.ByteString
     , responses :: Map FilePath BS.ByteString
+    , definition :: BS.ByteString
     }
     deriving (Show)
 
-instance Semigroup BugReportData where
-    (BugReportData req1 resp1) <> (BugReportData req2 resp2) = BugReportData (req1 <> req2) (resp1 <> resp2)
-
-instance Monoid BugReportData where
-    mempty = BugReportData mempty mempty
+emptyBugReport :: BugReportData
+emptyBugReport = BugReportData mempty mempty "INVALID"
 
 data BugReportDiff = BugReportDiff
     { booster :: BugReportData
@@ -56,11 +54,8 @@ data BugReportDiff = BugReportDiff
     }
     deriving (Show)
 
-instance Semigroup BugReportDiff where
-    (BugReportDiff b1 k1) <> (BugReportDiff b2 k2) = BugReportDiff (b1 <> b2) (k1 <> k2)
-
-instance Monoid BugReportDiff where
-    mempty = BugReportDiff mempty mempty
+emptyDiff :: BugReportDiff
+emptyDiff = BugReportDiff emptyBugReport emptyBugReport
 
 main :: IO ()
 main =
@@ -104,7 +99,12 @@ main =
                             requestSuffix `isSuffixOf` f || responseSuffix `isSuffixOf` f
                     files <-
                         filter hasCorrectSuffix . concat <$> mapM listFiles subdirs
-                    entries <- Tar.pack "." files
+                    defFile <-
+                        fromMaybe (error $ "No definition found in " <> file)
+                            . find (== "./definition.kore")
+                            <$> listFiles "."
+
+                    entries <- Tar.pack "." $ defFile : files
                     -- need to force the tar entries, withCurrentDirectory is not retained
                     mapM_ (`seq` pure ()) entries
                     pure $ foldr Tar.Next Tar.Done entries
@@ -138,7 +138,7 @@ unpackBugReports = Tar.foldEntries unpackBugReportData (Right mempty) Left
                             then bugReportDiff{booster = b}
                             else bugReportDiff{koreRpc = b}
                   )
-                $ fromMaybe mempty bDiff
+                $ fromMaybe emptyDiff bDiff
 
 {- Unpack all files inside rpc_* directories in a tarball, into maps
    of file prefixes (dir.name and number) to requests and resp. responses.
@@ -149,14 +149,14 @@ unpackBugReports = Tar.foldEntries unpackBugReportData (Right mempty) Left
 unpackBugReportDataFrom ::
     Tar.Entries err ->
     Either err BugReportData
-unpackBugReportDataFrom = Tar.foldEntries unpackRpc (Right mempty) Left
+unpackBugReportDataFrom = Tar.foldEntries unpackRpc (Right emptyBugReport) Left
   where
     unpackRpc ::
         Tar.Entry ->
         Either err BugReportData ->
         Either err BugReportData
     unpackRpc _ err@(Left _) = err
-    unpackRpc entry acc@(Right BugReportData{requests, responses})
+    unpackRpc entry acc@(Right bugReportData)
         | Tar.NormalFile bs _size <- Tar.entryContent entry
         , Just dir <- stripPrefix dirPrefix rpcDir
         , ".json" `isSuffixOf` file =
@@ -168,8 +168,12 @@ unpackBugReportDataFrom = Tar.foldEntries unpackRpc (Right mempty) Left
                     | otherwise = error $ "Bad file in tarball: " <> show (rpcDir </> file)
              in Right $
                     if isRequest
-                        then BugReportData{requests = Map.insert (dir <> number) json requests, responses}
-                        else BugReportData{requests, responses = Map.insert (dir <> number) json responses}
+                        then bugReportData{requests = Map.insert (dir <> number) json bugReportData.requests}
+                        else bugReportData{responses = Map.insert (dir <> number) json bugReportData.responses}
+        | Tar.NormalFile bs _size <- Tar.entryContent entry
+        , rpcDir == "./" -- dir output of splitFileName for names without path
+        , file == "definition.kore" =
+            Right bugReportData{definition = bs}
         | otherwise = acc
       where
         (rpcDir, file) = splitFileName (Tar.entryPath entry)
@@ -185,6 +189,15 @@ checkDiff name BugReportDiff{booster, koreRpc} =
         : if null $ Map.keys booster.requests
             then ["No Booster data... skipping..."]
             else execWriter $ do
+                when (booster.definition /= koreRpc.definition) $ do
+                    let bSize = BS.length booster.definition
+                        kSize = BS.length koreRpc.definition
+                    msg $
+                        "Definitions in bug reports differ "
+                            <> case compare bSize kSize of
+                                EQ -> "(same size)"
+                                LT -> "(kore bigger)"
+                                GT -> "(booster bigger)"
                 when
                     ( Map.keys koreRpc.requests /= Map.keys booster.requests
                         || Map.keys koreRpc.responses /= Map.keys booster.responses
