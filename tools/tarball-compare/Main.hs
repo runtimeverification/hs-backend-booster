@@ -30,6 +30,8 @@ import Data.List.Extra
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
+import System.Directory
+import System.Directory.Extra
 import System.Environment (getArgs)
 import System.FilePath
 
@@ -64,19 +66,16 @@ main :: IO ()
 main =
     getArgs >>= \case
         [tarFile] -> do
-            contents <- Tar.checkSecurity . unpack tarFile <$> BS.readFile tarFile
+            contents <- readToTar tarFile
             case unpackBugReports contents of
                 Left err -> either print print err
                 Right bugReports ->
                     forM_ (Map.toList bugReports) $
                         mapM_ BS.putStrLn . uncurry checkDiff
         [tar1, tar2] -> do
-            let dataFrom f =
-                    either (error . either show show) id
-                        . unpackBugReportDataFrom
-                        . Tar.checkSecurity
-                        . unpack f
-                        <$> BS.readFile f
+            let dataFrom =
+                    fmap (either (error . either show show) id . unpackBugReportDataFrom)
+                        . readToTar
             bugReportDiff <-
                 BugReportDiff
                     <$> dataFrom tar1
@@ -84,12 +83,35 @@ main =
             mapM_ BS.putStrLn $ checkDiff (tar1 <> "<->" <> tar2) bugReportDiff
         _ -> putStrLn "incorrect args"
   where
-    unpack tarFile
-        | ".tar" == takeExtension tarFile = Tar.read
-        | ".tgz" == takeExtension tarFile = Tar.read . GZip.decompress
-        | ".tar.gz" `isSuffixOf` takeExtensions tarFile = Tar.read . GZip.decompress
-        | ".tar.bz2" `isSuffixOf` takeExtensions tarFile = Tar.read . BZ2.decompress
-        | otherwise = Tar.read
+    readToTar :: FilePath -> IO (Tar.Entries (Either Tar.FormatError Tar.FileNameError))
+    readToTar file
+        | ".tar" == takeExtension file =
+            Tar.checkSecurity . Tar.read <$> BS.readFile file
+        | ".tgz" == takeExtension file || ".tar.gz" `isSuffixOf` takeExtensions file =
+            Tar.checkSecurity . Tar.read . GZip.decompress <$> BS.readFile file
+        | ".tar.bz2" `isSuffixOf` takeExtensions file =
+            Tar.checkSecurity . Tar.read . BZ2.decompress <$> BS.readFile file
+        | otherwise = do
+            isDir <- doesDirectoryExist file
+            if isDir
+                then withCurrentDirectory file $ do
+                    -- create a Tar.Entries structure from the rpc_*
+                    -- directories within the directory (ignore all other
+                    -- files and subdirectories)
+                    subdirs <-
+                        filter (dirPrefix `isPrefixOf`) . map takeFileName <$> listDirectories "."
+                    putStrLn $ "DEBUG: " <> show subdirs
+                    let hasCorrectSuffix f =
+                            requestSuffix `isSuffixOf` f || responseSuffix `isSuffixOf` f
+                    files <-
+                        filter hasCorrectSuffix . concat <$> mapM listFiles subdirs
+                    putStrLn $ "DEBUG: " <> show file <> ": " <> show files
+                    entries <- Tar.pack "." files
+                    -- need to force the tar entries, withCurrentDirectory is not retained
+                    mapM_ (`seq` pure ()) entries
+                    pure $ foldr Tar.Next Tar.Done entries
+                else -- if a differently-named file was given. try to read a tarball
+                    Tar.checkSecurity . Tar.read <$> BS.readFile file
 
 unpackBugReports ::
     Tar.Entries (Either Tar.FormatError Tar.FileNameError) ->
@@ -153,9 +175,11 @@ unpackBugReportDataFrom = Tar.foldEntries unpackRpc (Right mempty) Left
         | otherwise = acc
       where
         (rpcDir, file) = splitFileName (Tar.entryPath entry)
-        dirPrefix = "rpc_"
-        requestSuffix = "_request.json"
-        responseSuffix = "_response.json"
+
+dirPrefix, requestSuffix, responseSuffix :: FilePath
+dirPrefix = "rpc_"
+requestSuffix = "_request.json"
+responseSuffix = "_response.json"
 
 checkDiff :: FilePath -> BugReportDiff -> [BS.ByteString]
 checkDiff name BugReportDiff{booster, koreRpc} =
