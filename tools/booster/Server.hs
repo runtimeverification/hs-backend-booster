@@ -34,6 +34,7 @@ import System.Clock (
     getTime,
  )
 import System.Exit
+import System.IO (hPutStrLn, stderr)
 
 import Booster.CLOptions
 import Booster.JsonRpc qualified as Booster
@@ -126,7 +127,9 @@ main = do
                 mvarLogAction <- newMVar actualLogAction
                 let logAction = swappableLogger mvarLogAction
 
-                kore@KoreServer{runSMT} <- mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions
+                let defaultTactic = fromMaybe (SMT.List [SMT.Atom "check-sat-using", SMT.Atom "smt"]) koreSolverOptions.tactic
+                kore@KoreServer{runSMT} <-
+                    mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions{tactic = Just defaultTactic}
 
                 withMDLib llvmLibraryFile $ \mdl -> do
                     mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
@@ -147,7 +150,7 @@ main = do
                                 [handleErrorCall, handleSomeException]
                         interruptHandler _ = do
                             when (logLevel >= LevelInfo) $
-                                putStrLn "[Info#proxy] Server shutting down"
+                                hPutStrLn stderr "[Info#proxy] Server shutting down"
                             whenJust statVar Stats.showStats
                             exitSuccess
                     handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger
@@ -241,13 +244,14 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
                 , loggerEnv
                 }
   where
-    KoreSolverOptions{timeOut, rLimit, resetInterval, prelude} = koreSolverOptions
+    KoreSolverOptions{timeOut, rLimit, resetInterval, prelude, tactic} = koreSolverOptions
     smtConfig =
         SMT.defaultConfig
             { SMT.timeOut = timeOut
             , SMT.rLimit = rLimit
             , SMT.resetInterval = resetInterval
             , SMT.prelude = prelude
+            , SMT.tactic = tactic
             }
 
     -- SMT solver with user declared lemmas

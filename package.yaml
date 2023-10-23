@@ -71,7 +71,6 @@ library:
   - containers
   - deepseq
   - deriving-aeson
-  - Diff
   - exceptions
   - extra
   - filepath
@@ -85,6 +84,7 @@ library:
   - monad-logger
   - optparse-applicative
   - prettyprinter
+  - process
   - recursion-schemes >= 5.2.2.3
   - regex-base
   - regex-pcre-builtin
