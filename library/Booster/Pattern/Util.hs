@@ -32,6 +32,8 @@ module Booster.Pattern.Util (
     freshenVar,
     abstractTerm,
     abstractSymbolicConstructorArguments,
+    cellSymbolStats,
+    cellVariableStats,
 ) where
 
 import Data.Bifunctor (bimap, first)
@@ -204,6 +206,7 @@ abstractSymbolicConstructorArguments constructorNames term = goSubst (freeVariab
                 (bimap (goSubst freeVars) (map (goSubst freeVars)) <$> rest)
         KSet def elements rest ->
             KSet def (map (goSubst freeVars) elements) (goSubst freeVars <$> rest)
+
 modifyVarNameConcreteness :: (ByteString -> ByteString) -> Concreteness -> Concreteness
 modifyVarNameConcreteness f = \case
     SomeConstrained m -> SomeConstrained $ Map.mapKeys (first f) m
@@ -369,3 +372,43 @@ termSymbolStats = cata $ \case
             (+)
             (Map.unionsWith (+) xs)
             (fromMaybe Map.empty mr)
+
+{- | Calculate symbol application statistics: "symbol name" -> "number of its applications",
+     within the left-most top-most application of a specific Symbol
+-}
+cellSymbolStats :: SymbolName -> Term -> Map Symbol Int
+cellSymbolStats name = go
+  where
+    go :: Term -> Map Symbol Int
+    go t = case t of
+        Var{} -> Map.empty
+        DomainValue{} -> Map.empty
+        app@(SymbolApplication sym _ args) ->
+            if sym.attributes.symbolType == Constructor && sym.name == name
+                then termSymbolStats app
+                else Map.unionsWith (+) (map go args)
+        AndTerm t1 t2 -> Map.unionsWith (+) [go t1, go t2]
+        Injection _ _ sub -> go sub
+        KMap{} -> Map.empty
+        KList{} -> Map.empty
+        KSet{} -> Map.empty
+
+{- | Calculate variable statistics: "variable name" -> "number of its occurrences",
+     within the left-most top-most application of a specific Symbol
+-}
+cellVariableStats :: SymbolName -> Term -> Map Variable Int
+cellVariableStats name = go
+  where
+    go :: Term -> Map Variable Int
+    go t = case t of
+        Var{} -> Map.empty
+        DomainValue{} -> Map.empty
+        app@(SymbolApplication sym _ args) ->
+            if sym.attributes.symbolType == Constructor && sym.name == name
+                then termVarStats app
+                else Map.unionsWith (+) (map go args)
+        AndTerm t1 t2 -> Map.unionsWith (+) [go t1, go t2]
+        Injection _ _ sub -> go sub
+        KMap{} -> Map.empty
+        KList{} -> Map.empty
+        KSet{} -> Map.empty
