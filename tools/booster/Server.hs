@@ -207,9 +207,9 @@ clProxyOptionsParser =
             <*> optional
                 ( option
                     (Depth <$> auto)
-                    ( metavar "FORCE_FALLBACK"
-                        <> long "force-fallback"
-                        <> help "Force fallback to the old backend every n steps"
+                    ( metavar "INTERIM_SIMPLIFICATION"
+                        <> long "interim-simplification"
+                        <> help "Perform pattern-wide simplification every N steps"
                         <> showDefault
                     )
                 )
