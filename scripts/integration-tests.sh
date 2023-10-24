@@ -31,6 +31,9 @@ for dir in $(ls -d test-*); do
         SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time
     elif [ "$name" = "no-evaluator" ]; then
         SERVER=$BOOSTER_DEV ./runDirectoryTest.sh test-$name --time
+    elif [ "$name" = "foundry-bug-report" ]; then
+        SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time
+        SERVER="$KORE_RPC_BOOSTER --interim-simplification 50" ./runDirectoryTest.sh test-$name --time
     else
         SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time
     fi
