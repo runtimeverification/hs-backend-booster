@@ -27,11 +27,11 @@ import Control.Monad (forM, forM_, unless, when)
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Writer
 import Data.ByteString.Lazy.Char8 qualified as BS
+import Data.Functor.Foldable (Corecursive (embed), cata)
 import Data.List.Extra as List
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
-import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text.Encoding qualified as Text
 import Prettyprinter
@@ -288,9 +288,20 @@ checkDiff name BugReportDiff{booster, koreRpc} =
             . Text.decodeUtf8
             $ BS.toStrict booster.definition
     internalised =
-        either (error . show) id
+        orientEquals
+            . either (error . show) id
             . runExcept
             . internaliseTermOrPredicate DisallowAlias IgnoreSubsorts Nothing bDef
+
+    orientEquals = \case
+        Internal.APredicate p -> Internal.APredicate $ orient p
+        Internal.TermAndPredicate p -> Internal.TermAndPredicate p{Internal.constraints = Set.map orient p.constraints}
+      where
+        orient :: Internal.Predicate -> Internal.Predicate
+        orient = cata $ \case
+            Internal.EqualsTermF t1 t2
+                | t1 > t2 -> Internal.EqualsTerm t2 t1
+            other -> embed other
 
     patternsIn :: KoreRpcJson -> [Internal.TermOrPredicate]
     patternsIn (RpcRequest (Execute r)) = [internalised r.state.term]
@@ -323,14 +334,14 @@ checkDiff name BugReportDiff{booster, koreRpc} =
                 let diffs = catMaybes $ zipWith pDiff bPats kPats
                 mapM_ msg diffs
 
-
-
 pDiff :: Internal.TermOrPredicate -> Internal.TermOrPredicate -> Maybe BS.ByteString
 pDiff p1 p2
     | p1 == p2 = Nothing
     | otherwise =
-          let asBS = BS.pack . renderDefault . prettyThing
-           in Just $ renderDiff (asBS p1) (asBS p2)
+        let asBS = BS.pack . renderDefault . prettyThing
+            bsP1 = asBS p1
+            bsP2 = asBS p2
+         in if bsP1 == bsP2 then Nothing else Just $ renderDiff bsP1 bsP2
   where
     prettyThing (Internal.APredicate p) = pretty p
     prettyThing (Internal.TermAndPredicate p) = pretty p
