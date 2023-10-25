@@ -201,8 +201,24 @@ respondEither mbStatsVar forceFallback booster kore req = case req of
         (bResult, bTime) <- Stats.timed $ booster (Execute r{maxDepth = mbDepthLimit})
         case bResult of
             Right (Execute boosterResult)
+                | boosterResult.reason == DepthBound
+                    && currentDepth + boosterResult.depth == fromMaybe 0 r.maxDepth -> do
+                    -- we were successful with the booster, thus we
+                    -- return the booster result with the updated
+                    -- depth, in case we previously looped
+                    Log.logInfoNS "proxy" . Text.pack $
+                        "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
+                    logStats ExecuteM (time + bTime, koreTime)
+                    pure $
+                        Right $
+                            Execute
+                                boosterResult
+                                    { depth = currentDepth + boosterResult.depth
+                                    , logs = combineLogs [rpcLogs, boosterResult.logs]
+                                    }
                 -- the execution reached the depth bound due to a forced Kore simplification
-                | boosterResult.reason == DepthBound && isJust mforceSimplification -> do
+                | boosterResult.reason == DepthBound
+                    && isJust mforceSimplification -> do
                     Log.logInfoNS "proxy" . Text.pack $
                         "Forced simplification at " <> show (currentDepth + boosterResult.depth)
                     simplifyResult <- simplifyExecuteState logSettings r._module boosterResult.state
@@ -314,20 +330,6 @@ respondEither mbStatsVar forceFallback booster kore req = case req of
                                                             }
                                 -- can only be an error at this point
                                 res -> pure res
-                | otherwise -> do
-                    -- we were successful with the booster, thus we
-                    -- return the booster result with the updated
-                    -- depth, in case we previously looped
-                    Log.logInfoNS "proxy" . Text.pack $
-                        "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
-                    logStats ExecuteM (time + bTime, koreTime)
-                    pure $
-                        Right $
-                            Execute
-                                boosterResult
-                                    { depth = currentDepth + boosterResult.depth
-                                    , logs = combineLogs [rpcLogs, boosterResult.logs]
-                                    }
             -- can only be an error at this point
             res -> pure res
 
