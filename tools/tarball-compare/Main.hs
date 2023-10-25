@@ -23,20 +23,29 @@ import Codec.Archive.Tar qualified as Tar
 import Codec.Archive.Tar.Check qualified as Tar
 import Codec.Compression.BZip qualified as BZ2
 import Codec.Compression.GZip qualified as GZip
-import Control.Monad (forM, forM_, when)
+import Control.Monad (forM, forM_, when, unless)
+import Control.Monad.Trans.Except
 import Control.Monad.Trans.Writer
 import Data.ByteString.Lazy.Char8 qualified as BS
-import Data.List.Extra
+import Data.List.Extra as List
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe)
+import Data.Set (Set)
+import Data.Set qualified as Set
+import Data.Text.Encoding qualified as Text
 import System.Directory
 import System.Directory.Extra
 import System.Environment (getArgs)
 import System.FilePath
 
 import Booster.JsonRpc.Utils
+import Booster.Pattern.Base qualified as Internal
+import Booster.Syntax.ParsedKore (internalise, parseKoreDefinition)
+import Booster.Syntax.Json (sortOfJson)
+import Booster.Syntax.Json.Internalise
 import Kore.JsonRpc.Types
+import Kore.Syntax.Json.Types hiding (Left, Right)
 
 data BugReportData = BugReportData
     { requests :: Map FilePath BS.ByteString
@@ -214,6 +223,7 @@ checkDiff name BugReportDiff{booster, koreRpc} =
                                 keyBS
                                 koreRpcReqJson
                                 boosterReqJson
+                            comparePatternsIn "requests" keyBS boosterReqJson koreRpcReqJson
                     case (Map.lookup koreRpcReqKey koreRpc.responses, Map.lookup koreRpcReqKey booster.responses) of
                         (Just koreResp, Just boosterResp) -> do
                             compareJson
@@ -265,3 +275,39 @@ checkDiff name BugReportDiff{booster, koreRpc} =
         case decodeKoreRpc json of
             RpcResponse (Execute r) -> Just r.depth
             _other -> Nothing
+
+    bDef = -- HACK: compare contents using the default module and booster def
+        either (error . show) id
+            . internalise Nothing
+            . either error id
+            . parseKoreDefinition (name <> "/definition.kore")
+            . Text.decodeUtf8
+            $ BS.toStrict booster.definition
+    internalised =
+        either (error . show) id
+            . runExcept
+            . internaliseTermOrPredicate DisallowAlias IgnoreSubsorts Nothing bDef
+
+    patternsIn :: KoreRpcJson -> [Internal.TermOrPredicate]
+    patternsIn (RpcRequest (Execute r)) = [internalised r.state.term]
+    patternsIn (RpcRequest (Implies r)) = map internalised [r.antecedent.term, r.consequent.term]
+    patternsIn (RpcRequest (Simplify r)) = [internalised r.state.term]
+    patternsIn (RpcResponse (Execute r)) = fromState r.state : maybe [] (List.sort . map fromState) r.nextStates
+    patternsIn (RpcResponse (Simplify r)) = [internalised r.state.term]
+    patternsIn (RpcResponse (Implies r)) = [internalised r.implication.term]
+    patternsIn (RpcKoreJson state) = [internalised state.term]
+    patternsIn _other = []
+
+    fromState :: ExecuteState -> Internal.TermOrPredicate
+    fromState exState =
+        case catMaybes $ [exState.substitution, exState.predicate] of
+            [] -> internalised exState.term.term
+            ps@(p:_) ->
+                internalised $
+                    KJAnd
+                        (fromMaybe (error "no sort") $ sortOfJson p.term)
+                        (exState.term.term : map (.term) ps)
+
+    comparePatternsIn tipe key bsBooster bsKore = do
+        unless (patternsIn (decodeKoreRpc bsBooster) == patternsIn (decodeKoreRpc bsKore)) $
+            msg $ "Patterns in " <> tipe <> " " <> key <> " differ."
