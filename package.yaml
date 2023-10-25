@@ -217,6 +217,7 @@ executables:
       - kore-rpc-types
       - monad-logger
       - optparse-applicative
+      - prettyprinter
       - tar
       - text
       - transformers

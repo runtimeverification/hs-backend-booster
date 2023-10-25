@@ -34,6 +34,7 @@ import Data.Maybe (catMaybes, fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text.Encoding qualified as Text
+import Prettyprinter
 import System.Directory
 import System.Directory.Extra
 import System.Environment (getArgs)
@@ -41,6 +42,7 @@ import System.FilePath
 
 import Booster.JsonRpc.Utils
 import Booster.Pattern.Base qualified as Internal
+import Booster.Prettyprinter
 import Booster.Syntax.Json (sortOfJson)
 import Booster.Syntax.Json.Internalise
 import Booster.Syntax.ParsedKore (internalise, parseKoreDefinition)
@@ -311,6 +313,24 @@ checkDiff name BugReportDiff{booster, koreRpc} =
                         (exState.term.term : map (.term) ps)
 
     comparePatternsIn tipe key bsBooster bsKore = do
-        unless (patternsIn (decodeKoreRpc bsBooster) == patternsIn (decodeKoreRpc bsKore)) $
-            msg $
-                "Patterns in " <> tipe <> " " <> key <> " differ."
+        let bPats = patternsIn $ decodeKoreRpc bsBooster
+            kPats = patternsIn $ decodeKoreRpc bsKore
+        unless (bPats == kPats) $
+            msg ("Patterns in " <> tipe <> " " <> key <> " differ.")
+        if length bPats /= length kPats
+            then msg "Different amount of patterns"
+            else do
+                let diffs = catMaybes $ zipWith pDiff bPats kPats
+                mapM_ msg diffs
+
+
+
+pDiff :: Internal.TermOrPredicate -> Internal.TermOrPredicate -> Maybe BS.ByteString
+pDiff p1 p2
+    | p1 == p2 = Nothing
+    | otherwise =
+          let asBS = BS.pack . renderDefault . prettyThing
+           in Just $ renderDiff (asBS p1) (asBS p2)
+  where
+    prettyThing (Internal.APredicate p) = pretty p
+    prettyThing (Internal.TermAndPredicate p) = pretty p
