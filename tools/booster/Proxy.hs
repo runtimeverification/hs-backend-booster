@@ -202,9 +202,7 @@ respondEither mbStatsVar forceFallback booster kore req = case req of
         case bResult of
             Right (Execute boosterResult)
                 -- the execution reached the depth bound due to a forced Kore simplification
-                | boosterResult.reason == DepthBound
-                    && isJust mforceSimplification
-                    && boosterResult.depth == currentDepth + fromMaybe 0 mforceSimplification -> do
+                | boosterResult.reason == DepthBound && isJust mbDepthLimit -> do
                     Log.logInfoNS "proxy" . Text.pack $
                         "Forced simplification at " <> show (currentDepth + boosterResult.depth)
                     simplifyResult <- simplifyExecuteState logSettings r._module boosterResult.state
