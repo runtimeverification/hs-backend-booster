@@ -839,7 +839,6 @@ instance Pretty Term where
                 Pretty.brackets . Pretty.hsep . Pretty.punctuate Pretty.comma $
                     map pretty l
 
-
         -- shorten domain value ByteString to a readable length
         shortenBS dv =
             let cutoff = 16
