@@ -208,6 +208,9 @@ ApplicationPattern :: { KorePattern }
                       { mkAssoc True $5 $6 $7 }
                     | rightAssoc '{' '}' '(' ident SortsBrace NePatterns ')'
                       { mkAssoc False $5 $6 $7 }
+                    -- special case for multi-or in definitions prior to Oct 2023
+                    | rightAssoc '{' '}' '(' or SortsBrace NePatterns ')'
+                      { mkAssoc False $5 $6 $7 }
                     | top '{' Sort '}' '(' ')'
                       { KJTop {sort = $3} }
                     | bottom '{' Sort '}' '(' ')'
@@ -403,6 +406,7 @@ the result. Namely, \\and, \\or, \\implies, and \\iff. Designed to be passed to
 foldl1' or foldr1.
 -}
 mkApply :: Token -> [Sort] -> KorePattern -> KorePattern -> KorePattern
+mkApply (Token _ TokenOr) [aSort] first second = KJOr aSort [first, second]
 mkApply tok sorts@[_, _] first second
     | Token _ (TokenIdent _) <- tok = KJApp (mkId tok) sorts [first, second]
 mkApply other _ _ _ = error $ "mkApply: unsupported token " <> show other
