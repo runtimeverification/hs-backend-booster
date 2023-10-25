@@ -190,14 +190,9 @@ checkDiff name BugReportDiff{booster, koreRpc} =
             then ["No Booster data... skipping..."]
             else execWriter $ do
                 when (booster.definition /= koreRpc.definition) $ do
-                    let bSize = BS.length booster.definition
-                        kSize = BS.length koreRpc.definition
                     msg $
                         "Definitions in bug reports differ "
-                            <> case compare bSize kSize of
-                                EQ -> "(same size)"
-                                LT -> "(kore bigger)"
-                                GT -> "(booster bigger)"
+                            <> compareSizes booster.definition koreRpc.definition
                 when
                     ( Map.keys koreRpc.requests /= Map.keys booster.requests
                         || Map.keys koreRpc.responses /= Map.keys booster.responses
@@ -216,14 +211,14 @@ checkDiff name BugReportDiff{booster, koreRpc} =
                                     "Requests have different type: " <> show (boosTp, koreTp)
                             compareJson
                                 "Requests"
-                                koreRpcReqKey
+                                keyBS
                                 koreRpcReqJson
                                 boosterReqJson
                     case (Map.lookup koreRpcReqKey koreRpc.responses, Map.lookup koreRpcReqKey booster.responses) of
                         (Just koreResp, Just boosterResp) -> do
                             compareJson
                                 "Responses"
-                                koreRpcReqKey
+                                keyBS
                                 koreResp
                                 boosterResp
                             let koreDepth = responseDepth koreResp
@@ -246,29 +241,22 @@ checkDiff name BugReportDiff{booster, koreRpc} =
 
     compareJson ::
         BS.ByteString ->
-        String ->
+        BS.ByteString ->
         BS.ByteString ->
         BS.ByteString ->
         Writer [BS.ByteString] ()
-    compareJson prefix key koreJson boosterJson = do
-        let koreSize = BS.length koreJson
-            boosSize = BS.length boosterJson
-            keyBS = BS.pack key
-        when (koreSize /= boosSize) $
-            msg $
-                BS.unwords [prefix, "for", keyBS, "have different size."]
+    compareJson prefix key koreJson boosterJson =
         when (koreJson /= boosterJson) $
             msg $
                 BS.unwords
-                    [ prefix
-                    , "for"
-                    , keyBS
-                    , "are different"
-                    , case compare koreSize boosSize of
-                        EQ -> "(same size)"
-                        GT -> "(kore bigger)"
-                        LT -> "(booster bigger)"
-                    ]
+                    [prefix, "for", key, "are different", compareSizes boosterJson koreJson]
+
+    compareSizes bsBooster bsKore =
+        case compare (BS.length bsBooster) (BS.length bsKore) of
+            LT -> "(kore bigger)"
+            EQ -> "(same size)"
+            GT -> "(booster bigger)"
+
     requestType :: BS.ByteString -> KoreRpcType
     requestType = rpcTypeOf . decodeKoreRpc
 
