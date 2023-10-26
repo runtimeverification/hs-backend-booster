@@ -322,7 +322,7 @@ checkDiff name BugReportDiff{booster, koreRpc} =
 
     fromState :: ExecuteState -> Internal.TermOrPredicate
     fromState exState =
-        case catMaybes $ [exState.substitution, exState.predicate] of
+        case catMaybes [exState.substitution, exState.predicate] of
             [] -> internalised exState.term.term
             ps@(p : _) ->
                 internalised $
