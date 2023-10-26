@@ -905,7 +905,7 @@ expandAlias alias currentArgs
                         }
 
 removeTops :: Def.Pattern -> Def.Pattern
-removeTops p = p{Def.constraints = Set.filter (/= Def.Top) p.constraints}
+removeTops p = p{Def.constraints = Set.delete Def.Top p.constraints}
 
 {- | Internalises simplification rules, for both term simplification
    (represented as a 'RewriteRule') and predicate simplification

@@ -723,7 +723,7 @@ makeBaseFunctor ''Predicate
 -- | A term (configuration) constrained by a number of predicates.
 data Pattern = Pattern
     { term :: Term
-    , constraints :: Set Predicate
+    , constraints :: !(Set Predicate)
     }
     deriving stock (Eq, Ord, Show, Generic, Data)
     deriving anyclass (NFData)
