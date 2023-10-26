@@ -208,9 +208,11 @@ ApplicationPattern :: { KorePattern }
                       { mkAssoc True $5 $6 $7 }
                     | rightAssoc '{' '}' '(' ident SortsBrace NePatterns ')'
                       { mkAssoc False $5 $6 $7 }
-                    -- special case for multi-or in definitions prior to Oct 2023
+                    -- special cases for multi-or in definitions prior to Oct 2023
                     | rightAssoc '{' '}' '(' or SortsBrace NePatterns ')'
                       { mkAssoc False $5 $6 $7 }
+                    | leftAssoc '{' '}' '(' or SortsBrace NePatterns ')'
+                      { mkAssoc True $5 $6 $7 }
                     | top '{' Sort '}' '(' ')'
                       { KJTop {sort = $3} }
                     | bottom '{' Sort '}' '(' ')'
