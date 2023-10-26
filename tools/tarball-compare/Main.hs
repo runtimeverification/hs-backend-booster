@@ -2,18 +2,25 @@
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 
-Simple tool to compare two tarballs for correspondence. The following
-comparisons are performed until a comparison fails:
+Tool to compare two bug report tarballs (or directories containing an
+unpacked bug report) for correspondence. The following comparisons are
+performed:
 
-1) tarballs contain the same number of request/response files
-Then, for each pair of responses to an execute request:
-  . the file size is the same (?)
-  . the responses have the same number of steps (depth) if the request
-    is an execute request
-  . the contained json is the same (?)
+. compare number of request/response files in the tarball
+. compare definition.kore file in the tarball (top-level)
+Then, for each pair of requests or responses in the rpc_* directories:
+  . compare file contents and file size of json files
+  . compare the number of steps (depth) in responses to execute requests
+  . internalise states in response data (based on the definition.kore
+    file) and compare internal data (displaying diff if not equal)
 
-The tool takes two tarballs as arguments, and program options to
-determine what checks to perform (1-4 above).
+The tool can work on:
+
+. a single gzipped tarball containing other tarballs for many tests
+  (when given a single argument)
+. two tarballs or directories of unpacked bug report data, assumed to
+  contain the same rpc_* directory names (two files as arguments) .
+  (when given two arguments, each one either a tar file or a directory)
 -}
 module Main (
     module Main,
