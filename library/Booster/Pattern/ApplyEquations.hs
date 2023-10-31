@@ -74,7 +74,7 @@ data EquationFailure
     = IndexIsNone Term
     | TooManyIterations Int Term Term
     | EquationLoop [Term]
-    | RecursionLimitExceeded [Term]
+    | TooManyRecursions [Term]
     | SideConditionsFalse [Predicate]
     | InternalError Text
     deriving stock (Eq, Show)
@@ -91,7 +91,7 @@ instance Pretty EquationFailure where
                 ]
         EquationLoop ts ->
             vsep $ "Evaluation produced a loop:" : map pretty ts
-        RecursionLimitExceeded ts ->
+        TooManyRecursions ts ->
             vsep $
                 "Recursion limit exceeded. The following terms were evaluated:"
                     : map pretty ts
@@ -199,8 +199,11 @@ startState =
         , trace = mempty
         }
 
+eqState :: MonadLoggerIO io => StateT EquationState io a -> EquationT io a
+eqState = EquationT . lift . lift
+
 getState :: MonadLoggerIO io => EquationT io EquationState
-getState = EquationT (lift $ lift get)
+getState = eqState get
 
 getConfig :: MonadLoggerIO io => EquationT io EquationConfig
 getConfig = EquationT ask
@@ -209,20 +212,20 @@ countSteps :: MonadLoggerIO io => EquationT io Int
 countSteps = length . (.termStack) <$> getState
 
 pushTerm :: MonadLoggerIO io => Term -> EquationT io ()
-pushTerm t = EquationT . lift . lift . modify $ \s -> s{termStack = t : s.termStack}
+pushTerm t = eqState . modify $ \s -> s{termStack = t : s.termStack}
 
 pushConstraints :: MonadLoggerIO io => Set Predicate -> EquationT io ()
-pushConstraints ps = EquationT . lift . lift . modify $ \s -> s{predicates = s.predicates <> ps}
+pushConstraints ps = eqState . modify $ \s -> s{predicates = s.predicates <> ps}
 
 setChanged, resetChanged :: MonadLoggerIO io => EquationT io ()
-setChanged = EquationT . lift . lift . modify $ \s -> s{changed = True}
-resetChanged = EquationT . lift . lift . modify $ \s -> s{changed = False}
+setChanged = eqState . modify $ \s -> s{changed = True}
+resetChanged = eqState . modify $ \s -> s{changed = False}
 
 getChanged :: MonadLoggerIO io => EquationT io Bool
-getChanged = EquationT $ lift $ lift $ gets (.changed)
+getChanged = eqState $ gets (.changed)
 
 pushRecursion :: MonadLoggerIO io => Term -> EquationT io Int
-pushRecursion t = EquationT . lift . lift $ do
+pushRecursion t = eqState $ do
     stk <- gets (.recursionStack)
     modify $ \s -> s{recursionStack = t : stk}
     pure (1 + length stk)
@@ -231,8 +234,8 @@ popRecursion :: MonadLoggerIO io => EquationT io ()
 popRecursion = do
     s <- getState
     if null s.recursionStack
-        then throw $ RecursionLimitExceeded []
-        else EquationT . lift . lift $ put s{recursionStack = tail s.recursionStack}
+        then throw $ InternalError "Trying to pop an empty recursion stack"
+        else eqState $ put s{recursionStack = tail s.recursionStack}
 
 checkForLoop :: MonadLoggerIO io => Term -> EquationT io ()
 checkForLoop t = do
@@ -273,7 +276,7 @@ iterateEquations maxRecursion maxIterations direction preference startTerm =
   where
     checkCounter counter
         | counter > maxRecursion =
-            throw . RecursionLimitExceeded . (.recursionStack) =<< getState
+            throw . TooManyRecursions . (.recursionStack) =<< getState
         | otherwise = pure ()
 
     go :: MonadLoggerIO io => Term -> EquationT io Term
@@ -348,7 +351,7 @@ evaluatePattern' Pattern{term, constraints} = do
     simplifyAssumedPredicate p = do
         allPs <- predicates <$> getState
         let otherPs = Set.delete p allPs
-        EquationT $ lift $ lift $ modify $ \s -> s{termStack = [], predicates = otherPs}
+        eqState $ modify $ \s -> s{predicates = otherPs}
         newP <- simplifyConstraint' p
         pushConstraints $ Set.singleton newP
 
@@ -570,7 +573,7 @@ traceRuleApplication t loc lbl uid res = do
     logOther (LevelOther "Simplify") (pack . renderDefault . pretty $ newTraceItem)
     config <- getConfig
     when config.doTracing $
-        EquationT . lift . lift . modify $
+        eqState . modify $
             \s -> s{trace = s.trace :|> newTraceItem}
 
 applyEquation ::
@@ -640,13 +643,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     checkConstraint p = do
         lift . logOther (LevelOther "Simplify") $
             "Recursive simplification of predicate: " <> pack (renderDefault (pretty p))
-        oldChangeFlag <- lift $ lift getChanged
-        let restoreChangeFlag :: EquationT io ()
-            restoreChangeFlag =
-                if oldChangeFlag
-                    then setChanged
-                    else resetChanged
-            fallBackToP :: EquationFailure -> EquationT io Predicate
+        let fallBackToP :: EquationFailure -> EquationT io Predicate
             fallBackToP e = do
                 logOther (LevelOther "Simplify") . pack . renderDefault $
                     "Aborting recursive simplification:" <> pretty e
@@ -654,8 +651,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
         -- exceptions need to be handled differently in the recursion,
         -- falling back to the unsimplified constraint instead of aborting.
         simplified <-
-            lift . lift $
-                resetChanged >> simplifyConstraint' p `catch_` fallBackToP <* restoreChangeFlag
+            lift . lift $ simplifyConstraint' p `catch_` fallBackToP
         case simplified of
             Bottom -> fail "Rule condition was False"
             Top -> pure Nothing
@@ -767,6 +763,7 @@ simplifyConstraint' = \case
     evalBool :: MonadLoggerIO io => Term -> EquationT io Term
     evalBool t = do
         prior <- getState -- save prior state so we can revert
+        eqState $ put prior{termStack = [], changed = False}
         result <- iterateEquations 5 100 TopDown PreferFunctions t
-        EquationT $ lift $ lift $ put prior
+        eqState $ put prior
         pure result
