@@ -566,6 +566,13 @@ mkLogRewriteTrace
                                     , origin = Booster
                                     , result = Failure{reason = "Loop detected", _ruleId = Nothing}
                                     }
+                            ApplyEquations.RecursionLimitExceeded _ ->
+                                Simplification
+                                    { originalTerm = Nothing
+                                    , originalTermIndex = Nothing
+                                    , origin = Booster
+                                    , result = Failure{reason = "Recursion limit exceeded", _ruleId = Nothing}
+                                    }
                             ApplyEquations.InternalError err ->
                                 Simplification
                                     { originalTerm = Nothing
