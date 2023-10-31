@@ -17,7 +17,7 @@ module SIMPLIFY
   // enter a loop of p1, p2, p1, p2... until depth 100 is reached, and then
   // bail out in booster. Simplification in kore-rpc _loops to infinity_.
 
-  // an equation requiring a second-order evaluation of side condition p3
+  // a set of fucntion equations that require second-order evaluation of side condition p3
   rule [eval-g]: g(X) => X requires p3(X)
 
   rule [p3-true]: p3(1) => true
