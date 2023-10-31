@@ -79,3 +79,13 @@ before it is found to be true). See `simplify.k` for details.
 
    _Expected:_
    - `1` (applying rule `eval-g` after evaluating `p3(1)` to `true`)
+
+1) _simplification-loop_
+
+   _Input:_
+   - `p1(42)`
+
+   _Output:_
+   - `p1(42)` attempting to simplify in a loop, then returning the original)
+
+   This test loops forever in `kore-rpc-booster` and `kore-rpc-dev`.
