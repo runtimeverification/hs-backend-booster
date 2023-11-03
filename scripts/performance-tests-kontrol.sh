@@ -40,7 +40,11 @@ cd evm-semantics
 git submodule update --init --recursive --depth 1 kevm-pyk/src/kevm_pyk/kproj/plugin
 
 cd ..
+
+# Patch kontrol
 sed -i'' -e "s|git = \"https://github.com/runtimeverification/evm-semantics.git\", tag = \"$KEVM_VERSION\", subdirectory = \"kevm-pyk\"|path = \"evm-semantics/kevm-pyk/\"|g" pyproject.toml
+sed -i'' -e "s|'forge', 'build'|'forge', 'build', '--no-auto-detect'|g" src/kontrol/foundry.py
+sed -i'' -e "s|'forge', 'build'|'forge', 'build', '--no-auto-detect'|g" src/tests/integration/test_foundry_prove.py
 
 feature_shell() {
   GC_DONT_GC=1 nix develop github:runtimeverification/evm-semantics/$KEVM_VERSION --extra-experimental-features 'nix-command flakes' --override-input k-framework/booster-backend $SCRIPT_DIR/../ --command bash -c "$1"
@@ -50,12 +54,12 @@ master_shell() {
   GC_DONT_GC=1 nix develop github:runtimeverification/evm-semantics/$KEVM_VERSION --extra-experimental-features 'nix-command flakes' --override-input k-framework/booster-backend github:runtimeverification/hs-backend-booster/$MASTER_COMMIT --command bash -c "$1"
 }
 
-feature_shell "poetry update kevm-pyk && poetry install && poetry run kevm-dist --verbose build plugin haskell foundry --jobs 4"
+feature_shell "poetry install && poetry run kevm-dist --verbose build plugin haskell foundry --jobs 4"
 
 feature_shell "make test-integration PYTEST_PARALLEL=8 PYTEST_ARGS='--timeout 7200 -vv --use-booster' > $SCRIPT_DIR/kontrol-$KONTROL_VERSION-$FEATURE_BRANCH_NAME.log"
 
 if [ ! -e "$SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.log" ]; then
-  master_shell "make test-integration PYTEST_PARALLEL=8 PYTEST_ARGS='--timeout 7200 -vv --use-booster' > $SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.log"
+  master_shell "make test-integration TEST_ARGS='--numprocesses=8 --use-booster' > $SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.log"
 fi
 
 cd $SCRIPT_DIR
