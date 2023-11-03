@@ -34,7 +34,7 @@ git submodule update --init --recursive --depth 1
 
 KEVM_VERSION="v$(cat deps/kevm_release)"
 
-# poetry takes too long to clne kevm-pyk, so we just hand-clone and override pyproject.toml
+# poetry takes too long to clone kevm-pyk, so we just do a shallow clone locally and override pyproject.toml
 git clone --depth 1 --branch $KEVM_VERSION https://github.com/runtimeverification/evm-semantics.git
 cd evm-semantics
 git submodule update --init --recursive --depth 1 kevm-pyk/src/kevm_pyk/kproj/plugin
@@ -50,9 +50,7 @@ master_shell() {
   GC_DONT_GC=1 nix develop github:runtimeverification/evm-semantics/$KEVM_VERSION --extra-experimental-features 'nix-command flakes' --override-input k-framework/booster-backend github:runtimeverification/hs-backend-booster/$MASTER_COMMIT --command bash -c "$1"
 }
 
-
-feature_shell "poetry install"
-feature_shell "poetry run kevm-dist --verbose build plugin haskell foundry --jobs 4"
+feature_shell "poetry update kevm-pyk && poetry install && poetry run kevm-dist --verbose build plugin haskell foundry --jobs 4"
 
 feature_shell "make test-integration PYTEST_PARALLEL=8 PYTEST_ARGS='--timeout 7200 -vv --use-booster' > $SCRIPT_DIR/kontrol-$KONTROL_VERSION-$FEATURE_BRANCH_NAME.log"
 
