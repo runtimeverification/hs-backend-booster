@@ -7,6 +7,13 @@ SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
 MASTER_COMMIT="$(git rev-parse origin/main)"
 
+FEATURE_BRANCH_NAME="$(git rev-parse --abbrev-ref HEAD)"
+FEATURE_BRANCH_NAME="${FEATURE_BRANCH_NAME//\//-}"
+
+if [[ $FEATURE_BRANCH_NAME == "master" ]]; then
+  FEATURE_BRANCH_NAME="feature"
+fi
+
 # Create a temporary directory and store its name in a variable.
 TEMPD=$(mktemp -d)
 
@@ -39,18 +46,13 @@ git submodule update --init --recursive --depth 1 kevm-pyk/src/kevm_pyk/kproj/pl
 feature_shell "make poetry"
 feature_shell "poetry run -C kevm-pyk -- kevm-dist --verbose build plugin haskell --jobs 4"
 
-feature_shell "make test-prove-pyk PYTEST_PARALLEL=8 PYTEST_ARGS='--timeout 7200 -vv --use-booster' > $SCRIPT_DIR/kevm-$KEVM_VERSION-feature.log"
+feature_shell "make test-prove-pyk PYTEST_PARALLEL=8 PYTEST_ARGS='--timeout 7200 -vv --use-booster' > $SCRIPT_DIR/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME.log"
 
 if [ ! -e "$SCRIPT_DIR/kevm-$KEVM_VERSION-master-$MASTER_COMMIT.log" ]; then
-    master_shell "make test-prove-pyk PYTEST_PARALLEL=8 PYTEST_ARGS='--timeout 7200 -vv --use-booster' > $SCRIPT_DIR/kevm-$KEVM_VERSION-master-$MASTER_COMMIT.log"
+  master_shell "make test-prove-pyk PYTEST_PARALLEL=8 PYTEST_ARGS='--timeout 7200 -vv --use-booster' > $SCRIPT_DIR/kevm-$KEVM_VERSION-master-$MASTER_COMMIT.log"
 fi
 
-
-
-# master_shell "poetry run -C kevm-pyk -- kevm-dist --verbose clean plugin"
-# master_shell "poetry run -C kevm-pyk -- kevm-dist --verbose clean haskell"
-
 cd $SCRIPT_DIR
-grep ' call  ' kevm-$KEVM_VERSION-feature.log > kevm-$KEVM_VERSION-master-$MASTER_COMMIT.feature
+grep ' call  ' kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME.log > kevm-$KEVM_VERSION-master-$MASTER_COMMIT.$FEATURE_BRANCH_NAME
 grep ' call  ' kevm-$KEVM_VERSION-master-$MASTER_COMMIT.log > kevm-$KEVM_VERSION-master-$MASTER_COMMIT.master
-feature_shell "python3 compare.py kevm-$KEVM_VERSION-master-$MASTER_COMMIT.feature kevm-$KEVM_VERSION-master-$MASTER_COMMIT.master > kevm-$KEVM_VERSION-master-$MASTER_COMMIT-feature-compare"
+python3 compare.py kevm-$KEVM_VERSION-master-$MASTER_COMMIT.$FEATURE_BRANCH_NAME kevm-$KEVM_VERSION-master-$MASTER_COMMIT.master > kevm-$KEVM_VERSION-master-$MASTER_COMMIT-$FEATURE_BRANCH_NAME-compare

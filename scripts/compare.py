@@ -5,8 +5,9 @@ import sys
 logfile_1 = sys.argv[1]
 logfile_2 = sys.argv[2]
 mintime   = 0.01
+# minchange = 0.035
 minchange = 0.035
-    
+  
 def readData(file_name):
     data_lines = []
     with open(file_name, 'r') as file_data:
@@ -19,16 +20,13 @@ def readData(file_name):
                     data_lines.append((test, time))
     return data_lines
 
-def getCommitLogname(file_name):
-    test, suite = file_name.split('.')
-    return (test, suite)
+def getKey(file_name):
+    return file_name.split('.')[-1]
 
 data_entries = {}
-(commit1, log_name1) = getCommitLogname(logfile_1)
-key1 = commit1 + '-' + log_name1
+key1 = getKey(logfile_1)
 data_entries[key1] = { test : time for (test, time) in readData(logfile_1) }
-(commit2, log_name2) = getCommitLogname(logfile_2)
-key2 = commit2 + '-' + log_name2
+key2 = getKey(logfile_2)
 data_entries[key2] = { test : time for (test, time) in readData(logfile_2) }
 
 common_passing_tests = [k1 for k1 in data_entries[key1] if k1 in data_entries[key2]]
