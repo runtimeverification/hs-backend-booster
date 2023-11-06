@@ -14,6 +14,8 @@ MASTER_COMMIT="$(git rev-parse origin/main)"
 FEATURE_BRANCH_NAME=${FEATURE_BRANCH_NAME:-"$(git rev-parse --abbrev-ref HEAD)"}
 FEATURE_BRANCH_NAME="${FEATURE_BRANCH_NAME//\//-}"
 
+PYTEST_PARALLEL=${PYTEST_PARALLEL:-2}
+
 if [[ $FEATURE_BRANCH_NAME == "master" ]]; then
   FEATURE_BRANCH_NAME="feature"
 fi
@@ -60,10 +62,10 @@ master_shell() {
 
 feature_shell "poetry install && poetry run kevm-dist --verbose build plugin haskell foundry --jobs 4"
 
-feature_shell "make test-integration TEST_ARGS='--numprocesses=8 --use-booster -vv' > $SCRIPT_DIR/kontrol-$KONTROL_VERSION-$FEATURE_BRANCH_NAME.log"
+feature_shell "make test-integration TEST_ARGS='--maxfail=0 --numprocesses=$PYTEST_PARALLEL --use-booster -vv' > $SCRIPT_DIR/kontrol-$KONTROL_VERSION-$FEATURE_BRANCH_NAME.log"
 
 if [ ! -e "$SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.log" ]; then
-  master_shell "make test-integration TEST_ARGS='--numprocesses=8 --use-booster -vv' > $SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.log"
+  master_shell "make test-integration TEST_ARGS='--maxfail=0 --numprocesses=$PYTEST_PARALLEL --use-booster -vv' > $SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.log"
 fi
 
 cd $SCRIPT_DIR
