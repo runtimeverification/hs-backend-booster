@@ -11,7 +11,7 @@ SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
 MASTER_COMMIT="$(git rev-parse origin/main)"
 
-FEATURE_BRANCH_NAME="$(git rev-parse --abbrev-ref HEAD)"
+FEATURE_BRANCH_NAME=${FEATURE_BRANCH_NAME:-"$(git rev-parse --abbrev-ref HEAD)"}
 FEATURE_BRANCH_NAME="${FEATURE_BRANCH_NAME//\//-}"
 
 if [[ $FEATURE_BRANCH_NAME == "master" ]]; then
