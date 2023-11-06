@@ -23,9 +23,9 @@ if [ ! -e "$TEMPD" ]; then
     exit 1
 fi
 
-# Make sure the temp directory gets removed on script exit.
+# Make sure the temp directory gets removed and kore-rpc-booster gets killed on script exit.
 trap "exit 1"           HUP INT PIPE QUIT TERM
-trap 'rm -rf "$TEMPD"'  EXIT
+trap 'rm -rf "$TEMPD" && killall kore-rpc-booster'  EXIT
 
 cd $TEMPD
 git clone --depth 1 --branch $KONTROL_VERSION https://github.com/runtimeverification/kontrol.git
