@@ -20,20 +20,31 @@ if [[ $FEATURE_BRANCH_NAME == "master" ]]; then
   FEATURE_BRANCH_NAME="feature"
 fi
 
-# Create a temporary directory and store its name in a variable.
-TEMPD=$(mktemp -d)
+if [ ! -e "$TEST_RUN_ROOT_DIR" ]; then
+    echo "[WARINING] directory $TEST_RUN_ROOT_DIR not found"
 
-# Exit if the temp directory wasn't created successfully.
-if [ ! -e "$TEMPD" ]; then
-    >&2 echo "Failed to create temp directory"
-    exit 1
+    # if no directory was given to run tests in, create a temporary one and run the script there
+    TEMPD=$(mktemp -d)
+
+    # Exit if the temp directory wasn't created successfully.
+    if [ ! -e "$TEMPD" ]; then
+        >&2 echo "Failed to create temp directory"
+        exit 1
+    fi
+
+    TEST_RUN_ROOT_DIR=$TEMPD
 fi
 
-# Make sure the temp directory gets removed and kore-rpc-booster gets killed on script exit.
+# Make sure the temp directory (not TEST_RUN_ROOT_DIR!!) gets removed
+# and kore-rpc-booster gets killed on script exit.
 trap "exit 1"           HUP INT PIPE QUIT TERM
-trap 'rm -rf "$TEMPD" && killall kore-rpc-booster'  EXIT
+if [[ -n "$TEMPD" ]]; then
+    trap 'rm -rf "$TEMPD" && killall kore-rpc-booster'  EXIT
+else
+    trap 'killall kore-rpc-booster'  EXIT
+fi
 
-cd $TEMPD
+cd $TEST_RUN_ROOT_DIR
 git clone --depth 1 --branch $KONTROL_VERSION https://github.com/runtimeverification/kontrol.git
 cd kontrol
 git submodule update --init --recursive --depth 1
