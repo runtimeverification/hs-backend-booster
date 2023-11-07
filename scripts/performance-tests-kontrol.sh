@@ -38,25 +38,21 @@ fi
 # Make sure the temp directory (not TEST_RUN_ROOT_DIR!!) gets removed
 # and kore-rpc-booster gets killed on script exit.
 trap "exit 1"           HUP INT PIPE QUIT TERM
-if [[ -n ${TEMPD:-""} ]]; then
+if [[ -n "$TEMPD" ]]; then
     trap 'rm -rf "$TEMPD" && killall kore-rpc-booster'  EXIT
 else
     trap 'killall kore-rpc-booster'  EXIT
 fi
 
 cd $TEST_RUN_ROOT_DIR
-if [ ! -d "kontrol" ] ; then
-    git clone --depth 1 --branch $KONTROL_VERSION https://github.com/runtimeverification/kontrol.git
-fi
+git clone --depth 1 --branch $KONTROL_VERSION https://github.com/runtimeverification/kontrol.git
 cd kontrol
 git submodule update --init --recursive --depth 1
 
 KEVM_VERSION="v$(cat deps/kevm_release)"
 
 # poetry takes too long to clone kevm-pyk, so we just do a shallow clone locally and override pyproject.toml
-if [ ! -d "evm-semantics" ] ; then
-    git clone --depth 1 --branch $KEVM_VERSION https://github.com/runtimeverification/evm-semantics.git
-fi
+git clone --depth 1 --branch $KEVM_VERSION https://github.com/runtimeverification/evm-semantics.git
 cd evm-semantics
 git submodule update --init --recursive --depth 1 kevm-pyk/src/kevm_pyk/kproj/plugin
 
