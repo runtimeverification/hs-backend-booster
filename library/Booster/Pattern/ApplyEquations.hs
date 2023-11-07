@@ -15,6 +15,7 @@ module Booster.Pattern.ApplyEquations (
     isMatchFailure,
     isSuccess,
     simplifyConstraint,
+    SimplifierCache,
 ) where
 
 import Control.Monad
@@ -191,7 +192,7 @@ toCache :: MonadLoggerIO io => Term -> Term -> EquationT io ()
 toCache orig result = EquationT . lift . lift . modify $ \s -> s{cache = Map.insert orig result s.cache}
 
 fromCache :: MonadLoggerIO io => Term -> EquationT io (Maybe Term)
-fromCache t = EquationT . lift . lift $ gets (.cache) >>= pure . Map.lookup t
+fromCache t = EquationT . lift . lift $ Map.lookup t <$> gets (.cache)
 
 checkForLoop :: MonadLoggerIO io => Term -> EquationT io ()
 checkForLoop t = do
