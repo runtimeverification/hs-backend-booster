@@ -5,7 +5,7 @@ set -euxo pipefail
 #  https://github.com/pypa/pip/issues/7883
 export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 
-KONTROL_VERSION='v0.1.49'
+KONTROL_VERSION=${KONTROL_VERSION:-'v0.1.49'}
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
