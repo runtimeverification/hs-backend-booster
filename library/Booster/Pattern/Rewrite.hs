@@ -302,7 +302,7 @@ applyRule pat rule = runRewriteRuleAppT $ do
         RewriteRuleAppT (RewriteT io (RewriteFailed k)) (Maybe a)
     checkConstraint onUnclear onBottom p = do
         RewriteConfig{definition, llvmApi, doTracing} <- lift $ RewriteT ask
-        (simplified, _traces) <- simplifyConstraint doTracing definition llvmApi p
+        (simplified, _traces, _cache) <- simplifyConstraint doTracing definition llvmApi mempty p
         case simplified of
             Right Bottom -> onBottom
             Right Top -> pure Nothing
@@ -580,7 +580,7 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
 
     simplifyP :: Pattern -> StateT RewriteStepsState io (Maybe Pattern)
     simplifyP p =
-        evaluatePattern doTracing def mLlvmLibrary p >>= \(res, traces) -> do
+        evaluatePattern doTracing def mLlvmLibrary mempty p >>= \(res, traces, _cache) -> do
             logTraces traces
             case res of
                 Right newPattern -> do
