@@ -63,9 +63,11 @@ master_shell() {
 feature_shell "poetry install && poetry run kevm-dist --verbose build plugin haskell foundry --jobs 4"
 
 feature_shell "make test-integration TEST_ARGS='--maxfail=0 --numprocesses=$PYTEST_PARALLEL --use-booster -vv' | tee $SCRIPT_DIR/kontrol-$KONTROL_VERSION-$FEATURE_BRANCH_NAME.log"
+killall kore-rpc-booster
 
 if [ ! -e "$SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.log" ]; then
   master_shell "make test-integration TEST_ARGS='--maxfail=0 --numprocesses=$PYTEST_PARALLEL --use-booster -vv' | tee $SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.log"
+  killall kore-rpc-booster
 fi
 
 cd $SCRIPT_DIR
