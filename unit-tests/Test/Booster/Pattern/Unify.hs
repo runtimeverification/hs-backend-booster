@@ -387,6 +387,15 @@ internalMaps =
             symbolicKMapWithOneItem
             (success [("A", kmapElementSort, [trm| \dv{SortTestKMapItem{}}("value")|])])
         , test
+            "Can unify a concrete and symbolic map with two elements"
+            concreteKMapWithTwoItems
+            symbolicKMapWithTwoItems
+            ( success
+                [ ("A", kmapElementSort, [trm| \dv{SortTestKMapItem{}}("value")|])
+                , ("B", kmapElementSort, [trm| \dv{SortTestKMapItem{}}("value2")|])
+                ]
+            )
+        , test
             "Can unify {\"key\" |-> \"value\", ...REST} with {A |-> \"value\"}"
             concreteKMapWithOneItemAndRest
             symbolicKMapWithOneItem
