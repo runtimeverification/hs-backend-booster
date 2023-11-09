@@ -404,8 +404,8 @@ internalMaps =
             )
         , test
             "Can unify {\"key\" |-> \"value\", A |-> \"value2\"} with {\"key\" |-> \"value\", ...REST}"
-            concreteKMapWithOneItemAndRest
             concreteAndSymbolicKMapWithTwoItems
+            concreteKMapWithOneItemAndRest
             ( success
                 [
                     ( "REST"
