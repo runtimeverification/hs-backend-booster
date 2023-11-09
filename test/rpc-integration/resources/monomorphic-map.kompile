@@ -1,0 +1,5 @@
+kompile --llvm-kompile-type c monomorphic-map.k --syntax-module MONOMORPHIC-MAP
+cp monomorphic-map-kompiled/interpreter.* ./monomorphic-map.dylib
+kompile --backend haskell monomorphic-map.k --syntax-module MONOMORPHIC-MAP
+cp monomorphic-map-kompiled/definition.kore ./monomorphic-map.kore
+rm -r monomorphic-map-kompiled
