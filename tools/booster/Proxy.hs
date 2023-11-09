@@ -273,7 +273,7 @@ respondEither mbStatsVar forceFallback booster kore req = case req of
                                                 combineLogs
                                                     [ rpcLogs
                                                     , boosterResult.logs
-                                                      koreResult.logs
+                                                    , koreResult.logs
                                                     , fallbackLog
                                                     ]
                                         executionLoop
