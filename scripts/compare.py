@@ -77,7 +77,7 @@ column_width3 = max([len(c[3]) for c in final_table])
 def mkColumn(c, w):
     return ' ' + c.ljust(w) + ' '
 
-columns = ['|'.join((mkColumn(c0, column_width0), mkColumn(c1, column_width1), mkColumn(c2, column_width2), mkColumn(c3, column_width3))) for (c0, c1, c2, c3) in final_table]
-columns[1] = columns[1].replace('|', '+').replace(' ', '-')
+columns = ['|' + '|'.join((mkColumn(c0, column_width0), mkColumn(c1, column_width1), mkColumn(c2, column_width2), mkColumn(c3, column_width3))) for (c0, c1, c2, c3) in final_table]
+columns[1] = columns[1].replace(' ', '-')
 
 print('\n'.join(columns))
