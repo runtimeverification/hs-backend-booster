@@ -272,7 +272,7 @@ externaliseKmapUnsafe def keyVals rest =
                 keyVals
   where
     unit = SymbolApplication (stripCollectionMetadata $ unitSymbol $ KMapMeta def) [] []
-    k |-> v = SymbolApplication (stripCollectionMetadata $ kmapElementSymbol def) [] [k, v]
+    k |-> v = SymbolApplication (stripCollectionMetadata $ kmapElementSymbol def) (kmapElementSymbol def).argSorts [k, v]
     a `con` b = SymbolApplication (stripCollectionMetadata $ concatSymbol $ KMapMeta def) [] [a, b]
 {-# INLINE externaliseKmapUnsafe #-}
 
