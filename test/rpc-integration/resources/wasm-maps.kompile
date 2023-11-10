@@ -1,0 +1,5 @@
+kompile --llvm-kompile-type c wasm-maps.k --syntax-module WASM-MAPS
+cp wasm-maps-kompiled/interpreter.* ./wasm-maps.dylib
+kompile --backend haskell wasm-maps.k --syntax-module WASM-MAPS
+cp wasm-maps-kompiled/definition.kore ./wasm-maps.kore
+rm -r wasm-maps-kompiled
