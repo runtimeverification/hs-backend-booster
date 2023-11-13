@@ -11,7 +11,7 @@ import Control.Concurrent.MVar (newMVar)
 import Control.Concurrent.MVar qualified as MVar
 import Control.DeepSeq (force)
 import Control.Exception (AsyncException (UserInterrupt), evaluate, handleJust)
-import Control.Monad (forM_, void, when)
+import Control.Monad (forM_, void, when, unless)
 import Control.Monad.Catch (bracket)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -27,7 +27,7 @@ import Data.Conduit.Network (serverSettings)
 import Data.IORef (writeIORef)
 import Data.InternedText (globalInternedTextCache)
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 import Options.Applicative
 import System.Clock (
     Clock (..),
@@ -109,10 +109,15 @@ main = do
             liftIO $
                 loadDefinition definitionFile
                     >>= evaluate . force . either (error . show) id
+        unless (isJust $ Map.lookup mainModuleName definitions) $ do
+            Logger.logErrorNS "proxy" $
+                    "Main module " <> mainModuleName <> " not found in " <> Text.pack definitionFile
+            liftIO exitFailure
 
         monadLogger <- askLoggerIO
 
         let coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
+
             koreLogOptions =
                 (defaultKoreLogOptions (ExeName "") startTime)
                     { Log.logLevel = coLogLevel
@@ -122,7 +127,7 @@ main = do
                     }
             srvSettings = serverSettings port "*"
 
-        liftIO $ void $ withBugReport (ExeName "hs-booster-proxy") BugReportOnError $ \reportDirectory ->
+        liftIO $ void $ withBugReport (ExeName "kore-rpc-booster") BugReportOnError $ \reportDirectory ->
             withLogger reportDirectory koreLogOptions $ \actualLogAction -> do
                 mvarLogAction <- newMVar actualLogAction
                 let logAction = swappableLogger mvarLogAction
