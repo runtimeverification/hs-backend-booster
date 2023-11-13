@@ -7,24 +7,13 @@
             "version": 1,
             "term": {
                 "tag": "App",
-                "name": "Lbl'UndsPipe'-'-GT-Unds'",
+                "name": "Lbl'Unds'Int2Val'Pipe'-'-GT-Unds'",
                 "sorts": [],
                 "args": [
                     {
                         "tag": "App",
-                        "name": "inj",
-                        "sorts": [
-                            {
-                                "tag": "SortApp",
-                                "name": "SortInt",
-                                "args": []
-                            },
-                            {
-                                "tag": "SortApp",
-                                "name": "SortKItem",
-                                "args": []
-                            }
-                        ],
+                        "name": "LblwrapInt",
+                        "sorts": [],
                         "args": [
                             {
                                 "tag": "DV",
@@ -33,7 +22,7 @@
                                     "name": "SortInt",
                                     "args": []
                                 },
-                                "value": "1"
+                                "value": "2"
                             }
                         ]
                     },
@@ -43,24 +32,37 @@
                         "sorts": [
                             {
                                 "tag": "SortApp",
-                                "name": "SortInt",
+                                "name": "SortIVal",
                                 "args": []
                             },
                             {
                                 "tag": "SortApp",
-                                "name": "SortKItem",
+                                "name": "SortVal",
                                 "args": []
                             }
                         ],
                         "args": [
                             {
-                                "tag": "DV",
-                                "sort": {
-                                    "tag": "SortApp",
-                                    "name": "SortInt",
-                                    "args": []
-                                },
-                                "value": "10001"
+                                "tag": "App",
+                                "name": "Lbl'-LT-Unds-GT-UndsUnds'WASM-MAPS'Unds'IVal'Unds'IValType'Unds'Int",
+                                "sorts": [],
+                                "args": [
+                                    {
+                                        "tag": "App",
+                                        "name": "Lbli32",
+                                        "sorts": [],
+                                        "args": []
+                                    },
+                                    {
+                                        "tag": "DV",
+                                        "sort": {
+                                            "tag": "SortApp",
+                                            "name": "SortInt",
+                                            "args": []
+                                        },
+                                        "value": "0"
+                                    }
+                                ]
                             }
                         ]
                     }

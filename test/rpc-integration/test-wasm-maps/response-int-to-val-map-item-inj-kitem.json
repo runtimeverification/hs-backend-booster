@@ -1,0 +1,16 @@
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "error": {
+        "code": 2,
+        "data": {
+            "context": [
+                "\\and (<unknown location>)",
+                "symbol or alias 'Lbl'Unds'Int2Val'Pipe'-'-GT-Unds'' (<unknown location>)",
+                "(pr/test/rpc-integration/resources/wasm-maps.kore 133:71, <unknown location>)"
+            ],
+            "error": "Expecting sort SortVal{} but got SortKItem{}."
+        },
+        "message": "Could not verify pattern"
+    }
+}
