@@ -69,7 +69,7 @@
                             "args": [
                               {
                                 "tag": "App",
-                                "name": "Lbl'-LT-Unds-GT-UndsUnds'WASM-MAPS'Unds'IVal'Unds'IValType'Unds'Int",
+                                "name": "Lbl'-LT-Unds-GT-UndsUnds'MAP-INT-TO-VAL'Unds'IVal'Unds'IValType'Unds'Int",
                                 "sorts": [],
                                 "args": [
                                   {

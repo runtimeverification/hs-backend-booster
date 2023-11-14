@@ -1,10 +1,6 @@
 module WASM-MAPS
-  imports INT
-
-  syntax WrappedInt ::= wrap(Int)  [symbol, klabel(wrapInt)]
-  syntax Int ::= unwrap(WrappedInt)  [function, total, injective, symbol, klabel(unwrapInt)]
-  rule unwrap(wrap(A:Int)) => A
-
+  imports MAP-INT-TO-VAL-PRIMITIVE-SYMBOLIC
+  imports MAP-INT-TO-VAL-PRIMITIVE-CONCRETE
 
   configuration
         <wasm>
@@ -15,7 +11,17 @@ module WASM-MAPS
   syntax Instr ::=  "init_local"  Int Val
  // -------------------------------------
   rule <instrs> init_local INDEX VALUE => . ... </instrs>
-       <locals> LOCALS => LOCALS [ wrap(INDEX) <- VALUE ] </locals>
+       <locals> LOCALS => LOCALS {{ INDEX <- VALUE }} </locals>
+
+
+endmodule
+
+module MAP-INT-TO-VAL
+  imports INT
+
+  syntax WrappedInt ::= wrap(Int)  [symbol, klabel(wrapInt)]
+  syntax Int ::= unwrap(WrappedInt)  [function, total, injective, symbol, klabel(unwrapInt)]
+  rule unwrap(wrap(A:Int)) => A
 
   //---------------------------------------------------------------------------
   syntax IValType ::= "i32" [klabel(i32), symbol] | "i64" [klabel(i64), symbol]
@@ -42,4 +48,24 @@ module WASM-MAPS
   syntax priorities _Int2Val|->_ > _MapIntToVal_ .MapIntToVal
   syntax non-assoc _Int2Val|->_
 
+endmodule
+
+module MAP-INT-TO-VAL-PRIMITIVE-CONCRETE [concrete]
+  imports MAP-INT-TO-VAL
+
+  syntax MapIntToVal ::= MapIntToVal "{{" key: Int "<-" value: Val "}}"
+                 [ function, total, klabel(MapIntToVal:primitiveUpdate), symbol,
+                   prefer
+                 ]
+  rule M:MapIntToVal {{ Key:Int <- Value:Val }}
+      => M[wrap(Key) <- Value]
+endmodule
+
+module MAP-INT-TO-VAL-PRIMITIVE-SYMBOLIC  [symbolic]
+  imports MAP-INT-TO-VAL
+
+  syntax MapIntToVal ::= MapIntToVal "{{" key: Int "<-" value: Val "}}"
+                 [ function, total, klabel(MapIntToVal:primitiveUpdate), symbol,
+                   prefer
+                 ]
 endmodule
