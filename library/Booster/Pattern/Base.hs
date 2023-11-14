@@ -69,6 +69,11 @@ data Sort
 pattern SortBool :: Sort
 pattern SortBool = SortApp "SortBool" []
 
+sortName :: Sort -> Maybe SortName
+sortName = \case
+    SortApp name _args -> Just name
+    SortVar _ -> Nothing
+
 -- | A variable for symbolic execution or for terms in a rule.
 data Variable = Variable
     { variableSort :: Sort
@@ -271,13 +276,21 @@ externaliseKmapUnsafe def keyVals rest =
                 s
                 keyVals
   where
-    unit = SymbolApplication (stripCollectionMetadata $ unitSymbol $ KMapMeta def) [] []
+    -- unit = SymbolApplication (stripCollectionMetadata $ unitSymbol $ KMapMeta def) [] []
+    unit = Term mempty $ SymbolApplicationF (unitSymbol $ KMapMeta def) [] []
+    -- k |-> v =
+    --     SymbolApplication
+    --         (stripCollectionMetadata $ kmapElementSymbol def)
+    --         []
+    --         [k, v]
     k |-> v =
-        SymbolApplication
-            (stripCollectionMetadata $ kmapElementSymbol def)
-            (kmapElementSymbol def).argSorts
-            [k, v]
-    a `con` b = SymbolApplication (stripCollectionMetadata $ concatSymbol $ KMapMeta def) [] [a, b]
+        Term mempty $
+            SymbolApplicationF
+                (kmapElementSymbol def)
+                []
+                [k, v]
+    -- a `con` b = SymbolApplication (stripCollectionMetadata $ concatSymbol $ KMapMeta def) [] [a, b]
+    a `con` b = Term mempty $ SymbolApplicationF (concatSymbol $ KMapMeta def) [] [a, b]
 {-# INLINE externaliseKmapUnsafe #-}
 
 stripCollectionMetadata :: Symbol -> Symbol

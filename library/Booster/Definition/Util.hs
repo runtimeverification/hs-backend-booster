@@ -24,7 +24,7 @@ import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
 import Data.List.Extra (sortOn)
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import GHC.Generics (Generic)
@@ -34,13 +34,15 @@ import Prettyprinter.Render.String qualified as Pretty (renderString)
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
+import Booster.Pattern.Base (Symbol (..), sortName)
 import Booster.Pattern.Index (TermIndex (..))
 import Booster.Prettyprinter
 import Booster.Util
 
 data Summary = Summary
     { file :: FilePath
-    , modNames, sortNames, symbolNames :: [ByteString]
+    , modNames, sortNames :: [ByteString]
+    , symbolSignatures :: [(ByteString, [ByteString], Maybe ByteString)]
     , subSorts :: Map.Map ByteString [ByteString]
     , axiomCount, preserveDefinednessCount, containAcSymbolsCount :: Int
     , functionRuleCount, simplificationCount, predicateSimplificationCount :: Int
@@ -58,7 +60,7 @@ mkSummary file def =
         { file
         , modNames = Map.keys def.modules
         , sortNames = Map.keys def.sorts
-        , symbolNames = Map.keys def.symbols
+        , symbolSignatures = map (\symbol -> (symbol.name, catMaybes (map sortName symbol.argSorts), sortName symbol.resultSort)) $ Map.elems def.symbols
         , subSorts = Map.map (Set.toList . snd) def.sorts
         , axiomCount = length $ concat $ concatMap Map.elems (Map.elems def.rewriteTheory)
         , preserveDefinednessCount =
@@ -94,7 +96,7 @@ instance Pretty Summary where
         Pretty.vsep $
             [ list prettyLabel "Modules" summary.modNames
             , list prettyLabel "Sorts" summary.sortNames
-            , list prettyLabel "Symbols" summary.symbolNames
+            , list prettySymbolSignature "Symbols" summary.symbolSignatures
             , "Axioms: " <> pretty summary.axiomCount
             , "Axioms preserving definedness: " <> pretty summary.preserveDefinednessCount
             , "Axioms containing AC symbols: " <> pretty summary.containAcSymbolsCount
@@ -131,6 +133,11 @@ instance Pretty Summary where
                 (header <> ": " <> pretty (length xs)) : map (("- " <>) . f) xs
 
         prettyLabel = either error (pretty . BS.unpack) . decodeLabel
+
+        prettySymbolSignature (name, argSortNames, resultSortName) =
+            let prettyResultSortName = pretty . BS.unpack $ maybe "" ("->" <>) resultSortName
+                prettyArgSortNames = pretty . BS.unpack $ "{" <> BS.intercalate "," argSortNames <> "}"
+             in prettyLabel name <> prettyArgSortNames <> prettyResultSortName
 
         prettyTermIndex Anything = "Anything"
         prettyTermIndex (TopSymbol sym) = prettyLabel sym
