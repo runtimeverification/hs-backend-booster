@@ -1,0 +1,127 @@
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+        "reason": "stuck",
+        "depth": 1,
+        "state": {
+            "term": {
+                "format": "KORE",
+                "version": 1,
+                "term": {
+                    "tag": "App",
+                    "name": "Lbl'-LT-'generatedTop'-GT-'",
+                    "sorts": [],
+                    "args": [
+                        {
+                            "tag": "App",
+                            "name": "Lbl'-LT-'wasm'-GT-'",
+                            "sorts": [],
+                            "args": [
+                                {
+                                    "tag": "App",
+                                    "name": "Lbl'-LT-'instrs'-GT-'",
+                                    "sorts": [],
+                                    "args": [
+                                        {
+                                            "tag": "App",
+                                            "name": "dotk",
+                                            "sorts": [],
+                                            "args": []
+                                        }
+                                    ]
+                                },
+                                {
+                                    "tag": "App",
+                                    "name": "Lbl'-LT-'locals'-GT-'",
+                                    "sorts": [],
+                                    "args": [
+                                        {
+                                            "tag": "App",
+                                            "name": "Lbl'Unds'Int2Val'Pipe'-'-GT-Unds'",
+                                            "sorts": [],
+                                            "args": [
+                                                {
+                                                    "tag": "App",
+                                                    "name": "LblwrapInt",
+                                                    "sorts": [],
+                                                    "args": [
+                                                        {
+                                                            "tag": "DV",
+                                                            "sort": {
+                                                                "tag": "SortApp",
+                                                                "name": "SortInt",
+                                                                "args": []
+                                                            },
+                                                            "value": "0"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "tag": "App",
+                                                    "name": "inj",
+                                                    "sorts": [
+                                                        {
+                                                            "tag": "SortApp",
+                                                            "name": "SortIVal",
+                                                            "args": []
+                                                        },
+                                                        {
+                                                            "tag": "SortApp",
+                                                            "name": "SortVal",
+                                                            "args": []
+                                                        }
+                                                    ],
+                                                    "args": [
+                                                        {
+                                                            "tag": "App",
+                                                            "name": "Lbl'-LT-Unds-GT-UndsUnds'WASM-MAPS'Unds'IVal'Unds'IValType'Unds'Int",
+                                                            "sorts": [],
+                                                            "args": [
+                                                                {
+                                                                    "tag": "App",
+                                                                    "name": "Lbli32",
+                                                                    "sorts": [],
+                                                                    "args": []
+                                                                },
+                                                                {
+                                                                    "tag": "DV",
+                                                                    "sort": {
+                                                                        "tag": "SortApp",
+                                                                        "name": "SortInt",
+                                                                        "args": []
+                                                                    },
+                                                                    "value": "0"
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "tag": "App",
+                            "name": "Lbl'-LT-'generatedCounter'-GT-'",
+                            "sorts": [],
+                            "args": [
+                                {
+                                    "tag": "DV",
+                                    "sort": {
+                                        "tag": "SortApp",
+                                        "name": "SortInt",
+                                        "args": []
+                                    },
+                                    "value": "0"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}

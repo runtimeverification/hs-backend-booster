@@ -1,0 +1,141 @@
+{
+  "format": "KORE",
+  "version": 1,
+  "term": {
+    "tag": "App",
+    "name": "Lbl'-LT-'generatedTop'-GT-'",
+    "sorts": [],
+    "args": [
+      {
+        "tag": "App",
+        "name": "Lbl'-LT-'wasm'-GT-'",
+        "sorts": [],
+        "args": [
+          {
+            "tag": "App",
+            "name": "Lbl'-LT-'instrs'-GT-'",
+            "sorts": [],
+            "args": [
+              {
+                "tag": "App",
+                "name": "kseq",
+                "sorts": [],
+                "args": [
+                  {
+                    "tag": "App",
+                    "name": "inj",
+                    "sorts": [
+                      {
+                        "tag": "SortApp",
+                        "name": "SortInstr",
+                        "args": []
+                      },
+                      {
+                        "tag": "SortApp",
+                        "name": "SortKItem",
+                        "args": []
+                      }
+                    ],
+                    "args": [
+                      {
+                        "tag": "App",
+                        "name": "Lblinit'Unds'local'UndsUndsUnds'WASM-MAPS'Unds'Instr'Unds'Int'Unds'Val",
+                        "sorts": [],
+                        "args": [
+                          {
+                            "tag": "DV",
+                            "sort": {
+                              "tag": "SortApp",
+                              "name": "SortInt",
+                              "args": []
+                            },
+                            "value": "0"
+                          },
+                          {
+                            "tag": "App",
+                            "name": "inj",
+                            "sorts": [
+                              {
+                                "tag": "SortApp",
+                                "name": "SortIVal",
+                                "args": []
+                              },
+                              {
+                                "tag": "SortApp",
+                                "name": "SortVal",
+                                "args": []
+                              }
+                            ],
+                            "args": [
+                              {
+                                "tag": "App",
+                                "name": "Lbl'-LT-Unds-GT-UndsUnds'WASM-MAPS'Unds'IVal'Unds'IValType'Unds'Int",
+                                "sorts": [],
+                                "args": [
+                                  {
+                                    "tag": "App",
+                                    "name": "Lbli32",
+                                    "sorts": [],
+                                    "args": []
+                                  },
+                                  {
+                                    "tag": "DV",
+                                    "sort": {
+                                      "tag": "SortApp",
+                                      "name": "SortInt",
+                                      "args": []
+                                    },
+                                    "value": "0"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "App",
+                    "name": "dotk",
+                    "sorts": [],
+                    "args": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "App",
+            "name": "Lbl'-LT-'locals'-GT-'",
+            "sorts": [],
+            "args": [
+              {
+                "tag": "App",
+                "name": "Lbl'Stop'MapIntToVal",
+                "sorts": [],
+                "args": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "App",
+        "name": "Lbl'-LT-'generatedCounter'-GT-'",
+        "sorts": [],
+        "args": [
+          {
+            "tag": "DV",
+            "sort": {
+              "tag": "SortApp",
+              "name": "SortInt",
+              "args": []
+            },
+            "value": "0"
+          }
+        ]
+      }
+    ]
+  }
+}
