@@ -60,7 +60,9 @@ mkSummary file def =
         { file
         , modNames = Map.keys def.modules
         , sortNames = Map.keys def.sorts
-        , symbolSignatures = map (\symbol -> (symbol.name, catMaybes (map sortName symbol.argSorts), sortName symbol.resultSort)) $ Map.elems def.symbols
+        , symbolSignatures =
+            map (\symbol -> (symbol.name, catMaybes (map sortName symbol.argSorts), sortName symbol.resultSort)) $
+                Map.elems def.symbols
         , subSorts = Map.map (Set.toList . snd) def.sorts
         , axiomCount = length $ concat $ concatMap Map.elems (Map.elems def.rewriteTheory)
         , preserveDefinednessCount =
