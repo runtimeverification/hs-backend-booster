@@ -15,7 +15,7 @@ module WASM-MAPS
   syntax Instr ::=  "init_local"  Int Val
  // -------------------------------------
   rule <instrs> init_local INDEX VALUE => . ... </instrs>
-       <locals> .MapIntToVal => wrap(INDEX) Int2Val|-> VALUE  </locals>
+       <locals> LOCALS => LOCALS [ wrap(INDEX) <- VALUE ] </locals>
 
   //---------------------------------------------------------------------------
   syntax IValType ::= "i32" [klabel(i32), symbol] | "i64" [klabel(i64), symbol]
@@ -36,6 +36,8 @@ module WASM-MAPS
          [function, total, hook(MAP.unit),klabel(.MapIntToVal), symbol]
   syntax MapIntToVal ::= WrappedInt "Int2Val|->" Val
          [function, total, hook(MAP.element), klabel(_Int2Val|->_), symbol]
+
+  syntax MapIntToVal ::= MapIntToVal "[" key: WrappedInt "<-" value: Val "]" [function, total, klabel(MapInt2Val:update), symbol, hook(MAP.update), prefer]
 
   syntax priorities _Int2Val|->_ > _MapIntToVal_ .MapIntToVal
   syntax non-assoc _Int2Val|->_
