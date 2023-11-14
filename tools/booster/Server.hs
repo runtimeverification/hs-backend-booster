@@ -11,7 +11,7 @@ import Control.Concurrent.MVar (newMVar)
 import Control.Concurrent.MVar qualified as MVar
 import Control.DeepSeq (force)
 import Control.Exception (AsyncException (UserInterrupt), evaluate, handleJust)
-import Control.Monad (forM_, void, when, unless)
+import Control.Monad (forM_, unless, void, when)
 import Control.Monad.Catch (bracket)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -27,7 +27,8 @@ import Data.Conduit.Network (serverSettings)
 import Data.IORef (writeIORef)
 import Data.InternedText (globalInternedTextCache)
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe, isJust, mapMaybe)
+import Data.Set qualified as Set
 import Options.Applicative
 import System.Clock (
     Clock (..),
@@ -64,6 +65,7 @@ import Kore.Log (
  )
 import Kore.Log qualified as Log
 import Kore.Log.DebugSolver qualified as Log
+import Kore.Log.Registry qualified as Log
 import Kore.Rewrite.SMT.Lemma (declareSMTLemmas)
 import Kore.Syntax.Definition (ModuleName (ModuleName), SentenceAxiom)
 import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
@@ -94,6 +96,8 @@ main = do
         levelFilter :: Logger.LogSource -> LogLevel -> Bool
         levelFilter _source lvl =
             lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
+        koreLogExtraLevels =
+            Set.unions $ mapMaybe (`Map.lookup` koreExtraLogs) customLevels
 
     Logger.runStderrLoggingT $ Logger.filterLogger levelFilter $ do
         liftIO $ forM_ eventlogEnabledUserEvents $ \t -> do
@@ -111,7 +115,7 @@ main = do
                     >>= evaluate . force . either (error . show) id
         unless (isJust $ Map.lookup mainModuleName definitions) $ do
             Logger.logErrorNS "proxy" $
-                    "Main module " <> mainModuleName <> " not found in " <> Text.pack definitionFile
+                "Main module " <> mainModuleName <> " not found in " <> Text.pack definitionFile
             liftIO exitFailure
 
         monadLogger <- askLoggerIO
@@ -121,6 +125,7 @@ main = do
             koreLogOptions =
                 (defaultKoreLogOptions (ExeName "") startTime)
                     { Log.logLevel = coLogLevel
+                    , Log.logEntries = koreLogExtraLevels
                     , Log.timestampsSwitch = TimestampsDisable
                     , Log.debugSolverOptions = debugSolverOptions
                     , Log.logType = LogSomeAction $ LogAction $ \txt -> liftIO $ monadLogger defaultLoc "kore" logLevel $ toLogStr txt
@@ -178,6 +183,16 @@ toSeverity LevelInfo = Just Log.Info
 toSeverity LevelWarn = Just Log.Warning
 toSeverity LevelError = Just Log.Error
 toSeverity LevelOther{} = Nothing
+
+koreExtraLogs :: Map.Map LogLevel Log.EntryTypes
+koreExtraLogs =
+    Map.map (Set.fromList . mapMaybe (`Map.lookup` Log.textToType Log.registry)) $
+        Map.fromList
+            [ (LevelOther "SimplifyKore", ["DebugAttemptEquation", "DebugApplyEquation"])
+            , (LevelOther "RewriteKore", ["DebugAttemptedRewriteRules", "DebugAppliedRewriteRules"])
+            , (LevelOther "SimplifySuccess", ["DebugApplyEquation"])
+            , (LevelOther "RewriteSuccess", ["DebugAppliedRewriteRules"])
+            ]
 
 data CLProxyOptions = CLProxyOptions
     { clOptions :: CLOptions
