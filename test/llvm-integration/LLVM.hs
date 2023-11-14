@@ -268,6 +268,20 @@ sortMapKmap =
         , mapSortName = "SortMap"
         }
 
+sortMapInt2Int :: KMapDefinition
+sortMapInt2Int =
+    KMapDefinition
+        { symbolNames =
+            KCollectionSymbolNames
+                { unitSymbolName = "Lbl'Stop'MapInt2Int"
+                , elementSymbolName = "Lbl'Unds'Int2Int'Pipe'-'-GT-Unds'"
+                , concatSymbolName = "Lbl'Unds'MapInt2Int'Unds'"
+                }
+        , keySortName = "SortInt"
+        , elementSortName = "SortInt"
+        , mapSortName = "SortMapInt2Int"
+        }
+
 sortListKList :: KListDefinition
 sortListKList =
     KListDefinition
@@ -388,6 +402,13 @@ defSorts =
             ,
                 ( SortAttributes{collectionAttributes = Just (sortMapKmap.symbolNames, KMapTag), argCount = 0}
                 , Set.fromList ["SortMap"]
+                )
+            )
+        ,
+            ( "SortMapInt2Int"
+            ,
+                ( SortAttributes{collectionAttributes = Just (sortMapInt2Int.symbolNames, KMapTag), argCount = 0}
+                , Set.fromList ["SortMapInt2Int"]
                 )
             )
         ,
@@ -564,6 +585,24 @@ defSymbols =
                 }
             )
         ,
+            ( "Lbl'Stop'MapInt2Int"
+            , Symbol
+                { name = "Lbl'Stop'MapInt2Int"
+                , sortVars = []
+                , argSorts = []
+                , resultSort = SortApp "SortMapInt2Int" []
+                , attributes =
+                    SymbolAttributes
+                        { collectionMetadata = Just $ KMapMeta sortMapInt2Int
+                        , symbolType = TotalFunction
+                        , isIdem = IsNotIdem
+                        , isAssoc = IsNotAssoc
+                        , isMacroOrAlias = IsNotMacroOrAlias
+                        , hasEvaluators = CanBeEvaluated
+                        }
+                }
+            )
+        ,
             ( "Lbl'Stop'Set"
             , Symbol
                 { name = "Lbl'Stop'Set"
@@ -663,6 +702,24 @@ defSymbols =
                 , attributes =
                     SymbolAttributes
                         { collectionMetadata = Just $ KMapMeta sortMapKmap
+                        , symbolType = PartialFunction
+                        , isIdem = IsNotIdem
+                        , isAssoc = IsAssoc
+                        , isMacroOrAlias = IsNotMacroOrAlias
+                        , hasEvaluators = CanBeEvaluated
+                        }
+                }
+            )
+        ,
+            ( "Lbl'Unds'MapInt2Int'Unds'"
+            , Symbol
+                { name = "Lbl'Unds'MapInt2Int'Unds'"
+                , sortVars = []
+                , argSorts = [SortApp "SortMapInt2Int" [], SortApp "SortMapInt2Int" []]
+                , resultSort = SortApp "SortMapInt2Int" []
+                , attributes =
+                    SymbolAttributes
+                        { collectionMetadata = Just $ KMapMeta sortMapInt2Int
                         , symbolType = PartialFunction
                         , isIdem = IsNotIdem
                         , isAssoc = IsAssoc
@@ -1293,6 +1350,24 @@ defSymbols =
                 , attributes =
                     SymbolAttributes
                         { collectionMetadata = Just $ KMapMeta sortMapKmap
+                        , symbolType = TotalFunction
+                        , isIdem = IsNotIdem
+                        , isAssoc = IsNotAssoc
+                        , isMacroOrAlias = IsNotMacroOrAlias
+                        , hasEvaluators = CanBeEvaluated
+                        }
+                }
+            )
+        ,
+            ( "Lbl'Unds'Int2Int'Pipe'-'-GT-Unds'"
+            , Symbol
+                { name = "Lbl'Unds'Int2Int'Pipe'-'-GT-Unds'"
+                , sortVars = []
+                , argSorts = [SortApp "SortInt" [], SortApp "SortInt" []]
+                , resultSort = SortApp "SortMapInt2Int" []
+                , attributes =
+                    SymbolAttributes
+                        { collectionMetadata = Just $ KMapMeta sortMapInt2Int
                         , symbolType = TotalFunction
                         , isIdem = IsNotIdem
                         , isAssoc = IsNotAssoc
