@@ -163,7 +163,11 @@ mapKItemInjProp api = property $ do
             []
             [k, v]
 
-    wrapIntTerm i = SymbolApplication (fromMaybe (error "missing symbol") $ Map.lookup "LblwrapInt" defSymbols) [] [intTerm i]
+    wrapIntTerm i =
+        SymbolApplication
+            (fromMaybe (error "missing symbol") $ Map.lookup "LblwrapInt" defSymbols)
+            []
+            [intTerm i]
 
 ------------------------------------------------------------
 
