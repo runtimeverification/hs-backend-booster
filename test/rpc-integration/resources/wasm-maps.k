@@ -6,6 +6,16 @@ module WASM-MAPS
   rule unwrap(wrap(A:Int)) => A
 
 
+  configuration
+        <wasm>
+          <instrs> .K </instrs>
+          <locals> .MapIntToVal </locals>
+        </wasm>
+
+  syntax Instr ::=  "init_local"  Int Val
+ // -------------------------------------
+  rule <instrs> init_local INDEX VALUE => . ... </instrs>
+       <locals> .MapIntToVal => wrap(INDEX) Int2Val|-> VALUE  </locals>
 
   //---------------------------------------------------------------------------
   syntax IValType ::= "i32" [klabel(i32), symbol] | "i64" [klabel(i64), symbol]
