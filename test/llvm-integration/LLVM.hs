@@ -90,6 +90,10 @@ llvmSpec =
                 it "should work with latin-1strings" $
                     hedgehog . propertyTest . latin1Prop
 
+            describe "LLVM hooked Map simplifications" $
+                it "should preserve singleton maps" $
+                    hedgehog . propertyTest . mapKItemInjProp
+
 --------------------------------------------------
 -- individual hedgehog property tests and helpers
 
@@ -146,6 +150,20 @@ latin1Prop api = property $ do
                 | s == syntaxStringSort -> txt
                 | otherwise -> error $ "Unexpected sort " <> show s
             otherTerm -> error $ "Unexpected term " <> show otherTerm
+
+mapKItemInjProp :: Internal.API -> Property
+mapKItemInjProp api = property $ do
+    let k = wrapIntTerm 1
+    let v = intTerm 2
+    LLVM.simplifyTerm api testDef (elem k v) (SortApp "SortMapInt2Int" []) === elem k v
+  where
+    elem k v =
+        SymbolApplication
+            (kmapElementSymbol sortMapInt2Int)
+            []
+            [k, v]
+
+    wrapIntTerm i = SymbolApplication (fromMaybe (error "missing symbol") $ Map.lookup "LblwrapInt" defSymbols) [] [intTerm i]
 
 ------------------------------------------------------------
 
@@ -277,7 +295,7 @@ sortMapInt2Int =
                 , elementSymbolName = "Lbl'Unds'Int2Int'Pipe'-'-GT-Unds'"
                 , concatSymbolName = "Lbl'Unds'MapInt2Int'Unds'"
                 }
-        , keySortName = "SortInt"
+        , keySortName = "SortWrappedInt"
         , elementSortName = "SortInt"
         , mapSortName = "SortMapInt2Int"
         }
@@ -1363,11 +1381,29 @@ defSymbols =
             , Symbol
                 { name = "Lbl'Unds'Int2Int'Pipe'-'-GT-Unds'"
                 , sortVars = []
-                , argSorts = [SortApp "SortInt" [], SortApp "SortInt" []]
+                , argSorts = [SortApp "SortWrappedInt" [], SortApp "SortInt" []]
                 , resultSort = SortApp "SortMapInt2Int" []
                 , attributes =
                     SymbolAttributes
                         { collectionMetadata = Just $ KMapMeta sortMapInt2Int
+                        , symbolType = TotalFunction
+                        , isIdem = IsNotIdem
+                        , isAssoc = IsNotAssoc
+                        , isMacroOrAlias = IsNotMacroOrAlias
+                        , hasEvaluators = CanBeEvaluated
+                        }
+                }
+            )
+        ,
+            ( "LblwrapInt"
+            , Symbol
+                { name = "LblwrapInt"
+                , sortVars = []
+                , argSorts = [SortApp "SortInt" []]
+                , resultSort = SortApp "SortWrappedInt" []
+                , attributes =
+                    SymbolAttributes
+                        { collectionMetadata = Nothing
                         , symbolType = TotalFunction
                         , isIdem = IsNotIdem
                         , isAssoc = IsNotAssoc
