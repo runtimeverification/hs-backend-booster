@@ -12,6 +12,7 @@ module Booster.JsonRpc (
     runServer,
     RpcTypes.rpcJsonConfig,
     execStateToKoreJson,
+    toExecState,
 ) where
 
 import Control.Applicative ((<|>))
