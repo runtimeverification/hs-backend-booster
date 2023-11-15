@@ -158,13 +158,18 @@ mapKItemInjProp api = property $ do
     let v = wrapIntTerm 2
     LLVM.simplifyTerm api testDef (update kPrim v) (SortApp "SortMapInt2Int" []) === elem k v
   where
-    update k v = 
-        
-        SymbolApplication (fromMaybe (error "missing symbol") $ Map.lookup "LblMapInt2Val'Coln'primitiveUpdate" defSymbols) [] [
-            SymbolApplication (fromMaybe (error "missing symbol") $ Map.lookup "Lbl'Stop'MapInt2Int" defSymbols) [] [],
-            k, v
-        ]
-    
+    update k v =
+        SymbolApplication
+            (fromMaybe (error "missing symbol") $ Map.lookup "LblMapInt2Val'Coln'primitiveUpdate" defSymbols)
+            []
+            [ SymbolApplication
+                (fromMaybe (error "missing symbol") $ Map.lookup "Lbl'Stop'MapInt2Int" defSymbols)
+                []
+                []
+            , k
+            , v
+            ]
+
     elem k v =
         SymbolApplication
             (kmapElementSymbol sortMapInt2Int)
