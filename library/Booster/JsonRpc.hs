@@ -12,6 +12,7 @@ module Booster.JsonRpc (
     runServer,
     RpcTypes.rpcJsonConfig,
     execStateToKoreJson,
+    toExecState,
 ) where
 
 import Control.Applicative ((<|>))
@@ -173,33 +174,32 @@ respond stateVar =
                 -- term and predicate (pattern)
                 Right (TermAndPredicate pat) -> do
                     Log.logInfoNS "booster" "Simplifying a pattern"
-                    ApplyEquations.evaluatePattern doTracing def mLlvmLibrary pat >>= \case
-                        (Right newPattern, patternTraces) -> do
+                    ApplyEquations.evaluatePattern doTracing def mLlvmLibrary mempty pat >>= \case
+                        (Right newPattern, patternTraces, _) -> do
                             let (term, mbPredicate, mbSubstitution) = externalisePattern newPattern
                                 tSort = externaliseSort (sortOfPattern newPattern)
-                                result =
-                                    case catMaybes [mbPredicate, mbSubstitution] of
-                                        [] -> term
-                                        xs -> KoreJson.KJAnd tSort (term : xs)
+                                result = case catMaybes [mbPredicate, mbSubstitution] of
+                                    [] -> term
+                                    ps -> KoreJson.KJAnd tSort $ term : ps
                             pure $ Right (addHeader result, patternTraces)
-                        (Left ApplyEquations.SideConditionsFalse{}, patternTraces) -> do
+                        (Left ApplyEquations.SideConditionsFalse{}, patternTraces, _) -> do
                             let tSort = fromMaybe (error "unknown sort") $ sortOfJson req.state.term
                             pure $ Right (addHeader $ KoreJson.KJBottom tSort, patternTraces)
-                        (Left (ApplyEquations.EquationLoop terms), _traces) ->
+                        (Left (ApplyEquations.EquationLoop terms), _traces, _) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
-                        (Left other, _traces) ->
+                        (Left other, _traces, _) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ show other -- FIXME
                             -- predicate only
                 Right (APredicate predicate) -> do
                     Log.logInfoNS "booster" "Simplifying a predicate"
-                    ApplyEquations.simplifyConstraint doTracing def mLlvmLibrary predicate >>= \case
-                        (Right newPred, traces) -> do
+                    ApplyEquations.simplifyConstraint doTracing def mLlvmLibrary mempty predicate >>= \case
+                        (Right newPred, traces, _) -> do
                             let predicateSort =
                                     fromMaybe (error "not a predicate") $
                                         sortOfJson req.state.term
                                 result = externalisePredicate predicateSort newPred
                             pure $ Right (addHeader result, traces)
-                        (Left something, _traces) ->
+                        (Left something, _traces, _) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ show something -- FIXME
             stop <- liftIO $ getTime Monotonic
 
