@@ -12,21 +12,31 @@ module Booster.JsonRpc.Utils (
     KoreRpcType (..),
     rpcTypeOf,
     typeString,
+    diffBy,
 ) where
 
 import Control.Applicative ((<|>))
+import Control.Monad.Trans.Except
 import Data.Aeson as Json
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.Aeson.Types (parseMaybe)
-import Data.Algorithm.Diff
-import Data.Algorithm.DiffOutput (ppDiff)
 import Data.ByteString.Lazy.Char8 qualified as BS
-import Data.Function (on)
 import Data.Maybe (fromMaybe)
 import Network.JSONRPC
+import Prettyprinter
+import System.Exit (ExitCode (..))
+import System.FilePath
+import System.IO.Extra (withTempDir)
+import System.IO.Unsafe (unsafePerformIO)
+import System.Process (readProcessWithExitCode)
 
+import Booster.Definition.Base qualified as Internal
+import Booster.Pattern.Base qualified as Internal
+import Booster.Prettyprinter
+import Booster.Syntax.Json.Internalise
 import Kore.JsonRpc.Types
 import Kore.Syntax.Json.Types hiding (Left, Right)
+import qualified Data.Map as Map
 
 diffJson :: BS.ByteString -> BS.ByteString -> DiffResult
 diffJson file1 file2 =
@@ -39,16 +49,16 @@ diffJson file1 file2 =
             | contents1 == contents2 ->
                 Identical $ rpcTypeOf contents1
         (NotRpcJson lines1, NotRpcJson lines2) -> do
-            TextDiff $ getGroupedDiff lines1 lines2
+            TextDiff (BS.unlines lines1) (BS.unlines lines2)
         (other1, other2)
             | rpcTypeOf other1 /= rpcTypeOf other2 ->
                 DifferentType (rpcTypeOf other1) (rpcTypeOf other2)
             | otherwise -> do
-                JsonDiff (rpcTypeOf other1) $ computeJsonDiff other1 other2
+                JsonDiff
+                    (rpcTypeOf other1)
+                    (encodePretty' rpcJsonConfig other1)
+                    (encodePretty' rpcJsonConfig other2)
   where
-    computeJsonDiff =
-        getGroupedDiff `on` (BS.lines . encodePretty' rpcJsonConfig)
-
     -- \| Branching execution results are considered equivalent if
     -- \* they both have two branches
     -- \* branches are syntactically the same, but may be in different order
@@ -64,8 +74,8 @@ diffJson file1 file2 =
 data DiffResult
     = Identical KoreRpcType
     | DifferentType KoreRpcType KoreRpcType
-    | JsonDiff KoreRpcType [Diff [BS.ByteString]]
-    | TextDiff [Diff [BS.ByteString]]
+    | JsonDiff KoreRpcType BS.ByteString BS.ByteString
+    | TextDiff BS.ByteString BS.ByteString
     deriving (Eq, Show)
 
 isIdentical :: DiffResult -> Bool
@@ -83,15 +93,15 @@ renderResult korefile1 korefile2 = \case
             , "  * File " <> file1 <> ": " <> typeString type1
             , "  * File " <> file2 <> ": " <> typeString type2
             ]
-    JsonDiff rpcType diffs ->
+    JsonDiff rpcType first second ->
         BS.unlines
             [ BS.unwords ["Files", file1, "and", file2, "are different", typeString rpcType <> "s"]
-            , renderDiff diffs
+            , BS.pack $ fromMaybe (error "Expected difference") $ renderDiff first second
             ]
-    TextDiff diffs ->
+    TextDiff first second ->
         BS.unlines
             [ BS.unwords ["Files", file1, "and", file2, "are different non-json files"]
-            , renderDiff diffs
+            , BS.pack $ fromMaybe (error "Expected difference") $ renderDiff first second
             ]
   where
     file1 = BS.pack korefile1
@@ -117,7 +127,7 @@ decodeKoreRpc input =
                     [ Execute <$> parseMaybe (Json.parseJSON @ExecuteResult) resp.getResult
                     , Implies <$> parseMaybe (Json.parseJSON @ImpliesResult) resp.getResult
                     , Simplify <$> parseMaybe (Json.parseJSON @SimplifyResult) resp.getResult
-                    , AddModule <$> parseMaybe (Json.parseJSON @()) resp.getResult
+                    , AddModule <$> parseMaybe (Json.parseJSON @AddModuleResult) resp.getResult
                     , GetModel <$> parseMaybe (Json.parseJSON @GetModelResult) resp.getResult
                     ]
     rpcError =
@@ -200,17 +210,37 @@ rpcTypeOf = \case
         Cancel -> error "Cancel"
 
 -------------------------------------------------------------------
--- pretty diff output
--- Currently using a String-based module from the Diff package but
--- which should be rewritten to handle Text and Char8.ByteString
+-- doing the actual diff when output is requested
 
-renderDiff :: [Diff [BS.ByteString]] -> BS.ByteString
-renderDiff = BS.pack . ppDiff . map (convert (map BS.unpack))
+renderDiff :: BS.ByteString -> BS.ByteString -> Maybe String
+renderDiff first second
+    | first == second = Nothing
+renderDiff first second = unsafePerformIO . withTempDir $ \dir -> do
+    let path1 = dir </> "diff_file1.txt"
+        path2 = dir </> "diff_file2.txt"
+    BS.writeFile path1 first
+    BS.writeFile path2 second
+    (result, str, _) <- readProcessWithExitCode "diff" ["-w", path1, path2] ""
+    case result of
+        ExitSuccess -> pure Nothing
+        ExitFailure 1 -> pure $ Just str
+        ExitFailure n -> error $ "diff process exited with code " <> show n
 
--- Should we defined `Functor Diff`? But then again `type Diff a = PolyDiff a a`
--- and we should define `Bifunctor PolyDiff` and assimilate the `Diff` package.
-convert :: (a -> b) -> Diff a -> Diff b
-convert f = \case
-    First a -> First $ f a
-    Second b -> Second $ f b
-    Both a b -> Both (f a) (f b)
+-------------------------------------------------------------------
+-- compute diff on internalised patterns (to normalise collections etc)
+-- This uses the `pretty` instance for a textual diff.
+diffBy :: Internal.KoreDefinition -> KorePattern -> KorePattern -> Maybe String
+diffBy def pat1 pat2 =
+    renderDiff (internalise pat1) (internalise pat2)
+  where
+    renderBS :: Internal.TermOrPredicate -> BS.ByteString
+    renderBS (Internal.BoolOrCeilOrSubstitutionPredicate (Internal.IsPredicate p)) = BS.pack . renderDefault $ pretty p
+    renderBS (Internal.BoolOrCeilOrSubstitutionPredicate (Internal.IsCeil c)) = BS.pack . renderDefault $ pretty c
+    renderBS (Internal.BoolOrCeilOrSubstitutionPredicate (Internal.IsSubstitution k v)) = BS.pack . renderDefault $ pretty k <+> "=" <+> pretty v
+    renderBS (Internal.TermAndPredicateAndSubstitution p m) = BS.pack . renderDefault $ pretty p <+> vsep (map (\(k,v) -> pretty k <+> "=" <+> pretty v) (Map.toList m))
+    internalise =
+        either
+            (("Pattern could not be internalised: " <>) . Json.encode)
+            renderBS
+            . runExcept
+            . internaliseTermOrPredicate DisallowAlias IgnoreSubsorts Nothing def

@@ -11,7 +11,7 @@ import Control.Concurrent.MVar (newMVar)
 import Control.Concurrent.MVar qualified as MVar
 import Control.DeepSeq (force)
 import Control.Exception (AsyncException (UserInterrupt), evaluate, handleJust)
-import Control.Monad (forM_, void, when)
+import Control.Monad (forM_, unless, void, when)
 import Control.Monad.Catch (bracket)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -27,13 +27,15 @@ import Data.Conduit.Network (serverSettings)
 import Data.IORef (writeIORef)
 import Data.InternedText (globalInternedTextCache)
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust, mapMaybe)
+import Data.Set qualified as Set
 import Options.Applicative
 import System.Clock (
     Clock (..),
     getTime,
  )
 import System.Exit
+import System.IO (hPutStrLn, stderr)
 
 import Booster.CLOptions
 import Booster.JsonRpc qualified as Booster
@@ -51,6 +53,7 @@ import Kore.JsonRpc qualified as Kore
 import Kore.JsonRpc.Error
 import Kore.JsonRpc.Server
 import Kore.JsonRpc.Types (API, ReqOrRes (Req, Res))
+import Kore.JsonRpc.Types.Depth (Depth (..))
 import Kore.Log (
     ExeName (..),
     KoreLogType (LogSomeAction),
@@ -62,10 +65,11 @@ import Kore.Log (
  )
 import Kore.Log qualified as Log
 import Kore.Log.DebugSolver qualified as Log
+import Kore.Log.Registry qualified as Log
 import Kore.Rewrite.SMT.Lemma (declareSMTLemmas)
 import Kore.Syntax.Definition (ModuleName (ModuleName), SentenceAxiom)
 import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
-import Proxy (KoreServer (..))
+import Proxy (KoreServer (..), ProxyConfig (..))
 import Proxy qualified
 import SMT qualified
 import Stats qualified
@@ -85,13 +89,15 @@ main = do
                     , eventlogEnabledUserEvents
                     }
             , koreSolverOptions
-            , proxyOptions = ProxyOptions{printStats}
+            , proxyOptions = ProxyOptions{printStats, forceFallback}
             , debugSolverOptions
             } = options
         (logLevel, customLevels) = adjustLogLevels logLevels
         levelFilter :: Logger.LogSource -> LogLevel -> Bool
         levelFilter _source lvl =
             lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
+        koreLogExtraLevels =
+            Set.unions $ mapMaybe (`Map.lookup` koreExtraLogs) customLevels
 
     Logger.runStderrLoggingT $ Logger.filterLogger levelFilter $ do
         liftIO $ forM_ eventlogEnabledUserEvents $ \t -> do
@@ -107,47 +113,57 @@ main = do
             liftIO $
                 loadDefinition definitionFile
                     >>= evaluate . force . either (error . show) id
+        unless (isJust $ Map.lookup mainModuleName definitions) $ do
+            Logger.logErrorNS "proxy" $
+                "Main module " <> mainModuleName <> " not found in " <> Text.pack definitionFile
+            liftIO exitFailure
 
         monadLogger <- askLoggerIO
 
         let coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
+
             koreLogOptions =
                 (defaultKoreLogOptions (ExeName "") startTime)
                     { Log.logLevel = coLogLevel
+                    , Log.logEntries = koreLogExtraLevels
                     , Log.timestampsSwitch = TimestampsDisable
                     , Log.debugSolverOptions = debugSolverOptions
                     , Log.logType = LogSomeAction $ LogAction $ \txt -> liftIO $ monadLogger defaultLoc "kore" logLevel $ toLogStr txt
                     }
             srvSettings = serverSettings port "*"
 
-        liftIO $ void $ withBugReport (ExeName "hs-booster-proxy") BugReportOnError $ \reportDirectory ->
+        liftIO $ void $ withBugReport (ExeName "kore-rpc-booster") BugReportOnError $ \reportDirectory ->
             withLogger reportDirectory koreLogOptions $ \actualLogAction -> do
                 mvarLogAction <- newMVar actualLogAction
                 let logAction = swappableLogger mvarLogAction
 
-                kore@KoreServer{runSMT} <- mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions
+                let defaultTactic = fromMaybe (SMT.List [SMT.Atom "check-sat-using", SMT.Atom "smt"]) koreSolverOptions.tactic
+                kore@KoreServer{runSMT} <-
+                    mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions{tactic = Just defaultTactic}
 
                 withMDLib llvmLibraryFile $ \mdl -> do
                     mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
                     boosterState <-
                         liftIO $
                             newMVar Booster.ServerState{definitions, defaultMain = mainModuleName, mLlvmLibrary}
-                    statVar <- if printStats then Just <$> Stats.newStats else pure Nothing
+                    statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
 
                     runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
                     let koreRespond, boosterRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
                         koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
                         boosterRespond = Booster.respond boosterState
+
+                        proxyConfig = ProxyConfig{statsVar, forceFallback, boosterState}
                         server =
                             jsonRpcServer
                                 srvSettings
-                                (const $ Proxy.respondEither statVar boosterState boosterRespond koreRespond)
+                                (const $ Proxy.respondEither proxyConfig boosterRespond koreRespond)
                                 [handleErrorCall, handleSomeException]
                         interruptHandler _ = do
                             when (logLevel >= LevelInfo) $
-                                putStrLn "[Info#proxy] Server shutting down"
-                            whenJust statVar Stats.showStats
+                                hPutStrLn stderr "[Info#proxy] Server shutting down"
+                            whenJust statsVar Stats.showStats
                             exitSuccess
                     handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger
   where
@@ -170,6 +186,16 @@ toSeverity LevelWarn = Just Log.Warning
 toSeverity LevelError = Just Log.Error
 toSeverity LevelOther{} = Nothing
 
+koreExtraLogs :: Map.Map LogLevel Log.EntryTypes
+koreExtraLogs =
+    Map.map (Set.fromList . mapMaybe (`Map.lookup` Log.textToType Log.registry)) $
+        Map.fromList
+            [ (LevelOther "SimplifyKore", ["DebugAttemptEquation", "DebugApplyEquation"])
+            , (LevelOther "RewriteKore", ["DebugAttemptedRewriteRules", "DebugAppliedRewriteRules"])
+            , (LevelOther "SimplifySuccess", ["DebugApplyEquation"])
+            , (LevelOther "RewriteSuccess", ["DebugAppliedRewriteRules"])
+            ]
+
 data CLProxyOptions = CLProxyOptions
     { clOptions :: CLOptions
     , proxyOptions :: ProxyOptions
@@ -177,9 +203,11 @@ data CLProxyOptions = CLProxyOptions
     , debugSolverOptions :: !Log.DebugSolverOptions
     }
 
-newtype ProxyOptions = ProxyOptions
+data ProxyOptions = ProxyOptions
     { printStats :: Bool
     -- ^ print timing statistics per request and on shutdown
+    , forceFallback :: Maybe Depth
+    -- ^ force fallback every n-steps
     }
 
 parserInfoModifiers :: InfoMod options
@@ -200,6 +228,15 @@ clProxyOptionsParser =
             <$> switch
                 ( long "print-stats"
                     <> help "(development) Print timing information per request and on shutdown"
+                )
+            <*> optional
+                ( option
+                    (Depth <$> auto)
+                    ( metavar "INTERIM_SIMPLIFICATION"
+                        <> long "interim-simplification"
+                        <> help "Perform pattern-wide simplification every N steps"
+                        <> showDefault
+                    )
                 )
 
 mkKoreServer :: Log.LoggerEnv IO -> CLOptions -> KoreSolverOptions -> IO KoreServer
@@ -229,13 +266,14 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
                 , loggerEnv
                 }
   where
-    KoreSolverOptions{timeOut, rLimit, resetInterval, prelude} = koreSolverOptions
+    KoreSolverOptions{timeOut, rLimit, resetInterval, prelude, tactic} = koreSolverOptions
     smtConfig =
         SMT.defaultConfig
             { SMT.timeOut = timeOut
             , SMT.rLimit = rLimit
             , SMT.resetInterval = resetInterval
             , SMT.prelude = prelude
+            , SMT.tactic = tactic
             }
 
     -- SMT solver with user declared lemmas

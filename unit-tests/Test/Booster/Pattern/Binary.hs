@@ -12,6 +12,7 @@ import Booster.Pattern.Binary
 import Booster.Pattern.Util (sortOfTerm)
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
+import Data.Set qualified as Set
 import Hedgehog (Gen, Property, forAll, property, (===))
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
@@ -57,7 +58,7 @@ genPredicate =
         <$> Gen.choice [pure TrueBool, pure FalseBool, genTerm]
 
 genPattern :: Gen Pattern
-genPattern = (\t cs -> Pattern t cs []) <$> genTerm <*> upTo 10 genPredicate
+genPattern = (\t cs -> Pattern t cs mempty) <$> genTerm <*> (Set.fromList <$> upTo 10 genPredicate)
 
 test_BinaryRoundTrips :: [TestTree]
 test_BinaryRoundTrips =

@@ -305,12 +305,18 @@ addModule
                         withExcept DefinitionSortError $
                             internaliseSort (Set.fromList paramNames) sorts' sort
                     let internalArgs = uncurry Def.Variable <$> zip internalArgSorts argNames
-                    internalRhs <-
-                        withExcept (DefinitionAliasError name.getId . InconsistentAliasPattern) $
-                            internaliseTermOrPredicate True (Just sortVars) defWithNewSortsAndSymbols.partial rhs
-                    let rhsSort = Util.sortOfTermOrPredicate internalRhs
+
+                    (internalRhs, substitution) <-  withExcept (DefinitionAliasError name.getId . InconsistentAliasPattern . (:[])) $
+                        internalisePattern 
+                            AllowAlias 
+                            IgnoreSubsorts 
+                            (Just sortVars)
+                            defWithNewSortsAndSymbols.partial
+                            rhs
+                    unless (null substitution) $ throwE $ DefinitionAliasError name.getId $ InconsistentAliasPattern [SubstitutionNotAllowed]
+                    let rhsSort = Util.sortOfPattern internalRhs
                     unless
-                        (fromMaybe internalResSort rhsSort == internalResSort)
+                        (rhsSort == internalResSort)
                         (throwE (DefinitionSortError (GeneralError "IncompatibleSorts")))
                     return (internalName, Alias{name = internalName, params, args = internalArgs, rhs = internalRhs})
                 -- filter out "antiLeft" aliases, recognised by name and argument count
@@ -431,6 +437,22 @@ addModule
                                     , (symbolNames.elementSymbolName, def)
                                     , (symbolNames.concatSymbolName, def)
                                     ]
+                        Just (symbolNames, KSetTag) -> do
+                            elementSortName <-
+                                extractElemSortName symbolNames.elementSymbolName
+                            let def =
+                                    KSetMeta
+                                        KListDefinition
+                                            { symbolNames
+                                            , elementSortName
+                                            , listSortName = resultSort
+                                            }
+                            pure $
+                                Map.fromList
+                                    [ (symbolNames.unitSymbolName, def)
+                                    , (symbolNames.elementSymbolName, def)
+                                    , (symbolNames.concatSymbolName, def)
+                                    ]
 
             -- extractedCollectionMetadata :: Map Def.SymbolName KCollectionMetadata
             extractedCollectionMetadata <-
@@ -539,7 +561,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
     case axiom of
         -- rewrite: an actual rewrite rule
         Syntax.KJRewrites _ lhs rhs
-            | Syntax.KJAnd _ (Syntax.KJNot _ _) (Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs) <- lhs ->
+            | Syntax.KJAnd _ [Syntax.KJNot _ _, Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs] <- lhs ->
                 Just . RewriteRuleAxiom' aliasName aliasArgs rhs
                     <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
             | Syntax.KJApp (Syntax.Id aliasName) _ aliasArgs <- lhs ->
@@ -564,19 +586,19 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
                 Just . SimplificationAxiom' req lhs rhs sortVars
                     <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
             -- requires and argument predicate, no antiLeft
-            | Syntax.KJAnd _ requires argPred@Syntax.KJAnd{first = Syntax.KJIn{}} <- req
+            | Syntax.KJAnd _ [requires, argPred@Syntax.KJAnd{patterns = Syntax.KJIn{} : _}] <- req
             , all isVar args -> do
                 argTuples <- extractBinders argPred
                 Just . FunctionAxiom' requires argTuples lhs rhs sortVars
                     <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
             -- antiLeft (discarded), requires and argument predicate
-            | Syntax.KJAnd _ _antiLeft Syntax.KJAnd{first = reqs, second = argPred} <- req
+            | Syntax.KJAnd _ [_antiLeft, Syntax.KJAnd{patterns = [reqs, argPred]}] <- req
             , all isVar args -> do
                 argTuples <- extractBinders argPred
                 Just . FunctionAxiom' reqs argTuples lhs rhs sortVars
                     <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
             -- no arguments, no antiLeft
-            | Syntax.KJAnd _ requires Syntax.KJTop{} <- req
+            | Syntax.KJAnd _ [requires, Syntax.KJTop{}] <- req
             , all isVar args -> do
                 Just . FunctionAxiom' requires [] lhs rhs sortVars
                     <$> withExcept DefinitionAttributeError (mkAttributes parsedAx)
@@ -596,14 +618,14 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
                     pure Nothing
         Syntax.KJImplies
             _
-            Syntax.KJAnd{first = con1@Syntax.KJApp{}, second = con2@Syntax.KJApp{}}
+            Syntax.KJAnd{patterns = [con1@Syntax.KJApp{}, con2@Syntax.KJApp{}]}
             Syntax.KJApp{name}
                 | hasAttribute "constructor"
                 , con1.name == con2.name
                 , con1.name == name ->
                     -- no confusion same constructor. Could assert `name` is a constructor
                     pure Nothing
-        Syntax.KJNot _ (Syntax.KJAnd{first = con1@Syntax.KJApp{}, second = con2@Syntax.KJApp{}})
+        Syntax.KJNot _ (Syntax.KJAnd{patterns = [con1@Syntax.KJApp{}, con2@Syntax.KJApp{}]})
             | hasAttribute "constructor"
             , con1.name /= con2.name ->
                 -- no confusion different constructors. Could check whether con*.name are constructors
@@ -644,7 +666,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
             pure []
         Syntax.KJIn{first = Syntax.KJEVar{name, sort}, second = term} ->
             pure [(name, sort, term)]
-        Syntax.KJAnd{first = Syntax.KJIn _ _ Syntax.KJEVar{name, sort} term, second = rest} ->
+        Syntax.KJAnd{patterns = [Syntax.KJIn _ _ Syntax.KJEVar{name, sort} term, rest]} ->
             ((name, sort, term) :) <$> extractBinders rest
         other -> throwE $ DefinitionAxiomError $ MalformedArgumentBinder parsedAx other
 
@@ -731,18 +753,12 @@ internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
     -- prefix all variables in lhs and rhs with "Rule#" to avoid
     -- name clashes with patterns from the user
     -- filter out literal `Top` constraints
-    lhs <-
-        fmap (removeTrueBools . Util.modifyVariables (Util.modifyVarName ("Rule#" <>))) $
-            withExcept (DefinitionPatternError ref) $
-                internalisePattern True Nothing partialDefinition left
+    lhs <-  internalisePattern' ref (Util.modifyVarName ("Rule#" <>)) left
     existentials' <- fmap Set.fromList $ withExcept (DefinitionPatternError ref) $ mapM mkVar exs
     let renameVariable v
             | v `Set.member` existentials' = Util.modifyVarName ("Ex#" <>) v
             | otherwise = Util.modifyVarName ("Rule#" <>) v
-    rhs <-
-        fmap (removeTrueBools . Util.modifyVariables renameVariable) $
-            withExcept (DefinitionPatternError ref) $
-                internalisePattern True Nothing partialDefinition right
+    rhs <- internalisePattern' ref renameVariable right
     let notPreservesDefinednessReasons =
             -- users can override the definedness computation by an explicit attribute
             if coerce axAttributes.preserving
@@ -767,6 +783,11 @@ internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
             , existentials
             }
   where
+    internalisePattern' ref f t = do
+        (pat, substitution) <- withExcept (DefinitionPatternError ref) $ internalisePattern AllowAlias IgnoreSubsorts Nothing partialDefinition t
+        unless (null substitution) $ throwE $ DefinitionPatternError ref SubstitutionNotAllowed
+        pure $ removeTrueBools $ Util.modifyVariables f pat
+
     mkVar (name, sort) = do
         variableSort <- lookupInternalSort Nothing partialDefinition.sorts right sort
         let variableName = textToBS name.getId
@@ -789,7 +810,7 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
     args <-
         traverse
             ( withExcept (DefinitionPatternError ref)
-                . internaliseTerm True Nothing partialDefinition
+                . internaliseTerm AllowAlias IgnoreSubsorts Nothing partialDefinition
             )
             aliasArgs
     result <- expandAlias alias args
@@ -805,10 +826,7 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
     let renameVariable v
             | v `Set.member` existentials' = Util.modifyVarName ("Ex#" <>) v
             | otherwise = Util.modifyVarName ("Rule#" <>) v
-    rhs <-
-        fmap (removeTrueBools . Util.modifyVariables renameVariable) $
-            withExcept (DefinitionPatternError ref) $
-                internalisePattern True Nothing partialDefinition right
+    rhs <- internalisePattern' ref renameVariable right
 
     let notPreservesDefinednessReasons =
             -- users can override the definedness computation by an explicit attribute
@@ -840,6 +858,11 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
         variableSort <- lookupInternalSort Nothing partialDefinition.sorts right sort
         let variableName = textToBS name.getId
         pure $ Variable{variableSort, variableName}
+    
+    internalisePattern' ref f t = do
+        (pat, substitution) <- withExcept (DefinitionPatternError ref) $ internalisePattern AllowAlias IgnoreSubsorts Nothing partialDefinition t
+        unless (null substitution) $ throwE $ DefinitionPatternError ref SubstitutionNotAllowed
+        pure $ removeTrueBools $ Util.modifyVariables f pat
 
 expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicate
 expandAlias alias currentArgs
@@ -847,29 +870,26 @@ expandAlias alias currentArgs
         throwE $
             DefinitionAliasError (Text.decodeLatin1 alias.name) $
                 WrongAliasArgCount alias currentArgs
-    | otherwise =
+    | otherwise = do
         let substitution = Map.fromList (zip alias.args currentArgs)
-         in return $ substitute substitution alias.rhs
+        substitute substitution alias.rhs
   where
-    substitute substitution termOrPredicate =
-        case termOrPredicate of
-            Def.BoolOrCeilPredicate predicate ->
-                Def.BoolOrCeilPredicate $ bimap (sub substitution) (sub substitution) predicate
-            Def.TermAndPredicate Def.Pattern{term, constraints, ceilConditions} ->
-                Def.TermAndPredicate
-                    Def.Pattern
-                        { term = Util.substituteInTerm substitution term
-                        , constraints =
-                            sub substitution <$> constraints
-                        , ceilConditions =
-                            sub substitution <$> ceilConditions
-                        }
+    substitute substitution Def.Pattern{term, constraints, ceilConditions} = do
+        pure $ Def.TermAndPredicateAndSubstitution
+            Def.Pattern
+                { term = Util.substituteInTerm substitution term
+                , constraints =
+                    Set.fromList $ sub substitution <$> (Set.toList constraints)
+                , ceilConditions =
+                    sub substitution <$> ceilConditions
+                }
+            mempty
 
     sub :: (Coercible a Def.Term, Coercible Def.Term a) => Map Variable Def.Term -> a -> a
     sub substitution = coerce . Util.substituteInTerm substitution . coerce
 
 removeTrueBools :: Def.Pattern -> Def.Pattern
-removeTrueBools p = p{Def.constraints = filter (/= Def.Predicate Def.TrueBool) p.constraints}
+removeTrueBools p = p{Def.constraints = Set.filter (/= Def.Predicate Def.TrueBool) p.constraints}
 
 {- | Internalises simplification rules, for term simplification
    (represented as a 'RewriteRule').
@@ -891,7 +911,7 @@ internaliseSimpleEquation partialDef precond left right sortVars attrs
         error $ "internaliseSimpleEquation should only be called for simplifications" <> show attrs
     | Syntax.KJApp{} <- left = do
         -- this ensures that `left` is a _term_ (invariant guarded by classifyAxiom)
-        lhs <- internalisePattern' $ Syntax.KJAnd left.sort left precond
+        lhs <- internalisePattern' $ Syntax.KJAnd left.sort [left, precond]
         rhs <- internalisePattern' right
         let
             -- checking the lhs term, too, as a safe approximation
@@ -926,10 +946,11 @@ internaliseSimpleEquation partialDef precond left right sortVars attrs
         -- unexpected top-level term, which we want to ignore
         error $ "internaliseSimpleEquation should only be called with app nodes as LHS" <> show left
   where
-    internalisePattern' =
-        withExcept (DefinitionPatternError (sourceRef attrs))
-            . fmap (removeTrueBools . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))
-            . internalisePattern True (Just sortVars) partialDef
+    internalisePattern' t = do
+        (pat, substitution) <- withExcept (DefinitionPatternError (sourceRef attrs)) $ internalisePattern AllowAlias IgnoreSubsorts (Just sortVars) partialDef t
+        unless (null substitution) $ throwE $ DefinitionPatternError (sourceRef attrs) SubstitutionNotAllowed
+        pure $ removeTrueBools $ Util.modifyVariables (Util.modifyVarName ("Eq#" <>)) pat
+
 
 {- | Internalises a function rule from its components that were matched
   before.
@@ -955,16 +976,17 @@ internaliseFunctionEquation ::
     Except DefinitionError AxiomResult
 internaliseFunctionEquation partialDef requires args leftTerm right sortVars attrs = do
     -- internalise the LHS (LHS term and requires)
-    left <- -- expected to be a simple term, f(X_1, X_2,..)
+    (left, substitution) <- -- expected to be a simple term, f(X_1, X_2,..)
         withExcept (DefinitionPatternError (sourceRef attrs)) $
-            internalisePattern True (Just sortVars) partialDef $
-                Syntax.KJAnd leftTerm.sort leftTerm requires
+            internalisePattern AllowAlias IgnoreSubsorts (Just sortVars) partialDef $
+                Syntax.KJAnd leftTerm.sort [leftTerm, requires]
+    unless (null substitution) $ throwE $ DefinitionPatternError (sourceRef attrs) SubstitutionNotAllowed
     -- extract argument binders from predicates and inline in to LHS term
     argPairs <- mapM internaliseArg args
     let lhs =
             removeTrueBools . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)) $
                 left{Def.term = Util.substituteInTerm (Map.fromList argPairs) left.term}
-    rhs <- internaliseSide right
+    rhs <- internalisePattern' right
     let argsUndefined =
             concatMap (Util.filterTermSymbols (not . Util.isDefinedSymbol) . snd) argPairs
         rhsUndefined =
@@ -999,14 +1021,14 @@ internaliseFunctionEquation partialDef requires args leftTerm right sortVars att
         Def.SymbolApplication symbol _ _ -> symbol.attributes.symbolType == TotalFunction
         _ -> False
 
-    internaliseSide =
-        withExcept (DefinitionPatternError (sourceRef attrs))
-            . fmap (removeTrueBools . Util.modifyVariables (Util.modifyVarName ("Eq#" <>)))
-            . internalisePattern True (Just sortVars) partialDef
+    internalisePattern' t = do
+        (pat, substitution) <- withExcept (DefinitionPatternError (sourceRef attrs)) $ internalisePattern AllowAlias IgnoreSubsorts (Just sortVars) partialDef t
+        unless (null substitution) $ throwE $ DefinitionPatternError (sourceRef attrs) SubstitutionNotAllowed
+        pure $ removeTrueBools $ Util.modifyVariables (Util.modifyVarName ("Eq#" <>)) pat
 
     internaliseTerm' =
         withExcept (DefinitionPatternError (sourceRef attrs))
-            . internaliseTerm True (Just sortVars) partialDef
+            . internaliseTerm AllowAlias IgnoreSubsorts (Just sortVars) partialDef
 
     internaliseArg ::
         (Syntax.Id, Syntax.Sort, Syntax.KorePattern) ->

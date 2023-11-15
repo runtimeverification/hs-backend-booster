@@ -30,6 +30,7 @@ import Data.ByteString qualified as BS
 import Data.Int (Int16)
 import Data.List (intercalate)
 import Data.Map qualified as Map
+import Data.Set qualified as Set
 import Data.Word (Word64)
 import GHC.Word (Word8)
 import Text.Printf
@@ -385,7 +386,7 @@ decodePattern mDef = do
             preds <- forM preds' $ \case
                 BPredicate p -> pure p
                 _ -> fail "Expecting a predicate"
-            pure $ Pattern trm preds []
+            pure $ Pattern trm (Set.fromList preds) mempty
         _ -> fail "Expecting a term on the top of the stack"
 
 decodeSingleBlock :: Get Block
@@ -447,6 +448,7 @@ encodeTerm = \case
     Injection source target t -> encodeSymbolApplication "inj" [source, target] [Left t]
     KMap def keyVals rest -> encodeTerm $ externaliseKmapUnsafe def keyVals rest
     KList def heads rest -> encodeTerm $ externaliseKList def heads rest
+    KSet def heads rest -> encodeTerm $ externaliseKSet def heads rest
 
 encodeSymbol :: ByteString -> [Sort] -> Put
 encodeSymbol name sorts = do

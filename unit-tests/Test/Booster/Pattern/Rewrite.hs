@@ -243,19 +243,19 @@ rulePriority =
 
 rewritesTo :: Term -> (Text, Term) -> IO ()
 t1 `rewritesTo` (lbl, t2) =
-    unsafePerformIO
-        (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern_ t1))
+    (fst <$> unsafePerformIO
+        (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t1)))
         @?= Right (RewriteFinished (Just lbl) Nothing $ Pattern_ t2)
 
 getsStuck :: Term -> IO ()
 getsStuck t1 =
-    unsafePerformIO (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern_ t1))
+    (fst <$> unsafePerformIO (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t1)))
         @?= Right (RewriteStuck $ Pattern_ t1)
 
 branchesTo :: Term -> [(Text, Term)] -> IO ()
 t `branchesTo` ts =
-    unsafePerformIO
-        (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern_ t))
+    (fst <$> unsafePerformIO
+        (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t)))
         @?= Right
             ( RewriteBranch (Pattern_ t) $
                 NE.fromList $
@@ -265,7 +265,7 @@ t `branchesTo` ts =
 failsWith :: Term -> RewriteFailed "Rewrite" -> IO ()
 failsWith t err =
     unsafePerformIO
-        (runNoLoggingT $ runRewriteT False def Nothing (rewriteStep [] [] $ Pattern_ t))
+        (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t))
         @?= Left err
 
 ----------------------------------------
@@ -277,8 +277,8 @@ runRewrite t = do
         runNoLoggingT $ performRewrite False def Nothing Nothing [] [] $ Pattern_ t
     pure (counter, fmap (.term) res)
 
-aborts :: Term -> IO ()
-aborts t = runRewrite t >>= (@?= (0, RewriteAborted t))
+aborts :: RewriteFailed "Rewrite" -> Term -> IO ()
+aborts failure t = runRewrite t >>= (@?= (0, RewriteAborted failure t))
 
 newtype Steps = Steps Natural
 
@@ -291,11 +291,15 @@ canRewrite =
     testGroup
         "Can rewrite"
         [ testCase "Rewrites con1 once, then aborts" $
-            rewrites
-                (Steps 1)
-                [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
-                [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( f1{}(   \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
-                RewriteAborted
+            let startTerm =
+                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
+                targetTerm =
+                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( f1{}(   \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
+             in rewrites
+                    (Steps 1)
+                    startTerm
+                    targetTerm
+                    (RewriteAborted (NoRulesForTerm targetTerm))
         , testCase "Rewrites con3 twice, branching on con1" $ do
             let branch1 =
                     ( "con1-f2"
@@ -325,10 +329,14 @@ abortsOnErrors :: TestTree
 abortsOnErrors =
     testGroup
         "Aborts rewrite when there is an error"
-        [ testCase "when there are no rules at all" $ aborts (app con2 [d])
+        [ testCase "when there are no rules at all" $
+            let term = app con2 [d] in aborts (NoRulesForTerm term) term
         , testCase "when the term index is None" $
-            aborts
-                [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( \and{SomeSort{}}( con1{}( \dv{SomeSort{}}("thing") ), con2{}( \dv{SomeSort{}}("thing") ) ) ), C:SortK{} ) ) |]
+            let term =
+                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( \and{SomeSort{}}( con1{}( \dv{SomeSort{}}("thing") ), con2{}( \dv{SomeSort{}}("thing") ) ) ), C:SortK{} ) ) |]
+             in aborts
+                    (TermIndexIsNone term)
+                    term
         ]
 
 callsError :: TestTree
@@ -348,9 +356,11 @@ abortsOnFailures =
     testGroup
         "Aborts rewrite when the rewriter cannot handle it"
         [ testCase "when unification is not a match" $
-            aborts [trm| con3{}(X:SomeSort{}, \dv{SomeSort{}}("thing")) |]
+            let term = [trm| con3{}(X:SomeSort{}, \dv{SomeSort{}}("thing")) |]
+             in aborts (NoRulesForTerm term) term
         , testCase "when definedness is unclear" $
-            aborts [trm| con4{}(\dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing")) |]
+            let term = [trm| con4{}(\dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing")) |]
+             in aborts (NoRulesForTerm term) term
         ]
 
 newtype MaxDepth = MaxDepth Natural
@@ -360,12 +370,16 @@ supportsDepthControl =
     testGroup
         "supports maximum depth control"
         [ testCase "executes normally when maxDepth > maximum expected" $
-            rewritesToDepth
-                (MaxDepth 42)
-                (Steps 1)
-                [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
-                [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( f1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
-                RewriteAborted
+            let startTerm =
+                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
+                targetTerm =
+                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( f1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
+             in rewritesToDepth
+                    (MaxDepth 42)
+                    (Steps 1)
+                    startTerm
+                    targetTerm
+                    (RewriteAborted $ NoRulesForTerm targetTerm)
         , testCase "stops execution after 1 step when maxDepth == 1" $
             rewritesToDepth
                 (MaxDepth 1)
@@ -422,12 +436,16 @@ supportsCutPoints =
                     [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
                 )
         , testCase "ignores non-matching cut-point labels" $
-            rewritesToCutPoint
-                "otherLabel"
-                (Steps 1)
-                [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
-                [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( f1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
-                RewriteAborted
+            let startTerm =
+                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
+                targetTerm =
+                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( f1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
+             in rewritesToCutPoint
+                    "otherLabel"
+                    (Steps 1)
+                    startTerm
+                    targetTerm
+                    (RewriteAborted (NoRulesForTerm targetTerm))
         , testCase "prefers reporting branches to stopping at label in one branch" $ do
             let branch1 =
                     ( "con1-f2"
@@ -466,12 +484,16 @@ supportsTerminalRules =
                 [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( f1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
                 (RewriteTerminal "con1-f1" Nothing)
         , testCase "ignores non-matching labels" $
-            rewritesToTerminal
-                "otherLabel"
-                (Steps 1)
-                [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
-                [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( f1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
-                RewriteAborted
+            let startTerm =
+                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
+                targetTerm =
+                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( f1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
+             in rewritesToTerminal
+                    "otherLabel"
+                    (Steps 1)
+                    startTerm
+                    targetTerm
+                    (RewriteAborted (NoRulesForTerm targetTerm))
         ]
   where
     rewritesToTerminal :: Text -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()

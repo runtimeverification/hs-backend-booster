@@ -13,6 +13,7 @@ module Booster.Pattern.ApplyEquations (
     isMatchFailure,
     isSuccess,
     simplifyConstraint,
+    SimplifierCache,
 ) where
 
 import Control.Monad
@@ -26,7 +27,6 @@ import Control.Monad.Logger.CallStack (
  )
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
-import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State
 import Data.Bifunctor (second)
@@ -67,7 +67,7 @@ data EquationFailure
     = IndexIsNone Term
     | TooManyIterations Int Term Term
     | EquationLoop [Term]
-    | SideConditionsFalse [Predicate]
+    | SideConditionFalse Predicate
     | InternalError Text
     deriving stock (Eq, Show)
 
@@ -82,7 +82,10 @@ data EquationState = EquationState
     , changed :: Bool
     , predicates :: Set Predicate
     , trace :: Seq EquationTrace
+    , cache :: SimplifierCache
     }
+
+type SimplifierCache = Map Term Term
 
 data EquationTrace = EquationTrace
     { subjectTerm :: Term
@@ -123,21 +126,22 @@ instance Pretty EquationTrace where
                 ]
                     ++ map pretty cs
                     ++ ["using " <> locationInfo]
-        ConditionFalse ->
+        ConditionFalse p ->
             vsep
                 [ "Simplifying term"
                 , prettyTerm
                 , "failed with false condition"
+                , pretty p
                 , "using " <> locationInfo
                 ]
-        EnsuresFalse ps ->
-            vsep $
+        EnsuresFalse p ->
+            vsep
                 [ "Simplifying term"
                 , prettyTerm
                 , "using " <> locationInfo
-                , "resulted in ensuring false conditions"
+                , "resulted in ensuring false condition"
+                , pretty p
                 ]
-                    <> map pretty ps
         MatchConstraintViolated constrained varName ->
             vsep
                 [ "Concreteness constraint violated: "
@@ -157,9 +161,9 @@ isMatchFailure _ = False
 isSuccess EquationTrace{result = Success{}} = True
 isSuccess _ = False
 
-startState :: EquationState
-startState =
-    EquationState{termStack = [], changed = False, predicates = mempty, trace = mempty}
+startState :: Map Term Term -> EquationState
+startState cache =
+    EquationState{termStack = [], changed = False, predicates = mempty, trace = mempty, cache}
 
 getState :: MonadLoggerIO io => EquationT io EquationState
 getState = EquationT (lift $ lift get)
@@ -173,15 +177,21 @@ countSteps = length . (.termStack) <$> getState
 pushTerm :: MonadLoggerIO io => Term -> EquationT io ()
 pushTerm t = EquationT . lift . lift . modify $ \s -> s{termStack = t : s.termStack}
 
-pushConstraints :: MonadLoggerIO io => [Predicate] -> EquationT io ()
-pushConstraints ps = EquationT . lift . lift . modify $ \s -> s{predicates = s.predicates <> Set.fromList ps}
+pushConstraints :: MonadLoggerIO io => Set Predicate -> EquationT io ()
+pushConstraints ps = EquationT . lift . lift . modify $ \s -> s{predicates = s.predicates <> ps}
 
 setChanged, resetChanged :: MonadLoggerIO io => EquationT io ()
 setChanged = EquationT . lift . lift . modify $ \s -> s{changed = True}
 resetChanged = EquationT . lift . lift . modify $ \s -> s{changed = False}
 
 getChanged :: MonadLoggerIO io => EquationT io Bool
-getChanged = EquationT $ lift $ lift $ gets (.changed)
+getChanged = EquationT . lift . lift $ gets (.changed)
+
+toCache :: MonadLoggerIO io => Term -> Term -> EquationT io ()
+toCache orig result = EquationT . lift . lift . modify $ \s -> s{cache = Map.insert orig result s.cache}
+
+fromCache :: MonadLoggerIO io => Term -> EquationT io (Maybe Term)
+fromCache t = EquationT . lift . lift $ Map.lookup t <$> gets (.cache)
 
 checkForLoop :: MonadLoggerIO io => Term -> EquationT io ()
 checkForLoop t = do
@@ -200,14 +210,15 @@ runEquationT ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    SimplifierCache ->
     EquationT io a ->
-    io (Either EquationFailure a, [EquationTrace])
-runEquationT doTracing definition llvmApi (EquationT m) = do
+    io (Either EquationFailure a, [EquationTrace], SimplifierCache)
+runEquationT doTracing definition llvmApi sCache (EquationT m) = do
     (res, endState) <-
-        flip runStateT startState $
+        flip runStateT (startState sCache) $
             runExceptT $
                 runReaderT m EquationConfig{definition, llvmApi, doTracing}
-    pure (res, toList $ trace endState)
+    pure (res, toList endState.trace, endState.cache)
 
 iterateEquations ::
     MonadLoggerIO io =>
@@ -246,9 +257,9 @@ evaluateTerm ::
     KoreDefinition ->
     Maybe LLVM.API ->
     Term ->
-    io (Either EquationFailure Term, [EquationTrace])
+    io (Either EquationFailure Term, [EquationTrace], SimplifierCache)
 evaluateTerm doTracing direction def llvmApi =
-    runEquationT doTracing def llvmApi
+    runEquationT doTracing def llvmApi mempty
         . evaluateTerm' direction
 
 -- version for internal nested evaluation
@@ -267,10 +278,11 @@ evaluatePattern ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    SimplifierCache ->
     Pattern ->
-    io (Either EquationFailure Pattern, [EquationTrace])
-evaluatePattern doTracing def mLlvmLibrary =
-    runEquationT doTracing def mLlvmLibrary . evaluatePattern'
+    io (Either EquationFailure Pattern, [EquationTrace], SimplifierCache)
+evaluatePattern doTracing def mLlvmLibrary cache =
+    runEquationT doTracing def mLlvmLibrary cache . evaluatePattern'
 
 -- version for internal nested evaluation
 evaluatePattern' ::
@@ -285,15 +297,15 @@ evaluatePattern' Pattern{term, constraints, ceilConditions} = do
     traverse_ simplifyAssumedPredicate . predicates =<< getState
     -- this may yield additional new constraints, left unevaluated
     evaluatedConstraints <- predicates <$> getState
-    pure Pattern{constraints = Set.toList evaluatedConstraints, term = newTerm, ceilConditions}
+    pure Pattern{constraints = evaluatedConstraints, term = newTerm, ceilConditions}
   where
     -- evaluate the given predicate assuming all others
     simplifyAssumedPredicate p = do
         allPs <- predicates <$> getState
         let otherPs = Set.delete p allPs
         EquationT $ lift $ lift $ modify $ \s -> s{predicates = otherPs}
-        newP <- simplifyConstraint' p
-        pushConstraints [newP]
+        newP <- simplifyConstraint' True p
+        pushConstraints $ Set.singleton newP
 
 ----------------------------------------
 
@@ -328,18 +340,35 @@ applyTerm BottomUp pref =
             KList def
                 <$> sequence heads
                 <*> mapM (uncurry (liftM2 (,)) . second sequence) rest
+        KSetF def heads rest ->
+            KSet def
+                <$> sequence heads
+                <*> sequence rest
+-- FIXME rewrite Bottom-up evaluation without cata, traversing top-down but processing in pre-order (apply below)
 applyTerm TopDown pref = \t@(Term attributes _) ->
     if attributes.isEvaluated
         then pure t
-        else do
-            config <- getConfig
-            -- All fully concrete values go to the LLVM backend (top-down only)
-            if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
-                then do
-                    let result = simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
-                    when (result /= t) setChanged
-                    pure result
-                else apply t
+        else
+            fromCache t >>= \case
+                Nothing -> do
+                    config <- getConfig
+                    -- All fully concrete values go to the LLVM backend (top-down only)
+                    simplified <-
+                        if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
+                            then do
+                                let result = simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
+                                when (result /= t) $ do
+                                    setChanged
+                                    traceRuleApplication t Nothing (Just "LLVM") Nothing $ Success result
+                                pure result
+                            else apply t
+                    toCache t simplified
+                    pure simplified
+                Just cached -> do
+                    when (t /= cached) $ do
+                        setChanged
+                        traceRuleApplication t Nothing (Just "Cache") Nothing $ Success cached
+                    pure cached
   where
     apply = \case
         dv@DomainValue{} ->
@@ -382,6 +411,10 @@ applyTerm TopDown pref = \t@(Term attributes _) ->
                                 <*> mapM (applyTerm TopDown pref) tails
                     )
                     rest
+        KSet def keyVals rest ->
+            KSet def
+                <$> mapM (applyTerm TopDown pref) keyVals
+                <*> maybe (pure Nothing) ((Just <$>) . applyTerm TopDown pref) rest
 
 {- | Try to apply function equations and simplifications to the given
    top-level term, in priority order and per group.
@@ -412,8 +445,8 @@ data ApplyEquationResult
     | FailedMatch MatchFailReason
     | IndeterminateMatch
     | IndeterminateCondition [Predicate]
-    | ConditionFalse
-    | EnsuresFalse [Predicate]
+    | ConditionFalse Predicate
+    | EnsuresFalse Predicate
     | RuleNotPreservingDefinedness
     | MatchConstraintViolated Constrained VarName
     deriving stock (Eq, Show)
@@ -434,8 +467,8 @@ handleFunctionEquation success continue abort = \case
     FailedMatch _ -> continue
     IndeterminateMatch -> abort
     IndeterminateCondition{} -> abort
-    ConditionFalse -> continue
-    EnsuresFalse ps -> throw $ SideConditionsFalse ps
+    ConditionFalse _ -> continue
+    EnsuresFalse p -> throw $ SideConditionFalse p
     RuleNotPreservingDefinedness -> abort
     MatchConstraintViolated{} -> continue
 
@@ -445,8 +478,8 @@ handleSimplificationEquation success continue _abort = \case
     FailedMatch _ -> continue
     IndeterminateMatch -> continue
     IndeterminateCondition{} -> continue
-    ConditionFalse -> continue
-    EnsuresFalse ps -> throw $ SideConditionsFalse ps
+    ConditionFalse _ -> continue
+    EnsuresFalse p -> throw $ SideConditionFalse p
     RuleNotPreservingDefinedness -> continue
     MatchConstraintViolated{} -> continue
 
@@ -502,7 +535,11 @@ traceRuleApplication ::
     EquationT io ()
 traceRuleApplication t loc lbl uid res = do
     let newTraceItem = EquationTrace t loc lbl uid res
-    logOther (LevelOther "Simplify") (pack . renderDefault . pretty $ newTraceItem)
+        prettyItem = pack . renderDefault . pretty $ newTraceItem
+    logOther (LevelOther "Simplify") prettyItem
+    case res of
+        Success{} -> logOther (LevelOther "SimplifySuccess") prettyItem
+        _ -> pure ()
     config <- getConfig
     when config.doTracing $
         EquationT . lift . lift . modify $
@@ -542,39 +579,32 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                     concatMap
                         (splitBoolPredicates . coerce . substituteInTerm subst . coerce)
                         rule.requires
-            unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint required
+            unclearConditions' <- catMaybes <$> mapM (checkConstraint ConditionFalse) required
 
             case unclearConditions' of
-                Nothing -> throwE ConditionFalse
-                Just unclearConditions ->
-                    if not $ null unclearConditions
-                        then throwE $ IndeterminateCondition unclearConditions
-                        else do
-                            -- check ensured conditions, filter any
-                            -- true ones, prune if any is false
-                            let ensured =
-                                    concatMap
-                                        (splitBoolPredicates . coerce . substituteInTerm subst . coerce)
-                                        rule.ensures
-                            mbEnsuredConditions <-
-                                runMaybeT $ catMaybes <$> mapM checkConstraint ensured
-                            case mbEnsuredConditions of
-                                -- throws if an ensured condition found to be false
-                                Nothing -> throwE $ EnsuresFalse ensured
-                                -- pushes new ensured conditions and return result
-                                Just conditions ->
-                                    lift $ pushConstraints conditions
-                            pure $ substituteInTerm subst rule.rhs
+                [] -> do
+                    -- check ensured conditions, filter any
+                    -- true ones, prune if any is false
+                    let ensured =
+                            concatMap
+                                (splitBoolPredicates . substituteInPredicate subst)
+                                (Set.toList rule.ensures)
+                    ensuredConditions <-
+                        -- throws if an ensured condition found to be false
+                        catMaybes <$> mapM (checkConstraint EnsuresFalse) ensured
+                    lift $ pushConstraints $ Set.fromList ensuredConditions
+                    pure $ substituteInTerm subst rule.rhs
+                unclearConditions -> throwE $ IndeterminateCondition unclearConditions
   where
     -- evaluate/simplify a predicate, cut the operation short when it
     -- is Bottom.
     checkConstraint ::
+        (Predicate -> ApplyEquationResult) ->
         Predicate ->
-        MaybeT (ExceptT ApplyEquationResult (EquationT io)) (Maybe Predicate)
-    checkConstraint p = do
-        mApi <- (.llvmApi) <$> lift (lift getConfig)
-        case simplifyPredicate mApi p of
-            Predicate FalseBool -> fail "side condition was false"
+        ExceptT ApplyEquationResult (EquationT io) (Maybe Predicate)
+    checkConstraint whenBottom p =
+        lift (simplifyConstraint' False p) >>= \case
+            Predicate FalseBool -> throwE $ whenBottom p
             Predicate TrueBool -> pure Nothing
             _other -> pure $ Just p
 
@@ -639,17 +669,18 @@ simplifyConstraint ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    SimplifierCache ->
     Predicate ->
-    io (Either EquationFailure Predicate, [EquationTrace])
-simplifyConstraint doTracing def mbApi p =
-    runEquationT doTracing def mbApi $ simplifyConstraint' p
+    io (Either EquationFailure Predicate, [EquationTrace], SimplifierCache)
+simplifyConstraint doTracing def mbApi cache p =
+    runEquationT doTracing def mbApi cache $ simplifyConstraint' True p
 
 -- version for internal nested evaluation
-simplifyConstraint' :: MonadLoggerIO io => Predicate -> EquationT io Predicate
--- We are assuming all predicates are of the form 'P ==Bool true' and
+simplifyConstraint' :: MonadLoggerIO io => Bool -> Predicate -> EquationT io Predicate
+-- We are assuming all predicates are of the form 'true \equals P' and
 -- evaluating them using simplifyBool if they are concrete.
 -- Non-concrete \equals predicates are simplified using evaluateTerm.
-simplifyConstraint' = \case
+simplifyConstraint' recurse = \case
     Predicate t@(Term TermAttributes{canBeEvaluated} _)
         | isConcrete t && canBeEvaluated -> do
             mbApi <- (.llvmApi) <$> getConfig
@@ -659,9 +690,9 @@ simplifyConstraint' = \case
                         then pure $ Predicate TrueBool
                         else pure $ Predicate FalseBool
                 Nothing ->
-                    Predicate <$> evalBool t
+                    Predicate <$> if recurse then evalBool t else pure t
         | otherwise ->
-            Predicate <$> evalBool t
+            Predicate <$> if recurse then evalBool t else pure t
   where
     evalBool :: MonadLoggerIO io => Term -> EquationT io Term
     evalBool t = do

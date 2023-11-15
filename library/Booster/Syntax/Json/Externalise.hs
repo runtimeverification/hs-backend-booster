@@ -10,36 +10,44 @@ module Booster.Syntax.Json.Externalise (
 ) where
 
 import Data.Foldable ()
+import Data.Set qualified as Set
 import Data.Text.Encoding qualified as Text
 
 import Booster.Pattern.Base (externaliseKmapUnsafe)
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
 import Kore.Syntax.Json.Types qualified as Syntax
+import qualified Data.Map as Map
+import Data.Map (Map)
 
-{- | Converts an internal pattern to a pair of term and predicate in
- external format. The predicate is 'And'ed to avoid leaking
+{- | Converts an internal pattern to a triple of term, predicate and substitution in
+ external format. The predicate and substitution are 'And'ed to avoid leaking
  Json format internals to the caller.
 -}
 externalisePattern ::
-    Internal.Pattern ->
-    (Syntax.KorePattern, Maybe Syntax.KorePattern)
-externalisePattern Internal.Pattern{term = term, constraints, ceilConditions} =
+    Internal.Pattern -> Map Internal.Variable Internal.Term ->
+    (Syntax.KorePattern, Maybe Syntax.KorePattern, Maybe Syntax.KorePattern)
+externalisePattern Internal.Pattern{term = term, constraints, ceilConditions} substitutions =
     -- need a sort for the predicates in external format
     let sort = externaliseSort $ sortOfTerm term
+        substitution =
+            if null substitutions
+                then Nothing
+                else Just . multiAnd sort . map (uncurry $ externaliseSubstitution sort) . Map.toList $ substitutions
         predicate =
-            if null constraints
+            if null constraints && null ceilConditions
                 then Nothing
                 else
                     Just $
                         multiAnd sort $
-                            map (externalisePredicate sort) constraints
+                            map (externalisePredicate sort) (Set.toList constraints)
                                 ++ map (externaliseCeil sort) ceilConditions
-     in (externaliseTerm term, predicate)
+     in (externaliseTerm term, predicate, substitution)
   where
     multiAnd :: Syntax.Sort -> [Syntax.KorePattern] -> Syntax.KorePattern
     multiAnd _ [] = error "multiAnd: empty"
-    multiAnd sort ps = foldl1 (Syntax.KJAnd sort) ps
+    multiAnd _ [p] = p
+    multiAnd sort ps = Syntax.KJAnd sort ps
 
 -- TODO: should KorePattern be the only type with an actual Unparse instance?
 externaliseTerm :: Internal.Term -> Syntax.KorePattern
@@ -47,8 +55,9 @@ externaliseTerm = \case
     Internal.AndTerm first' second' ->
         Syntax.KJAnd
             (externaliseSort $ sortOfTerm second')
-            (externaliseTerm first')
-            (externaliseTerm second')
+            [ externaliseTerm first'
+            , externaliseTerm second'
+            ]
     Internal.SymbolApplication symbol sorts args ->
         Syntax.KJApp
             (symbolNameToId symbol.name)
@@ -66,6 +75,8 @@ externaliseTerm = \case
     Internal.KMap def keyVals rest -> externaliseTerm $ externaliseKmapUnsafe def keyVals rest
     Internal.KList def heads rest ->
         externaliseTerm $ Internal.externaliseKList def heads rest
+    Internal.KSet def heads rest ->
+        externaliseTerm $ Internal.externaliseKSet def heads rest
 
 externalisePredicate :: Syntax.Sort -> Internal.Predicate -> Syntax.KorePattern
 externalisePredicate sort (Internal.Predicate t) =
@@ -82,6 +93,15 @@ externaliseCeil sort (Internal.Ceil term) =
         { argSort = externaliseSort $ sortOfTerm term
         , sort
         , arg = externaliseTerm term
+        }
+
+externaliseSubstitution :: Syntax.Sort -> Internal.Variable -> Internal.Term -> Syntax.KorePattern
+externaliseSubstitution sort Internal.Variable{variableSort = iSort, variableName = iName} t = 
+    Syntax.KJEquals
+        { argSort = externaliseSort $ sortOfTerm t
+        , sort
+        , first =  Syntax.KJEVar (varNameToId iName) (externaliseSort iSort)
+        , second = externaliseTerm t
         }
 
 varNameToId :: Internal.VarName -> Syntax.Id
