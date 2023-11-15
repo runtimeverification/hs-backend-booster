@@ -40,6 +40,7 @@ import Data.Functor.Foldable
 import Data.Hashable (Hashable)
 import Data.Hashable qualified as Hashable
 import Data.List as List (foldl1', sort)
+import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Set (Set, fromList, toList)
 import Data.Set qualified as Set
@@ -49,7 +50,6 @@ import GHC.Generics (Generic)
 import Language.Haskell.TH.Syntax (Lift (..))
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
-import Data.Map (Map)
 
 type VarName = ByteString
 type SymbolName = ByteString

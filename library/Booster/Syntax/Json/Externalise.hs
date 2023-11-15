@@ -16,16 +16,17 @@ import Data.Text.Encoding qualified as Text
 import Booster.Pattern.Base (externaliseKmapUnsafe)
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
-import Kore.Syntax.Json.Types qualified as Syntax
-import qualified Data.Map as Map
 import Data.Map (Map)
+import Data.Map qualified as Map
+import Kore.Syntax.Json.Types qualified as Syntax
 
 {- | Converts an internal pattern to a triple of term, predicate and substitution in
  external format. The predicate and substitution are 'And'ed to avoid leaking
  Json format internals to the caller.
 -}
 externalisePattern ::
-    Internal.Pattern -> Map Internal.Variable Internal.Term ->
+    Internal.Pattern ->
+    Map Internal.Variable Internal.Term ->
     (Syntax.KorePattern, Maybe Syntax.KorePattern, Maybe Syntax.KorePattern)
 externalisePattern Internal.Pattern{term = term, constraints, ceilConditions} substitutions =
     -- need a sort for the predicates in external format
@@ -96,11 +97,11 @@ externaliseCeil sort (Internal.Ceil term) =
         }
 
 externaliseSubstitution :: Syntax.Sort -> Internal.Variable -> Internal.Term -> Syntax.KorePattern
-externaliseSubstitution sort Internal.Variable{variableSort = iSort, variableName = iName} t = 
+externaliseSubstitution sort Internal.Variable{variableSort = iSort, variableName = iName} t =
     Syntax.KJEquals
         { argSort = externaliseSort $ sortOfTerm t
         , sort
-        , first =  Syntax.KJEVar (varNameToId iName) (externaliseSort iSort)
+        , first = Syntax.KJEVar (varNameToId iName) (externaliseSort iSort)
         , second = externaliseTerm t
         }
 

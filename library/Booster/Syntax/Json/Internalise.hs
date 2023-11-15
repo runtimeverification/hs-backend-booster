@@ -55,13 +55,13 @@ import Prettyprinter (pretty)
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Attributes.Base qualified as Internal
 import Booster.Definition.Base (KoreDefinition (..), emptyKoreDefinition)
+import Booster.Pattern.Base (InternalisedPredicate (..))
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
 import Booster.Prettyprinter (renderDefault)
 import Booster.Syntax.Json.Externalise (externaliseSort)
 import Booster.Syntax.ParsedKore.Parser (parsePattern)
 import Kore.Syntax.Json.Types qualified as Syntax
-import Booster.Pattern.Base (InternalisedPredicate (..))
 
 pattern IsQQ, IsNotQQ :: Flag "qq"
 pattern IsQQ = Flag True
@@ -97,14 +97,21 @@ internalisePattern allowAlias checkSubsorts sortVars definition p = do
     term <- andTerm p =<< mapM (internaliseTerm allowAlias checkSubsorts sortVars definition) terms
     -- internalise all predicates
     (constraints, ceilConditions, substitutions) <-
-        partitionInternalised <$> mapM (internaliseBoolPredicate allowAlias checkSubsorts sortVars definition) predicates
+        partitionInternalised
+            <$> mapM (internaliseBoolPredicate allowAlias checkSubsorts sortVars definition) predicates
     pure (Internal.Pattern{term, constraints, ceilConditions}, substitutions)
   where
-    partitionInternalised :: [InternalisedPredicate] -> (Set Internal.Predicate, [Internal.Ceil], Map Internal.Variable Internal.Term)
-    partitionInternalised = foldr (\r (preds, ceils, subs) -> case r of
-        IsPredicate pr -> (Set.insert pr preds, ceils, subs)
-        IsCeil c -> (preds, c:ceils, subs)
-        IsSubstitution k v -> (preds, ceils, Map.insert k v subs)) mempty
+    partitionInternalised ::
+        [InternalisedPredicate] ->
+        (Set Internal.Predicate, [Internal.Ceil], Map Internal.Variable Internal.Term)
+    partitionInternalised =
+        foldr
+            ( \r (preds, ceils, subs) -> case r of
+                IsPredicate pr -> (Set.insert pr preds, ceils, subs)
+                IsCeil c -> (preds, c : ceils, subs)
+                IsSubstitution k v -> (preds, ceils, Map.insert k v subs)
+            )
+            mempty
 
     andTerm :: Syntax.KorePattern -> [Internal.Term] -> Except PatternError Internal.Term
     andTerm _ [] = error "BUG: andTerm called with empty term list"
@@ -128,7 +135,8 @@ internaliseTermOrPredicate ::
     Except [PatternError] Internal.TermOrPredicate
 internaliseTermOrPredicate allowAlias checkSubsorts sortVars definition syntaxPatt =
     Internal.BoolOrCeilOrSubstitutionPredicate
-        <$> (withExcept (: []) $ internaliseBoolPredicate allowAlias checkSubsorts sortVars definition syntaxPatt)
+        <$> ( withExcept (: []) $ internaliseBoolPredicate allowAlias checkSubsorts sortVars definition syntaxPatt
+            )
         <|> uncurry Internal.TermAndPredicateAndSubstitution
             <$> (withExcept (: []) $ internalisePattern allowAlias checkSubsorts sortVars definition syntaxPatt)
 
@@ -267,7 +275,6 @@ internaliseTerm ::
     Syntax.KorePattern ->
     Except PatternError Internal.Term
 internaliseTerm = internaliseTermRaw IsNotQQ
-
 
 -- Throws errors when a term is encountered. The 'And' case
 -- is analysed before, this function produces an 'AndPredicate'.

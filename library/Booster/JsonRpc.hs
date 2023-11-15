@@ -42,7 +42,13 @@ import Booster.Definition.Base (KoreDefinition (..))
 import Booster.Definition.Base qualified as Definition (RewriteRule (..))
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.ApplyEquations qualified as ApplyEquations
-import Booster.Pattern.Base (Pattern (..), TermOrPredicate (..), InternalisedPredicate (..), Variable, Term)
+import Booster.Pattern.Base (
+    InternalisedPredicate (..),
+    Pattern (..),
+    Term,
+    TermOrPredicate (..),
+    Variable,
+ )
 import Booster.Pattern.Base qualified as Pattern
 import Booster.Pattern.Rewrite (
     RewriteFailed (..),
@@ -204,7 +210,7 @@ respond stateVar =
                             pure . Left . RpcError.backendError RpcError.Aborted $ show something -- FIXME
                 Right (BoolOrCeilOrSubstitutionPredicate _) ->
                     pure . Left . RpcError.backendError RpcError.Aborted $
-                        ("cannot simplify ceil/substitution at the moment" :: String) -- FIXME            
+                        ("cannot simplify ceil/substitution at the moment" :: String) -- FIXME
             stop <- liftIO $ getTime Monotonic
 
             let duration =
@@ -214,7 +220,7 @@ respond stateVar =
                         RpcTypes.SimplifyResult{state, logs = mkTraces duration traceData}
             pure $ second (uncurry mkSimplifyResponse) result
 
-                        -- this case is only reachable if the cancel appeared as part of a batch request
+        -- this case is only reachable if the cancel appeared as part of a batch request
         RpcTypes.Cancel -> pure $ Left RpcError.cancelUnsupportedInBatchMode
         -- using "Method does not exist" error code
         _ -> pure $ Left RpcError.notImplemented

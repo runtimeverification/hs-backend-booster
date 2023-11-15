@@ -243,19 +243,26 @@ rulePriority =
 
 rewritesTo :: Term -> (Text, Term) -> IO ()
 t1 `rewritesTo` (lbl, t2) =
-    (fst <$> unsafePerformIO
-        (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t1)))
+    ( fst
+        <$> unsafePerformIO
+            (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t1))
+    )
         @?= Right (RewriteFinished (Just lbl) Nothing $ Pattern_ t2)
 
 getsStuck :: Term -> IO ()
 getsStuck t1 =
-    (fst <$> unsafePerformIO (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t1)))
+    ( fst
+        <$> unsafePerformIO
+            (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t1))
+    )
         @?= Right (RewriteStuck $ Pattern_ t1)
 
 branchesTo :: Term -> [(Text, Term)] -> IO ()
 t `branchesTo` ts =
-    (fst <$> unsafePerformIO
-        (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t)))
+    ( fst
+        <$> unsafePerformIO
+            (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t))
+    )
         @?= Right
             ( RewriteBranch (Pattern_ t) $
                 NE.fromList $

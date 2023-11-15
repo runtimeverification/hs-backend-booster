@@ -34,9 +34,9 @@ import Booster.Definition.Base qualified as Internal
 import Booster.Pattern.Base qualified as Internal
 import Booster.Prettyprinter
 import Booster.Syntax.Json.Internalise
+import Data.Map qualified as Map
 import Kore.JsonRpc.Types
 import Kore.Syntax.Json.Types hiding (Left, Right)
-import qualified Data.Map as Map
 
 diffJson :: BS.ByteString -> BS.ByteString -> DiffResult
 diffJson file1 file2 =
@@ -237,7 +237,9 @@ diffBy def pat1 pat2 =
     renderBS (Internal.BoolOrCeilOrSubstitutionPredicate (Internal.IsPredicate p)) = BS.pack . renderDefault $ pretty p
     renderBS (Internal.BoolOrCeilOrSubstitutionPredicate (Internal.IsCeil c)) = BS.pack . renderDefault $ pretty c
     renderBS (Internal.BoolOrCeilOrSubstitutionPredicate (Internal.IsSubstitution k v)) = BS.pack . renderDefault $ pretty k <+> "=" <+> pretty v
-    renderBS (Internal.TermAndPredicateAndSubstitution p m) = BS.pack . renderDefault $ pretty p <+> vsep (map (\(k,v) -> pretty k <+> "=" <+> pretty v) (Map.toList m))
+    renderBS (Internal.TermAndPredicateAndSubstitution p m) =
+        BS.pack . renderDefault $
+            pretty p <+> vsep (map (\(k, v) -> pretty k <+> "=" <+> pretty v) (Map.toList m))
     internalise =
         either
             (("Pattern could not be internalised: " <>) . Json.encode)
