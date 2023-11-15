@@ -155,9 +155,12 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                     koreError ->
                         -- can only be an error
                         pure koreError
-            Left ErrorObj{getErrMsg, getErrData = Object errObj} -> do
+            Left ErrorObj{getErrMsg, getErrData} -> do
                 -- in case of problems, log the problem and try with kore
-                let boosterError = maybe "???" fromString $ Aeson.lookup "error" errObj
+                let boosterError
+                        | Object errObj <- getErrData
+                        , Just err <- Aeson.lookup "error" errObj = fromString err
+                        | otherwise = fromString getErrData
                     fromString (String s) = s
                     fromString other = Text.pack (show other)
                 Log.logWarnNS "proxy" . Text.unwords $
