@@ -66,4 +66,14 @@ module MAP-INT2INT
            latex({#1}\mapsto{#2}), injective
          ]
 
+  syntax MapInt2Int ::= MapInt2Int "[" key: WrappedInt "<-" value: WrappedInt "]" 
+         [function, total, klabel(MapInt2Val:update), symbol, hook(MAP.update), prefer]
+
+
+  syntax MapInt2Int ::= MapInt2Int "{{" key: Int "<-" value: WrappedInt "}}"
+                 [ function, total, klabel(MapInt2Val:primitiveUpdate), symbol,
+                   prefer
+                 ]
+  rule M:MapInt2Int {{ Key:Int <- Value:WrappedInt }}
+      => M[wrap(Key) <- Value]
 endmodule

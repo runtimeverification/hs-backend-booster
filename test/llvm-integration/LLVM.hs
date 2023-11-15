@@ -154,9 +154,17 @@ latin1Prop api = property $ do
 mapKItemInjProp :: Internal.API -> Property
 mapKItemInjProp api = property $ do
     let k = wrapIntTerm 1
-    let v = intTerm 2
-    LLVM.simplifyTerm api testDef (elem k v) (SortApp "SortMapInt2Int" []) === elem k v
+    let kPrim = intTerm 1
+    let v = wrapIntTerm 2
+    LLVM.simplifyTerm api testDef (update kPrim v) (SortApp "SortMapInt2Int" []) === elem k v
   where
+    update k v = 
+        
+        SymbolApplication (fromMaybe (error "missing symbol") $ Map.lookup "LblMapInt2Val'Coln'primitiveUpdate" defSymbols) [] [
+            SymbolApplication (fromMaybe (error "missing symbol") $ Map.lookup "Lbl'Stop'MapInt2Int" defSymbols) [] [],
+            k, v
+        ]
+    
     elem k v =
         SymbolApplication
             (kmapElementSymbol sortMapInt2Int)
@@ -1405,6 +1413,24 @@ defSymbols =
                 , sortVars = []
                 , argSorts = [SortApp "SortInt" []]
                 , resultSort = SortApp "SortWrappedInt" []
+                , attributes =
+                    SymbolAttributes
+                        { collectionMetadata = Nothing
+                        , symbolType = TotalFunction
+                        , isIdem = IsNotIdem
+                        , isAssoc = IsNotAssoc
+                        , isMacroOrAlias = IsNotMacroOrAlias
+                        , hasEvaluators = CanBeEvaluated
+                        }
+                }
+            )
+        ,
+            ( "LblMapInt2Val'Coln'primitiveUpdate"
+            , Symbol
+                { name = "LblMapInt2Val'Coln'primitiveUpdate"
+                , sortVars = []
+                , argSorts = [SortApp "MapInt2Int" [], SortApp "SortInt" [], SortApp "SortWrappedInt" []]
+                , resultSort = SortApp "MapInt2Int" []
                 , attributes =
                     SymbolAttributes
                         { collectionMetadata = Nothing
