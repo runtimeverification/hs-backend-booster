@@ -199,8 +199,8 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
             pure ()
 
     handleExecute :: LogSettings -> KoreDefinition -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
-    handleExecute logSettings def r =
-        executionLoop logSettings forceFallback def (0, 0.0, 0.0, Nothing) r
+    handleExecute logSettings def =
+        executionLoop logSettings forceFallback def (0, 0.0, 0.0, Nothing)
 
     executionLoop ::
         LogSettings ->
