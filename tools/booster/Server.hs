@@ -69,7 +69,7 @@ import Kore.Log.Registry qualified as Log
 import Kore.Rewrite.SMT.Lemma (declareSMTLemmas)
 import Kore.Syntax.Definition (ModuleName (ModuleName), SentenceAxiom)
 import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
-import Proxy (KoreServer (..))
+import Proxy (KoreServer (..), ProxyConfig (..))
 import Proxy qualified
 import SMT qualified
 import Stats qualified
@@ -146,22 +146,24 @@ main = do
                     boosterState <-
                         liftIO $
                             newMVar Booster.ServerState{definitions, defaultMain = mainModuleName, mLlvmLibrary}
-                    statVar <- if printStats then Just <$> Stats.newStats else pure Nothing
+                    statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
 
                     runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
                     let koreRespond, boosterRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
                         koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
                         boosterRespond = Booster.respond boosterState
+
+                        proxyConfig = ProxyConfig{statsVar, forceFallback, boosterState}
                         server =
                             jsonRpcServer
                                 srvSettings
-                                (const $ Proxy.respondEither statVar forceFallback boosterRespond koreRespond)
+                                (const $ Proxy.respondEither proxyConfig boosterRespond koreRespond)
                                 [handleErrorCall, handleSomeException]
                         interruptHandler _ = do
                             when (logLevel >= LevelInfo) $
                                 hPutStrLn stderr "[Info#proxy] Server shutting down"
-                            whenJust statVar Stats.showStats
+                            whenJust statsVar Stats.showStats
                             exitSuccess
                     handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger
   where

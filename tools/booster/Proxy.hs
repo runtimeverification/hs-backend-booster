@@ -7,6 +7,7 @@ License     : BSD-3-Clause
 -}
 module Proxy (
     KoreServer (..),
+    ProxyConfig (..),
     serverError,
     respondEither,
 ) where
@@ -21,13 +22,15 @@ import Data.Aeson.Types (Value (..))
 import Data.Bifunctor (second)
 import Data.Either (partitionEithers)
 import Data.List.NonEmpty qualified as NonEmpty
+import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Network.JSONRPC
 import System.Clock (Clock (Monotonic), TimeSpec, diffTimeSpec, getTime, toNanoSecs)
 
-import Booster.JsonRpc (execStateToKoreJson)
+import Booster.JsonRpc as Booster (ServerState (..), execStateToKoreJson)
+import Booster.JsonRpc.Utils (diffBy)
 import Kore.Attribute.Symbol (StepperAttributes)
 import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
 import Kore.Internal.TermLike (TermLike, VariableName)
@@ -54,6 +57,12 @@ data KoreServer = KoreServer
     , loggerEnv :: Kore.Log.LoggerEnv IO
     }
 
+data ProxyConfig = ProxyConfig
+    { statsVar :: Maybe StatsVar
+    , forceFallback :: Maybe Depth
+    , boosterState :: MVar.MVar Booster.ServerState
+    }
+
 serverError :: String -> Value -> ErrorObj
 serverError detail = ErrorObj ("Server error: " <> detail) (-32032)
 
@@ -61,12 +70,11 @@ respondEither ::
     forall m.
     Log.MonadLogger m =>
     MonadIO m =>
-    Maybe StatsVar ->
-    Maybe Depth ->
+    ProxyConfig ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res) ->
     Respond (API 'Req) m (API 'Res)
-respondEither mbStatsVar forceFallback booster kore req = case req of
+respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore req = case req of
     Execute execReq
         | isJust execReq.stepTimeout || isJust execReq.movingAverageStepTimeout ->
             loggedKore ExecuteM req
@@ -118,14 +126,17 @@ respondEither mbStatsVar forceFallback booster kore req = case req of
                 case koreResult of
                     Right (Simplify koreRes) -> do
                         logStats SimplifyM (boosterTime + koreTime, koreTime)
-                        when (koreRes.state /= boosterRes.state) $
-                            -- TODO pretty instance for KoreJson terms for logging
-                            Log.logOtherNS "proxy" (Log.LevelOther "Simplify") . Text.pack . unlines $
-                                [ "Booster simplification:"
-                                , show boosterRes.state
-                                , "to"
-                                , show koreRes.state
-                                ]
+                        when (koreRes.state /= boosterRes.state) $ do
+                            bState <- liftIO (MVar.readMVar boosterState)
+                            let m = fromMaybe bState.defaultMain simplifyReq._module
+                                def =
+                                    fromMaybe (error $ "Module " <> show m <> " not found") $
+                                        Map.lookup m bState.definitions
+                            Log.logOtherNS "proxy" (Log.LevelOther "Simplify") $
+                                let diff =
+                                        fromMaybe "<syntactic difference only>" $
+                                            diffBy def boosterRes.state.term koreRes.state.term
+                                 in Text.pack ("Kore simplification: Diff (< before - > after)\n" <> diff)
                         stop <- liftIO $ getTime Monotonic
                         let timing
                                 | Just start <- mbStart
@@ -163,7 +174,7 @@ respondEither mbStatsVar forceFallback booster kore req = case req of
         pure result
 
     logStats method (time, koreTime)
-        | Just v <- mbStatsVar = do
+        | Just v <- statsVar = do
             addStats v method time koreTime
             Log.logInfoNS "proxy" . Text.pack . unwords $
                 [ "Performed"
@@ -248,7 +259,7 @@ respondEither mbStatsVar forceFallback booster kore req = case req of
                                         }
                                 )
                     do
-                        when (isJust mbStatsVar) $
+                        when (isJust statsVar) $
                             Log.logInfoNS "proxy" . Text.pack $
                                 "Kore fall-back in " <> microsWithUnit kTime
                         case kResult of
