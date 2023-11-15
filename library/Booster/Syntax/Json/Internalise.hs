@@ -324,9 +324,9 @@ internaliseBoolPredicate allowAlias checkSubsorts sortVars definition@KoreDefini
                     (Internal.SortBool, x, Internal.TrueBool) -> pure $ IsPredicate $ Internal.Predicate x
                     (Internal.SortBool, Internal.FalseBool, x) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NotBool x
                     (Internal.SortBool, x, Internal.FalseBool) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NotBool x
+                    (Internal.SortInt, _, _) -> pure $ IsPredicate $ Internal.Predicate $ Internal.EqualsInt a b
                     (_, Internal.Var x, t) -> pure $ IsSubstitution x t
                     (_, t, Internal.Var x) -> pure $ IsSubstitution x t
-                    (Internal.SortInt, _, _) -> pure $ IsPredicate $ Internal.Predicate $ Internal.EqualsInt a b
                     (otherSort, _, _) ->
                         pure $
                             IsPredicate $
