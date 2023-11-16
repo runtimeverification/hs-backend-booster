@@ -176,9 +176,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                     ["Problem with simplify request: ", Text.pack getErrMsg, "-", boosterError]
                 -- NB the timing information for booster execution is lost here.
                 loggedKore SimplifyM req
-            Left ErrorVal{} ->
-                error "IMPOSSIBLE!"
-            Right _wrong ->
+            _wrong ->
                 pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
 
     loggedKore method r = do
