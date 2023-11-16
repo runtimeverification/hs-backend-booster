@@ -106,7 +106,7 @@ substituteInTerm substitution = goSubst
                 KSet def (map goSubst elements) (goSubst <$> rest)
 
 substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
-substituteInPredicate substitution = (coerce . substituteInTerm substitution . coerce)
+substituteInPredicate substitution = coerce . substituteInTerm substitution . coerce
 
 modifyVariables :: (Variable -> Variable) -> Pattern -> Pattern
 modifyVariables f p =

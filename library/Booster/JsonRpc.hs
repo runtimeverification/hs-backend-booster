@@ -95,7 +95,7 @@ respond stateVar =
                 Left patternError -> do
                     Log.logDebug $ "Error internalising cterm" <> Text.pack (show patternError)
                     pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternError
-                Right (pat, _substitution) -> do
+                Right (pat, substitution) -> do
                     let cutPoints = fromMaybe [] req.cutPointRules
                         terminals = fromMaybe [] req.terminalRules
                         mbDepth = fmap RpcTypes.getNat req.maxDepth
@@ -116,7 +116,7 @@ respond stateVar =
                                     Just $
                                         fromIntegral (toNanoSecs (diffTimeSpec stop start)) / 1e9
                                 else Nothing
-                    pure $ execResponse duration req result
+                    pure $ execResponse duration req result substitution
         RpcTypes.AddModule req -> do
             -- block other request executions while modifying the server state
             state <- liftIO $ takeMVar stateVar
@@ -179,11 +179,11 @@ respond stateVar =
                     Log.logError $ "Error internalising cterm: " <> Text.pack (show patternErrors)
                     pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternErrors
                 -- term and predicate (pattern)
-                Right (TermAndPredicateAndSubstitution pat _) -> do
+                Right (TermAndPredicateAndSubstitution pat substitution) -> do
                     Log.logInfoNS "booster" "Simplifying a pattern"
                     ApplyEquations.evaluatePattern doTracing def mLlvmLibrary mempty pat >>= \case
                         (Right newPattern, patternTraces, _) -> do
-                            let (term, mbPredicate, mbSubstitution) = externalisePattern newPattern mempty
+                            let (term, mbPredicate, mbSubstitution) = externalisePattern newPattern substitution
                                 tSort = externaliseSort (sortOfPattern newPattern)
                                 result = case catMaybes [mbPredicate, mbSubstitution] of
                                     [] -> term
@@ -287,8 +287,9 @@ execResponse ::
     Maybe Double ->
     RpcTypes.ExecuteRequest ->
     (Natural, Seq (RewriteTrace Pattern), RewriteResult Pattern) ->
+    Map Variable Term ->
     Either ErrorObj (RpcTypes.API 'RpcTypes.Res)
-execResponse mbDuration req (d, traces, rr) = case rr of
+execResponse mbDuration req (d, traces, rr) originalSubstitution = case rr of
     RewriteBranch p nexts ->
         Right $
             RpcTypes.Execute
@@ -296,8 +297,8 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     { reason = RpcTypes.Branching
                     , depth
                     , logs
-                    , state = toExecState p mempty
-                    , nextStates = Just $ map (\(_, _, p') -> toExecState p' mempty) $ toList nexts
+                    , state = toExecState p originalSubstitution
+                    , nextStates = Just $ map (\(_, _, p') -> toExecState p' originalSubstitution) $ toList nexts
                     , rule = Nothing
                     }
     RewriteStuck p ->
@@ -307,7 +308,7 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     { reason = RpcTypes.Stuck
                     , depth
                     , logs
-                    , state = toExecState p mempty
+                    , state = toExecState p originalSubstitution
                     , nextStates = Nothing
                     , rule = Nothing
                     }
@@ -318,7 +319,7 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     { reason = RpcTypes.Vacuous
                     , depth
                     , logs
-                    , state = toExecState p mempty
+                    , state = toExecState p originalSubstitution
                     , nextStates = Nothing
                     , rule = Nothing
                     }
@@ -329,8 +330,8 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     { reason = RpcTypes.CutPointRule
                     , depth
                     , logs
-                    , state = toExecState p mempty
-                    , nextStates = Just [toExecState next mempty]
+                    , state = toExecState p originalSubstitution
+                    , nextStates = Just [toExecState next originalSubstitution]
                     , rule = Just lbl
                     }
     RewriteTerminal lbl _ p ->
@@ -340,7 +341,7 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     { reason = RpcTypes.TerminalRule
                     , depth
                     , logs
-                    , state = toExecState p mempty
+                    , state = toExecState p originalSubstitution
                     , nextStates = Nothing
                     , rule = Just lbl
                     }
@@ -351,7 +352,7 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     { reason = RpcTypes.DepthBound
                     , depth
                     , logs
-                    , state = toExecState p mempty
+                    , state = toExecState p originalSubstitution
                     , nextStates = Nothing
                     , rule = Nothing
                     }
@@ -368,7 +369,7 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                                     (logSuccessfulSimplifications, logFailedSimplifications)
                                     (RewriteStepFailed failure)
                          in logs <|> abortRewriteLog
-                    , state = toExecState p mempty
+                    , state = toExecState p originalSubstitution
                     , nextStates = Nothing
                     , rule = Nothing
                     }

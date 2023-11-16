@@ -726,7 +726,7 @@ pattern NotBool t =
         []
         [t]
 
-pattern EqualsInt, EqualsK :: Term -> Term -> Term
+pattern EqualsInt, NEqualsInt, EqualsK, NEqualsK :: Term -> Term -> Term
 pattern EqualsInt a b =
     SymbolApplication
         ( Symbol
@@ -738,10 +738,32 @@ pattern EqualsInt a b =
             )
         []
         [a, b]
+pattern NEqualsInt a b =
+    SymbolApplication
+        ( Symbol
+                "Lbl'UndsEqlsSlshEqls'Int'Unds'"
+                []
+                [SortInt, SortInt]
+                SortBool
+                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing)
+            )
+        []
+        [a, b]
 pattern EqualsK a b =
     SymbolApplication
         ( Symbol
                 "Lbl'UndsEqlsEqls'K'Unds'"
+                []
+                [SortK, SortK]
+                SortBool
+                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing)
+            )
+        []
+        [a, b]
+pattern NEqualsK a b =
+    SymbolApplication
+        ( Symbol
+                "Lbl'UndsEqlsSlshEqls'K'Unds'"
                 []
                 [SortK, SortK]
                 SortBool

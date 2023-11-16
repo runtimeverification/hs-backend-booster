@@ -294,7 +294,16 @@ internaliseBoolPredicate allowAlias checkSubsorts sortVars definition@KoreDefini
     Syntax.KJBottom{} -> notSupported -- TODO should we throw here?
     Syntax.KJNot{arg} -> do
         recursion arg >>= \case
+            IsPredicate (Internal.Predicate (Internal.EqualsInt a b)) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NEqualsInt a b
+            IsPredicate (Internal.Predicate (Internal.EqualsK a b)) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NEqualsK a b
             IsPredicate (Internal.Predicate p) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NotBool p
+            IsSubstitution k v -> case sortOfTerm v of
+                Internal.SortInt -> pure $ IsPredicate $ Internal.Predicate $ Internal.NEqualsInt (Internal.Var k) v
+                otherSort ->
+                    pure $
+                        IsPredicate $
+                            Internal.Predicate $
+                                Internal.NEqualsK (Internal.KSeq otherSort $ Internal.Var k) (Internal.KSeq otherSort v)
             _ -> notSupported
     Syntax.KJAnd{} -> notSupported
     Syntax.KJOr{} -> notSupported
@@ -324,9 +333,9 @@ internaliseBoolPredicate allowAlias checkSubsorts sortVars definition@KoreDefini
                     (Internal.SortBool, x, Internal.TrueBool) -> pure $ IsPredicate $ Internal.Predicate x
                     (Internal.SortBool, Internal.FalseBool, x) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NotBool x
                     (Internal.SortBool, x, Internal.FalseBool) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NotBool x
-                    (Internal.SortInt, _, _) -> pure $ IsPredicate $ Internal.Predicate $ Internal.EqualsInt a b
                     (_, Internal.Var x, t) -> pure $ IsSubstitution x t
                     (_, t, Internal.Var x) -> pure $ IsSubstitution x t
+                    (Internal.SortInt, _, _) -> pure $ IsPredicate $ Internal.Predicate $ Internal.EqualsInt a b
                     (otherSort, _, _) ->
                         pure $
                             IsPredicate $

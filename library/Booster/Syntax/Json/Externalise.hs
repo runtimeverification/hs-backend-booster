@@ -84,8 +84,8 @@ externalisePredicate sort (Internal.Predicate t) =
     Syntax.KJEquals
         { argSort = externaliseSort $ sortOfTerm t
         , sort
-        , first = externaliseTerm t
-        , second = externaliseTerm Internal.TrueBool
+        , first = externaliseTerm Internal.TrueBool
+        , second = externaliseTerm t
         }
 
 externaliseCeil :: Syntax.Sort -> Internal.Ceil -> Syntax.KorePattern

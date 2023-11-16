@@ -22,7 +22,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 import Data.Aeson (ToJSON (..), Value (..), object, (.=))
-import Data.Bifunctor (Bifunctor (bimap), first, second)
+import Data.Bifunctor (first, second)
 import Data.ByteString.Char8 (ByteString)
 import Data.Coerce (Coercible, coerce)
 import Data.Function (on)
@@ -888,7 +888,7 @@ expandAlias alias currentArgs
                 Def.Pattern
                     { term = Util.substituteInTerm substitution term
                     , constraints =
-                        Set.fromList $ sub substitution <$> (Set.toList constraints)
+                        Set.fromList $ sub substitution <$> Set.toList constraints
                     , ceilConditions =
                         sub substitution <$> ceilConditions
                     }
