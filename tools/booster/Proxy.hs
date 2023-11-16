@@ -38,7 +38,6 @@ import Kore.Attribute.Symbol (StepperAttributes)
 import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
 import Kore.Internal.TermLike (TermLike, VariableName)
 import Kore.JsonRpc qualified as Kore (ServerState)
-import Kore.JsonRpc.Error qualified as RpcError
 import Kore.JsonRpc.Types
 import Kore.JsonRpc.Types qualified as ExecuteRequest (ExecuteRequest (..))
 import Kore.JsonRpc.Types qualified as SimplifyRequest (SimplifyRequest (..))

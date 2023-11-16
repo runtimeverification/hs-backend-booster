@@ -35,7 +35,7 @@ import Control.Monad.Extra
 import Control.Monad.Trans.Except
 import Data.Aeson (ToJSON (..), Value, object, (.=))
 import Data.Bifunctor
-import Data.ByteString.Char8 (ByteString)
+import Data.ByteString.Char8 (ByteString, isPrefixOf)
 import Data.ByteString.Char8 qualified as BS
 import Data.Char (isLower)
 import Data.Coerce (coerce)
@@ -297,13 +297,16 @@ internaliseBoolPredicate allowAlias checkSubsorts sortVars definition@KoreDefini
             IsPredicate (Internal.Predicate (Internal.EqualsInt a b)) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NEqualsInt a b
             IsPredicate (Internal.Predicate (Internal.EqualsK a b)) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NEqualsK a b
             IsPredicate (Internal.Predicate p) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NotBool p
-            IsSubstitution k v -> case sortOfTerm v of
-                Internal.SortInt -> pure $ IsPredicate $ Internal.Predicate $ Internal.NEqualsInt (Internal.Var k) v
-                otherSort ->
-                    pure $
-                        IsPredicate $
-                            Internal.Predicate $
-                                Internal.NEqualsK (Internal.KSeq otherSort $ Internal.Var k) (Internal.KSeq otherSort v)
+            IsSubstitution k v ->
+                if "@" `isPrefixOf` k.variableName
+                    then notSupported -- @ variables are set variables, the negation of which we do not support internalising
+                    else case sortOfTerm v of
+                        Internal.SortInt -> pure $ IsPredicate $ Internal.Predicate $ Internal.NEqualsInt (Internal.Var k) v
+                        otherSort ->
+                            pure $
+                                IsPredicate $
+                                    Internal.Predicate $
+                                        Internal.NEqualsK (Internal.KSeq otherSort $ Internal.Var k) (Internal.KSeq otherSort v)
             _ -> notSupported
     Syntax.KJAnd{} -> notSupported
     Syntax.KJOr{} -> notSupported
