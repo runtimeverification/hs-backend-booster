@@ -11,6 +11,7 @@ module Test.Booster.Pattern.Rewrite (
 
 import Control.Exception (ErrorCall, catch)
 import Control.Monad.Logger.CallStack
+import Data.Bifunctor (second)
 import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -241,47 +242,36 @@ rulePriority =
                              )
                          ]
 
+runWith :: Term -> Either (RewriteFailed "Rewrite") (RewriteResult Pattern)
+runWith t =
+    second fst $
+        unsafePerformIO
+            (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t))
+
 rewritesTo :: Term -> (Text, Term) -> IO ()
 t1 `rewritesTo` (lbl, t2) =
-    ( fst
-        <$> unsafePerformIO
-            (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t1))
-    )
-        @?= Right (RewriteFinished (Just lbl) Nothing $ Pattern_ t2)
+    runWith t1 @?= Right (RewriteFinished (Just lbl) Nothing $ Pattern_ t2)
 
 getsStuck :: Term -> IO ()
 getsStuck t1 =
-    ( fst
-        <$> unsafePerformIO
-            (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t1))
-    )
-        @?= Right (RewriteStuck $ Pattern_ t1)
+    runWith t1 @?= Right (RewriteStuck $ Pattern_ t1)
 
 branchesTo :: Term -> [(Text, Term)] -> IO ()
 t `branchesTo` ts =
-    ( fst
-        <$> unsafePerformIO
-            (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t))
-    )
+    runWith t
         @?= Right
-            ( RewriteBranch (Pattern_ t) $
-                NE.fromList $
-                    map (\(lbl, t') -> (lbl, Nothing, Pattern_ t')) ts
-            )
+            (RewriteBranch (Pattern_ t) $ NE.fromList $ map (\(lbl, t') -> (lbl, Nothing, Pattern_ t')) ts)
 
 failsWith :: Term -> RewriteFailed "Rewrite" -> IO ()
 failsWith t err =
-    unsafePerformIO
-        (runNoLoggingT $ runRewriteT False def Nothing mempty (rewriteStep [] [] $ Pattern_ t))
-        @?= Left err
+    runWith t @?= Left err
 
 ----------------------------------------
 -- tests for performRewrite (iterated rewrite in IO with logging)
 
 runRewrite :: Term -> IO (Natural, RewriteResult Term)
 runRewrite t = do
-    (counter, _, res) <-
-        runNoLoggingT $ performRewrite False def Nothing Nothing [] [] $ Pattern_ t
+    (counter, _, res) <- runNoLoggingT $ performRewrite False def Nothing Nothing [] [] $ Pattern_ t
     pure (counter, fmap (.term) res)
 
 aborts :: RewriteFailed "Rewrite" -> Term -> IO ()

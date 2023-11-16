@@ -86,7 +86,7 @@ respond stateVar =
             | isJust req.stepTimeout -> pure $ Left $ RpcError.unsupportedOption ("step-timeout" :: String)
             | isJust req.movingAverageStepTimeout ->
                 pure $ Left $ RpcError.unsupportedOption ("moving-average-step-timeout" :: String)
-        RpcTypes.Execute req -> withContext stateVar req._module $ \(def, mLlvmLibrary) -> do
+        RpcTypes.Execute req -> withContext req._module $ \(def, mLlvmLibrary) -> do
             start <- liftIO $ getTime Monotonic
             -- internalise given constrained term
             let internalised = runExcept $ internalisePattern DisallowAlias CheckSubsorts Nothing def req.state.term
@@ -146,7 +146,7 @@ respond stateVar =
                                 Log.logInfo $
                                     "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
                                 pure $ Right $ RpcTypes.AddModule $ RpcTypes.AddModuleResult $ getId newModule.name
-        RpcTypes.Simplify req -> withContext stateVar req._module $ \(def, mLlvmLibrary) -> do
+        RpcTypes.Simplify req -> withContext req._module $ \(def, mLlvmLibrary) -> do
             start <- liftIO $ getTime Monotonic
             let internalised =
                     runExcept $ internaliseTermOrPredicate DisallowAlias CheckSubsorts Nothing def req.state.term
@@ -224,19 +224,17 @@ respond stateVar =
         RpcTypes.Cancel -> pure $ Left RpcError.cancelUnsupportedInBatchMode
         -- using "Method does not exist" error code
         _ -> pure $ Left RpcError.notImplemented
-
-withContext ::
-    MonadIO m =>
-    MVar ServerState ->
-    Maybe Text ->
-    ((KoreDefinition, Maybe LLVM.API) -> m (Either ErrorObj resp)) ->
-    m (Either ErrorObj resp)
-withContext stateVar mbMainModule action = do
-    state <- liftIO $ readMVar stateVar
-    let mainName = fromMaybe state.defaultMain mbMainModule
-    case Map.lookup mainName state.definitions of
-        Nothing -> pure $ Left $ RpcError.backendError RpcError.CouldNotFindModule mainName
-        Just d -> action (d, state.mLlvmLibrary)
+  where
+    withContext ::
+        Maybe Text ->
+        ((KoreDefinition, Maybe LLVM.API) -> m (Either ErrorObj (RpcTypes.API 'RpcTypes.Res))) ->
+        m (Either ErrorObj (RpcTypes.API 'RpcTypes.Res))
+    withContext mbMainModule action = do
+        state <- liftIO $ readMVar stateVar
+        let mainName = fromMaybe state.defaultMain mbMainModule
+        case Map.lookup mainName state.definitions of
+            Nothing -> pure $ Left $ RpcError.backendError RpcError.CouldNotFindModule mainName
+            Just d -> action (d, state.mLlvmLibrary)
 
 runServer ::
     Int ->
