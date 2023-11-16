@@ -9,7 +9,7 @@ module Booster.Syntax.Json.Internalise (
     internalisePattern,
     internaliseTermOrPredicate,
     internaliseTerm,
-    internaliseBoolPredicate,
+    internalisePredicate,
     lookupInternalSort,
     PatternError (..),
     internaliseSort,
@@ -98,7 +98,7 @@ internalisePattern allowAlias checkSubsorts sortVars definition p = do
     -- internalise all predicates
     (constraints, ceilConditions, substitutions) <-
         partitionInternalised
-            <$> mapM (internaliseBoolPredicate allowAlias checkSubsorts sortVars definition) predicates
+            <$> mapM (internalisePredicate allowAlias checkSubsorts sortVars definition) predicates
     pure (Internal.Pattern{term, constraints, ceilConditions}, substitutions)
   where
     partitionInternalised ::
@@ -135,7 +135,7 @@ internaliseTermOrPredicate ::
     Except [PatternError] Internal.TermOrPredicate
 internaliseTermOrPredicate allowAlias checkSubsorts sortVars definition syntaxPatt =
     Internal.BoolOrCeilOrSubstitutionPredicate
-        <$> ( withExcept (: []) $ internaliseBoolPredicate allowAlias checkSubsorts sortVars definition syntaxPatt
+        <$> ( withExcept (: []) $ internalisePredicate allowAlias checkSubsorts sortVars definition syntaxPatt
             )
         <|> uncurry Internal.TermAndPredicateAndSubstitution
             <$> (withExcept (: []) $ internalisePattern allowAlias checkSubsorts sortVars definition syntaxPatt)
@@ -278,14 +278,14 @@ internaliseTerm = internaliseTermRaw IsNotQQ
 
 -- Throws errors when a term is encountered. The 'And' case
 -- is analysed before, this function produces an 'AndPredicate'.
-internaliseBoolPredicate ::
+internalisePredicate ::
     Flag "alias" ->
     Flag "subsorts" ->
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     Syntax.KorePattern ->
     Except PatternError InternalisedPredicate
-internaliseBoolPredicate allowAlias checkSubsorts sortVars definition@KoreDefinition{sorts} pat = case pat of
+internalisePredicate allowAlias checkSubsorts sortVars definition@KoreDefinition{sorts} pat = case pat of
     Syntax.KJEVar{} -> term
     Syntax.KJSVar{} -> term
     Syntax.KJApp{} -> term
@@ -358,7 +358,7 @@ internaliseBoolPredicate allowAlias checkSubsorts sortVars definition@KoreDefini
     term = throwE $ PredicateExpected pat
     notSupported = throwE $ NotSupported pat
 
-    recursion = internaliseBoolPredicate allowAlias checkSubsorts sortVars definition
+    recursion = internalisePredicate allowAlias checkSubsorts sortVars definition
 
     lookupInternalSort' = lookupInternalSort sortVars sorts pat
 
