@@ -15,6 +15,7 @@ module Booster.Pattern.ApplyEquations (
     isMatchFailure,
     isSuccess,
     simplifyConstraint,
+    SimplifierCache,
 ) where
 
 import Control.Monad
@@ -83,7 +84,10 @@ data EquationState = EquationState
     , changed :: Bool
     , predicates :: Set Predicate
     , trace :: Seq EquationTrace
+    , cache :: SimplifierCache
     }
+
+type SimplifierCache = Map Term Term
 
 data EquationTrace = EquationTrace
     { subjectTerm :: Term
@@ -158,9 +162,9 @@ isMatchFailure _ = False
 isSuccess EquationTrace{result = Success{}} = True
 isSuccess _ = False
 
-startState :: EquationState
-startState =
-    EquationState{termStack = [], changed = False, predicates = mempty, trace = mempty}
+startState :: Map Term Term -> EquationState
+startState cache =
+    EquationState{termStack = [], changed = False, predicates = mempty, trace = mempty, cache}
 
 getState :: MonadLoggerIO io => EquationT io EquationState
 getState = EquationT (lift $ lift get)
@@ -182,7 +186,13 @@ setChanged = EquationT . lift . lift . modify $ \s -> s{changed = True}
 resetChanged = EquationT . lift . lift . modify $ \s -> s{changed = False}
 
 getChanged :: MonadLoggerIO io => EquationT io Bool
-getChanged = EquationT $ lift $ lift $ gets (.changed)
+getChanged = EquationT . lift . lift $ gets (.changed)
+
+toCache :: MonadLoggerIO io => Term -> Term -> EquationT io ()
+toCache orig result = EquationT . lift . lift . modify $ \s -> s{cache = Map.insert orig result s.cache}
+
+fromCache :: MonadLoggerIO io => Term -> EquationT io (Maybe Term)
+fromCache t = EquationT . lift . lift $ Map.lookup t <$> gets (.cache)
 
 checkForLoop :: MonadLoggerIO io => Term -> EquationT io ()
 checkForLoop t = do
@@ -201,14 +211,15 @@ runEquationT ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    SimplifierCache ->
     EquationT io a ->
-    io (Either EquationFailure a, [EquationTrace])
-runEquationT doTracing definition llvmApi (EquationT m) = do
+    io (Either EquationFailure a, [EquationTrace], SimplifierCache)
+runEquationT doTracing definition llvmApi sCache (EquationT m) = do
     (res, endState) <-
-        flip runStateT startState $
+        flip runStateT (startState sCache) $
             runExceptT $
                 runReaderT m EquationConfig{definition, llvmApi, doTracing}
-    pure (res, toList $ trace endState)
+    pure (res, toList endState.trace, endState.cache)
 
 iterateEquations ::
     MonadLoggerIO io =>
@@ -247,9 +258,9 @@ evaluateTerm ::
     KoreDefinition ->
     Maybe LLVM.API ->
     Term ->
-    io (Either EquationFailure Term, [EquationTrace])
+    io (Either EquationFailure Term, [EquationTrace], SimplifierCache)
 evaluateTerm doTracing direction def llvmApi =
-    runEquationT doTracing def llvmApi
+    runEquationT doTracing def llvmApi mempty
         . evaluateTerm' direction
 
 -- version for internal nested evaluation
@@ -268,10 +279,11 @@ evaluatePattern ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    SimplifierCache ->
     Pattern ->
-    io (Either EquationFailure Pattern, [EquationTrace])
-evaluatePattern doTracing def mLlvmLibrary =
-    runEquationT doTracing def mLlvmLibrary . evaluatePattern'
+    io (Either EquationFailure Pattern, [EquationTrace], SimplifierCache)
+evaluatePattern doTracing def mLlvmLibrary cache =
+    runEquationT doTracing def mLlvmLibrary cache . evaluatePattern'
 
 -- version for internal nested evaluation
 evaluatePattern' ::
@@ -333,18 +345,31 @@ applyTerm BottomUp pref =
             KSet def
                 <$> sequence heads
                 <*> sequence rest
+-- FIXME rewrite Bottom-up evaluation without cata, traversing top-down but processing in pre-order (apply below)
 applyTerm TopDown pref = \t@(Term attributes _) ->
     if attributes.isEvaluated
         then pure t
-        else do
-            config <- getConfig
-            -- All fully concrete values go to the LLVM backend (top-down only)
-            if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
-                then do
-                    let result = simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
-                    when (result /= t) setChanged
-                    pure result
-                else apply t
+        else
+            fromCache t >>= \case
+                Nothing -> do
+                    config <- getConfig
+                    -- All fully concrete values go to the LLVM backend (top-down only)
+                    simplified <-
+                        if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
+                            then do
+                                let result = simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
+                                when (result /= t) $ do
+                                    setChanged
+                                    traceRuleApplication t Nothing (Just "LLVM") Nothing $ Success result
+                                pure result
+                            else apply t
+                    toCache t simplified
+                    pure simplified
+                Just cached -> do
+                    when (t /= cached) $ do
+                        setChanged
+                        traceRuleApplication t Nothing (Just "Cache") Nothing $ Success cached
+                    pure cached
   where
     apply = \case
         dv@DomainValue{} ->
@@ -511,7 +536,11 @@ traceRuleApplication ::
     EquationT io ()
 traceRuleApplication t loc lbl uid res = do
     let newTraceItem = EquationTrace t loc lbl uid res
-    logOther (LevelOther "Simplify") (pack . renderDefault . pretty $ newTraceItem)
+        prettyItem = pack . renderDefault . pretty $ newTraceItem
+    logOther (LevelOther "Simplify") prettyItem
+    case res of
+        Success{} -> logOther (LevelOther "SimplifySuccess") prettyItem
+        _ -> pure ()
     config <- getConfig
     when config.doTracing $
         EquationT . lift . lift . modify $
@@ -655,18 +684,19 @@ simplifyConstraint ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    SimplifierCache ->
     Predicate ->
-    io (Either EquationFailure Predicate, [EquationTrace])
-simplifyConstraint doTracing def mbApi p =
-    runEquationT doTracing def mbApi $ simplifyConstraint' p
+    io (Either EquationFailure Predicate, [EquationTrace], SimplifierCache)
+simplifyConstraint doTracing def mbApi cache p =
+    runEquationT doTracing def mbApi cache $ simplifyConstraint' p
 
 -- version for internal nested evaluation
 simplifyConstraint' :: MonadLoggerIO io => Predicate -> EquationT io Predicate
--- We are assuming all predicates are of the form 'P ==Bool true' and
+-- We are assuming all predicates are of the form 'true \equals P' and
 -- evaluating them using simplifyBool if they are concrete.
 -- Non-concrete \equals predicates are simplified using evaluateTerm.
 simplifyConstraint' = \case
-    EqualsTerm t@(Term attributes _) TrueBool
+    EqualsTerm TrueBool t@(Term attributes _)
         | isConcrete t && attributes.canBeEvaluated -> do
             mbApi <- (.llvmApi) <$> getConfig
             case mbApi of
@@ -678,17 +708,17 @@ simplifyConstraint' = \case
                     evalBool t >>= prune
         | otherwise ->
             evalBool t >>= prune
-    EqualsTerm TrueBool t ->
-        -- although "true" is usually 2nd
-        simplifyConstraint' (EqualsTerm t TrueBool)
+    EqualsTerm t TrueBool ->
+        -- normalise to 'true' in first argument (like 'kore-rpc')
+        simplifyConstraint' (EqualsTerm TrueBool t)
     other ->
-        pure other -- should not occur, predicates should be '_ ==Bool true'
+        pure other -- should not occur, predicates should be 'true \equals _'
   where
     prune =
         pure . \case
             TrueBool -> Top
             FalseBool -> Bottom
-            other -> EqualsTerm other TrueBool
+            other -> EqualsTerm TrueBool other
 
     evalBool :: MonadLoggerIO io => Term -> EquationT io Term
     evalBool t = do
