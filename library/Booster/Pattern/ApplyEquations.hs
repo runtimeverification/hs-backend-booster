@@ -68,7 +68,6 @@ data EquationFailure
     | TooManyIterations Int Term Term
     | EquationLoop [Term]
     | SideConditionFalse Predicate
-    | SideConditionFalse Predicate
     | InternalError Text
     deriving stock (Eq, Show)
 
@@ -128,24 +127,18 @@ instance Pretty EquationTrace where
                     ++ map pretty cs
                     ++ ["using " <> locationInfo]
         ConditionFalse p ->
-        ConditionFalse p ->
             vsep
                 [ "Simplifying term"
                 , prettyTerm
                 , "failed with false condition"
                 , pretty p
-                , pretty p
                 , "using " <> locationInfo
                 ]
-        EnsuresFalse p ->
-            vsep
         EnsuresFalse p ->
             vsep
                 [ "Simplifying term"
                 , prettyTerm
                 , "using " <> locationInfo
-                , "resulted in ensuring false condition"
-                , pretty p
                 , "resulted in ensuring false condition"
                 , pretty p
                 ]
@@ -312,7 +305,6 @@ evaluatePattern' Pattern{term, constraints, ceilConditions} = do
         let otherPs = Set.delete p allPs
         EquationT $ lift $ lift $ modify $ \s -> s{predicates = otherPs}
         newP <- simplifyConstraint' True p
-        newP <- simplifyConstraint' True p
         pushConstraints $ Set.singleton newP
 
 ----------------------------------------
@@ -455,8 +447,6 @@ data ApplyEquationResult
     | IndeterminateCondition [Predicate]
     | ConditionFalse Predicate
     | EnsuresFalse Predicate
-    | ConditionFalse Predicate
-    | EnsuresFalse Predicate
     | RuleNotPreservingDefinedness
     | MatchConstraintViolated Constrained VarName
     deriving stock (Eq, Show)
@@ -479,8 +469,6 @@ handleFunctionEquation success continue abort = \case
     IndeterminateCondition{} -> abort
     ConditionFalse _ -> continue
     EnsuresFalse p -> throw $ SideConditionFalse p
-    ConditionFalse _ -> continue
-    EnsuresFalse p -> throw $ SideConditionFalse p
     RuleNotPreservingDefinedness -> abort
     MatchConstraintViolated{} -> continue
 
@@ -490,8 +478,6 @@ handleSimplificationEquation success continue _abort = \case
     FailedMatch _ -> continue
     IndeterminateMatch -> continue
     IndeterminateCondition{} -> continue
-    ConditionFalse _ -> continue
-    EnsuresFalse p -> throw $ SideConditionFalse p
     ConditionFalse _ -> continue
     EnsuresFalse p -> throw $ SideConditionFalse p
     RuleNotPreservingDefinedness -> continue
@@ -594,22 +580,8 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                         (splitBoolPredicates . coerce . substituteInTerm subst . coerce)
                         rule.requires
             unclearConditions' <- catMaybes <$> mapM (checkConstraint ConditionFalse) required
-            unclearConditions' <- catMaybes <$> mapM (checkConstraint ConditionFalse) required
 
             case unclearConditions' of
-                [] -> do
-                    -- check ensured conditions, filter any
-                    -- true ones, prune if any is false
-                    let ensured =
-                            concatMap
-                                (splitBoolPredicates . substituteInPredicate subst)
-                                (Set.toList rule.ensures)
-                    ensuredConditions <-
-                        -- throws if an ensured condition found to be false
-                        catMaybes <$> mapM (checkConstraint EnsuresFalse) ensured
-                    lift $ pushConstraints $ Set.fromList ensuredConditions
-                    pure $ substituteInTerm subst rule.rhs
-                unclearConditions -> throwE $ IndeterminateCondition unclearConditions
                 [] -> do
                     -- check ensured conditions, filter any
                     -- true ones, prune if any is false
@@ -627,7 +599,6 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     -- evaluate/simplify a predicate, cut the operation short when it
     -- is Bottom.
     checkConstraint ::
-        (Predicate -> ApplyEquationResult) ->
         (Predicate -> ApplyEquationResult) ->
         Predicate ->
         ExceptT ApplyEquationResult (EquationT io) (Maybe Predicate)
@@ -703,16 +674,14 @@ simplifyConstraint ::
     io (Either EquationFailure Predicate, [EquationTrace], SimplifierCache)
 simplifyConstraint doTracing def mbApi cache p =
     runEquationT doTracing def mbApi cache $ simplifyConstraint' True p
-    runEquationT doTracing def mbApi cache $ simplifyConstraint' True p
 
 -- version for internal nested evaluation
-simplifyConstraint' :: MonadLoggerIO io => Bool -> Predicate -> EquationT io Predicate
 simplifyConstraint' :: MonadLoggerIO io => Bool -> Predicate -> EquationT io Predicate
 -- We are assuming all predicates are of the form 'true \equals P' and
 -- evaluating them using simplifyBool if they are concrete.
 -- Non-concrete \equals predicates are simplified using evaluateTerm.
-simplifyConstraint' recurse recurse = \case
-    p@(Predicate t@(Term TermAttributes{canBeEvaluated} _))
+simplifyConstraint' recurse = \case
+    Predicate t@(Term TermAttributes{canBeEvaluated} _)
         | isConcrete t && canBeEvaluated -> do
             mbApi <- (.llvmApi) <$> getConfig
             case mbApi of
@@ -721,14 +690,9 @@ simplifyConstraint' recurse recurse = \case
                         then pure $ Predicate TrueBool
                         else pure $ Predicate FalseBool
                 Nothing ->
-                    if recurse then evalBool t >>= prune else pure p
+                    Predicate <$> if recurse then evalBool t else pure t
         | otherwise ->
-            if recurse then evalBool t >>= prune else pure p
-    EqualsTerm t TrueBool ->
-        -- normalise to 'true' in first argument (like 'kore-rpc')
-        simplifyConstraint' recurse (EqualsTerm TrueBool t)
-    other ->
-        pure other -- should not occur, predicates should be 'true \equals _'
+            Predicate <$> if recurse then evalBool t else pure t
   where
     evalBool :: MonadLoggerIO io => Term -> EquationT io Term
     evalBool t = do
