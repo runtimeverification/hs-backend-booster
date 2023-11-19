@@ -58,7 +58,7 @@ data QueryCommand
     deriving stock (Eq, Ord, Show)
 
 data Response
-    = Success -- UNUSED?
+    = Success -- for command_
     | Sat
     | Unsat
     | Unknown
