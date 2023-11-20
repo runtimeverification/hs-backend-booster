@@ -41,9 +41,9 @@ data SmtCommand
 data DeclareCommand
     = Assert SExpr
     | DeclareConst SmtId SmtSort
-    | DeclareData [DataDecl]
     | DeclareSort SmtId Int
     | DeclareFunc SmtId [SmtSort] SmtSort
+    --    | DeclareData [DataDecl] NOT NECESSARY?
     deriving stock (Eq, Ord, Show)
 
 type DataDecl = String -- HACK

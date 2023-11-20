@@ -34,6 +34,7 @@ import System.IO (
  )
 
 import Booster.SMT.Base
+import Booster.SMT.LowLevelCodec
 
 data SMTContext = SMTContext
     { solver :: Backend.Solver
@@ -93,7 +94,7 @@ class SMTEncode cmd where
         Proxy cmd ->
         Backend.Solver ->
         BS.Builder ->
-        SMT io BS.Builder
+        SMT io BS.ByteString
 
 runCmd :: forall cmd io. (SMTEncode cmd, MonadLoggerIO io) => cmd -> SMT io Response
 runCmd cmd = do
@@ -101,15 +102,29 @@ runCmd cmd = do
     ctxt <- SMT ask
     whenJust ctxt.mbTranscript $ \h ->
         liftIO (BS.hPutBuilder h cmdBS)
-    result <- decode <$> run_ @cmd Proxy ctxt.solver cmdBS
+    result <- readResponse <$> run_ @cmd Proxy ctxt.solver cmdBS
     whenJust ctxt.mbTranscript $
         liftIO . flip BS.hPutStrLn (BS.pack $ show result)
     pure result
 
 instance SMTEncode DeclareCommand where
-    encode = const $ BS.shortByteString ""
+    encode = encodeDeclaration
 
     run_ _ s = fmap (const "(Success)") . liftIO . Backend.command_ s
 
-decode :: BS.Builder -> Response
-decode = const $ Error "Decoder not implemented"
+instance SMTEncode QueryCommand where
+    encode = encodeQuery
+
+    run_ _ s = fmap BS.toStrict . liftIO . Backend.command s
+
+instance SMTEncode ControlCommand where
+    encode Push = BS.shortByteString "(push)"
+    encode Pop = BS.shortByteString "(pop)"
+    encode Exit = BS.shortByteString "(exit)"
+
+    run_ _ s = fmap (const "(Success)") . liftIO . Backend.command_ s
+
+encode' :: SmtCommand -> BS.Builder
+encode' (Query q) = encode q
+encode' (Declare d) = encode d
+encode' (Control c) = encode c

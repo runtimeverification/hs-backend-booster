@@ -2,17 +2,18 @@
 Copyright   : (c) Runtime Verification, 2023
 License     : BSD-3-Clause
 -}
-
 module Booster.SMT.LowLevelCodec (
     readResponse,
     parseSExpr,
+    encodeQuery,
+    encodeDeclaration,
 ) where
 
-import Control.Monad
 import Control.Applicative ((<|>))
+import Control.Monad
 import Data.Attoparsec.ByteString.Char8 qualified as A
-import Data.ByteString.Char8 qualified as BS
 import Data.ByteString.Builder qualified as BS
+import Data.ByteString.Char8 qualified as BS
 import Data.Char (isSpace)
 import Data.Functor (($>))
 import Data.Ratio
@@ -21,28 +22,27 @@ import Text.Read
 
 import Booster.SMT.Base
 
-readResponse :: BS.Builder -> Response
+readResponse :: BS.ByteString -> Response
 readResponse =
-    either (Error . BS.pack) id
-        . A.parseOnly responseP
-        . BS.toStrict
-        . BS.toLazyByteString
+    either (Error . BS.pack) id . A.parseOnly responseP
 
-parseSExpr :: BS.Builder -> Either String SExpr
-parseSExpr = A.parseOnly sexpP . BS.toStrict . BS.toLazyByteString
+parseSExpr :: BS.ByteString -> Either String SExpr
+parseSExpr = A.parseOnly sexpP
 
 -- S-Expression and response parsing
 
 responseP :: A.Parser Response
-responseP = A.string "success" $> Success -- UNUSED?
-        <|> A.string "sat" $>  Sat
+responseP =
+    A.string "success" $> Success -- UNUSED?
+        <|> A.string "sat" $> Sat
         <|> A.string "unsat" $> Unsat
         <|> A.string "unknown" $> Unknown
         <|> A.char '(' *> errOrValuesP <* A.char ')'
 
 errOrValuesP :: A.Parser Response
-errOrValuesP = A.string "error " *> (Error <$> stringP)
-           <|> Values <$> A.many1' pairP
+errOrValuesP =
+    A.string "error " *> (Error <$> stringP)
+        <|> Values <$> A.many1' pairP
 
 stringP :: A.Parser BS.ByteString
 stringP = A.char '"' *> A.takeWhile1 (/= '"') <* A.char '"'
@@ -56,6 +56,7 @@ pairP = do
     void (A.char ')')
     pure (s, v)
 
+-- TODO could be parsed directly using attoparsec parsers
 valueP :: A.Parser Value
 valueP = fmap sexprToVal sexpP
 
@@ -69,7 +70,7 @@ sexprToVal = \case
         | ('#' : 'b' : ds) <- BS.unpack bs
         , Just n <- binLit ds ->
             Bits (length ds) n
-        | ('#' : 'x' : ds) <- BS.unpack  bs
+        | ('#' : 'x' : ds) <- BS.unpack bs
         , [(n, [])] <- readHex ds ->
             Bits (4 * length ds) n
         | Just n <- readMaybe (BS.unpack bs) ->
@@ -95,8 +96,47 @@ sexprToVal = \case
 sexpP :: A.Parser SExpr
 sexpP = parseAtom <|> parseList
   where
-    parseList = List <$> (A.char '(' *> A.many' sexpP <* A.char ')')
+    parseList = List <$> (A.char '(' *> sexpP `A.sepBy` whiteSpace <* A.char ')')
 
     parseAtom = Atom . SmtId <$> A.takeWhile1 (not . isSpecial)
 
     isSpecial c = isSpace c || c `elem` ['(', ')', ';']
+
+    whiteSpace = A.takeWhile1 isSpace
+
+-----------------------------------------------------
+-- Encoding commands as SExprs and rendering a BS builder
+
+toBuilder :: SExpr -> BS.Builder
+toBuilder = \case
+    Atom (SmtId bs) ->
+        BS.byteString bs
+    List [] ->
+        inParens ""
+    List (x : rest) ->
+        inParens . mconcat $ toBuilder x : [BS.char8 ' ' <> toBuilder y | y <- rest]
+  where
+    inParens b = BS.char8 '(' <> b <> BS.char8 ')'
+
+encodeQuery :: QueryCommand -> BS.Builder
+encodeQuery = \case
+    CheckSat -> BS.shortByteString "(check-sat)"
+    GetValue xs -> toBuilder $ List (atom "get-values" : xs)
+
+atom :: String -> SExpr
+atom = Atom . SmtId . BS.pack
+
+encodeDeclaration :: DeclareCommand -> BS.Builder
+encodeDeclaration =
+    toBuilder . \case
+        Assert x -> List [atom "assert", x]
+        DeclareConst name sort -> List [atom "declare-const", Atom name, sortExpr sort]
+        -- DeclareData ddcls -> FIXME "declare data"
+        DeclareSort name arity -> List [atom "declare-sort", Atom name, atom (show arity)]
+        DeclareFunc name sorts sort ->
+            List [atom "declare-fun", Atom name, List (map sortExpr sorts), sortExpr sort]
+
+sortExpr :: SmtSort -> SExpr
+sortExpr = \case
+    SimpleSmtSort name -> Atom name
+    SmtSort name args -> List (Atom name : map sortExpr args)
