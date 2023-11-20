@@ -131,7 +131,7 @@ encodeDeclaration =
     toBuilder . \case
         Assert x -> List [atom "assert", x]
         DeclareConst name sort -> List [atom "declare-const", Atom name, sortExpr sort]
-        -- DeclareData ddcls -> FIXME "declare data"
+        -- DeclareData ddcls -> not required (yet)
         DeclareSort name arity -> List [atom "declare-sort", Atom name, atom (show arity)]
         DeclareFunc name sorts sort ->
             List [atom "declare-fun", Atom name, List (map sortExpr sorts), sortExpr sort]

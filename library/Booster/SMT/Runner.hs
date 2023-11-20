@@ -84,7 +84,6 @@ runSMT ctxt (SMT action) =
 declare :: MonadLoggerIO io => [DeclareCommand] -> SMT io ()
 declare = mapM_ runCmd
 
--- TODO move this to its own file!
 class SMTEncode cmd where
     encode :: cmd -> BS.Builder
 
