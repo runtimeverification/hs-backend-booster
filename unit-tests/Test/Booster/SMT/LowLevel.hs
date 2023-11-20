@@ -9,6 +9,7 @@ module Test.Booster.SMT.LowLevel (
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Logger (runNoLoggingT)
 import Data.ByteString.Char8 qualified as BS
+import Data.Ratio ((%))
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -29,7 +30,7 @@ test_smoke =
 emptyIsSat :: TestTree
 emptyIsSat =
     testCase "An empty solver responds to (check-sat) with sat" $
-    (Sat @=?) =<< runSatAfter []
+        (Sat @=?) =<< runSatAfter []
 
 declTests :: TestTree
 declTests =
@@ -42,10 +43,11 @@ declTests =
         , testCase "declare simple sort" $ runsOK [Declare $ DeclareSort "OtherSort" 1]
         , testCase "declare custom-sorted function" $
             let sortName = "CustomSort"
-             in runsOK [ Declare $ DeclareSort sortName 1
-                       , Declare $ DeclareFunc "f" [SmtSort sortName [smtInt]] smtInt
-                       ]
-        -- , runsOK [Declare $ Assert $ ]
+             in runsOK
+                    [ Declare $ DeclareSort sortName 1
+                    , Declare $ DeclareFunc "f" [SmtSort sortName [smtInt]] smtInt
+                    ]
+                    -- , runsOK [Declare $ Assert $ ]
         ]
   where
     -- FIXME move this to the library modules!
@@ -89,4 +91,20 @@ responseParsing =
             expected @=? readResponse input
 
 valueParsing :: TestTree
-valueParsing = error "implement me"
+valueParsing =
+    testGroup
+        "Parsing values"
+        [ "42" `parsesAsValue` SMT.Int 42
+        , "-42" `parsesAsValue` SMT.Int (negate 42)
+        , "0" `parsesAsValue` SMT.Int 0
+        , "(- 0)" `parsesAsValue` SMT.Int 0
+        , "true" `parsesAsValue` SMT.Bool True
+        , "false" `parsesAsValue` SMT.Bool False
+        , "&^#$Rubbish" `parsesAsValue` Other (Atom "&^#$Rubbish")
+        , "(/ 42 43)" `parsesAsValue` SMT.Real (42 % 43)
+        ]
+  where
+    parsesAsValue :: BS.ByteString -> Value -> TestTree
+    input `parsesAsValue` expected =
+        testCase (show input <> " parses to value " <> show expected) $
+            Values [(Atom "x", expected)] @=? readResponse ("((x " <> input <> "))")
