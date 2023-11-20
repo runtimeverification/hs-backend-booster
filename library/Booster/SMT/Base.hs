@@ -2,12 +2,12 @@
 Copyright   : (c) Runtime Verification, 2023
 License     : BSD-3-Clause
 -}
-
 module Booster.SMT.Base (
-    module Booster.SMT.Base
+    module Booster.SMT.Base,
 ) where
 
 import Data.ByteString.Char8 qualified as BS
+import Data.String
 
 {- SMT lib 2 commands and responses
 
@@ -18,11 +18,13 @@ import Data.ByteString.Char8 qualified as BS
   queries (carry no data, response is important), and session control.
 -}
 
-newtype SmtId = SmtId BS.ByteString
+newtype SmtId = SmtId {bs :: BS.ByteString}
     deriving stock (Eq, Ord, Show)
+    deriving newtype (IsString)
 
-data SmtSort =
-    SimpleSmtSort SmtId | SmtSort SmtId [SmtSort]
+data SmtSort
+    = SimpleSmtSort SmtId
+    | SmtSort SmtId [SmtSort]
     deriving stock (Eq, Ord, Show)
 
 data SExpr -- SmtTerm
@@ -71,6 +73,6 @@ data Value
     = Bool !Bool
     | Int !Integer
     | Real !Rational
---    | Bits !Int !Integer
+    | Bits !Int !Integer
     | Other !SExpr
     deriving stock (Eq, Ord, Show)
