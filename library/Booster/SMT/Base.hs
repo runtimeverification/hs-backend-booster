@@ -76,3 +76,17 @@ data Value
     | Bits !Int !Integer
     | Other !SExpr
     deriving stock (Eq, Ord, Show)
+
+----------------------------------------
+-- well-known arithmetic functions, implemented through Num
+
+instance Num SExpr where
+    a + b = List [Atom "+", a, b]
+    a - b = List [Atom "-", a, b]
+    a * b = List [Atom "*", a, b]
+    negate a = List [Atom "-", a]
+    abs a = List [Atom "abs", a]
+    signum _ = error "signum @SExpr not implemented"
+    fromInteger n
+        | n >= 0 = Atom . SmtId . BS.pack $ show n
+        | otherwise = List [Atom "-", fromInteger (negate n)]
