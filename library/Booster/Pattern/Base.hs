@@ -693,7 +693,8 @@ injectionSymbol =
 
 -- convenience patterns
 pattern AndBool :: Term -> Term -> Term
-pattern AndBool l r = SymbolApplication
+pattern AndBool l r =
+    SymbolApplication
         ( Symbol
                 "Lbl'Unds'andBool'Unds'"
                 []

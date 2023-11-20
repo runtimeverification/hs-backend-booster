@@ -686,9 +686,10 @@ simplifyConstraint' recurseIntoEvalBool = \case
             mbApi <- (.llvmApi) <$> getConfig
             case mbApi of
                 Just api ->
-                    pure $ if simplifyBool api t
-                        then TrueBool
-                        else FalseBool
+                    pure $
+                        if simplifyBool api t
+                            then TrueBool
+                            else FalseBool
                 Nothing -> if recurseIntoEvalBool then evalBool t else pure t
     NotBool x -> negateBool <$> recursion x
     EqualsK (KSeq _ l) (KSeq _ r) -> evalEqualsK l r
@@ -710,22 +711,29 @@ simplifyConstraint' recurseIntoEvalBool = \case
 
     foldAndBool [] = TrueBool
     foldAndBool [x] = x
-    foldAndBool (FalseBool:_) = FalseBool
-    foldAndBool (TrueBool:xs) = foldAndBool xs
-    foldAndBool (x:xs) = AndBool x $ foldAndBool xs
+    foldAndBool (FalseBool : _) = FalseBool
+    foldAndBool (TrueBool : xs) = foldAndBool xs
+    foldAndBool (x : xs) = AndBool x $ foldAndBool xs
 
     evalEqualsK l@(SymbolApplication sL _ argsL) r@(SymbolApplication sR _ argsR)
         | isConstructorSymbol sL && isConstructorSymbol sR =
-            if sL == sR then foldAndBool <$> zipWithM evalEqualsK argsL argsR
-                        else pure FalseBool
-        | otherwise = (if recurseIntoEvalBool then evalBool else pure) $ EqualsK (KSeq (sortOfTerm l) l) (KSeq (sortOfTerm r) r)
+            if sL == sR
+                then foldAndBool <$> zipWithM evalEqualsK argsL argsR
+                else pure FalseBool
+        | otherwise =
+            (if recurseIntoEvalBool then evalBool else pure) $
+                EqualsK (KSeq (sortOfTerm l) l) (KSeq (sortOfTerm r) r)
     evalEqualsK (SymbolApplication symbol _ _) _
-        | isConstructorSymbol symbol =  pure FalseBool
+        | isConstructorSymbol symbol = pure FalseBool
     evalEqualsK _ (SymbolApplication symbol _ _)
-        | isConstructorSymbol symbol =  pure FalseBool
+        | isConstructorSymbol symbol = pure FalseBool
     evalEqualsK (Injection s1L s2L l) (Injection s1R s2R r)
         | s1L == s1R && s2L == s2R = evalEqualsK l r
-    evalEqualsK l@DomainValue{} r@DomainValue{} = 
+    evalEqualsK l@DomainValue{} r@DomainValue{} =
         pure $ if l == r then TrueBool else FalseBool
-    evalEqualsK l r = 
-        if l == r then pure TrueBool else (if recurseIntoEvalBool then evalBool else pure) $ EqualsK (KSeq (sortOfTerm l) l) (KSeq (sortOfTerm r) r)
+    evalEqualsK l r =
+        if l == r
+            then pure TrueBool
+            else
+                (if recurseIntoEvalBool then evalBool else pure) $
+                    EqualsK (KSeq (sortOfTerm l) l) (KSeq (sortOfTerm r) r)
