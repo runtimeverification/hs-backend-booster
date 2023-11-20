@@ -692,9 +692,17 @@ injectionSymbol =
         }
 
 -- convenience patterns
-pattern AndBool :: [Term] -> Term
-pattern AndBool ts <-
-    SymbolApplication (Symbol "Lbl'Unds'andBool'Unds'" _ _ _ _) _ ts
+pattern AndBool :: Term -> Term -> Term
+pattern AndBool l r = SymbolApplication
+        ( Symbol
+                "Lbl'Unds'andBool'Unds'"
+                []
+                [SortBool, SortBool]
+                SortBool
+                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing)
+            )
+        []
+        [l, r]
 
 pattern DV :: Sort -> Symbol
 pattern DV sort <- Symbol "\\dv" _ _ sort _
@@ -950,10 +958,7 @@ instance Pretty Variable where
             <> pretty var.variableSort
 
 instance Pretty Predicate where
-    pretty (Predicate t) =
-        "\\equalsTerm"
-            <> KPretty.noParameters
-            <> KPretty.argumentsP [t, DomainValue SortBool "true"]
+    pretty (Predicate t) = pretty t
 
 instance Pretty Ceil where
     pretty (Ceil t) =

@@ -16,5 +16,5 @@ splitBoolPredicates :: Predicate -> [Predicate]
 splitBoolPredicates p@(Predicate t)
     | isConcrete t = [p]
     | otherwise = case t of
-        AndBool ts -> concatMap (splitBoolPredicates . Predicate) ts
+        AndBool l r -> concatMap (splitBoolPredicates . Predicate) [l, r]
         other -> [Predicate other]
