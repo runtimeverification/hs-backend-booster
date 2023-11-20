@@ -11,6 +11,7 @@ module Booster.SMT.Runner (
     closeContext,
     runSMT,
     declare,
+    runCmd,
 ) where
 
 import Control.Monad
@@ -20,7 +21,6 @@ import Control.Monad.Logger
 import Control.Monad.Trans.Reader
 import Data.ByteString.Builder qualified as BS
 import Data.ByteString.Char8 qualified as BS
-import Data.Proxy
 import SMTLIB.Backends qualified as Backend
 import SMTLIB.Backends.Process qualified as Backend
 import System.IO (
@@ -91,7 +91,7 @@ class SMTEncode cmd where
     -- selecting the actual runner (command_ for Declare and Control, command for query)
     run_ ::
         MonadLoggerIO io =>
-        Proxy cmd ->
+        cmd ->
         Backend.Solver ->
         BS.Builder ->
         SMT io BS.ByteString
@@ -102,7 +102,7 @@ runCmd cmd = do
     ctxt <- SMT ask
     whenJust ctxt.mbTranscript $ \h ->
         liftIO (BS.hPutBuilder h cmdBS)
-    result <- readResponse <$> run_ @cmd Proxy ctxt.solver cmdBS
+    result <- readResponse <$> run_ cmd ctxt.solver cmdBS
     whenJust ctxt.mbTranscript $
         liftIO . flip BS.hPutStrLn (BS.pack $ show result)
     pure result
@@ -124,7 +124,11 @@ instance SMTEncode ControlCommand where
 
     run_ _ s = fmap (const "(Success)") . liftIO . Backend.command_ s
 
-encode' :: SmtCommand -> BS.Builder
-encode' (Query q) = encode q
-encode' (Declare d) = encode d
-encode' (Control c) = encode c
+instance SMTEncode SmtCommand where
+    encode (Query q) = encode q
+    encode (Declare d) = encode d
+    encode (Control c) = encode c
+
+    run_ (Query q) = run_ q
+    run_ (Declare d) = run_ d
+    run_ (Control c) = run_ c
