@@ -152,7 +152,6 @@ latin1Prop api = property $ do
                 | otherwise -> error $ "Unexpected sort " <> show s
             otherTerm -> error $ "Unexpected term " <> show otherTerm
 
-
 mapKItemInjProp :: Internal.API -> Property
 mapKItemInjProp api = property $ do
     let k = wrapIntTerm 1
@@ -179,12 +178,15 @@ mapKItemInjProp api = property $ do
 
     wrapIntTerm :: Int -> Term
     wrapIntTerm i =
-        SymbolApplication (defSymbols Map.! "inj") [SortApp "SortWrappedInt" [], SortApp "SortVal" []] [
-            SymbolApplication
+        SymbolApplication
+            (defSymbols Map.! "inj")
+            [SortApp "SortWrappedInt" [], SortApp "SortVal" []]
+            [ SymbolApplication
                 (defSymbols Map.! "LblwrapInt")
                 []
                 [intTerm i]
             ]
+
 ------------------------------------------------------------
 
 runKompile :: IO ()
@@ -3510,14 +3512,18 @@ defSymbols =
             )
         ,
             ( "LblwrapInt"
-            , [symb| symbol LblwrapInt{}(SortInt{}) : SortWrappedInt{} [constructor{}(), functional{}(), injective{}()] |] )
+            , [symb| symbol LblwrapInt{}(SortInt{}) : SortWrappedInt{} [constructor{}(), functional{}(), injective{}()] |]
+            )
         ,
             ( "Lbl'Stop'MapValToVal"
-            , [symb| symbol Lbl'Stop'MapValToVal{}() : SortMapValToVal{} [function{}(), functional{}(), total{}()] |] )
+            , [symb| symbol Lbl'Stop'MapValToVal{}() : SortMapValToVal{} [function{}(), functional{}(), total{}()] |]
+            )
         ,
             ( "LblMapValToVal'Coln'primitiveUpdate"
-            , [symb| symbol LblMapValToVal'Coln'primitiveUpdate{}(SortMapValToVal{}, SortVal{}, SortVal{}) : SortMapValToVal{} [function{}(), functional{}(), klabel{}("MapValToVal:primitiveUpdate"), total{}()] |])
+            , [symb| symbol LblMapValToVal'Coln'primitiveUpdate{}(SortMapValToVal{}, SortVal{}, SortVal{}) : SortMapValToVal{} [function{}(), functional{}(), klabel{}("MapValToVal:primitiveUpdate"), total{}()] |]
+            )
         ,
             ( "Lbl'Unds'Val2Val'Pipe'-'-GT-Unds'"
-            , [symb| symbol Lbl'Unds'Val2Val'Pipe'-'-GT-Unds'{}(SortVal{}, SortVal{}) : SortMapValToVal{} [function{}(), functional{}(), klabel{}("_Val2Val|->_"), total{}()] |] )
+            , [symb| symbol Lbl'Unds'Val2Val'Pipe'-'-GT-Unds'{}(SortVal{}, SortVal{}) : SortMapValToVal{} [function{}(), functional{}(), klabel{}("_Val2Val|->_"), total{}()] |]
+            )
         ]
