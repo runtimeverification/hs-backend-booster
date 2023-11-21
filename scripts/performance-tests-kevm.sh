@@ -10,6 +10,7 @@ KEVM_VERSION=${KEVM_VERSION:-'master'}
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
 MASTER_COMMIT="$(git rev-parse origin/main)"
+MASTER_COMMIT_SHORT="$(git rev-parse --short origin/main)"
 
 FEATURE_BRANCH_NAME=${FEATURE_BRANCH_NAME:-"$(git rev-parse --abbrev-ref HEAD)"}
 FEATURE_BRANCH_NAME="${FEATURE_BRANCH_NAME//\//-}"
@@ -54,12 +55,10 @@ feature_shell "make poetry && poetry run -C kevm-pyk -- kevm-dist --verbose buil
 feature_shell "make test-prove-pyk PYTEST_PARALLEL=$PYTEST_PARALLEL PYTEST_ARGS='--maxfail=0 --timeout 7200 -vv --use-booster' | tee $SCRIPT_DIR/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME.log"
 killall kore-rpc-booster || echo "No zombie processes found"
 
-if [ ! -e "$SCRIPT_DIR/kevm-$KEVM_VERSION-master-$MASTER_COMMIT.log" ]; then
-  master_shell "make test-prove-pyk PYTEST_PARALLEL=$PYTEST_PARALLEL PYTEST_ARGS='--maxfail=0 --timeout 7200 -vv --use-booster' | tee $SCRIPT_DIR/kevm-$KEVM_VERSION-master-$MASTER_COMMIT.log"
+if [ ! -e "$SCRIPT_DIR/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT.log" ]; then
+  master_shell "make test-prove-pyk PYTEST_PARALLEL=$PYTEST_PARALLEL PYTEST_ARGS='--maxfail=0 --timeout 7200 -vv --use-booster' | tee $SCRIPT_DIR/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT.log"
   killall kore-rpc-booster || echo "No zombie processes found"
 fi
 
 cd $SCRIPT_DIR
-grep ' call  ' kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME.log > kevm-$KEVM_VERSION-master-$MASTER_COMMIT.$FEATURE_BRANCH_NAME
-grep ' call  ' kevm-$KEVM_VERSION-master-$MASTER_COMMIT.log > kevm-$KEVM_VERSION-master-$MASTER_COMMIT.master
-python3 compare.py kevm-$KEVM_VERSION-master-$MASTER_COMMIT.$FEATURE_BRANCH_NAME kevm-$KEVM_VERSION-master-$MASTER_COMMIT.master > kevm-$KEVM_VERSION-master-$MASTER_COMMIT-$FEATURE_BRANCH_NAME-compare
+python3 compare.py kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME.log kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT.log > kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT-$FEATURE_BRANCH_NAME-compare

@@ -10,6 +10,7 @@ KONTROL_VERSION=${KONTROL_VERSION:-'v0.1.49'}
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
 MASTER_COMMIT="$(git rev-parse origin/main)"
+MASTER_COMMIT_SHORT="$(git rev-parse --short origin/main)"
 
 FEATURE_BRANCH_NAME=${FEATURE_BRANCH_NAME:-"$(git rev-parse --abbrev-ref HEAD)"}
 FEATURE_BRANCH_NAME="${FEATURE_BRANCH_NAME//\//-}"
@@ -65,12 +66,10 @@ feature_shell "poetry install && poetry run kevm-dist --verbose build plugin has
 feature_shell "make test-integration TEST_ARGS='--maxfail=0 --numprocesses=$PYTEST_PARALLEL --use-booster -vv' | tee $SCRIPT_DIR/kontrol-$KONTROL_VERSION-$FEATURE_BRANCH_NAME.log"
 killall kore-rpc-booster || echo "no zombie processes found"
 
-if [ ! -e "$SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.log" ]; then
-  master_shell "make test-integration TEST_ARGS='--maxfail=0 --numprocesses=$PYTEST_PARALLEL --use-booster -vv' | tee $SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.log"
+if [ ! -e "$SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT_SHORT.log" ]; then
+  master_shell "make test-integration TEST_ARGS='--maxfail=0 --numprocesses=$PYTEST_PARALLEL --use-booster -vv' | tee $SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT_SHORT.log"
   killall kore-rpc-booster || echo "no zombie processes found"
 fi
 
 cd $SCRIPT_DIR
-grep ' call  ' kontrol-$KONTROL_VERSION-$FEATURE_BRANCH_NAME.log > kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.$FEATURE_BRANCH_NAME
-grep ' call  ' kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.log > kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.master
-python3 compare.py kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.$FEATURE_BRANCH_NAME kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT.master > kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT-$FEATURE_BRANCH_NAME-compare
+python3 compare.py kontrol-$KONTROL_VERSION-$FEATURE_BRANCH_NAME.log kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT_SHORT.log > kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT_SHORT-$FEATURE_BRANCH_NAME-compare
