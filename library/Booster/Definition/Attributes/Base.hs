@@ -90,6 +90,7 @@ data AxiomAttributes = AxiomAttributes
     , simplification :: Flag "isSimplification"
     , preserving :: Flag "preservingDefinedness" -- this will override the computed attribute
     , concreteness :: Concreteness
+    , smtLemma :: Flag "isSMTLemma"
     }
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)

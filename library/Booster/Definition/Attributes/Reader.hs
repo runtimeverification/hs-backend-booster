@@ -67,6 +67,7 @@ instance HasAttributes ParsedAxiom where
             <*> (attributes .! "simplification")
             <*> (attributes .! "preserves-definedness")
             <*> readConcreteness attributes
+            <*> (attributes .! "smt-lemma")
 
 sourceName
     , locationName
