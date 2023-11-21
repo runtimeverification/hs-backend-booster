@@ -32,6 +32,7 @@ import Text.Read (readEither)
 import Text.Regex.PCRE
 
 import Booster.Definition.Attributes.Base
+import Booster.SMT.LowLevelCodec as SMT (parseSExpr)
 import Booster.Syntax.ParsedKore.Base
 import Kore.Syntax.Json.Types (Id (..))
 
@@ -166,6 +167,18 @@ instance HasAttributes ParsedSymbol where
                         "Sort injection '" <> name.getId <> "' cannot be associative."
                 attributes .! "assoc"
             hasConcreteEvaluators = coerce . not <$> attributes .! "no-evaluators"
+            smt = do
+                hooked <- attributes .:? "smt-hook"
+                declared <- attributes .:? "smtlib"
+                case (hooked, declared) of
+                    (Just h, _) ->
+                        either (throwE . Text.pack) (pure . Just . SMTHook) $
+                            SMT.parseSExpr (encodeUtf8 h)
+                    (Nothing, Just txt) ->
+                        pure . Just . SMTLib $ encodeUtf8 txt
+                    (Nothing, Nothing) ->
+                        pure Nothing
+
         SymbolAttributes
             <$> symbolType
             <*> isIdem
@@ -173,6 +186,7 @@ instance HasAttributes ParsedSymbol where
             <*> (coerce <$> (attributes .! "macro" <||> attributes .! "alias'Kywd'"))
             <*> hasConcreteEvaluators
             <*> pure Nothing
+            <*> smt
 
 instance HasAttributes ParsedSort where
     type Attributes ParsedSort = SortAttributes

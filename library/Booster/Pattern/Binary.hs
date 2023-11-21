@@ -205,7 +205,15 @@ lookupKoreDefinitionSymbol name = DecodeM $ do
                     []
                     []
                     (SortApp "UNKNOWN" [])
-                    (SymbolAttributes PartialFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CannotBeEvaluated Nothing)
+                    ( SymbolAttributes
+                        PartialFunction
+                        IsNotIdem
+                        IsNotAssoc
+                        IsNotMacroOrAlias
+                        CannotBeEvaluated
+                        Nothing
+                        Nothing
+                    )
         Just def -> Map.lookup name $ symbols def
 
 {- | Successively decodes items from the given "block" of bytes,

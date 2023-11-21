@@ -197,6 +197,7 @@ internaliseTermRaw qq allowAlias checkSubsorts sortVars definition@KoreDefinitio
                                     , isMacroOrAlias = Internal.IsNotMacroOrAlias
                                     , hasEvaluators = Flag False
                                     , collectionMetadata = Nothing
+                                    , smt = Nothing
                                     }
                     else
                         maybe (throwE $ UnknownSymbol name symPatt) pure $

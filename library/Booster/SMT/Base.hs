@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveLift #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2023
 License     : BSD-3-Clause
@@ -6,8 +9,13 @@ module Booster.SMT.Base (
     module Booster.SMT.Base,
 ) where
 
+import Control.DeepSeq (NFData (..))
 import Data.ByteString.Char8 qualified as BS
+import Data.Data (Data)
+import Data.Hashable (Hashable)
 import Data.String
+import GHC.Generics (Generic)
+import Language.Haskell.TH.Syntax (Lift)
 
 {- SMT lib 2 commands and responses
 
@@ -19,8 +27,8 @@ import Data.String
 -}
 
 newtype SmtId = SmtId {bs :: BS.ByteString}
-    deriving stock (Eq, Ord, Show)
-    deriving newtype (IsString)
+    deriving stock (Eq, Ord, Show, Generic, Data, Lift)
+    deriving newtype (IsString, NFData, Hashable)
 
 data SmtSort
     = SimpleSmtSort SmtId
@@ -31,6 +39,8 @@ data SExpr -- SmtTerm
     = Atom SmtId
     | List [SExpr]
     deriving stock (Eq, Ord, Show)
+    deriving stock (Generic, Data, Lift)
+    deriving anyclass (NFData, Hashable)
 
 data SmtCommand
     = Declare DeclareCommand -- no response required

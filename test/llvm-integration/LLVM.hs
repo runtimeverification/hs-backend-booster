@@ -431,6 +431,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -449,6 +450,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -467,6 +469,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -485,6 +488,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -504,6 +508,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -522,6 +527,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -540,6 +546,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -558,6 +565,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -576,6 +584,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -594,6 +603,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -612,6 +622,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -630,6 +641,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -648,6 +660,7 @@ defSymbols =
                         , isAssoc = IsAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -666,6 +679,7 @@ defSymbols =
                         , isAssoc = IsAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -684,6 +698,7 @@ defSymbols =
                         , isAssoc = IsAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -702,6 +717,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -720,6 +736,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -738,6 +755,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -756,6 +774,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -774,6 +793,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -792,6 +812,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -810,6 +831,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -828,6 +850,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -846,6 +869,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -864,6 +888,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -882,6 +907,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -900,6 +926,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -918,6 +945,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -936,6 +964,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -954,6 +983,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -972,6 +1002,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -990,6 +1021,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1008,6 +1040,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1026,6 +1059,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1044,6 +1078,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1062,6 +1097,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1080,6 +1116,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1098,6 +1135,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1116,6 +1154,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1134,6 +1173,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1152,6 +1192,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1170,6 +1211,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1188,6 +1230,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1206,6 +1249,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1224,6 +1268,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1242,6 +1287,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1260,6 +1306,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1278,6 +1325,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1296,6 +1344,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1314,6 +1363,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1332,6 +1382,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1350,6 +1401,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1368,6 +1420,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1386,6 +1439,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1404,6 +1458,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1422,6 +1477,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1440,6 +1496,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1459,6 +1516,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1477,6 +1535,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1495,6 +1554,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1513,6 +1573,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1531,6 +1592,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1550,6 +1612,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1569,6 +1632,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1587,6 +1651,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1605,6 +1670,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1623,6 +1689,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1641,6 +1708,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1659,6 +1727,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1677,6 +1746,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1695,6 +1765,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1713,6 +1784,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1731,6 +1803,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1749,6 +1822,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1767,6 +1841,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1785,6 +1860,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1803,6 +1879,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1821,6 +1898,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1839,6 +1917,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1857,6 +1936,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1875,6 +1955,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1893,6 +1974,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1911,6 +1993,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1930,6 +2013,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1948,6 +2032,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1966,6 +2051,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -1984,6 +2070,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2002,6 +2089,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2022,6 +2110,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2040,6 +2129,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2058,6 +2148,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2076,6 +2167,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2094,6 +2186,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2112,6 +2205,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2130,6 +2224,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2148,6 +2243,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2166,6 +2262,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2184,6 +2281,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2202,6 +2300,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2220,6 +2319,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2238,6 +2338,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2256,6 +2357,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2274,6 +2376,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2292,6 +2395,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2310,6 +2414,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2328,6 +2433,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2346,6 +2452,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2364,6 +2471,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2382,6 +2490,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2400,6 +2509,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2418,6 +2528,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2436,6 +2547,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2454,6 +2566,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2472,6 +2585,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2490,6 +2604,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2508,6 +2623,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2526,6 +2642,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2544,6 +2661,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2562,6 +2680,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2580,6 +2699,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2598,6 +2718,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2616,6 +2737,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2634,6 +2756,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2652,6 +2775,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2670,6 +2794,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2688,6 +2813,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2706,6 +2832,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2725,6 +2852,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2744,6 +2872,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2762,6 +2891,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2780,6 +2910,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2798,6 +2929,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2816,6 +2948,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2834,6 +2967,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2852,6 +2986,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2870,6 +3005,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2888,6 +3024,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2906,6 +3043,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2924,6 +3062,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2942,6 +3081,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2960,6 +3100,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2978,6 +3119,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -2996,6 +3138,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3014,6 +3157,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3032,6 +3176,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3050,6 +3195,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3068,6 +3214,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3086,6 +3233,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3104,6 +3252,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3122,6 +3271,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3140,6 +3290,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3158,6 +3309,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3177,6 +3329,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3195,6 +3348,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3214,6 +3368,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3232,6 +3387,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3250,6 +3406,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3268,6 +3425,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3286,6 +3444,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3304,6 +3463,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3323,6 +3483,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3341,6 +3502,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3359,6 +3521,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3377,6 +3540,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3395,6 +3559,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3413,6 +3578,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3431,6 +3597,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3449,6 +3616,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )
@@ -3467,6 +3635,7 @@ defSymbols =
                         , isAssoc = IsNotAssoc
                         , isMacroOrAlias = IsNotMacroOrAlias
                         , hasEvaluators = CanBeEvaluated
+                        , smt = Nothing
                         }
                 }
             )

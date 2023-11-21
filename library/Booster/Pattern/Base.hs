@@ -189,6 +189,7 @@ unitSymbol def =
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Just def
+                , smt = Nothing
                 }
         }
   where
@@ -211,6 +212,7 @@ concatSymbol def =
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Just def
+                , smt = Nothing
                 }
         }
   where
@@ -235,6 +237,7 @@ kmapElementSymbol def =
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Just $ KMapMeta def
+                , smt = Nothing
                 }
         }
 
@@ -253,6 +256,7 @@ klistElementSymbol def =
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Just $ KListMeta def
+                , smt = Nothing
                 }
         }
 
@@ -688,6 +692,7 @@ injectionSymbol =
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Nothing
+                , smt = Nothing
                 }
         }
 
@@ -721,7 +726,7 @@ pattern NotBool t =
                 []
                 [SortBool]
                 SortBool
-                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing)
+                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing Nothing)
             )
         []
         [t]
@@ -734,7 +739,7 @@ pattern EqualsInt a b =
                 []
                 [SortInt, SortInt]
                 SortBool
-                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing)
+                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing Nothing)
             )
         []
         [a, b]
@@ -745,7 +750,7 @@ pattern NEqualsInt a b =
                 []
                 [SortInt, SortInt]
                 SortBool
-                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing)
+                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing Nothing)
             )
         []
         [a, b]
@@ -756,7 +761,7 @@ pattern EqualsK a b =
                 []
                 [SortK, SortK]
                 SortBool
-                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing)
+                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing Nothing)
             )
         []
         [a, b]
@@ -767,7 +772,7 @@ pattern NEqualsK a b =
                 []
                 [SortK, SortK]
                 SortBool
-                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing)
+                (SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing Nothing)
             )
         []
         [a, b]
@@ -781,7 +786,7 @@ pattern KSeq sort a =
                 []
                 [SortKItem, SortK]
                 SortK
-                (SymbolAttributes Constructor IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing)
+                (SymbolAttributes Constructor IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing Nothing)
             )
         []
         [ Injection sort SortKItem a
@@ -791,7 +796,7 @@ pattern KSeq sort a =
                         []
                         []
                         SortK
-                        (SymbolAttributes Constructor IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing)
+                        (SymbolAttributes Constructor IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing Nothing)
                     )
                 []
                 []
