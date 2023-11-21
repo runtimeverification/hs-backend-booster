@@ -90,3 +90,22 @@ instance Num SExpr where
     fromInteger n
         | n >= 0 = Atom . SmtId . BS.pack $ show n
         | otherwise = List [Atom "-", fromInteger (negate n)]
+
+smtInt, smtBool :: SmtSort
+smtInt = SimpleSmtSort "Int"
+smtBool = SimpleSmtSort "Bool"
+
+-- well-known combinators with boolean result
+eq, neq, le, leq, gr, geq :: SExpr -> SExpr -> SExpr
+eq = mkOp "="
+neq = mkOp "distinct"
+le = mkOp "<"
+leq = mkOp "<="
+gr = mkOp ">"
+geq = mkOp ">="
+
+mkOp :: BS.ByteString -> SExpr -> SExpr -> SExpr
+mkOp opString a b = List [Atom $ SmtId opString, a, b]
+
+smtnot :: SExpr -> SExpr
+smtnot x = List [Atom "not", x]

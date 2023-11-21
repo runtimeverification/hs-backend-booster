@@ -12,6 +12,7 @@ module Booster.SMT.Runner (
     runSMT,
     declare,
     runCmd,
+    runCheck,
 ) where
 
 import Control.Monad
@@ -23,15 +24,7 @@ import Data.ByteString.Builder qualified as BS
 import Data.ByteString.Char8 qualified as BS
 import SMTLIB.Backends qualified as Backend
 import SMTLIB.Backends.Process qualified as Backend
-import System.IO (
-    BufferMode (..),
-    Handle,
-    IOMode (..),
-    hClose,
-    hSetBinaryMode,
-    hSetBuffering,
-    openFile,
- )
+import System.IO (Handle, IOMode (..), hClose, openFile)
 
 import Booster.SMT.Base
 import Booster.SMT.LowLevelCodec
@@ -42,16 +35,23 @@ data SMTContext = SMTContext
     , mbTranscript :: Maybe Handle
     }
 
+----------------------------------------
+{- TODO (later)
+- store prelude of [DeclareCommand] in context (enables hard resets)
+- error handling and retries
+  - retry counter in context
+    - Reader becomes State
+- (possibly) run `get-info` on Unknown responses and enhance Unknown constructor
+  - smtlib2: reason-unknown = memout | incomplete | SExpr
+-}
+
 mkContext ::
-    -- KoreDefinition ->
     Maybe FilePath ->
     IO SMTContext
 mkContext transcriptPath = do
     mbTranscript <-
         forM transcriptPath $ \path -> do
             h <- openFile path WriteMode
-            hSetBuffering h (BlockBuffering Nothing)
-            hSetBinaryMode h True
             BS.hPutStrLn h "; starting solver process"
             pure h
 
@@ -131,3 +131,11 @@ instance SMTEncode SmtCommand where
     run_ (Query q) = run_ q
     run_ (Declare d) = run_ d
     run_ (Control c) = run_ c
+
+-- typical interaction function for checking satisfiability
+runCheck :: MonadLoggerIO io => [DeclareCommand] -> SMT io Response
+runCheck decls =
+    void (runCmd Push)
+        >> mapM_ runCmd decls
+        >> runCmd CheckSat
+            <* runCmd Pop

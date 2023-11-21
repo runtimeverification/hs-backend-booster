@@ -24,6 +24,7 @@ test_smoke =
         [ emptyIsSat
         , declTests
         , codecTests
+        , checkTests
         ]
 
 ----------------------------------------
@@ -47,12 +48,11 @@ declTests =
                     [ Declare $ DeclareSort sortName 1
                     , Declare $ DeclareFunc "f" [SmtSort sortName [smtInt]] smtInt
                     ]
-                    -- , runsOK [Declare $ Assert $ ]
+        , testCase "declare assertion" $ runsOK [Declare $ Assert $ eq 0 0]
         ]
-  where
-    -- FIXME move this to the library modules!
-    smtInt = SimpleSmtSort "Int"
 
+-- we need to run a command with response after declaration commands,
+-- otherwise they might just get queued.
 runSatAfter :: [SmtCommand] -> IO SMT.Response
 runSatAfter commands = runNoLoggingT $ do
     ctxt <- liftIO $ mkContext Nothing
@@ -108,3 +108,27 @@ valueParsing =
     input `parsesAsValue` expected =
         testCase (show input <> " parses to value " <> show expected) $
             Values [(Atom "x", expected)] @=? readResponse ("((x " <> input <> "))")
+
+----------------------------------------
+checkTests :: TestTree
+checkTests =
+    testGroup
+        "Smoke tests for the runCheck function"
+        [ test "Empty declarations" `returns` Sat $ []
+        , test "Simple assertion" `returns` Sat $
+            [ DeclareConst "X" smtInt
+            , Assert $ eq (Atom "X") 42
+            ]
+        , test "Contradicting assertions" `returns` Unsat $
+            [ DeclareConst "X" smtInt
+            , Assert $ eq (Atom "X") 42
+            , Assert $ neq (Atom "X") 42
+            ]
+        ]
+  where
+    exec x =
+        runNoLoggingT $
+            liftIO (mkContext Nothing) >>= \c -> runSMT c x <* liftIO (closeContext c)
+    test name result decls =
+        testCase name $ (result @=?) =<< exec (runCheck decls)
+    returns = ($)
