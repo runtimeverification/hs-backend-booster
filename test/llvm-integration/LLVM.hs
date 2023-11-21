@@ -91,8 +91,8 @@ llvmSpec =
                 it "should work with latin-1strings" $
                     hedgehog . propertyTest . latin1Prop
 
-            describe "Correct sort injections in non KItem maps" $
-                it "should work with latin-1strings" $
+        beforeAll loadAPI $
+            it "should correct sort injections in non KItem maps" $
                     hedgehog . propertyTest . mapKItemInjProp
 
 --------------------------------------------------
