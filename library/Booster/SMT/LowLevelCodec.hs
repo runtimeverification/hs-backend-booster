@@ -7,6 +7,7 @@ module Booster.SMT.LowLevelCodec (
     parseSExpr,
     encodeQuery,
     encodeDeclaration,
+    sortExpr,
 ) where
 
 import Control.Applicative ((<|>))

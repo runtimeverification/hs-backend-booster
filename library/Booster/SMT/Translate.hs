@@ -5,21 +5,25 @@ License     : BSD-3-Clause
 module Booster.SMT.Translate (
     TranslationState (..),
     Translator (..),
+    equationToSmtLemma,
     initTranslator,
-    translateTerm,
     smtDeclarations,
+    translateTerm,
 ) where
 
 import Control.Monad.Trans.State
 import Data.ByteString.Char8 qualified as BS
+import Data.Coerce (coerce)
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Set qualified as Set
 import Text.Read (readMaybe)
 
-import Booster.Definition.Attributes.Base (SymbolAttributes (..), SMTType (..))
+import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.Pattern.Base
-import Booster.SMT.Base
+import Booster.SMT.Base as SMT
+import Booster.SMT.LowLevelCodec as SMT
 
 data TranslationState =
     TranslationState
@@ -98,17 +102,49 @@ fillPlaceholders target list = go target
                 else list!!(n-1)
         | otherwise = Atom name
 
+-- render an SMT assertion from an SMT lemma (which exist for both
+-- kinds of equations,"Function" and "Simplification")
+equationToSmtLemma :: RewriteRule a -> Translator (Maybe DeclareCommand)
+equationToSmtLemma equation
+    | not (coerce equation.attributes.smtLemma) = pure Nothing
+    | otherwise = fmap Just $ do
+          smtLHS <- translateTerm equation.lhs
+          smtRHS <- translateTerm equation.rhs
+          let equationRaw = SMT.eq smtLHS smtRHS
+              -- if requires empty: just (= (lhs) (rhs))
+              -- if requires not empty: (=> (requires) (= (lhs) (rhs)))
+          lemmaRaw <-
+              if Set.null equation.requires
+                  then pure equationRaw
+                  else do
+                      smtPremise <-
+                          foldl1 SMT.and
+                              <$> mapM (translateTerm . \(Predicate t) -> t) (Set.toList equation.requires)
+                      pure $ SMT.implies smtPremise equationRaw
+          -- NB ensures has no SMT implications (single shot sat-check)
 
-
--- render an SMT assertion from an SMT lemma (which exist for both kinds of equations)
-simplificationLemma :: RewriteRule "Simplification" -> Translator DeclareCommand
-simplificationLemma = undefined
-functionLemma :: RewriteRule "Function" -> Translator DeclareCommand
-functionLemma = undefined
+          -- free variables (not created by abstraction during
+          -- translation) are all-quantified on the outside
+          let freeVars = Set.toList (getAttributes equation.lhs).variables
+              -- TODO is the LHS enough? The RHS may have existentials.
+              mkSExpPair :: Variable -> SExpr
+              mkSExpPair v =
+                  List [Atom $ SmtId v.variableName, SMT.sortExpr $ smtSort v.variableSort]
+          pure $ Assert $ List [Atom "forall", List $ map mkSExpPair freeVars, lemmaRaw]
+          -- FIXME also dump all declare-const from the TranslationState mappings
+          -- and reset the mappings afterwards
 
 -- collect and render all declarations from a definition
 smtDeclarations :: KoreDefinition -> Translator [DeclareCommand]
 smtDeclarations def = undefined
     -- declare all sorts except Int and Bool
     -- declare all functions that have smt-lib
+    -- kore-rpc also declares all constructors, with no-junk axioms. WHY?
     -- declare all SMT lemmas (see functions above) as assertions
+
+smtSort :: Sort -> SmtSort
+smtSort (SortApp sortName args)
+    | null args = SimpleSmtSort $ SmtId sortName
+    | otherwise = SmtSort (SmtId sortName) $ map smtSort args
+smtSort (SortVar varName) =
+    SimpleSmtSort $ SmtId varName -- of course not previously declared...???

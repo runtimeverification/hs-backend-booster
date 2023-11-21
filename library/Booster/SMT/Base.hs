@@ -105,14 +105,16 @@ smtInt, smtBool :: SmtSort
 smtInt = SimpleSmtSort "Int"
 smtBool = SimpleSmtSort "Bool"
 
--- well-known combinators with boolean result
-eq, neq, le, leq, gr, geq :: SExpr -> SExpr -> SExpr
+-- well-known combinators
+eq, neq, le, leq, gr, geq, implies, and :: SExpr -> SExpr -> SExpr
 eq = mkOp "="
 neq = mkOp "distinct"
 le = mkOp "<"
 leq = mkOp "<="
 gr = mkOp ">"
 geq = mkOp ">="
+implies = mkOp "=>"
+and = mkOp "and"
 
 mkOp :: BS.ByteString -> SExpr -> SExpr -> SExpr
 mkOp opString a b = List [Atom $ SmtId opString, a, b]
