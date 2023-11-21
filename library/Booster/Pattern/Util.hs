@@ -78,7 +78,7 @@ applySubst subst (SortApp n args) =
 
 sortOfTermOrPredicate :: TermOrPredicates -> Maybe Sort
 sortOfTermOrPredicate (TermAndPredicateAndSubstitution Pattern{term} _) = Just (sortOfTerm term)
-sortOfTermOrPredicate (BoolOrCeilOrSubstitutionPredicates _ _ _) = Nothing
+sortOfTermOrPredicate BoolOrCeilOrSubstitutionPredicates {} = Nothing
 
 sortOfPattern :: Pattern -> Sort
 sortOfPattern pat = sortOfTerm pat.term
