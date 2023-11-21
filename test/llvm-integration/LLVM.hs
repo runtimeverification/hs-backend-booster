@@ -93,7 +93,7 @@ llvmSpec =
 
         beforeAll loadAPI $
             it "should correct sort injections in non KItem maps" $
-                    hedgehog . propertyTest . mapKItemInjProp
+                hedgehog . propertyTest . mapKItemInjProp
 
 --------------------------------------------------
 -- individual hedgehog property tests and helpers
