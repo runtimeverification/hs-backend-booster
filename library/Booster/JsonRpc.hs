@@ -57,11 +57,16 @@ import Booster.Pattern.Rewrite (
     performRewrite,
  )
 import Booster.Pattern.Util (sortOfPattern)
+import Booster.SMT.Base qualified as SMT
+import Booster.SMT.Interface qualified as SMT
+import Booster.SMT.Runner qualified as SMT
 import Booster.Syntax.Json (KoreJson (..), addHeader, sortOfJson)
 import Booster.Syntax.Json.Externalise
 import Booster.Syntax.Json.Internalise (
+    explodeAnd,
     internalisePattern,
     internaliseTermOrPredicate,
+    internalisePredicate,
     pattern CheckSubsorts,
     pattern DisallowAlias,
  )
@@ -220,8 +225,48 @@ respond stateVar =
                         RpcTypes.SimplifyResult{state, logs = mkTraces duration traceData}
             pure $ second (uncurry mkSimplifyResponse) result
 
+        RpcTypes.GetModel req -> withContext req._module $ \(def, _) -> do
+            let internalised =
+                    runExcept $
+                        mapM (internalisePredicate DisallowAlias CheckSubsorts Nothing def) $
+                        explodeAnd req.state.term
+            case internalised of
+                Left patternError -> do
+                    Log.logError $ "Error internalising cterm: " <> Text.pack (show patternError)
+                    pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternError
+                -- various predicates obtained
+                Right somePredicates -> do
+                    Log.logInfoNS "booster" "get-model on predicates"
+                    let actualPs = [ p | IsPredicate p <- somePredicates ]
+                    when (length actualPs /= length somePredicates) $
+                      Log.logWarnNS "booster" "Some predicates were unsupported and discarded for get-model"
+
+                    newContext <- liftIO SMT.mkContext $ Just "./solver-transcript.smt2" -- FIXME
+                    smtResult <- SMT.getModelFor newContext def actualPs
+                      SMT.closeContext newContext
+                    pure $ case smtResult of
+                        Left SMT.Unsat ->
+                            RpcTypes.GetModelResult
+                                { satisfiable = RpcTypes.Unsat
+                                , substitution = Nothing
+                                }
+                        Left SMT.Unknown ->
+                            RpcTypes.GetModelResult
+                                { satisfiable = RpcTypes.Unknown
+                                , substitution = Nothing
+                                }
+                        Right subst ->
+                            RpcTypes.GetModelResult
+                                { satisfiable = RpcTypes.Sat
+                                , substitution =
+                                      Just $ mkSubstitutionJson subst
+                                }
+
+
+
         -- this case is only reachable if the cancel appeared as part of a batch request
         RpcTypes.Cancel -> pure $ Left RpcError.cancelUnsupportedInBatchMode
+
         -- using "Method does not exist" error code
         _ -> pure $ Left RpcError.notImplemented
   where
