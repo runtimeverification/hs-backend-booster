@@ -9,7 +9,10 @@ module Booster.SMT.Translate (
     initTranslator,
     smtDeclarations,
     translateTerm,
+    valueToTerm,
     backTranslateFrom,
+    runTranslator,
+    smtSort,
 ) where
 
 import Control.Monad
@@ -111,6 +114,15 @@ fillPlaceholders target list = go target
                 then error $ "Hook argument index out of bounds: " <> show target
                 else list !! (n - 1)
         | otherwise = Atom name
+
+valueToTerm :: TranslationState -> Value -> Term
+valueToTerm st = \case
+    Bool True -> TrueBool
+    Bool False -> FalseBool
+    Int i -> DomainValue SortInt (BS.pack $ show i)
+    Real r -> error "unexpected Real value" -- DomainValue SortReal (printf "%0.f" (fromRational r))
+    bits@Bits{} -> error $ "unexpected Bits value " <> show bits -- DomainValue SortBits
+    Other sexpr -> backTranslateFrom st sexpr
 
 backTranslateFrom :: TranslationState -> SExpr -> Term
 backTranslateFrom st = backTranslate
@@ -265,5 +277,4 @@ smtSort (SortApp sortName args)
     | otherwise = SmtSort (smtName sortName) $ map smtSort args
 smtSort (SortVar varName) =
     error $ "Sort variable " <> show varName <> " not supported for SMT"
-
 -- SimpleSmtSort $ smtName varName -- of course not previously declared...???
