@@ -5,7 +5,7 @@ set -euxo pipefail
 #  https://github.com/pypa/pip/issues/7883
 export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 
-KONTROL_VERSION=${KONTROL_VERSION:-'v0.1.49'}
+KONTROL_VERSION=${KONTROL_VERSION:-'master'}
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
@@ -39,6 +39,13 @@ git clone --depth 1 --branch $KONTROL_VERSION https://github.com/runtimeverifica
 cd kontrol
 git submodule update --init --recursive --depth 1
 
+
+if [[ $KONTROL_VERSION == "master" ]]; then
+  KONTROL_VERSION=$(git name-rev --tags --name-only $(git rev-parse HEAD))
+else
+  KONTROL_VERSION="${KONTROL_VERSION//\//-}"
+fi
+
 KEVM_VERSION="v$(cat deps/kevm_release)"
 
 # poetry takes too long to clone kevm-pyk, so we just do a shallow clone locally and override pyproject.toml
@@ -63,13 +70,15 @@ master_shell() {
 
 feature_shell "poetry install && poetry run kevm-dist --verbose build plugin haskell foundry --jobs 4"
 
-feature_shell "make test-integration TEST_ARGS='--maxfail=0 --numprocesses=$PYTEST_PARALLEL --use-booster -vv' | tee $SCRIPT_DIR/kontrol-$KONTROL_VERSION-$FEATURE_BRANCH_NAME.log"
+mkdir -p $SCRIPT_DIR/logs
+
+feature_shell "make test-integration TEST_ARGS='--maxfail=0 --numprocesses=$PYTEST_PARALLEL --use-booster -vv' | tee $SCRIPT_DIR/logs/kontrol-$KONTROL_VERSION-$FEATURE_BRANCH_NAME.log"
 killall kore-rpc-booster || echo "no zombie processes found"
 
-if [ ! -e "$SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT_SHORT.log" ]; then
-  master_shell "make test-integration TEST_ARGS='--maxfail=0 --numprocesses=$PYTEST_PARALLEL --use-booster -vv' | tee $SCRIPT_DIR/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT_SHORT.log"
+if [ ! -e "$SCRIPT_DIR/logs/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT_SHORT.log" ]; then
+  master_shell "make test-integration TEST_ARGS='--maxfail=0 --numprocesses=$PYTEST_PARALLEL --use-booster -vv' | tee $SCRIPT_DIR/logs/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT_SHORT.log"
   killall kore-rpc-booster || echo "no zombie processes found"
 fi
 
 cd $SCRIPT_DIR
-python3 compare.py kontrol-$KONTROL_VERSION-$FEATURE_BRANCH_NAME.log kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT_SHORT.log > kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT_SHORT-$FEATURE_BRANCH_NAME-compare
+python3 compare.py logs/kontrol-$KONTROL_VERSION-$FEATURE_BRANCH_NAME.log logs/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT_SHORT.log > logs/kontrol-$KONTROL_VERSION-master-$MASTER_COMMIT_SHORT-$FEATURE_BRANCH_NAME-compare

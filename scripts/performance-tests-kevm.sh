@@ -46,19 +46,26 @@ cd $TEMPD
 git clone --depth 1 --branch $KEVM_VERSION https://github.com/runtimeverification/evm-semantics.git
 cd evm-semantics
 
-KEVM_VERSION=${KEVM_VERSION}-$(git rev-parse --short ${KEVM_VERSION})
+if [[ $KEVM_VERSION == "master" ]]; then
+  KEVM_VERSION=$(git name-rev --tags --name-only $(git rev-parse HEAD))
+else
+  KEVM_VERSION="${KEVM_VERSION//\//-}"
+fi
+
 git submodule update --init --recursive --depth 1 kevm-pyk/src/kevm_pyk/kproj/plugin
 
 
 feature_shell "make poetry && poetry run -C kevm-pyk -- kevm-dist --verbose build evm-semantics.plugin evm-semantics.haskell --jobs 4"
 
-feature_shell "make test-prove-pyk PYTEST_PARALLEL=$PYTEST_PARALLEL PYTEST_ARGS='--maxfail=0 --timeout 7200 -vv --use-booster' | tee $SCRIPT_DIR/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME.log"
+mkdir -p $SCRIPT_DIR/logs
+
+feature_shell "make test-prove-pyk PYTEST_PARALLEL=$PYTEST_PARALLEL PYTEST_ARGS='--maxfail=0 --timeout 7200 -vv --use-booster' | tee $SCRIPT_DIR/logs/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME.log"
 killall kore-rpc-booster || echo "No zombie processes found"
 
-if [ ! -e "$SCRIPT_DIR/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT.log" ]; then
-  master_shell "make test-prove-pyk PYTEST_PARALLEL=$PYTEST_PARALLEL PYTEST_ARGS='--maxfail=0 --timeout 7200 -vv --use-booster' | tee $SCRIPT_DIR/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT.log"
+if [ ! -e "$SCRIPT_DIR/logs/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT.log" ]; then
+  master_shell "make test-prove-pyk PYTEST_PARALLEL=$PYTEST_PARALLEL PYTEST_ARGS='--maxfail=0 --timeout 7200 -vv --use-booster' | tee $SCRIPT_DIR/logs/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT.log"
   killall kore-rpc-booster || echo "No zombie processes found"
 fi
 
 cd $SCRIPT_DIR
-python3 compare.py kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME.log kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT.log > kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT-$FEATURE_BRANCH_NAME-compare
+python3 compare.py logs/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME.log logs/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT.log > logs/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT-$FEATURE_BRANCH_NAME-compare
