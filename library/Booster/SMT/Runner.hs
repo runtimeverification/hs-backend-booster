@@ -24,7 +24,16 @@ import Data.ByteString.Builder qualified as BS
 import Data.ByteString.Char8 qualified as BS
 import SMTLIB.Backends qualified as Backend
 import SMTLIB.Backends.Process qualified as Backend
-import System.IO (Handle, IOMode (..), hClose, openFile)
+import System.IO (
+    BufferMode (..),
+    Handle,
+    IOMode (..),
+    hClose,
+    hFlush,
+    hSetBinaryMode,
+    hSetBuffering,
+    openFile,
+ )
 
 import Booster.SMT.Base
 import Booster.SMT.LowLevelCodec
@@ -52,16 +61,16 @@ mkContext transcriptPath = do
     mbTranscript <-
         forM transcriptPath $ \path -> do
             h <- openFile path WriteMode
+            hSetBuffering h (BlockBuffering Nothing)
+            hSetBinaryMode h True
             BS.hPutStrLn h "; starting solver process"
             pure h
-
-    let config =
-            Backend.defaultConfig
-                { Backend.std_err = maybe Backend.Inherit Backend.UseHandle mbTranscript
-                }
+    let config = Backend.defaultConfig
     handle <- Backend.new config
     let solverClose = Backend.close handle
     solver <- Backend.initSolver Backend.Queuing $ Backend.toBackend handle
+    whenJust mbTranscript $ \h ->
+        BS.hPutStrLn h "; solver initialised\n;;;;;;;;;;;;;;;;;;;;;;;"
     pure
         SMTContext
             { solver
@@ -100,16 +109,18 @@ runCmd cmd = do
     let cmdBS = encode cmd
     ctxt <- SMT ask
     whenJust ctxt.mbTranscript $ \h ->
-        liftIO (BS.hPutBuilder h cmdBS)
-    result <- readResponse <$> run_ cmd ctxt.solver cmdBS
+        liftIO (BS.hPutBuilder h $ cmdBS <> "\n")
+    output <- run_ cmd ctxt.solver cmdBS
+    let result = readResponse output
     whenJust ctxt.mbTranscript $
-        liftIO . flip BS.hPutStrLn (BS.pack $ show result)
+        liftIO . flip BS.hPutStrLn (BS.pack $ "; " <> show output <> ", parsed as " <> show result <> "\n")
+    -- whenJust ctxt.mbTranscript $ liftIO . hFlush
     pure result
 
 instance SMTEncode DeclareCommand where
     encode = encodeDeclaration
 
-    run_ _ s = fmap (const "(Success)") . liftIO . Backend.command_ s
+    run_ _ s = fmap (const "success") . liftIO . Backend.command_ s
 
 instance SMTEncode QueryCommand where
     encode = encodeQuery
@@ -121,7 +132,7 @@ instance SMTEncode ControlCommand where
     encode Pop = BS.shortByteString "(pop)"
     encode Exit = BS.shortByteString "(exit)"
 
-    run_ _ s = fmap (const "(Success)") . liftIO . Backend.command_ s
+    run_ _ s = fmap (const "success") . liftIO . Backend.command_ s
 
 instance SMTEncode SmtCommand where
     encode (Query q) = encode q
