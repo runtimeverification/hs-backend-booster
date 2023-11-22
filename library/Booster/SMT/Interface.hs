@@ -46,19 +46,19 @@ getModelFor ctxt def ps
             freeVars =
                 Set.unions $ map ((.variables) . getAttributes . getTerm) ps
 
-        let (freeVarsMap, otherMap) =
-                Map.partitionWithKey (const . (`Set.member` Set.map Var freeVars)) transState.mappings
+        let freeVarsMap =
+                Map.filterWithKey (const . (`Set.member` Set.map Var freeVars)) transState.mappings
             freeVarsToSExprs = Map.mapKeys getVar $ Map.map Atom freeVarsMap
 
         -- runCmd SMT.Push     -- assuming the prelude has been run already,
         mapM_ runCmd $ smtDeclarations def -- if prelude has not been run
 
-        -- declare-const everything from mappings that is not a
-        -- free variable in predicates before sending assertions
+        -- declare-const all introduced variables (free in predicates
+        -- as well as abstraction variables) before sending assertions
         mapM_
             runCmd
             [ DeclareConst smtId (SMT.smtSort $ sortOfTerm trm)
-            | (trm, smtId) <- Map.assocs otherMap
+            | (trm, smtId) <- Map.assocs transState.mappings
             ]
 
         -- assert the given predicates

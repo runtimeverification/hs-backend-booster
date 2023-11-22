@@ -122,7 +122,7 @@ toBuilder = \case
 encodeQuery :: QueryCommand -> BS.Builder
 encodeQuery = \case
     CheckSat -> BS.shortByteString "(check-sat)"
-    GetValue xs -> toBuilder $ List (atom "get-values" : xs)
+    GetValue xs -> toBuilder $ List [atom "get-value", List xs]
 
 atom :: String -> SExpr
 atom = Atom . SmtId . BS.pack
