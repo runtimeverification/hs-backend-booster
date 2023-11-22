@@ -156,7 +156,7 @@ test_simplifyConstraint =
             [ testCase "Same constructor, same variable" $
                 let subj =
                         EqualsK (KSeq someSort [trm| con1{}(A:SomeSort{}) |]) (KSeq someSort [trm| con1{}(A:SomeSort{}) |])
-                 in simpl (Predicate subj) @?= Right (Predicate (DomainValue boolSort "true"))
+                 in simpl (Predicate subj) @?= Right (Predicate TrueBool)
             , testCase "Same constructor, different variables" $
                 let subj =
                         EqualsK (KSeq someSort [trm| con1{}(A:SomeSort{}) |]) (KSeq someSort [trm| con1{}(B:SomeSort{}) |])
@@ -166,11 +166,11 @@ test_simplifyConstraint =
             , testCase "Different constructors, same variable" $
                 let subj =
                         EqualsK (KSeq someSort [trm| con1{}(A:SomeSort{}) |]) (KSeq someSort [trm| con2{}(A:SomeSort{}) |])
-                 in simpl (Predicate subj) @?= Right (Predicate (DomainValue boolSort "false"))
+                 in simpl (Predicate subj) @?= Right (Predicate FalseBool)
             , testCase "Different constructors, different variables" $
                 let subj =
                         EqualsK (KSeq someSort [trm| con1{}(A:SomeSort{}) |]) (KSeq someSort [trm| con2{}(B:SomeSort{}) |])
-                 in simpl (Predicate subj) @?= Right (Predicate (DomainValue boolSort "false"))
+                 in simpl (Predicate subj) @?= Right (Predicate FalseBool)
             ]
         ]
   where
