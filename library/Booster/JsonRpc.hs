@@ -42,7 +42,13 @@ import Booster.Definition.Base (KoreDefinition (..))
 import Booster.Definition.Base qualified as Definition (RewriteRule (..))
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.ApplyEquations qualified as ApplyEquations
-import Booster.Pattern.Base (Pattern (..), TermOrPredicate (..))
+import Booster.Pattern.Base (
+    Pattern (..),
+    Term,
+    TermOrPredicates (..),
+    Variable,
+ )
+import Booster.Pattern.Base qualified as Pattern
 import Booster.Pattern.Rewrite (
     RewriteFailed (..),
     RewriteResult (..),
@@ -61,12 +67,14 @@ import Booster.Syntax.Json.Internalise (
 import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base
 import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinitions)
+import Data.Set qualified as Set
 import Kore.JsonRpc.Error qualified as RpcError
 import Kore.JsonRpc.Server
 import Kore.JsonRpc.Types qualified as RpcTypes
 import Kore.JsonRpc.Types.Log
 import Kore.Syntax.Json.Types (Id (..))
 import Kore.Syntax.Json.Types qualified as KoreJson
+import Kore.Syntax.Json.Types qualified as Syntax
 
 respond ::
     forall m.
@@ -88,7 +96,7 @@ respond stateVar =
                 Left patternError -> do
                     Log.logDebug $ "Error internalising cterm" <> Text.pack (show patternError)
                     pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternError
-                Right pat -> do
+                Right (pat, substitution) -> do
                     let cutPoints = fromMaybe [] req.cutPointRules
                         terminals = fromMaybe [] req.terminalRules
                         mbDepth = fmap RpcTypes.getNat req.maxDepth
@@ -109,7 +117,7 @@ respond stateVar =
                                     Just $
                                         fromIntegral (toNanoSecs (diffTimeSpec stop start)) / 1e9
                                 else Nothing
-                    pure $ execResponse duration req result
+                    pure $ execResponse duration req result substitution
         RpcTypes.AddModule req -> do
             -- block other request executions while modifying the server state
             state <- liftIO $ takeMVar stateVar
@@ -172,11 +180,11 @@ respond stateVar =
                     Log.logError $ "Error internalising cterm: " <> Text.pack (show patternErrors)
                     pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternErrors
                 -- term and predicate (pattern)
-                Right (TermAndPredicate pat) -> do
+                Right (TermAndPredicateAndSubstitution pat substitution) -> do
                     Log.logInfoNS "booster" "Simplifying a pattern"
                     ApplyEquations.evaluatePattern doTracing def mLlvmLibrary mempty pat >>= \case
                         (Right newPattern, patternTraces, _) -> do
-                            let (term, mbPredicate, mbSubstitution) = externalisePattern newPattern
+                            let (term, mbPredicate, mbSubstitution) = externalisePattern newPattern substitution
                                 tSort = externaliseSort (sortOfPattern newPattern)
                                 result = case catMaybes [mbPredicate, mbSubstitution] of
                                     [] -> term
@@ -190,17 +198,26 @@ respond stateVar =
                         (Left other, _traces, _) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ show other -- FIXME
                             -- predicate only
-                Right (APredicate predicate) -> do
-                    Log.logInfoNS "booster" "Simplifying a predicate"
-                    ApplyEquations.simplifyConstraint doTracing def mLlvmLibrary mempty predicate >>= \case
-                        (Right newPred, traces, _) -> do
-                            let predicateSort =
-                                    fromMaybe (error "not a predicate") $
-                                        sortOfJson req.state.term
-                                result = externalisePredicate predicateSort newPred
-                            pure $ Right (addHeader result, traces)
-                        (Left something, _traces, _) ->
-                            pure . Left . RpcError.backendError RpcError.Aborted $ show something -- FIXME
+                Right (BoolOrCeilOrSubstitutionPredicates predicates ceils substitutions)
+                    | null predicates && null ceils && null substitutions ->
+                        pure $
+                            Right
+                                (addHeader $ Syntax.KJTop (fromMaybe (error "not a predicate") $ sortOfJson req.state.term), [])
+                    | otherwise -> do
+                        Log.logInfoNS "booster" "Simplifying all predicates"
+                        ApplyEquations.simplifyConstraints doTracing def mLlvmLibrary mempty (Set.toList predicates) >>= \case
+                            (Right newPreds, traces, _) -> do
+                                let predicateSort =
+                                        fromMaybe (error "not a predicate") $
+                                            sortOfJson req.state.term
+                                    result =
+                                        map (externalisePredicate predicateSort) newPreds
+                                            <> map (externaliseCeil predicateSort) ceils
+                                            <> map (uncurry $ externaliseSubstitution predicateSort) (Map.toList substitutions)
+
+                                pure $ Right (addHeader $ Syntax.KJAnd predicateSort result, traces)
+                            (Left something, _traces, _) ->
+                                pure . Left . RpcError.backendError RpcError.Aborted $ show something -- FIXME
             stop <- liftIO $ getTime Monotonic
 
             let duration =
@@ -275,8 +292,9 @@ execResponse ::
     Maybe Double ->
     RpcTypes.ExecuteRequest ->
     (Natural, Seq (RewriteTrace Pattern), RewriteResult Pattern) ->
+    Map Variable Term ->
     Either ErrorObj (RpcTypes.API 'RpcTypes.Res)
-execResponse mbDuration req (d, traces, rr) = case rr of
+execResponse mbDuration req (d, traces, rr) originalSubstitution = case rr of
     RewriteBranch p nexts ->
         Right $
             RpcTypes.Execute
@@ -284,8 +302,8 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     { reason = RpcTypes.Branching
                     , depth
                     , logs
-                    , state = toExecState p
-                    , nextStates = Just $ map (\(_, _, p') -> toExecState p') $ toList nexts
+                    , state = toExecState p originalSubstitution
+                    , nextStates = Just $ map (\(_, _, p') -> toExecState p' originalSubstitution) $ toList nexts
                     , rule = Nothing
                     }
     RewriteStuck p ->
@@ -295,7 +313,7 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     { reason = RpcTypes.Stuck
                     , depth
                     , logs
-                    , state = toExecState p
+                    , state = toExecState p originalSubstitution
                     , nextStates = Nothing
                     , rule = Nothing
                     }
@@ -306,7 +324,7 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     { reason = RpcTypes.Vacuous
                     , depth
                     , logs
-                    , state = toExecState p
+                    , state = toExecState p originalSubstitution
                     , nextStates = Nothing
                     , rule = Nothing
                     }
@@ -317,8 +335,8 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     { reason = RpcTypes.CutPointRule
                     , depth
                     , logs
-                    , state = toExecState p
-                    , nextStates = Just [toExecState next]
+                    , state = toExecState p originalSubstitution
+                    , nextStates = Just [toExecState next originalSubstitution]
                     , rule = Just lbl
                     }
     RewriteTerminal lbl _ p ->
@@ -328,7 +346,7 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     { reason = RpcTypes.TerminalRule
                     , depth
                     , logs
-                    , state = toExecState p
+                    , state = toExecState p originalSubstitution
                     , nextStates = Nothing
                     , rule = Just lbl
                     }
@@ -339,7 +357,7 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                     { reason = RpcTypes.DepthBound
                     , depth
                     , logs
-                    , state = toExecState p
+                    , state = toExecState p originalSubstitution
                     , nextStates = Nothing
                     , rule = Nothing
                     }
@@ -356,7 +374,7 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                                     (logSuccessfulSimplifications, logFailedSimplifications)
                                     (RewriteStepFailed failure)
                          in logs <|> abortRewriteLog
-                    , state = toExecState p
+                    , state = toExecState p originalSubstitution
                     , nextStates = Nothing
                     , rule = Nothing
                     }
@@ -385,15 +403,15 @@ execResponse mbDuration req (d, traces, rr) = case rr of
                 (Just t, Nothing) -> Just [t]
                 (Just t, Just xs) -> Just (t : xs)
 
-toExecState :: Pattern -> RpcTypes.ExecuteState
-toExecState pat =
+toExecState :: Pattern -> Map Variable Term -> RpcTypes.ExecuteState
+toExecState pat sub =
     RpcTypes.ExecuteState
         { term = addHeader t
         , predicate = fmap addHeader p
         , substitution = fmap addHeader s
         }
   where
-    (t, p, s) = externalisePattern pat
+    (t, p, s) = externalisePattern pat sub
 
 mkLogEquationTrace :: (Bool, Bool) -> ApplyEquations.EquationTrace -> Maybe LogEntry
 mkLogEquationTrace
@@ -409,7 +427,7 @@ mkLogEquationTrace
                             , origin
                             , result =
                                 Success
-                                    { rewrittenTerm = Just $ execStateToKoreJson $ toExecState $ Pattern rewrittenTrm mempty
+                                    { rewrittenTerm = Just $ execStateToKoreJson $ toExecState (Pattern.Pattern_ rewrittenTrm) mempty
                                     , substitution = Nothing
                                     , ruleId = fromMaybe "UNKNOWN" _ruleId
                                     }
@@ -474,7 +492,7 @@ mkLogEquationTrace
                             }
             _ -> Nothing
       where
-        originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern subjectTerm mempty
+        originalTerm = Just $ execStateToKoreJson $ toExecState (Pattern.Pattern_ subjectTerm) mempty
         originalTermIndex = Nothing
         origin = Booster
         _ruleId = fmap getUniqueId uid
@@ -495,7 +513,7 @@ mkLogRewriteTrace
                             Rewrite
                                 { result =
                                     Success
-                                        { rewrittenTerm = Just $ execStateToKoreJson $ toExecState res
+                                        { rewrittenTerm = Just $ execStateToKoreJson $ toExecState res mempty
                                         , substitution = Nothing
                                         , ruleId = maybe "UNKNOWN" getUniqueId uid
                                         }
@@ -547,7 +565,7 @@ mkLogRewriteTrace
                     let final = singleton $ case failure of
                             ApplyEquations.IndexIsNone trm ->
                                 Simplification
-                                    { originalTerm = Just $ execStateToKoreJson $ toExecState $ Pattern trm mempty
+                                    { originalTerm = Just $ execStateToKoreJson $ toExecState (Pattern.Pattern_ trm) mempty
                                     , originalTermIndex = Nothing
                                     , origin = Booster
                                     , result = Failure{reason = "No index found for term", _ruleId = Nothing}

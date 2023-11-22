@@ -1,4 +1,5 @@
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2023
@@ -41,7 +42,7 @@ import Booster.Pattern.Base
 import Booster.Syntax.Json.Externalise (externaliseTerm)
 import Booster.Syntax.Json.Internalise (pattern AllowAlias, pattern IgnoreSubsorts)
 import Booster.Syntax.Json.Internalise qualified as Syntax
-import Booster.Syntax.ParsedKore.Internalise (buildDefinitions)
+import Booster.Syntax.ParsedKore.Internalise (buildDefinitions, symb)
 import Booster.Syntax.ParsedKore.Parser (parseDefinition)
 import Kore.Syntax.Json.Types qualified as Syntax
 import System.Info (os)
@@ -89,6 +90,10 @@ llvmSpec =
             describe "LLVM String handling" $
                 it "should work with latin-1strings" $
                     hedgehog . propertyTest . latin1Prop
+
+        beforeAll loadAPI $
+            it "should correct sort injections in non KItem maps" $
+                hedgehog . propertyTest . mapKItemInjProp
 
 --------------------------------------------------
 -- individual hedgehog property tests and helpers
@@ -147,6 +152,41 @@ latin1Prop api = property $ do
                 | otherwise -> error $ "Unexpected sort " <> show s
             otherTerm -> error $ "Unexpected term " <> show otherTerm
 
+mapKItemInjProp :: Internal.API -> Property
+mapKItemInjProp api = property $ do
+    let k = wrapIntTerm 1
+    let v = wrapIntTerm 2
+    LLVM.simplifyTerm api testDef (update k v) (SortApp "SortMapValToVal" []) === singleton k v
+  where
+    update k v =
+        SymbolApplication
+            (defSymbols Map.! "LblMapValToVal'Coln'primitiveUpdate")
+            []
+            [ SymbolApplication
+                (defSymbols Map.! "Lbl'Stop'MapValToVal")
+                []
+                []
+            , k
+            , v
+            ]
+
+    singleton k v =
+        SymbolApplication
+            (defSymbols Map.! "Lbl'Unds'Val2Val'Pipe'-'-GT-Unds'")
+            []
+            [k, v]
+
+    wrapIntTerm :: Int -> Term
+    wrapIntTerm i =
+        SymbolApplication
+            (defSymbols Map.! "inj")
+            [SortApp "SortWrappedInt" [], SortApp "SortVal" []]
+            [ SymbolApplication
+                (defSymbols Map.! "LblwrapInt")
+                []
+                [intTerm i]
+            ]
+
 ------------------------------------------------------------
 
 runKompile :: IO ()
@@ -204,7 +244,6 @@ testDef =
         Map.empty -- no rules
         Map.empty -- no function equations
         Map.empty -- no simplifications
-        Map.empty -- no predicate simplifications
 
 {- To refresh the definition below, run this using the repl and fix up
    the remainder of the file if differences are shown.
@@ -221,7 +260,6 @@ displayTestDef = do
                 , aliases = Map.empty
                 , functionEquations = Map.empty
                 , simplifications = Map.empty
-                , predicateSimplifications = Map.empty
                 }
     -- compare to what we have
     if testDef == prunedDef
@@ -3471,5 +3509,21 @@ defSymbols =
                         , hasEvaluators = CanBeEvaluated
                         }
                 }
+            )
+        ,
+            ( "LblwrapInt"
+            , [symb| symbol LblwrapInt{}(SortInt{}) : SortWrappedInt{} [constructor{}(), functional{}(), injective{}()] |]
+            )
+        ,
+            ( "Lbl'Stop'MapValToVal"
+            , [symb| symbol Lbl'Stop'MapValToVal{}() : SortMapValToVal{} [function{}(), functional{}(), total{}()] |]
+            )
+        ,
+            ( "LblMapValToVal'Coln'primitiveUpdate"
+            , [symb| symbol LblMapValToVal'Coln'primitiveUpdate{}(SortMapValToVal{}, SortVal{}, SortVal{}) : SortMapValToVal{} [function{}(), functional{}(), klabel{}("MapValToVal:primitiveUpdate"), total{}()] |]
+            )
+        ,
+            ( "Lbl'Unds'Val2Val'Pipe'-'-GT-Unds'"
+            , [symb| symbol Lbl'Unds'Val2Val'Pipe'-'-GT-Unds'{}(SortVal{}, SortVal{}) : SortMapValToVal{} [function{}(), functional{}(), klabel{}("_Val2Val|->_"), total{}()] |]
             )
         ]
