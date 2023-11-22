@@ -259,10 +259,18 @@ respond stateVar =
                             RpcTypes.GetModelResult
                                 { satisfiable = RpcTypes.Sat
                                 , substitution =
-                                      Just $ mkSubstitutionJson subst
+                                      if Map.null subst
+                                      then Nothing
+                                      else
+                                          let sort = sortOfJson req.state.term
+
+                                          in Just $
+                                           foldl1 (KoreJson.KJAnd sort) $
+                                               [ KoreJson.KJEquals sort (externaliseTerm $ Pattern.Var var) (externaliseTerm term)
+                                               | (var, term) <- Map.assocs subst
+                                               ]
+
                                 }
-
-
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         RpcTypes.Cancel -> pure $ Left RpcError.cancelUnsupportedInBatchMode
