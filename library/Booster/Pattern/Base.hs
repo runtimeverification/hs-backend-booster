@@ -830,8 +830,8 @@ data InternalisedPredicate = IsPredicate Predicate | IsCeil Ceil | IsSubstitutio
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
-data TermOrPredicate -- = Either Predicate Pattern
-    = BoolOrCeilOrSubstitutionPredicate InternalisedPredicate
+data TermOrPredicates -- = Either Predicate Pattern
+    = BoolOrCeilOrSubstitutionPredicates !(Set Predicate) ![Ceil] (Map Variable Term)
     | TermAndPredicateAndSubstitution Pattern (Map Variable Term)
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
@@ -975,3 +975,4 @@ instance Pretty Pattern where
             , "Conditions:"
             ]
                 <> fmap (Pretty.indent 4 . pretty) (Set.toList patt.constraints)
+                <> fmap (Pretty.indent 4 . pretty) patt.ceilConditions
