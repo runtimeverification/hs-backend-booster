@@ -255,22 +255,29 @@ respond stateVar =
                                 , substitution = Nothing
                                 }
                         Right subst ->
-                            RpcTypes.GetModelResult
+                            let sort = fromMaybe (error "Unknown sort in input") $ sortOfJson req.state.term
+                                substitution
+                                    | Map.null subst = Nothing
+                                    | [(var, term)] <- Map.assocs subst =
+                                        Just . addHeader $
+                                            KoreJson.KJEquals
+                                                (externaliseSort var.variableSort)
+                                                sort
+                                                (externaliseTerm $ Pattern.Var var)
+                                                (externaliseTerm term)
+                                    | otherwise =
+                                        Just . addHeader $
+                                            KoreJson.KJAnd sort $
+                                                [ KoreJson.KJEquals
+                                                    (externaliseSort var.variableSort)
+                                                    sort
+                                                    (externaliseTerm $ Pattern.Var var)
+                                                    (externaliseTerm term)
+                                                | (var, term) <- Map.assocs subst
+                                                ]
+                            in RpcTypes.GetModelResult
                                 { satisfiable = RpcTypes.Sat
-                                , substitution =
-                                    if Map.null subst
-                                        then Nothing
-                                        else
-                                            let sort = fromMaybe (error "Unknown sort in input") $ sortOfJson req.state.term
-                                             in Just . addHeader $
-                                                    KoreJson.KJAnd sort $
-                                                        [ KoreJson.KJEquals
-                                                            (externaliseSort var.variableSort)
-                                                            sort
-                                                            (externaliseTerm $ Pattern.Var var)
-                                                            (externaliseTerm term)
-                                                        | (var, term) <- Map.assocs subst
-                                                        ]
+                                , substitution
                                 }
 
         -- this case is only reachable if the cancel appeared as part of a batch request
