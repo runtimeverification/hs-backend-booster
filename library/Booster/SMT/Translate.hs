@@ -9,16 +9,19 @@ module Booster.SMT.Translate (
     initTranslator,
     smtDeclarations,
     translateTerm,
+    backTranslateFrom,
 ) where
 
 import Control.Monad
 import Control.Monad.Trans.State
 import Data.ByteString.Char8 qualified as BS
+import Data.Char (isDigit)
 import Data.Coerce (coerce)
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Maybe (catMaybes, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Set qualified as Set
+import Data.Tuple (swap)
 import Prettyprinter qualified as Pretty
 import Text.Read (readMaybe)
 
@@ -108,6 +111,48 @@ fillPlaceholders target list = go target
                 then error $ "Hook argument index out of bounds: " <> show target
                 else list !! (n - 1)
         | otherwise = Atom name
+
+backTranslateFrom :: TranslationState -> SExpr -> Term
+backTranslateFrom st = backTranslate
+  where
+    reverseMap :: Map SmtId Term
+    reverseMap =
+        Map.fromListWithKey
+            (\k x y -> error $ "Duplicate values: " <> show (k, x, y))
+            . map swap
+            $ Map.assocs st.mappings
+
+    isVar :: BS.ByteString -> Bool
+    isVar bs = first4 == "SMT-" && BS.all isDigit rest
+      where
+        (first4, rest) = BS.splitAt 4 bs
+
+    backTranslate :: SExpr -> Term
+    backTranslate = \case
+        Atom s@(SmtId v)
+            | isVar v ->
+                fromMaybe (error $ show v <> " not found in reverseMap") $
+                    Map.lookup s reverseMap
+            | v == "true" ->
+                TrueBool
+            | v == "false" ->
+                FalseBool
+            | BS.all isDigit v ->
+                DomainValue SortInt v
+            | otherwise ->
+                error $ "Unable to backtranslate atom " <> show v
+        List xs
+            | null xs ->
+                error "backtranslate: empty list"
+            | (fct@Atom{} : args) <- xs ->
+                error
+                    "Reconstructing function application requires symbol metadata (SMTLib)"
+                    SymbolApplication
+                    undefined
+                    []
+                    $ map backTranslate args
+            | otherwise ->
+                error "backtranslate: List case not implemented"
 
 -- render an SMT assertion from an SMT lemma (which exist for both
 -- kinds of equations,"Function" and "Simplification")
