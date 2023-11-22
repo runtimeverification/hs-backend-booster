@@ -65,8 +65,8 @@ import Booster.Syntax.Json.Externalise
 import Booster.Syntax.Json.Internalise (
     explodeAnd,
     internalisePattern,
-    internaliseTermOrPredicate,
     internalisePredicate,
+    internaliseTermOrPredicate,
     pattern CheckSubsorts,
     pattern DisallowAlias,
  )
@@ -224,12 +224,11 @@ respond stateVar =
                     RpcTypes.Simplify
                         RpcTypes.SimplifyResult{state, logs = mkTraces duration traceData}
             pure $ second (uncurry mkSimplifyResponse) result
-
         RpcTypes.GetModel req -> withContext req._module $ \(def, _) -> do
             let internalised =
                     runExcept $
                         mapM (internalisePredicate DisallowAlias CheckSubsorts Nothing def) $
-                        explodeAnd req.state.term
+                            explodeAnd req.state.term
             case internalised of
                 Left patternError -> do
                     Log.logError $ "Error internalising cterm: " <> Text.pack (show patternError)
@@ -237,14 +236,14 @@ respond stateVar =
                 -- various predicates obtained
                 Right somePredicates -> do
                     Log.logInfoNS "booster" "get-model on predicates"
-                    let actualPs = [ p | IsPredicate p <- somePredicates ]
+                    let actualPs = [p | IsPredicate p <- somePredicates]
                     when (length actualPs /= length somePredicates) $
-                      Log.logWarnNS "booster" "Some predicates were unsupported and discarded for get-model"
+                        Log.logWarnNS "booster" "Some predicates were unsupported and discarded for get-model"
 
-                    newContext <- liftIO SMT.mkContext $ Just "./solver-transcript.smt2" -- FIXME
+                    newContext <- liftIO $ SMT.mkContext $ Just "./solver-transcript.smt2" -- FIXME
                     smtResult <- SMT.getModelFor newContext def actualPs
-                      SMT.closeContext newContext
-                    pure $ case smtResult of
+                    liftIO $ SMT.closeContext newContext
+                    pure . Right . RpcTypes.GetModel $ case smtResult of
                         Left SMT.Unsat ->
                             RpcTypes.GetModelResult
                                 { satisfiable = RpcTypes.Unsat
@@ -259,22 +258,23 @@ respond stateVar =
                             RpcTypes.GetModelResult
                                 { satisfiable = RpcTypes.Sat
                                 , substitution =
-                                      if Map.null subst
-                                      then Nothing
-                                      else
-                                          let sort = sortOfJson req.state.term
-
-                                          in Just $
-                                           foldl1 (KoreJson.KJAnd sort) $
-                                               [ KoreJson.KJEquals sort (externaliseTerm $ Pattern.Var var) (externaliseTerm term)
-                                               | (var, term) <- Map.assocs subst
-                                               ]
-
+                                    if Map.null subst
+                                        then Nothing
+                                        else
+                                            let sort = fromMaybe (error "Unknown sort in input") $ sortOfJson req.state.term
+                                             in Just . addHeader $
+                                                    KoreJson.KJAnd sort $
+                                                        [ KoreJson.KJEquals
+                                                            (externaliseSort var.variableSort)
+                                                            sort
+                                                            (externaliseTerm $ Pattern.Var var)
+                                                            (externaliseTerm term)
+                                                        | (var, term) <- Map.assocs subst
+                                                        ]
                                 }
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         RpcTypes.Cancel -> pure $ Left RpcError.cancelUnsupportedInBatchMode
-
         -- using "Method does not exist" error code
         _ -> pure $ Left RpcError.notImplemented
   where

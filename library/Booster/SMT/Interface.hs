@@ -50,14 +50,16 @@ getModelFor ctxt def ps
                 Map.partitionWithKey (const . (`Set.member` Set.map Var freeVars)) transState.mappings
             freeVarsToSExprs = Map.mapKeys getVar $ Map.map Atom freeVarsMap
 
-        --runCmd SMT.Push     -- assuming the prelude has been run already,
+        -- runCmd SMT.Push     -- assuming the prelude has been run already,
         mapM_ runCmd $ smtDeclarations def -- if prelude has not been run
 
         -- declare-const everything from mappings that is not a
         -- free variable in predicates before sending assertions
-        mapM_ runCmd [ DeclareConst smtId (SMT.smtSort $ sortOfTerm trm)
-                     | (trm, smtId) <- Map.assocs otherMap
-                     ]
+        mapM_
+            runCmd
+            [ DeclareConst smtId (SMT.smtSort $ sortOfTerm trm)
+            | (trm, smtId) <- Map.assocs otherMap
+            ]
 
         -- assert the given predicates
         mapM_ runCmd smtAsserts
@@ -80,14 +82,13 @@ getModelFor ctxt def ps
                         error $ "SMT Error: " <> BS.unpack msg
                     Values pairs ->
                         let x :: Map Variable Term
-                            x = Map.map (valueToTerm transState) $
-                                Map.compose (Map.fromList pairs) freeVarsToSExprs
+                            x =
+                                Map.map (valueToTerm transState) $
+                                    Map.compose (Map.fromList pairs) freeVarsToSExprs
                          in pure $ Right x
                     other ->
                         error $ "Unexpected SMT response to GetValue: " <> show other
-
   where
     getTerm (Predicate t) = t -- FIXME want a named field for this!
-
     getVar (Var v) = v
     getVar _ = error "not a var"

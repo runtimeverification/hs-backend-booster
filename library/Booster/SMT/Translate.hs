@@ -277,4 +277,5 @@ smtSort (SortApp sortName args)
     | otherwise = SmtSort (smtName sortName) $ map smtSort args
 smtSort (SortVar varName) =
     error $ "Sort variable " <> show varName <> " not supported for SMT"
+
 -- SimpleSmtSort $ smtName varName -- of course not previously declared...???
