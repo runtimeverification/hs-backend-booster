@@ -8,6 +8,7 @@ module Test.Booster.Pattern.ApplyEquations (
     test_evaluateFunction,
     test_simplify,
     test_simplifyPattern,
+    test_simplifyConstraint,
     test_errors,
 ) where
 
@@ -123,7 +124,7 @@ test_simplify =
 test_simplifyPattern :: TestTree
 test_simplifyPattern =
     testGroup
-        "Performing simplifications"
+        "Performing Pattern simplifications"
         [ testCase "No simplification applies" $ do
             let subj = [trm| f1{}(f2{}(A:SomeSort{})) |]
             simpl (Pattern_ subj) @?= Right (Pattern_ subj)
@@ -145,6 +146,39 @@ test_simplifyPattern =
   where
     simpl = unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluatePattern False simplDef Nothing mempty
     a = var "A" someSort
+
+test_simplifyConstraint :: TestTree
+test_simplifyConstraint =
+    testGroup
+        "Performing Predicate simplifications"
+        [ testGroup
+            "==K simplification"
+            [ testCase "Same constructor, same variable" $
+                let subj =
+                        EqualsK (KSeq someSort [trm| con1{}(A:SomeSort{}) |]) (KSeq someSort [trm| con1{}(A:SomeSort{}) |])
+                 in simpl (Predicate subj) @?= Right (Predicate (DomainValue boolSort "true"))
+            , testCase "Same constructor, different variables" $
+                let subj =
+                        EqualsK (KSeq someSort [trm| con1{}(A:SomeSort{}) |]) (KSeq someSort [trm| con1{}(B:SomeSort{}) |])
+                 in simpl (Predicate subj)
+                        @?= Right
+                            (Predicate (EqualsK (KSeq someSort [trm| A:SomeSort{} |]) (KSeq someSort [trm| B:SomeSort{} |])))
+            , testCase "Different constructors, same variable" $
+                let subj =
+                        EqualsK (KSeq someSort [trm| con1{}(A:SomeSort{}) |]) (KSeq someSort [trm| con2{}(A:SomeSort{}) |])
+                 in simpl (Predicate subj) @?= Right (Predicate (DomainValue boolSort "false"))
+            , testCase "Different constructors, different variables" $
+                let subj =
+                        EqualsK (KSeq someSort [trm| con1{}(A:SomeSort{}) |]) (KSeq someSort [trm| con2{}(B:SomeSort{}) |])
+                 in simpl (Predicate subj) @?= Right (Predicate (DomainValue boolSort "false"))
+            ]
+        ]
+  where
+    simpl =
+        unsafePerformIO
+            . runNoLoggingT
+            . (fst3 <$>)
+            . simplifyConstraint False testDefinition Nothing mempty
 
 test_errors :: TestTree
 test_errors =
