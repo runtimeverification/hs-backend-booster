@@ -24,6 +24,7 @@ import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.Pattern.ApplyEquations
 import Booster.Pattern.Base
+import Booster.Pattern.Bool
 import Booster.Pattern.Index (TermIndex (..))
 import Booster.Syntax.Json.Internalise (trm)
 import Test.Booster.Fixture hiding (inj)
