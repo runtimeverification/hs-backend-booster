@@ -693,78 +693,79 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                     mLlvmLibrary
                     mSolver
                     simplifierCache
-                    (rewriteStep cutLabels terminalLabels pat') >>= \case
-                    Right (RewriteFinished mlbl uniqueId single, cache) -> do
-                        whenJust mlbl $ \lbl ->
+                    (rewriteStep cutLabels terminalLabels pat')
+                    >>= \case
+                        Right (RewriteFinished mlbl uniqueId single, cache) -> do
+                            whenJust mlbl $ \lbl ->
+                                rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
+                            updateCache cache
+                            incrementCounter
+                            doSteps False single
+                        Right (terminal@(RewriteTerminal lbl uniqueId single), _cache) -> do
                             rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
-                        updateCache cache
-                        incrementCounter
-                        doSteps False single
-                    Right (terminal@(RewriteTerminal lbl uniqueId single), _cache) -> do
-                        rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
-                        logRewrite $
-                            "Terminal rule after " <> showCounter (counter + 1)
-                        incrementCounter
-                        simplifyResult pat' terminal
-                    Right (branching@RewriteBranch{}, cache) -> do
-                        logRewrite $ "Stopped due to branching after " <> showCounter counter
-                        updateCache cache
-                        simplified <- simplifyResult pat' branching
-                        case simplified of
-                            RewriteStuck{} -> do
-                                logRewrite "Rewrite stuck after pruning branches"
-                                pure simplified
-                            RewriteTrivial{} -> do
-                                logRewrite $ "Simplified to bottom after " <> showCounter counter
-                                pure simplified
-                            RewriteFinished mlbl uniqueId single -> do
-                                logRewrite "All but one branch pruned, continuing"
-                                whenJust mlbl $ \lbl ->
-                                    rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
-                                incrementCounter
-                                doSteps False single
-                            RewriteBranch pat'' branches -> do
-                                rewriteTrace $ RewriteBranchingStep pat'' $ fmap (\(lbl, uid, _) -> (lbl, uid)) branches
-                                pure simplified
-                            _other -> error "simplifyResult: Unexpected return value"
-                    Right (cutPoint@(RewriteCutPoint lbl _ _ _), _) -> do
-                        simplified <- simplifyResult pat' cutPoint
-                        case simplified of
-                            RewriteCutPoint{} ->
-                                logRewrite $ "Cut point " <> lbl <> " after " <> showCounter counter
-                            RewriteStuck{} ->
-                                logRewrite $ "Stuck after " <> showCounter counter
-                            RewriteTrivial{} ->
-                                logRewrite $ "Simplified to bottom after " <> showCounter counter
-                            _other -> error "simplifyResult: Unexpected return value"
-                        pure simplified
-                    Right (stuck@RewriteStuck{}, cache) -> do
-                        logRewrite $ "Stopped after " <> showCounter counter
-                        updateCache cache
-                        rewriteTrace $ RewriteStepFailed $ NoApplicableRules pat'
-                        if wasSimplified
-                            then pure stuck
-                            else withSimplified pat' "Retrying with simplified pattern" (doSteps True)
-                    Right (trivial@RewriteTrivial{}, _) -> do
-                        logRewrite $ "Simplified to bottom after " <> showCounter counter
-                        pure trivial
-                    Right (aborted@RewriteAborted{}, _) -> do
-                        logRewrite $ "Aborted after " <> showCounter counter
-                        simplifyResult pat' aborted
-                    -- if unification was unclear and the pattern was
-                    -- unsimplified, simplify and retry rewriting once
-                    Left failure@RuleApplicationUnclear{}
-                        | not wasSimplified -> do
+                            logRewrite $
+                                "Terminal rule after " <> showCounter (counter + 1)
+                            incrementCounter
+                            simplifyResult pat' terminal
+                        Right (branching@RewriteBranch{}, cache) -> do
+                            logRewrite $ "Stopped due to branching after " <> showCounter counter
+                            updateCache cache
+                            simplified <- simplifyResult pat' branching
+                            case simplified of
+                                RewriteStuck{} -> do
+                                    logRewrite "Rewrite stuck after pruning branches"
+                                    pure simplified
+                                RewriteTrivial{} -> do
+                                    logRewrite $ "Simplified to bottom after " <> showCounter counter
+                                    pure simplified
+                                RewriteFinished mlbl uniqueId single -> do
+                                    logRewrite "All but one branch pruned, continuing"
+                                    whenJust mlbl $ \lbl ->
+                                        rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
+                                    incrementCounter
+                                    doSteps False single
+                                RewriteBranch pat'' branches -> do
+                                    rewriteTrace $ RewriteBranchingStep pat'' $ fmap (\(lbl, uid, _) -> (lbl, uid)) branches
+                                    pure simplified
+                                _other -> error "simplifyResult: Unexpected return value"
+                        Right (cutPoint@(RewriteCutPoint lbl _ _ _), _) -> do
+                            simplified <- simplifyResult pat' cutPoint
+                            case simplified of
+                                RewriteCutPoint{} ->
+                                    logRewrite $ "Cut point " <> lbl <> " after " <> showCounter counter
+                                RewriteStuck{} ->
+                                    logRewrite $ "Stuck after " <> showCounter counter
+                                RewriteTrivial{} ->
+                                    logRewrite $ "Simplified to bottom after " <> showCounter counter
+                                _other -> error "simplifyResult: Unexpected return value"
+                            pure simplified
+                        Right (stuck@RewriteStuck{}, cache) -> do
+                            logRewrite $ "Stopped after " <> showCounter counter
+                            updateCache cache
+                            rewriteTrace $ RewriteStepFailed $ NoApplicableRules pat'
+                            if wasSimplified
+                                then pure stuck
+                                else withSimplified pat' "Retrying with simplified pattern" (doSteps True)
+                        Right (trivial@RewriteTrivial{}, _) -> do
+                            logRewrite $ "Simplified to bottom after " <> showCounter counter
+                            pure trivial
+                        Right (aborted@RewriteAborted{}, _) -> do
+                            logRewrite $ "Aborted after " <> showCounter counter
+                            simplifyResult pat' aborted
+                        -- if unification was unclear and the pattern was
+                        -- unsimplified, simplify and retry rewriting once
+                        Left failure@RuleApplicationUnclear{}
+                            | not wasSimplified -> do
+                                rewriteTrace $ RewriteStepFailed failure
+                                -- simplify remainders, substitute and rerun.
+                                -- If failed, do the pattern-wide simplfication and rerun again
+                                withSimplified pat' "Retrying with simplified pattern" (doSteps True)
+                        Left failure -> do
                             rewriteTrace $ RewriteStepFailed failure
-                            -- simplify remainders, substitute and rerun.
-                            -- If failed, do the pattern-wide simplfication and rerun again
-                            withSimplified pat' "Retrying with simplified pattern" (doSteps True)
-                    Left failure -> do
-                        rewriteTrace $ RewriteStepFailed failure
-                        let msg = "Aborted after " <> showCounter counter
-                        if wasSimplified
-                            then logRewrite msg >> pure (RewriteAborted failure pat')
-                            else withSimplified pat' msg (pure . RewriteAborted failure)
+                            let msg = "Aborted after " <> showCounter counter
+                            if wasSimplified
+                                then logRewrite msg >> pure (RewriteAborted failure pat')
+                                else withSimplified pat' msg (pure . RewriteAborted failure)
       where
         withSimplified p msg cont = do
             simplifyP p >>= \case
