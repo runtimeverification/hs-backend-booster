@@ -36,8 +36,8 @@ import Booster.Pattern.Util (
     substituteInTerm,
  )
 import Data.List (partition)
-import qualified Debug.Trace as Debug
 import Data.Maybe (isJust, isNothing)
+import Debug.Trace qualified as Debug
 
 -- | Result of a unification (a substitution or an indication of what went wrong)
 data UnificationResult
@@ -408,8 +408,11 @@ unify1
                         (KMap _ m Nothing, KMap _ kvs (Just restVar@Var{}))
                             | (cKvs, []) <- partitionConcreteKeys kvs -> unifySimpleMapShape cKvs restVar m
                         (KMap _ kvs1 rest1, KMap _ kvs2 rest2)
-                            |   -- all keys are either concrete or the set of keys matches syntactically
-                                (allKeysConstructorLike kvs1 && allKeysConstructorLike kvs2 || Set.fromList [k | (k,_v) <- kvs1] == Set.fromList [k | (k,_v) <- kvs2]) &&
+                            | -- all keys are either concrete or the set of keys matches syntactically
+                              ( allKeysConstructorLike kvs1 && allKeysConstructorLike kvs2
+                                    || Set.fromList [k | (k, _v) <- kvs1] == Set.fromList [k | (k, _v) <- kvs2]
+                              )
+                                &&
                                 -- either both have a ...rest or neither does
                                 ((isJust rest1 && isJust rest2) || (isNothing rest1 && isNothing rest2)) ->
                                 case (duplicateKeys kvs1, duplicateKeys kvs2) of
