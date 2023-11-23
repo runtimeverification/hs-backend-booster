@@ -248,19 +248,21 @@ respond stateVar =
                                 Log.logInfoNS -- FIXME warning?
                                     "booster"
                                     "get-model ignores supplied terms and only checks predicates"
-                                pure $ (Set.toList pat.constraints, substitution)
+                                pure (Set.toList pat.constraints, substitution)
                             BoolOrCeilOrSubstitutionPredicates pSet ceils subst -> do
                                 unless (null ceils) $
                                     Log.logInfoNS -- FIXME warning?
                                         "booster"
                                         "get-model: ignoring supplied ceil predicates"
-                                pure $ (Set.toList pSet, subst)
+                                pure (Set.toList pSet, subst)
 
                     smtResult <-
-                        if (null boolPs && Map.null suppliedSubst)
+                        if null boolPs && Map.null suppliedSubst
                             then do
                                 -- as per spec, no predicate, no answer
-                                Log.logOtherNS "booster" (Log.LevelOther "SMT") $
+                                Log.logOtherNS
+                                    "booster"
+                                    (Log.LevelOther "SMT")
                                     "No predicates or substitutions to check, returning Unknown"
                                 pure $ Left SMT.Unknown
                             else do
