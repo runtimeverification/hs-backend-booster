@@ -6,7 +6,6 @@ module Test.Booster.SMT.LowLevel (
     test_smoke,
 ) where
 
-import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Logger (runNoLoggingT)
 import Data.ByteString.Char8 qualified as BS
 import Data.Ratio ((%))
@@ -55,9 +54,9 @@ declTests =
 -- otherwise they might just get queued.
 runSatAfter :: [SmtCommand] -> IO SMT.Response
 runSatAfter commands = runNoLoggingT $ do
-    ctxt <- liftIO $ mkContext Nothing
+    ctxt <- mkContext Nothing
     result <- runSMT ctxt $ mapM_ runCmd commands >> runCmd CheckSat
-    liftIO $ closeContext ctxt
+    closeContext ctxt
     pure result
 
 runsOK :: [SmtCommand] -> Assertion
@@ -128,7 +127,7 @@ checkTests =
   where
     exec x =
         runNoLoggingT $
-            liftIO (mkContext Nothing) >>= \c -> runSMT c x <* liftIO (closeContext c)
+            mkContext Nothing >>= \c -> runSMT c x <* closeContext c
     test name result decls =
         testCase name $ (result @=?) =<< exec (runCheck decls)
     returns = ($)

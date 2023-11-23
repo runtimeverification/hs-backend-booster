@@ -3,6 +3,8 @@ Copyright   : (c) Runtime Verification, 2023
 License     : BSD-3-Clause
 -}
 module Booster.SMT.Interface (
+    initSolver,
+    closeSolver,
     getModelFor,
 ) where
 
@@ -21,6 +23,23 @@ import Booster.SMT.Base as SMT
 import Booster.SMT.Runner as SMT
 import Booster.SMT.Translate as SMT
 
+initSolver :: Log.MonadLoggerIO io => KoreDefinition -> Maybe FilePath -> io SMT.SMTContext
+initSolver def mbTranscript = do
+    ctxt <- mkContext mbTranscript
+    logSMT "Checking definition prelude"
+    check <- runSMT ctxt $
+        mapM_ runCmd (smtDeclarations def) >> runCmd CheckSat
+    case check of
+        Sat -> pure ctxt
+        other -> do
+            logSMT $ "Initial SMT definition check returned " <> pack (show other)
+            error "Refusing to work with a potentially inconsistent SMT setup"
+
+closeSolver :: Log.MonadLoggerIO io => SMT.SMTContext -> io ()
+closeSolver ctxt = do
+    logSMT "Closing SMT solver"
+    closeContext ctxt
+
 {- |
 Implementation of get-model request
 
@@ -37,11 +56,10 @@ the solver could determine 'Unsat'.
 getModelFor ::
     Log.MonadLoggerIO io =>
     SMT.SMTContext ->
-    KoreDefinition ->
     [Predicate] ->
     Map Variable Term -> -- supplied substitution
     io (Either SMT.Response (Map Variable Term))
-getModelFor ctxt def ps subst
+getModelFor ctxt ps subst
     | null ps && Map.null subst = do
         logSMT "No constraints or substitutions to check, returning Sat"
         pure $ Right Map.empty
@@ -64,8 +82,7 @@ getModelFor ctxt def ps subst
                 Map.filterWithKey (const . (`Set.member` Set.map Var freeVars)) transState.mappings
             freeVarsToSExprs = Map.mapKeys getVar $ Map.map Atom freeVarsMap
 
-        -- runCmd SMT.Push     -- assuming the prelude has been run already,
-        mapM_ runCmd $ smtDeclarations def -- if prelude has not been run
+        runCmd_ SMT.Push -- assuming the prelude has been run already,
 
         -- declare-const all introduced variables (free in predicates
         -- as well as abstraction variables) before sending assertions
@@ -77,7 +94,11 @@ getModelFor ctxt def ps subst
 
         -- assert the given predicates
         mapM_ runCmd smtAsserts
+
         satResponse <- runCmd CheckSat
+
+        runCmd_ SMT.Pop
+
         case satResponse of
             Error msg ->
                 error $ "SMT Error: " <> BS.unpack msg

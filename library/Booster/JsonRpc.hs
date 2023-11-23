@@ -58,7 +58,6 @@ import Booster.Pattern.Rewrite (
 import Booster.Pattern.Util (sortOfPattern)
 import Booster.SMT.Base qualified as SMT
 import Booster.SMT.Interface qualified as SMT
-import Booster.SMT.Runner qualified as SMT
 import Booster.Syntax.Json (KoreJson (..), addHeader, sortOfJson)
 import Booster.Syntax.Json.Externalise
 import Booster.Syntax.Json.Internalise (
@@ -263,11 +262,13 @@ respond stateVar =
                                     "No predicates or substitutions to check, returning Unknown"
                                 pure $ Left SMT.Unknown
                             else do
-                                newContext <-
-                                    liftIO $ SMT.mkContext $ Just "./solver-transcript.smt2" -- FIXME
+                                -- FIXME define a withSolver abstraction
+                                -- or else, keep the solver running all the time, not per request
+                                solver <-
+                                    SMT.initSolver def $ Just "./solver-transcript.smt2" -- FIXME
                                 smtResult <-
-                                    SMT.getModelFor newContext def boolPs suppliedSubst
-                                liftIO $ SMT.closeContext newContext
+                                    SMT.getModelFor solver boolPs suppliedSubst
+                                SMT.closeSolver solver
                                 pure smtResult
                     Log.logOtherNS "booster" (Log.LevelOther "SMT") $
                         "SMT result: " <> pack (either show (("Subst: "<>) . show . Map.size) smtResult)
