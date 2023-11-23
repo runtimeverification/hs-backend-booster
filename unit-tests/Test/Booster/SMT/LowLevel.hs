@@ -45,21 +45,21 @@ declTests =
             let sortName = "CustomSort"
              in runsOK
                     [ Declare $ DeclareSort sortName 1
-                    , Declare $ DeclareFunc "f" [SmtSort sortName [smtInt]] smtInt
+                    , Declare $ DeclareFunc "f" [SMTSort sortName [smtInt]] smtInt
                     ]
         , testCase "declare assertion" $ runsOK [Declare $ Assert $ eq 0 0]
         ]
 
 -- we need to run a command with response after declaration commands,
 -- otherwise they might just get queued.
-runSatAfter :: [SmtCommand] -> IO SMT.Response
+runSatAfter :: [SMTCommand] -> IO SMT.Response
 runSatAfter commands = runNoLoggingT $ do
     ctxt <- mkContext Nothing
     result <- runSMT ctxt $ mapM_ runCmd commands >> runCmd CheckSat
     closeContext ctxt
     pure result
 
-runsOK :: [SmtCommand] -> Assertion
+runsOK :: [SMTCommand] -> Assertion
 runsOK cmds = runSatAfter cmds >>= (Sat @=?)
 
 ----------------------------------------

@@ -67,7 +67,7 @@ sexprToVal = \case
         Bool True
     Atom "false" ->
         Bool False
-    Atom SmtId{bs}
+    Atom SMTId{bs}
         | ('#' : 'b' : ds) <- BS.unpack bs
         , Just n <- binLit ds ->
             Bits (length ds) n
@@ -99,7 +99,7 @@ sexpP = parseAtom <|> parseList
   where
     parseList = List <$> (A.char '(' *> sexpP `A.sepBy` whiteSpace <* A.char ')')
 
-    parseAtom = Atom . SmtId <$> A.takeWhile1 (not . isSpecial)
+    parseAtom = Atom . SMTId <$> A.takeWhile1 (not . isSpecial)
 
     isSpecial c = isSpace c || c `elem` ['(', ')', ';']
 
@@ -110,7 +110,7 @@ sexpP = parseAtom <|> parseList
 
 toBuilder :: SExpr -> BS.Builder
 toBuilder = \case
-    Atom (SmtId bs) ->
+    Atom (SMTId bs) ->
         BS.byteString bs
     List [] ->
         inParens ""
@@ -125,7 +125,7 @@ encodeQuery = \case
     GetValue xs -> toBuilder $ List [atom "get-value", List xs]
 
 atom :: String -> SExpr
-atom = Atom . SmtId . BS.pack
+atom = Atom . SMTId . BS.pack
 
 encodeDeclaration :: DeclareCommand -> BS.Builder
 encodeDeclaration =
@@ -137,7 +137,7 @@ encodeDeclaration =
         DeclareFunc name sorts sort ->
             List [atom "declare-fun", Atom name, List (map sortExpr sorts), sortExpr sort]
 
-sortExpr :: SmtSort -> SExpr
+sortExpr :: SMTSort -> SExpr
 sortExpr = \case
-    SimpleSmtSort name -> Atom name
-    SmtSort name args -> List (Atom name : map sortExpr args)
+    SimpleSMTSort name -> Atom name
+    SMTSort name args -> List (Atom name : map sortExpr args)

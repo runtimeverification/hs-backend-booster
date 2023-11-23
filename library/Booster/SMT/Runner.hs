@@ -150,7 +150,7 @@ instance SMTEncode ControlCommand where
 
     run_ _ s = fmap (const "success") . liftIO . Backend.command_ s
 
-instance SMTEncode SmtCommand where
+instance SMTEncode SMTCommand where
     encode (Query q) = encode q
     encode (Declare d) = encode d
     encode (Control c) = encode c

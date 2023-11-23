@@ -67,10 +67,10 @@ getModelFor ctxt ps subst
         logSMT $ "Checking, constraint count " <> pack (show $ Map.size subst + length ps)
         let (smtAsserts, transState) =
                 SMT.runTranslator $ do
-                    let mkSmtEquation v t =
+                    let mkSMTEquation v t =
                             SMT.eq <$> SMT.translateTerm (Var v) <*> SMT.translateTerm t
                     smtSubst <-
-                        mapM (fmap Assert . uncurry mkSmtEquation) $ Map.assocs subst
+                        mapM (fmap Assert . uncurry mkSMTEquation) $ Map.assocs subst
                     smtPs <-
                         mapM (fmap Assert . SMT.translateTerm . coerce) ps
                     pure $ smtSubst <> smtPs

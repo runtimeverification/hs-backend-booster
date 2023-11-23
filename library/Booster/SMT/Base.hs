@@ -26,23 +26,23 @@ import Language.Haskell.TH.Syntax (Lift)
   queries (carry no data, response is important), and session control.
 -}
 
-newtype SmtId = SmtId {bs :: BS.ByteString}
+newtype SMTId = SMTId {bs :: BS.ByteString}
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving newtype (IsString, NFData, Hashable)
 
-data SmtSort
-    = SimpleSmtSort SmtId
-    | SmtSort SmtId [SmtSort]
+data SMTSort
+    = SimpleSMTSort SMTId
+    | SMTSort SMTId [SMTSort]
     deriving stock (Eq, Ord, Show)
 
-data SExpr -- SmtTerm
-    = Atom SmtId
+data SExpr -- SMTTerm
+    = Atom SMTId
     | List [SExpr]
     deriving stock (Eq, Ord, Show)
     deriving stock (Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
-data SmtCommand
+data SMTCommand
     = Declare DeclareCommand -- no response required
     | Query QueryCommand -- response essential
     | Control ControlCommand
@@ -50,9 +50,9 @@ data SmtCommand
 
 data DeclareCommand
     = Assert SExpr
-    | DeclareConst SmtId SmtSort
-    | DeclareSort SmtId Int
-    | DeclareFunc SmtId [SmtSort] SmtSort
+    | DeclareConst SMTId SMTSort
+    | DeclareSort SMTId Int
+    | DeclareFunc SMTId [SMTSort] SMTSort
     --    | DeclareData [DataDecl] NOT NECESSARY?
     deriving stock (Eq, Ord, Show)
 
@@ -98,12 +98,12 @@ instance Num SExpr where
     abs a = List [Atom "abs", a]
     signum _ = error "signum @SExpr not implemented"
     fromInteger n
-        | n >= 0 = Atom . SmtId . BS.pack $ show n
+        | n >= 0 = Atom . SMTId . BS.pack $ show n
         | otherwise = List [Atom "-", fromInteger (negate n)]
 
-smtInt, smtBool :: SmtSort
-smtInt = SimpleSmtSort "Int"
-smtBool = SimpleSmtSort "Bool"
+smtInt, smtBool :: SMTSort
+smtInt = SimpleSMTSort "Int"
+smtBool = SimpleSMTSort "Bool"
 
 -- well-known combinators
 eq, neq, le, leq, gr, geq, implies, and :: SExpr -> SExpr -> SExpr
@@ -117,7 +117,7 @@ implies = mkOp "=>"
 and = mkOp "and"
 
 mkOp :: BS.ByteString -> SExpr -> SExpr -> SExpr
-mkOp opString a b = List [Atom $ SmtId opString, a, b]
+mkOp opString a b = List [Atom $ SMTId opString, a, b]
 
 smtnot :: SExpr -> SExpr
 smtnot x = List [Atom "not", x]

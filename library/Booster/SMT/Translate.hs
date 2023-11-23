@@ -5,7 +5,7 @@ License     : BSD-3-Clause
 module Booster.SMT.Translate (
     TranslationState (..),
     Translator (..),
-    equationToSmtLemma,
+    equationToSMTLemma,
     initTranslator,
     smtDeclarations,
     translateTerm,
@@ -36,7 +36,7 @@ import Booster.SMT.Base as SMT
 import Booster.SMT.LowLevelCodec as SMT
 
 data TranslationState = TranslationState
-    { mappings :: Map Term SmtId
+    { mappings :: Map Term SMTId
     , counter :: !Int
     }
 
@@ -56,7 +56,7 @@ asSMTVar t = Translator $ do
     case Map.lookup t st.mappings of
         Just v -> pure $ Atom v
         Nothing -> do
-            let new = SmtId . BS.pack $ "SMT-" <> show st.counter
+            let new = SMTId . BS.pack $ "SMT-" <> show st.counter
             put
                 st
                     { mappings = Map.insert t new st.mappings
@@ -73,7 +73,7 @@ translateTerm t =
                 Nothing -> asSMTVar t
                 Just (SMTLib name) -> do
                     smtArgs <- mapM translateTerm args
-                    pure . List $ Atom (SmtId name) : smtArgs
+                    pure . List $ Atom (SMTId name) : smtArgs
                 Just (SMTHook hook@Atom{}) -> do
                     smtArgs <- mapM translateTerm args
                     pure . List $ hook : smtArgs
@@ -82,9 +82,9 @@ translateTerm t =
                     pure $ fillPlaceholders sexpr smtArgs
         DomainValue sort value
             | SortBool <- sort ->
-                pure $ Atom (SmtId value)
+                pure $ Atom (SMTId value)
             | SortInt <- sort ->
-                pure $ Atom (SmtId value)
+                pure $ Atom (SMTId value)
             | otherwise ->
                 asSMTVar t
         Var{} ->
@@ -105,8 +105,8 @@ fillPlaceholders target list = go target
 
     maxArg = length list
 
-    fillAtom :: SmtId -> SExpr
-    fillAtom name@(SmtId bs)
+    fillAtom :: SMTId -> SExpr
+    fillAtom name@(SMTId bs)
         | '#' == BS.head bs
         , BS.length bs > 1
         , Just n <- readMaybe @Int (BS.unpack $ BS.tail bs) =
@@ -127,7 +127,7 @@ valueToTerm st = \case
 backTranslateFrom :: TranslationState -> SExpr -> Term
 backTranslateFrom st = backTranslate
   where
-    reverseMap :: Map SmtId Term
+    reverseMap :: Map SMTId Term
     reverseMap =
         Map.fromListWithKey
             (\k x y -> error $ "Duplicate values: " <> show (k, x, y))
@@ -141,7 +141,7 @@ backTranslateFrom st = backTranslate
 
     backTranslate :: SExpr -> Term
     backTranslate = \case
-        Atom s@(SmtId v)
+        Atom s@(SMTId v)
             | isVar v ->
                 fromMaybe (error $ show v <> " not found in reverseMap") $
                     Map.lookup s reverseMap
@@ -168,8 +168,8 @@ backTranslateFrom st = backTranslate
 
 -- render an SMT assertion from an SMT lemma (which exist for both
 -- kinds of equations,"Function" and "Simplification")
-equationToSmtLemma :: RewriteRule a -> Translator (Maybe DeclareCommand)
-equationToSmtLemma equation
+equationToSMTLemma :: RewriteRule a -> Translator (Maybe DeclareCommand)
+equationToSMTLemma equation
     | not (coerce equation.attributes.smtLemma) = pure Nothing
     | otherwise = fmap Just $ do
         smtLHS <- translateTerm equation.lhs
@@ -252,7 +252,7 @@ smtDeclarations def
     -- declare all SMT lemmas as assertions
     allRules :: Map k (Map k' [v]) -> [v]
     allRules = concat . concatMap Map.elems . Map.elems
-    extractLemmas = fmap catMaybes . mapM equationToSmtLemma . allRules
+    extractLemmas = fmap catMaybes . mapM equationToSMTLemma . allRules
 
     (lemmas, finalState) =
         runTranslator $
@@ -266,16 +266,16 @@ smtDeclarations def
             Just $ DeclareFunc (smtName name) (map smtSort sym.argSorts) (smtSort sym.resultSort)
         | otherwise = Nothing
 
-smtName :: BS.ByteString -> SmtId
-smtName = SmtId -- keep it simple
+smtName :: BS.ByteString -> SMTId
+smtName = SMTId -- keep it simple
 
-smtSort :: Sort -> SmtSort
-smtSort SortInt = SimpleSmtSort "Int"
-smtSort SortBool = SimpleSmtSort "Bool"
+smtSort :: Sort -> SMTSort
+smtSort SortInt = SimpleSMTSort "Int"
+smtSort SortBool = SimpleSMTSort "Bool"
 smtSort (SortApp sortName args)
-    | null args = SimpleSmtSort $ smtName sortName
-    | otherwise = SmtSort (smtName sortName) $ map smtSort args
+    | null args = SimpleSMTSort $ smtName sortName
+    | otherwise = SMTSort (smtName sortName) $ map smtSort args
 smtSort (SortVar varName) =
     error $ "Sort variable " <> show varName <> " not supported for SMT"
 
--- SimpleSmtSort $ smtName varName -- of course not previously declared...???
+-- SimpleSMTSort $ smtName varName -- of course not previously declared...???
