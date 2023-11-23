@@ -709,8 +709,6 @@ newtype Ceil = Ceil Term
     deriving stock (Eq, Ord, Show, Generic, Data)
     deriving anyclass (NFData)
 
-
-
 -- kseq{}(inj{<sort>, SortKItem{}}(<a>),dotk{}()
 pattern KSeq :: Sort -> Term -> Term
 pattern KSeq sort a =

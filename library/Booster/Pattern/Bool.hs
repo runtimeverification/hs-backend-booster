@@ -8,21 +8,27 @@ module Booster.Pattern.Bool (
     -- export everything, modules above can re-export only type names
     module Booster.Pattern.Bool,
 ) where
-import Booster.Pattern.Base
-    ( pattern DomainValue,
-      pattern SortBool,
-      pattern SortInt,
-      pattern SortK,
-      pattern SymbolApplication,
-      Symbol(Symbol),
-      Term, Pattern, Predicate (..), constraints )
-import Booster.Definition.Attributes.Base
-    ( pattern CanBeEvaluated,
-      pattern IsNotAssoc,
-      pattern IsNotIdem,
-      pattern IsNotMacroOrAlias,
-      SymbolAttributes(SymbolAttributes),
-      SymbolType(TotalFunction) )
+
+import Booster.Definition.Attributes.Base (
+    SymbolAttributes (SymbolAttributes),
+    SymbolType (TotalFunction),
+    pattern CanBeEvaluated,
+    pattern IsNotAssoc,
+    pattern IsNotIdem,
+    pattern IsNotMacroOrAlias,
+ )
+import Booster.Pattern.Base (
+    Pattern,
+    Predicate (..),
+    Symbol (Symbol),
+    Term,
+    constraints,
+    pattern DomainValue,
+    pattern SortBool,
+    pattern SortInt,
+    pattern SortK,
+    pattern SymbolApplication,
+ )
 import Booster.Pattern.Util (isConcrete)
 
 pattern AndBool :: Term -> Term -> Term
@@ -101,7 +107,6 @@ pattern TrueBool, FalseBool :: Term
 pattern TrueBool = DomainValue SortBool "true"
 pattern FalseBool = DomainValue SortBool "false"
 
-
 negateBool :: Term -> Term
 negateBool TrueBool = FalseBool
 negateBool FalseBool = TrueBool
@@ -116,7 +121,6 @@ foldAndBool (x : xs) = AndBool x $ foldAndBool xs
 
 isBottom :: Pattern -> Bool
 isBottom = (Predicate FalseBool `elem`) . constraints
-
 
 {- | We want to break apart predicates of type `Y1 andBool ... Yn` apart, in case some of the `Y`s are abstract
 which prevents the original expression from being fed to the LLVM simplifyBool function

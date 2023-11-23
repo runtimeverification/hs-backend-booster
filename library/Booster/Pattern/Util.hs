@@ -276,7 +276,6 @@ filterTermSymbols check = cata $ \case
                 more ->
                     filter check [concatSym, elemSym] <> fromMaybe [] rest <> concat more
 
-
 -- | Calculate size of a term in bytes
 sizeOfTerm :: Term -> Int
 sizeOfTerm = cata $ \case
