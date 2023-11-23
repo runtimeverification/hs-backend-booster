@@ -111,7 +111,9 @@ respond stateVar =
                                 , req.logFailedSimplifications
                                 , req.logFallbacks
                                 ]
-                    result <- performRewrite doTracing def mLlvmLibrary mbDepth cutPoints terminals pat
+                    solver <- SMT.initSolver def $ Just "solver-transcript.smt2" -- FIXME
+                    result <- performRewrite doTracing def mLlvmLibrary (Just solver) mbDepth cutPoints terminals pat
+                    SMT.closeSolver solver
                     stop <- liftIO $ getTime Monotonic
                     let duration =
                             if fromMaybe False req.logTiming

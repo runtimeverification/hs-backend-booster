@@ -50,6 +50,7 @@ import Booster.Pattern.Simplify
 import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
+import Booster.SMT.Interface qualified as SMT
 import Data.Coerce (coerce)
 
 newtype RewriteT io err a = RewriteT
@@ -59,6 +60,7 @@ newtype RewriteT io err a = RewriteT
 data RewriteConfig = RewriteConfig
     { definition :: KoreDefinition
     , llvmApi :: Maybe LLVM.API
+    , smtSolver :: Maybe SMT.SMTContext
     , doTracing :: Bool
     }
 
@@ -66,13 +68,14 @@ runRewriteT ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    Maybe SMT.SMTContext ->
     SimplifierCache ->
     RewriteT io err a ->
     io (Either err (a, SimplifierCache))
-runRewriteT doTracing def mLlvmLibrary cache =
+runRewriteT doTracing definition llvmApi smtSolver cache =
     runExceptT
         . flip runStateT cache
-        . flip runReaderT RewriteConfig{definition = def, llvmApi = mLlvmLibrary, doTracing}
+        . flip runReaderT RewriteConfig{definition, llvmApi, smtSolver, doTracing}
         . unRewriteT
 
 throw :: MonadLoggerIO io => err -> RewriteT io err a
@@ -557,6 +560,7 @@ performRewrite ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    Maybe SMT.SMTContext ->
     -- | maximum depth
     Maybe Natural ->
     -- | cut point rule labels
@@ -565,7 +569,7 @@ performRewrite ::
     [Text] ->
     Pattern ->
     io (Natural, Seq (RewriteTrace Pattern), RewriteResult Pattern)
-performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pat = do
+performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalLabels pat = do
     (rr, RewriteStepsState{counter, traces}) <-
         flip runStateT rewriteStart $ doSteps False pat
     pure (counter, traces, rr)
@@ -683,7 +687,13 @@ performRewrite doTracing def mLlvmLibrary mbMaxDepth cutLabels terminalLabels pa
                 logRewrite $ pack $ renderDefault $ showPattern title pat'
                 (if wasSimplified then pure else simplifyResult pat') $ RewriteFinished Nothing Nothing pat'
             else
-                runRewriteT doTracing def mLlvmLibrary simplifierCache (rewriteStep cutLabels terminalLabels pat') >>= \case
+                runRewriteT
+                    doTracing
+                    def
+                    mLlvmLibrary
+                    mSolver
+                    simplifierCache
+                    (rewriteStep cutLabels terminalLabels pat') >>= \case
                     Right (RewriteFinished mlbl uniqueId single, cache) -> do
                         whenJust mlbl $ \lbl ->
                             rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
@@ -769,7 +779,14 @@ data RewriteStepsState = RewriteStepsState
     { counter :: !Natural
     , traces :: !(Seq (RewriteTrace Pattern))
     , simplifierCache :: SimplifierCache
+    , smtSolver :: Maybe SMT.SMTContext
     }
 
 rewriteStart :: RewriteStepsState
-rewriteStart = RewriteStepsState{counter = 0, traces = mempty, simplifierCache = mempty}
+rewriteStart =
+    RewriteStepsState
+        { counter = 0
+        , traces = mempty
+        , simplifierCache = mempty
+        , smtSolver = Nothing
+        }
