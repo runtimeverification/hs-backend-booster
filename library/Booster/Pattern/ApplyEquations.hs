@@ -49,9 +49,9 @@ import Booster.Definition.Base
 import Booster.LLVM
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.Base
+import Booster.Pattern.Bool
 import Booster.Pattern.Index
 import Booster.Pattern.Match
-import Booster.Pattern.Simplify
 import Booster.Pattern.Util
 import Booster.Prettyprinter (renderDefault)
 import Data.Coerce (coerce)
@@ -685,7 +685,7 @@ simplifyConstraints ::
     [Predicate] ->
     io (Either EquationFailure [Predicate], [EquationTrace], SimplifierCache)
 simplifyConstraints doTracing def mbApi cache ps =
-    runEquationT doTracing def mbApi cache $ mapM (simplifyConstraint' True) ps
+    runEquationT doTracing def mbApi cache $ mapM ((coerce <$>) . simplifyConstraint' True . coerce) ps
 
 -- version for internal nested evaluation
 simplifyConstraint' :: MonadLoggerIO io => Bool -> Term -> EquationT io Term
@@ -717,16 +717,6 @@ simplifyConstraint' recurseIntoEvalBool = \case
 
     recursion = simplifyConstraint' recurseIntoEvalBool
 
-    negateBool TrueBool = FalseBool
-    negateBool FalseBool = TrueBool
-    negateBool x = NotBool x
-
-    foldAndBool [] = TrueBool
-    foldAndBool [x] = x
-    foldAndBool (FalseBool : _) = FalseBool
-    foldAndBool (TrueBool : xs) = foldAndBool xs
-    foldAndBool (x : xs) = AndBool x $ foldAndBool xs
-
     evalEqualsK l@(SymbolApplication sL _ argsL) r@(SymbolApplication sR _ argsR)
         | isConstructorSymbol sL && isConstructorSymbol sR =
             if sL == sR
@@ -735,7 +725,25 @@ simplifyConstraint' recurseIntoEvalBool = \case
         | otherwise =
             (if recurseIntoEvalBool then evalBool else pure) $
                 EqualsK (KSeq (sortOfTerm l) l) (KSeq (sortOfTerm r) r)
-    evalEqualsK (SymbolApplication symbol _ _) _
+    evalEqualsK (SymbolApplication symbol _ _) DomainValue{}
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK (SymbolApplication symbol _ _) Injection{}
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK (SymbolApplication symbol _ _) KMap{}
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK (SymbolApplication symbol _ _) KList{}
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK (SymbolApplication symbol _ _) KSet{}
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK DomainValue{} (SymbolApplication symbol _ _)
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK Injection{} (SymbolApplication symbol _ _)
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK KMap{} (SymbolApplication symbol _ _)
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK KList{} (SymbolApplication symbol _ _)
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK KSet{} (SymbolApplication symbol _ _)
         | isConstructorSymbol symbol = pure FalseBool
     evalEqualsK _ (SymbolApplication symbol _ _)
         | isConstructorSymbol symbol = pure FalseBool

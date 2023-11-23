@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -21,7 +23,6 @@ module Booster.Pattern.Util (
     isDefinedSymbol,
     checkSymbolIsAc,
     checkTermSymbols,
-    isBottom,
     isConcrete,
     filterTermSymbols,
     sizeOfTerm,
@@ -275,8 +276,6 @@ filterTermSymbols check = cata $ \case
                 more ->
                     filter check [concatSym, elemSym] <> fromMaybe [] rest <> concat more
 
-isBottom :: Pattern -> Bool
-isBottom = (Predicate FalseBool `elem`) . constraints
 
 -- | Calculate size of a term in bytes
 sizeOfTerm :: Term -> Int
