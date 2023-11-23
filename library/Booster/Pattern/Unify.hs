@@ -36,6 +36,8 @@ import Booster.Pattern.Util (
     substituteInTerm,
  )
 import Data.List (partition)
+import qualified Debug.Trace as Debug
+import Data.Maybe (isJust, isNothing)
 
 -- | Result of a unification (a substitution or an indication of what went wrong)
 data UnificationResult
@@ -400,21 +402,28 @@ unify1
             State{uSubstitution = currentSubst, uQueue = queue} <- get
             case queue of
                 Empty ->
-                    case (substituteInTerm currentSubst t1, substituteInTerm currentSubst t2) of
+                    case (substituteInKeys currentSubst t1, substituteInKeys currentSubst t2) of
                         (KMap _ kvs (Just restVar@Var{}), KMap _ m Nothing)
                             | (cKvs, []) <- partitionConcreteKeys kvs -> unifySimpleMapShape cKvs restVar m
                         (KMap _ m Nothing, KMap _ kvs (Just restVar@Var{}))
                             | (cKvs, []) <- partitionConcreteKeys kvs -> unifySimpleMapShape cKvs restVar m
-                        (KMap _ kvs Nothing, KMap _ m Nothing)
-                            | allKeysConstructorLike kvs && allKeysConstructorLike m ->
-                                case (duplicateKeys kvs, duplicateKeys m) of
-                                    (Just duplicate, _) -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs Nothing
-                                    (_, Just duplicate) -> failWith $ DuplicateKeys duplicate $ KMap def1 m Nothing
-                                    (Nothing, Nothing) -> case kvs `findAllKeysIn` m of
-                                        Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 m Nothing
-                                        Right (matched, []) -> forM_ matched $ uncurry enqueueRegularProblem
-                                        Right (_matched, rest) -> failWith $ KeyNotFound (fst $ head rest) $ KMap def1 kvs Nothing
-                        _ -> addIndeterminate t1 t2
+                        (KMap _ kvs1 rest1, KMap _ kvs2 rest2)
+                            |   -- all keys are either concrete or the set of keys matches syntactically
+                                (allKeysConstructorLike kvs1 && allKeysConstructorLike kvs2 || Set.fromList [k | (k,_v) <- kvs1] == Set.fromList [k | (k,_v) <- kvs2]) &&
+                                -- either both have a ...rest or neither does
+                                ((isJust rest1 && isJust rest2) || (isNothing rest1 && isNothing rest2)) ->
+                                case (duplicateKeys kvs1, duplicateKeys kvs2) of
+                                    (Just duplicate, _) -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs1 rest1
+                                    (_, Just duplicate) -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs2 rest2
+                                    (Nothing, Nothing) -> do
+                                        case kvs1 `findAllKeysIn` kvs2 of
+                                            Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 kvs2 rest2
+                                            Right (matched, []) -> forM_ matched $ uncurry enqueueRegularProblem
+                                            Right (_matched, rest) -> failWith $ KeyNotFound (fst $ head rest) $ KMap def1 kvs1 rest1
+                                        case (rest1, rest2) of
+                                            (Just r1, Just r2) -> enqueueRegularProblem r1 r2
+                                            _ -> pure ()
+                        (t1', t2') -> addIndeterminate t1' t2'
                 _ ->
                     -- defer unification until all regular terms have unified
                     enqueueMapProblem t1 t2
@@ -455,6 +464,12 @@ unify1
                     Right (matched, rest) -> do
                         forM_ matched $ uncurry enqueueRegularProblem
                         enqueueRegularProblem restVar $ KMap def1 (rest ++ sM) Nothing
+
+        substituteInKeys :: Map Variable Term -> Term -> Term
+        substituteInKeys substitution = \case
+            KMap attrs keyVals rest -> KMap attrs (bimap (substituteInTerm substitution) id <$> keyVals) rest
+            other -> other
+
 -- could be unifying a map with a function which returns a map
 unify1
     t1@SymbolApplication{}
