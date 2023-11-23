@@ -15,7 +15,7 @@ import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
-import Data.Bifunctor (bimap)
+import Data.Bifunctor (bimap, Bifunctor (first))
 import Data.Either.Extra
 import Data.List.NonEmpty as NE (NonEmpty, fromList)
 import Data.Map (Map)
@@ -36,8 +36,6 @@ import Booster.Pattern.Util (
     substituteInTerm,
  )
 import Data.List (partition)
-import qualified Debug.Trace as Debug
-import Data.Maybe (isJust, isNothing)
 
 -- | Result of a unification (a substitution or an indication of what went wrong)
 data UnificationResult
@@ -403,26 +401,29 @@ unify1
             case queue of
                 Empty ->
                     case (substituteInKeys currentSubst t1, substituteInKeys currentSubst t2) of
+                        (KMap _ kvs1 rest1, KMap _ kvs2 rest2)
+                            | Just duplicate <- duplicateKeys kvs1 -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs1 rest1
+                            | Just duplicate <- duplicateKeys kvs2 -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs2 rest2
+                            |   -- both sets of keys are syntactically the same (some keys could be functions)
+                                Set.fromList [k | (k,_v) <- kvs1] == Set.fromList [k | (k,_v) <- kvs2] -> do
+                                    forM_ (Map.elems $ Map.intersectionWith (,) (Map.fromList kvs1) (Map.fromList kvs2)) $ uncurry enqueueRegularProblem
+                                    case (rest1, rest2) of
+                                        (Just r1, Just r2) -> enqueueRegularProblem r1 r2
+                                        (Just r1, Nothing) -> enqueueRegularProblem r1 (KMap def1 [] Nothing)
+                                        (Nothing, Just r2) -> enqueueRegularProblem (KMap def1 [] Nothing) r2
+                                        (Nothing, Nothing) -> pure ()
+                        (KMap _ kvs1 Nothing, KMap _ kvs2 Nothing)
+                            |   -- the sets of keys do not match but all keys are concrete and fully evaluated
+                                -- this means there is a mismatch
+                                allKeysConstructorLike kvs1 && allKeysConstructorLike kvs2 ->
+                                    case kvs1 `findAllKeysIn` kvs2 of
+                                        Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 kvs2 Nothing
+                                        Right (_matched, []) -> error "unreachable case"
+                                        Right (_matched, rest) -> failWith $ KeyNotFound (fst $ head rest) $ KMap def1 kvs1 Nothing
                         (KMap _ kvs (Just restVar@Var{}), KMap _ m Nothing)
                             | (cKvs, []) <- partitionConcreteKeys kvs -> unifySimpleMapShape cKvs restVar m
                         (KMap _ m Nothing, KMap _ kvs (Just restVar@Var{}))
                             | (cKvs, []) <- partitionConcreteKeys kvs -> unifySimpleMapShape cKvs restVar m
-                        (KMap _ kvs1 rest1, KMap _ kvs2 rest2)
-                            |   -- all keys are either concrete or the set of keys matches syntactically
-                                (allKeysConstructorLike kvs1 && allKeysConstructorLike kvs2 || Set.fromList [k | (k,_v) <- kvs1] == Set.fromList [k | (k,_v) <- kvs2]) &&
-                                -- either both have a ...rest or neither does
-                                ((isJust rest1 && isJust rest2) || (isNothing rest1 && isNothing rest2)) ->
-                                case (duplicateKeys kvs1, duplicateKeys kvs2) of
-                                    (Just duplicate, _) -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs1 rest1
-                                    (_, Just duplicate) -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs2 rest2
-                                    (Nothing, Nothing) -> do
-                                        case kvs1 `findAllKeysIn` kvs2 of
-                                            Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 kvs2 rest2
-                                            Right (matched, []) -> forM_ matched $ uncurry enqueueRegularProblem
-                                            Right (_matched, rest) -> failWith $ KeyNotFound (fst $ head rest) $ KMap def1 kvs1 rest1
-                                        case (rest1, rest2) of
-                                            (Just r1, Just r2) -> enqueueRegularProblem r1 r2
-                                            _ -> pure ()
                         (t1', t2') -> addIndeterminate t1' t2'
                 _ ->
                     -- defer unification until all regular terms have unified
@@ -453,21 +454,17 @@ unify1
                     [] -> Nothing
                     (k, _) : _ -> Just k
 
-        unifySimpleMapShape cKvs restVar m
-            | Just duplicate <- duplicateKeys cKvs =
-                failWith $ DuplicateKeys duplicate $ KMap def1 cKvs (Just restVar)
-            | Just duplicate <- duplicateKeys m = failWith $ DuplicateKeys duplicate $ KMap def1 m Nothing
-            | otherwise = do
-                let (cM, sM) = partitionConcreteKeys m
-                case cKvs `findAllKeysIn` cM of
-                    Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 m Nothing
-                    Right (matched, rest) -> do
-                        forM_ matched $ uncurry enqueueRegularProblem
-                        enqueueRegularProblem restVar $ KMap def1 (rest ++ sM) Nothing
+        unifySimpleMapShape cKvs restVar m = do
+            let (cM, sM) = partitionConcreteKeys m
+            case cKvs `findAllKeysIn` cM of
+                Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 m Nothing
+                Right (matched, rest) -> do
+                    forM_ matched $ uncurry enqueueRegularProblem
+                    enqueueRegularProblem restVar $ KMap def1 (rest ++ sM) Nothing
 
         substituteInKeys :: Map Variable Term -> Term -> Term
         substituteInKeys substitution = \case
-            KMap attrs keyVals rest -> KMap attrs (bimap (substituteInTerm substitution) id <$> keyVals) rest
+            KMap attrs keyVals rest -> KMap attrs (first (substituteInTerm substitution) <$> keyVals) rest
             other -> other
 
 -- could be unifying a map with a function which returns a map
