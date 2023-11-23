@@ -99,21 +99,28 @@ getModelFor ctxt ps subst
 
         satResponse <- runCmd CheckSat
 
-        runCmd_ SMT.Pop
-
         case satResponse of
-            Error msg ->
+            Error msg -> do
+                runCmd_ SMT.Pop
                 error $ "SMT Error: " <> BS.unpack msg
-            Unsat ->
+            Unsat -> do
+                runCmd_ SMT.Pop
                 pure $ Left Unsat
-            Unknown ->
+            Unknown ->do
+                runCmd_ SMT.Pop
                 pure $ Left Unknown
-            Values{} ->
+            Values{} -> do
+                runCmd_ SMT.Pop
                 error $ "Unexpected SMT response " <> show satResponse
-            Success ->
+            Success -> do
+                runCmd_ SMT.Pop
                 error $ "Unexpected SMT response " <> show satResponse
             Sat -> do
-                response <- runCmd $ GetValue (Map.elems freeVarsToSExprs)
+                response <-
+                    if Map.null freeVarsToSExprs
+                        then pure $ Values []
+                        else runCmd $ GetValue (Map.elems freeVarsToSExprs)
+                runCmd_ SMT.Pop
                 case response of
                     Error msg ->
                         error $ "SMT Error: " <> BS.unpack msg
