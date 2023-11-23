@@ -239,33 +239,38 @@ respond stateVar =
                     pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternErrors
                 -- various predicates obtained
                 Right things -> do
-                    Log.logInfoNS "booster" "get-model on predicates"
+                    Log.logInfoNS "booster" "get-model request"
                     -- term and predicates were sent. Only work on predicates
-                    (actualPs, suppliedSubst) <-
+                    (boolPs, suppliedSubst) <-
                         case things of
                             TermAndPredicateAndSubstitution pat substitution -> do
-                                Log.logInfoNS
+                                Log.logInfoNS -- FIXME warning?
                                     "booster"
-                                    "get-model ignores supplied terms and only checks predicates" -- FIXME warning?
+                                    "get-model ignores supplied terms and only checks predicates"
                                 pure $ (Set.toList pat.constraints, substitution)
                             BoolOrCeilOrSubstitutionPredicates pSet ceils subst -> do
                                 unless (null ceils) $
-                                    Log.logInfoNS
+                                    Log.logInfoNS -- FIXME warning?
                                         "booster"
                                         "get-model: ignoring supplied ceil predicates"
                                 pure $ (Set.toList pSet, subst)
 
-
                     smtResult <-
-                        if (null actualPs && Map.null suppliedSubst)
-                            then pure $ Left SMT.Unknown -- as per spec, no predicate, no answer
+                        if (null boolPs && Map.null suppliedSubst)
+                            then do
+                                -- as per spec, no predicate, no answer
+                                Log.logOtherNS "booster" (Log.LevelOther "SMT") $
+                                    "No predicates or substitutions to check, returning Unknown"
+                                pure $ Left SMT.Unknown
                             else do
                                 newContext <-
                                     liftIO $ SMT.mkContext $ Just "./solver-transcript.smt2" -- FIXME
                                 smtResult <-
-                                    SMT.getModelFor newContext def actualPs -- FIXME suppliedSubst
+                                    SMT.getModelFor newContext def boolPs suppliedSubst
                                 liftIO $ SMT.closeContext newContext
                                 pure smtResult
+                    Log.logOtherNS "booster" (Log.LevelOther "SMT") $
+                        "SMT result: " <> pack (either show (("Subst: "<>) . show . Map.size) smtResult)
                     pure . Right . RpcTypes.GetModel $ case smtResult of
                         Left SMT.Unsat ->
                             RpcTypes.GetModelResult

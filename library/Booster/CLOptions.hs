@@ -112,6 +112,7 @@ allowedLogLevels =
     , ("SimplifyKore", "Log all simplification in kore-rpc")
     , ("SimplifySuccess", "Log successful simplifications (booster and kore-rpc)")
     , ("Depth", "Log the current depth of the state")
+    , ("SMT", "Log the SMT-solver interactions")
     ]
 
 -- Partition provided log levels into standard and custom ones, and

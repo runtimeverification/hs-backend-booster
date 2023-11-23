@@ -6,11 +6,13 @@ module Booster.SMT.Interface (
     getModelFor,
 ) where
 
-import Control.Monad.Logger
+import Control.Monad.Logger qualified as Log
 import Data.ByteString.Char8 qualified as BS
+import Data.Coerce
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Set qualified as Set
+import Data.Text (Text, pack)
 
 import Booster.Definition.Base
 import Booster.Pattern.Base
@@ -23,8 +25,8 @@ import Booster.SMT.Translate as SMT
 Implementation of get-model request
 
 Queries an SMT solver (given by SMTContext but assumed uninitialised,
-passing the definition) for whether the given predicates are
-satisfiable.
+passing the definition) for whether the given predicates and
+the supplied substitution are satisfiable together.
 
 Returns a satisfying substitution of free variables
 in the predicates if so.
@@ -33,18 +35,30 @@ Returns either 'Unsat' or 'Unknown' otherwise, depending on whether
 the solver could determine 'Unsat'.
 -}
 getModelFor ::
-    MonadLoggerIO io =>
+    Log.MonadLoggerIO io =>
     SMT.SMTContext ->
     KoreDefinition ->
     [Predicate] ->
+    Map Variable Term -> -- supplied substitution
     io (Either SMT.Response (Map Variable Term))
-getModelFor ctxt def ps
-    | null ps = pure $ Right Map.empty
+getModelFor ctxt def ps subst
+    | null ps && Map.null subst = do
+        logSMT "No constraints or substitutions to check, returning Sat"
+        pure $ Right Map.empty
     | otherwise = runSMT ctxt $ do
+        logSMT $ "Checking, constraint count " <> pack (show $ Map.size subst + length ps)
         let (smtAsserts, transState) =
-                SMT.runTranslator $ mapM (fmap Assert . SMT.translateTerm . getTerm) ps
+                SMT.runTranslator $ do
+                    let mkSmtEquation v t =
+                            SMT.eq <$> SMT.translateTerm (Var v) <*> SMT.translateTerm t
+                    smtSubst <-
+                        mapM (fmap Assert . uncurry mkSmtEquation) $ Map.assocs subst
+                    smtPs <-
+                        mapM (fmap Assert . SMT.translateTerm . coerce) ps
+                    pure $ smtSubst <> smtPs
             freeVars =
-                Set.unions $ map ((.variables) . getAttributes . getTerm) ps
+                Set.unions $
+                    Map.keysSet subst : map ((.variables) . getAttributes . coerce) ps
 
         let freeVarsMap =
                 Map.filterWithKey (const . (`Set.member` Set.map Var freeVars)) transState.mappings
@@ -89,6 +103,8 @@ getModelFor ctxt def ps
                     other ->
                         error $ "Unexpected SMT response to GetValue: " <> show other
   where
-    getTerm (Predicate t) = t -- FIXME want a named field for this!
     getVar (Var v) = v
     getVar _ = error "not a var"
+
+logSMT :: Log.MonadLoggerIO io => Text -> io ()
+logSMT = Log.logOtherNS "booster" (Log.LevelOther "SMT")
