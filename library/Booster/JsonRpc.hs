@@ -62,9 +62,7 @@ import Booster.SMT.Runner qualified as SMT
 import Booster.Syntax.Json (KoreJson (..), addHeader, sortOfJson)
 import Booster.Syntax.Json.Externalise
 import Booster.Syntax.Json.Internalise (
-    explodeAnd,
     internalisePattern,
-    internalisePredicate,
     internaliseTermOrPredicate,
     pattern CheckSubsorts,
     pattern DisallowAlias,
@@ -234,22 +232,40 @@ respond stateVar =
         RpcTypes.GetModel req -> withContext req._module $ \(def, _) -> do
             let internalised =
                     runExcept $
-                        mapM (internalisePredicate DisallowAlias CheckSubsorts Nothing def) $
-                            explodeAnd req.state.term
+                        internaliseTermOrPredicate DisallowAlias CheckSubsorts Nothing def req.state.term
             case internalised of
-                Left patternError -> do
-                    Log.logError $ "Error internalising cterm: " <> Text.pack (show patternError)
-                    pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternError
+                Left patternErrors -> do
+                    Log.logError $ "Error internalising cterm: " <> Text.pack (show patternErrors)
+                    pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternErrors
                 -- various predicates obtained
-                Right somePredicates -> do
+                Right things -> do
                     Log.logInfoNS "booster" "get-model on predicates"
-                    let actualPs = [p | Pattern.IsPredicate p <- somePredicates]
-                    when (length actualPs /= length somePredicates) $
-                        Log.logWarnNS "booster" "Some predicates were unsupported and discarded for get-model"
+                    -- term and predicates were sent. Only work on predicates
+                    (actualPs, suppliedSubst) <-
+                        case things of
+                            TermAndPredicateAndSubstitution pat substitution -> do
+                                Log.logInfoNS
+                                    "booster"
+                                    "get-model ignores supplied terms and only checks predicates" -- FIXME warning?
+                                pure $ (Set.toList pat.constraints, substitution)
+                            BoolOrCeilOrSubstitutionPredicates pSet ceils subst -> do
+                                unless (null ceils) $
+                                    Log.logInfoNS
+                                        "booster"
+                                        "get-model: ignoring supplied ceil predicates"
+                                pure $ (Set.toList pSet, subst)
 
-                    newContext <- liftIO $ SMT.mkContext $ Just "./solver-transcript.smt2" -- FIXME
-                    smtResult <- SMT.getModelFor newContext def actualPs
-                    liftIO $ SMT.closeContext newContext
+
+                    smtResult <-
+                        if (null actualPs && Map.null suppliedSubst)
+                            then pure $ Left SMT.Unknown -- as per spec, no predicate, no answer
+                            else do
+                                newContext <-
+                                    liftIO $ SMT.mkContext $ Just "./solver-transcript.smt2" -- FIXME
+                                smtResult <-
+                                    SMT.getModelFor newContext def actualPs -- FIXME suppliedSubst
+                                liftIO $ SMT.closeContext newContext
+                                pure smtResult
                     pure . Right . RpcTypes.GetModel $ case smtResult of
                         Left SMT.Unsat ->
                             RpcTypes.GetModelResult
@@ -261,6 +277,8 @@ respond stateVar =
                                 { satisfiable = RpcTypes.Unknown
                                 , substitution = Nothing
                                 }
+                        Left other ->
+                            error $ "Unexpected result " <> show other <> "from getModelFor"
                         Right subst ->
                             let sort = fromMaybe (error "Unknown sort in input") $ sortOfJson req.state.term
                                 substitution
