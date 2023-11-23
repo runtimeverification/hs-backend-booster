@@ -193,7 +193,6 @@ concreteAndSymbolicKMapWithTwoItems =
             )
         ]
         Nothing
-
 functionKMapWithOneItemAndRest =
     KMap
         testKMapDefinition
@@ -203,7 +202,6 @@ functionKMapWithOneItemAndRest =
             )
         ]
         (Just [trm| REST:SortTestKMap{}|])
-
 functionKMapWithOneItem =
     KMap
         testKMapDefinition

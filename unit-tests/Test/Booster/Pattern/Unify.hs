@@ -434,7 +434,7 @@ internalMaps =
                         []
                         Nothing
                     )
-                    ,
+                ,
                     ( "B"
                     , SortApp "SortTestKMapItem" []
                     , [trm| \dv{SortTestKMapItem{}}("value") |]

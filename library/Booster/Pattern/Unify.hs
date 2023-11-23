@@ -15,7 +15,7 @@ import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
-import Data.Bifunctor (bimap, Bifunctor (first))
+import Data.Bifunctor (Bifunctor (first), bimap)
 import Data.Either.Extra
 import Data.List.NonEmpty as NE (NonEmpty, fromList)
 import Data.Map (Map)
@@ -404,22 +404,23 @@ unify1
                         (KMap _ kvs1 rest1, KMap _ kvs2 rest2)
                             | Just duplicate <- duplicateKeys kvs1 -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs1 rest1
                             | Just duplicate <- duplicateKeys kvs2 -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs2 rest2
-                            |   -- both sets of keys are syntactically the same (some keys could be functions)
-                                Set.fromList [k | (k,_v) <- kvs1] == Set.fromList [k | (k,_v) <- kvs2] -> do
-                                    forM_ (Map.elems $ Map.intersectionWith (,) (Map.fromList kvs1) (Map.fromList kvs2)) $ uncurry enqueueRegularProblem
-                                    case (rest1, rest2) of
-                                        (Just r1, Just r2) -> enqueueRegularProblem r1 r2
-                                        (Just r1, Nothing) -> enqueueRegularProblem r1 (KMap def1 [] Nothing)
-                                        (Nothing, Just r2) -> enqueueRegularProblem (KMap def1 [] Nothing) r2
-                                        (Nothing, Nothing) -> pure ()
+                            | -- both sets of keys are syntactically the same (some keys could be functions)
+                              Set.fromList [k | (k, _v) <- kvs1] == Set.fromList [k | (k, _v) <- kvs2] -> do
+                                forM_ (Map.elems $ Map.intersectionWith (,) (Map.fromList kvs1) (Map.fromList kvs2)) $
+                                    uncurry enqueueRegularProblem
+                                case (rest1, rest2) of
+                                    (Just r1, Just r2) -> enqueueRegularProblem r1 r2
+                                    (Just r1, Nothing) -> enqueueRegularProblem r1 (KMap def1 [] Nothing)
+                                    (Nothing, Just r2) -> enqueueRegularProblem (KMap def1 [] Nothing) r2
+                                    (Nothing, Nothing) -> pure ()
                         (KMap _ kvs1 Nothing, KMap _ kvs2 Nothing)
-                            |   -- the sets of keys do not match but all keys are concrete and fully evaluated
-                                -- this means there is a mismatch
-                                allKeysConstructorLike kvs1 && allKeysConstructorLike kvs2 ->
-                                    case kvs1 `findAllKeysIn` kvs2 of
-                                        Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 kvs2 Nothing
-                                        Right (_matched, []) -> error "unreachable case"
-                                        Right (_matched, rest) -> failWith $ KeyNotFound (fst $ head rest) $ KMap def1 kvs1 Nothing
+                            | -- the sets of keys do not match but all keys are concrete and fully evaluated
+                              -- this means there is a mismatch
+                              allKeysConstructorLike kvs1 && allKeysConstructorLike kvs2 ->
+                                case kvs1 `findAllKeysIn` kvs2 of
+                                    Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 kvs2 Nothing
+                                    Right (_matched, []) -> error "unreachable case"
+                                    Right (_matched, rest) -> failWith $ KeyNotFound (fst $ head rest) $ KMap def1 kvs1 Nothing
                         (KMap _ kvs (Just restVar@Var{}), KMap _ m Nothing)
                             | (cKvs, []) <- partitionConcreteKeys kvs -> unifySimpleMapShape cKvs restVar m
                         (KMap _ m Nothing, KMap _ kvs (Just restVar@Var{}))
