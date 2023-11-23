@@ -27,8 +27,9 @@ initSolver :: Log.MonadLoggerIO io => KoreDefinition -> Maybe FilePath -> io SMT
 initSolver def mbTranscript = do
     ctxt <- mkContext mbTranscript
     logSMT "Checking definition prelude"
-    check <- runSMT ctxt $
-        mapM_ runCmd (smtDeclarations def) >> runCmd CheckSat
+    check <-
+        runSMT ctxt $
+            mapM_ runCmd (smtDeclarations def) >> runCmd CheckSat
     case check of
         Sat -> pure ctxt
         other -> do

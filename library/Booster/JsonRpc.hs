@@ -271,7 +271,7 @@ respond stateVar =
                                 SMT.closeSolver solver
                                 pure smtResult
                     Log.logOtherNS "booster" (Log.LevelOther "SMT") $
-                        "SMT result: " <> pack (either show (("Subst: "<>) . show . Map.size) smtResult)
+                        "SMT result: " <> pack (either show (("Subst: " <>) . show . Map.size) smtResult)
                     pure . Right . RpcTypes.GetModel $ case smtResult of
                         Left SMT.Unsat ->
                             RpcTypes.GetModelResult
@@ -306,10 +306,10 @@ respond stateVar =
                                                     (externaliseTerm term)
                                                 | (var, term) <- Map.assocs subst
                                                 ]
-                            in RpcTypes.GetModelResult
-                                { satisfiable = RpcTypes.Sat
-                                , substitution
-                                }
+                             in RpcTypes.GetModelResult
+                                    { satisfiable = RpcTypes.Sat
+                                    , substitution
+                                    }
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         RpcTypes.Cancel -> pure $ Left RpcError.cancelUnsupportedInBatchMode

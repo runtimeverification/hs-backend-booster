@@ -126,7 +126,8 @@ runCmd cmd = do
     whenJust ctxt.mbTranscript $
         liftIO . flip BS.hPutStrLn (BS.pack $ "; " <> show output <> ", parsed as " <> show result <> "\n")
     when (isError result) $
-        logOtherNS "booster" (LevelOther "SMT") $ "SMT solver reports: " <> pack (show result)
+        logOtherNS "booster" (LevelOther "SMT") $
+            "SMT solver reports: " <> pack (show result)
     pure result
   where
     isError :: Response -> Bool
