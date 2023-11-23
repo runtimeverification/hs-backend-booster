@@ -31,6 +31,7 @@ import Text.Read (readMaybe)
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.Pattern.Base
+import Booster.Pattern.Bool
 import Booster.Prettyprinter qualified as Pretty
 import Booster.SMT.Base as SMT
 import Booster.SMT.LowLevelCodec as SMT
