@@ -223,33 +223,6 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
         (bResult, bTime) <- Stats.timed $ booster (Execute r{maxDepth = mbDepthLimit})
         case bResult of
             Right (Execute boosterResult)
-                -- the execution reached the depth bound due to a forced Kore simplification
-                | boosterResult.reason == DepthBound && isJust mforceSimplification -> do
-                    Log.logInfoNS "proxy" . Text.pack $
-                        "Forced simplification at " <> show (currentDepth + boosterResult.depth)
-                    simplifyResult <- simplifyExecuteState logSettings r._module def boosterResult.state
-                    case simplifyResult of
-                        Left logsOnly -> do
-                            -- state was simplified to \bottom, return vacuous
-                            Log.logInfoNS "proxy" "Vacuous state after simplification"
-                            pure . Right . Execute $ makeVacuous logsOnly boosterResult
-                        Right (simplifiedBoosterState, boosterStateSimplificationLogs) -> do
-                            let accumulatedLogs =
-                                    combineLogs
-                                        [ rpcLogs
-                                        , boosterResult.logs
-                                        , boosterStateSimplificationLogs
-                                        ]
-                            executionLoop
-                                logSettings
-                                mforceSimplification
-                                def
-                                ( currentDepth + boosterResult.depth
-                                , time + bTime
-                                , koreTime
-                                , accumulatedLogs
-                                )
-                                r{ExecuteRequest.state = execStateToKoreJson simplifiedBoosterState}
                 -- if the new backend aborts, branches or gets stuck, revert to the old one
                 --
                 -- if we are stuck in the new backend we try to re-run
@@ -334,7 +307,8 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                 | otherwise -> do
                     -- we were successful with the booster, thus we
                     -- return the booster result with the updated
-                    -- depth, in case we previously looped
+                    -- depth, in case we previously looped,
+                    -- unless we've stopped due to --interim-simplification
                     --
                     -- we also perform an internal simplify request to detect vacuous states
                     Log.logInfoNS "proxy" . Text.pack $
@@ -353,14 +327,29 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                         , boosterResult.logs
                                         , boosterStateSimplificationLogs
                                         ]
-                            pure $
-                                Right $
-                                    Execute
-                                        boosterResult
-                                            { depth = currentDepth + boosterResult.depth
-                                            , state = simplifiedBoosterState
-                                            , logs = accumulatedLogs
-                                            }
+                            if boosterResult.reason == DepthBound && isJust mforceSimplification
+                                then -- the execution reached the depth bound due to a forced Kore simplification, continue
+
+                                    executionLoop
+                                        logSettings
+                                        mforceSimplification
+                                        def
+                                        ( currentDepth + boosterResult.depth
+                                        , time + bTime
+                                        , koreTime
+                                        , accumulatedLogs
+                                        )
+                                        r{ExecuteRequest.state = execStateToKoreJson simplifiedBoosterState}
+                                else -- return the simplified booster result
+
+                                    pure $
+                                        Right $
+                                            Execute
+                                                boosterResult
+                                                    { depth = currentDepth + boosterResult.depth
+                                                    , state = simplifiedBoosterState
+                                                    , logs = accumulatedLogs
+                                                    }
             -- can only be an error at this point
             res -> pure res
 
