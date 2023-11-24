@@ -335,16 +335,32 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                     -- we were successful with the booster, thus we
                     -- return the booster result with the updated
                     -- depth, in case we previously looped
+                    --
+                    -- we also perform an internal simplify request to detect vacuous states
                     Log.logInfoNS "proxy" . Text.pack $
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     logStats ExecuteM (time + bTime, koreTime)
-                    pure $
-                        Right $
-                            Execute
-                                boosterResult
-                                    { depth = currentDepth + boosterResult.depth
-                                    , logs = combineLogs [rpcLogs, boosterResult.logs]
-                                    }
+                    simplifyResult <- simplifyExecuteState logSettings r._module def boosterResult.state
+                    case simplifyResult of
+                        Left logsOnly -> do
+                            -- state was simplified to \bottom, return vacuous
+                            Log.logInfoNS "proxy" "Vacuous state after simplification"
+                            pure . Right . Execute $ makeVacuous logsOnly boosterResult
+                        Right (simplifiedBoosterState, boosterStateSimplificationLogs) -> do
+                            let accumulatedLogs =
+                                    combineLogs
+                                        [ rpcLogs
+                                        , boosterResult.logs
+                                        , boosterStateSimplificationLogs
+                                        ]
+                            pure $
+                                Right $
+                                    Execute
+                                        boosterResult
+                                            { depth = currentDepth + boosterResult.depth
+                                            , state = simplifiedBoosterState
+                                            , logs = accumulatedLogs
+                                            }
             -- can only be an error at this point
             res -> pure res
 
