@@ -20,8 +20,6 @@ import Control.Monad.Trans.Except (runExcept)
 import Data.Aeson (ToJSON (..))
 import Data.Aeson.KeyMap qualified as Aeson
 import Data.Aeson.Types (Value (..))
-import Data.Bifunctor (second)
-import Data.Either (partitionEithers)
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, mapMaybe)
@@ -91,14 +89,13 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                         , logFallbacks = execReq.logFallbacks
                         , logTiming = execReq.logTiming
                         }
-             in liftIO (getTime Monotonic) >>= \start -> do
+             in liftIO (getTime Monotonic) >>= \_start -> do
                     bState <- liftIO $ MVar.readMVar boosterState
                     let m = fromMaybe bState.defaultMain execReq._module
                         def =
                             fromMaybe (error $ "Module " <> show m <> " not found") $
                                 Map.lookup m bState.definitions
                     handleExecute logSettings def execReq
-                        >>= traverse (postExecSimplify logSettings start execReq._module def)
     Implies _ ->
         loggedKore ImpliesM req
     Simplify simplifyReq ->
@@ -407,66 +404,6 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                     , logFailedSimplifications
                     , logTiming
                     }
-
-    postExecSimplify ::
-        LogSettings -> TimeSpec -> Maybe Text -> KoreDefinition -> API 'Res -> m (API 'Res)
-    postExecSimplify logSettings start mbModule def = \case
-        Execute res -> Execute <$> simplifyResult res
-        other -> pure other
-      where
-        -- timeLog :: TimeDiff -> Maybe [LogEntry]
-        timeLog stop
-            | fromMaybe False logSettings.logTiming =
-                let duration =
-                        fromIntegral (toNanoSecs (diffTimeSpec stop start)) / 1e9
-                 in Just [RPCLog.ProcessingTime Nothing duration]
-            | otherwise =
-                Nothing
-
-        simplifyResult :: ExecuteResult -> m ExecuteResult
-        simplifyResult res@ExecuteResult{reason, state, nextStates} = do
-            Log.logInfoNS "proxy" . Text.pack $ "Simplifying state in " <> show reason <> " result"
-            simplified <- simplifyExecuteState logSettings mbModule def state
-            case simplified of
-                Left logsOnly -> do
-                    -- state simplified to \bottom, return vacuous
-                    Log.logInfoNS "proxy" "Vacuous after simplifying result state"
-                    stop <- liftIO $ getTime Monotonic
-                    pure $ makeVacuous (combineLogs [timeLog stop, logsOnly]) res
-                Right (simplifiedState, simplifiedStateLogs) -> do
-                    simplifiedNexts <-
-                        maybe
-                            (pure [])
-                            (mapM $ simplifyExecuteState logSettings mbModule def)
-                            nextStates
-                    stop <- liftIO $ getTime Monotonic
-                    let (logsOnly, (filteredNexts, filteredNextLogs)) =
-                            second unzip $ partitionEithers simplifiedNexts
-                        newLogs = simplifiedStateLogs : logsOnly <> filteredNextLogs
-
-                    pure $ case reason of
-                        Branching
-                            | null filteredNexts ->
-                                res
-                                    { reason = Stuck
-                                    , nextStates = Nothing
-                                    , logs = combineLogs $ timeLog stop : res.logs : simplifiedStateLogs : logsOnly
-                                    }
-                            | length filteredNexts == 1 ->
-                                res -- What now? would have to re-loop. Return as-is.
-                                -- otherwise falling through to _otherReason
-                        CutPointRule
-                            | null filteredNexts ->
-                                makeVacuous (combineLogs $ timeLog stop : newLogs) res
-                        _otherReason ->
-                            res
-                                { state = simplifiedState
-                                , nextStates =
-                                    if null filteredNexts
-                                        then Nothing
-                                        else Just filteredNexts
-                                , logs = combineLogs $ timeLog stop : res.logs : newLogs
-                                }
 
 data LogSettings = LogSettings
     { logSuccessfulSimplifications :: Maybe Bool
