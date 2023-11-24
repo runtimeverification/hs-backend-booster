@@ -7,15 +7,20 @@ module Booster.SMT.Interface (
     initSolver,
     closeSolver,
     getModelFor,
+    checkPredicates,
 ) where
 
+import Control.Monad
 import Control.Monad.Logger qualified as Log
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Maybe
 import Data.ByteString.Char8 qualified as BS
 import Data.Coerce
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Set (Set)
 import Data.Set qualified as Set
-import Data.Text (Text, pack)
+import Data.Text as Text (Text, pack, unwords)
 
 import Booster.Definition.Base
 import Booster.Pattern.Base
@@ -106,7 +111,7 @@ getModelFor ctxt ps subst
             Unsat -> do
                 runCmd_ SMT.Pop
                 pure $ Left Unsat
-            Unknown ->do
+            Unknown -> do
                 runCmd_ SMT.Pop
                 pure $ Left Unknown
             Values{} -> do
@@ -135,6 +140,110 @@ getModelFor ctxt ps subst
   where
     getVar (Var v) = v
     getVar _ = error "not a var"
+
+{- | Check a predicates, given a set of predicates as known truth.
+
+Simplest version:
+
+Given K as known truth and predicates P to check, check whether K => P
+or K => !P, or neither of those implications holds. The check is done
+by asking the solver to find a counter-example:
+
+- If K ∧ !P yields Unsat then K => P (P is true given K)
+- If K ∧ P yields Unsat then K => !P (P is false given K)
+
+For both cases, the respective other result should be Sat, not
+Unknown, but we can _assume_ that by excluded middle (P ∨ !P).
+
+- If both K ∧ !P and K ∧ P yield Unsat then K is already Unsat (i.e.,
+  false) by itself and we should not conclude anything.
+- All other cases imply that we cannot conclude any impliciation,
+  neither P nor !P follows from K.
+
+In the initial version we make no attempt to determine _which_ of the
+predicates in P contributes to the respective false result. Neither do
+we check whether the predicates in P are satisfiable at all by
+themselves (together, without constraints in K).
+-}
+checkPredicates ::
+    forall io.
+    Log.MonadLoggerIO io =>
+    SMT.SMTContext ->
+    (Set Predicate) ->
+    Map Variable Term ->
+    (Set Predicate) ->
+    io (Maybe Bool)
+checkPredicates ctxt givenPs givenSubst psToCheck
+    | null psToCheck = pure $ Just True -- or Nothing?
+    | otherwise = runSMT ctxt . runMaybeT $ do
+        let ((smtGiven, sexprsToCheck), transState) =
+                SMT.runTranslator $ do
+                    let mkSMTEquation v t =
+                            SMT.eq <$> SMT.translateTerm (Var v) <*> SMT.translateTerm t
+                    smtSubst <-
+                        mapM (fmap Assert . uncurry mkSMTEquation) $ Map.assocs givenSubst
+                    smtPs <-
+                        mapM (fmap Assert . SMT.translateTerm . coerce) $ Set.toList givenPs
+                    toCheck <-
+                        mapM (SMT.translateTerm . coerce) $ Set.toList psToCheck
+                    pure (smtSubst <> smtPs, toCheck)
+
+        logSMT $
+            Text.unwords
+                [ "Checking"
+                , pack (show $ length psToCheck)
+                , "predicates, given"
+                , pack (show $ length givenPs)
+                , "assertions and a substitution of size"
+                , pack (show $ Map.size givenSubst)
+                ]
+
+        smtRun_ Push
+
+        -- declare-const all introduced variables (free in predicates
+        -- as well as abstraction variables) before sending assertions
+        mapM_
+            smtRun
+            [ DeclareConst smtId (SMT.smtSort $ sortOfTerm trm)
+            | (trm, smtId) <- Map.assocs transState.mappings
+            ]
+
+        -- assert ground truth
+        mapM_ smtRun smtGiven
+
+        consistent <- smtRun CheckSat
+        when (consistent /= Sat) $ do
+            void $ smtRun Pop
+            logSMT "Inconsistent ground truth, check returns Nothing"
+            fail "returns nothing"
+
+        -- save ground truth for 2nd check
+        smtRun_ Push
+
+        -- run check for K ∧ P and then for K ∧ !P
+        let allToCheck = SMT.List (Atom "and" : sexprsToCheck)
+
+        smtRun_ $ Assert allToCheck
+        positive <- smtRun CheckSat
+        smtRun_ Pop
+        smtRun_ $ Assert (SMT.smtnot allToCheck)
+        negative <- smtRun CheckSat
+        void $ smtRun Pop
+
+        logSMT $
+            "Check of Given ∧ P and Given ∧ !P produced "
+                <> pack (show (positive, negative))
+
+        case (positive, negative) of
+            (Unsat, Unsat) -> fail "should have been caught above"
+            (_, Unsat) -> pure True
+            (Unsat, _) -> pure False
+            _anythingElse_ -> fail "Both Sat, Unknown results, or error"
+  where
+    smtRun_ :: SMTEncode c => c -> MaybeT (SMT io) ()
+    smtRun_ = lift . SMT.runCmd_
+    smtRun :: SMTEncode c => c -> MaybeT (SMT io) Response
+    smtRun = lift . SMT.runCmd
 
 logSMT :: Log.MonadLoggerIO io => Text -> io ()
 logSMT = Log.logOtherNS "booster" (Log.LevelOther "SMT")

@@ -277,10 +277,32 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
         failIfUnclear = RuleConditionUnclear rule
         notAppliedIfBottom = RewriteRuleAppT $ pure NotApplied
     unclearRequires <-
-        catMaybes <$> mapM (checkConstraint failIfUnclear notAppliedIfBottom) ruleRequires
-    unless (null unclearRequires) $
-        failRewrite $
-            head unclearRequires
+        catMaybes <$> mapM (checkConstraint id notAppliedIfBottom) ruleRequires
+
+    -- check unclear requires-clauses in the context of known constraints (prior)
+    let prior = pat.constraints
+    mbSolver <- lift $ RewriteT $ (.smtSolver) <$> ask
+
+    case mbSolver of
+        Just solver -> do
+            checkAllRequires <- lift $ SMT.checkPredicates solver prior mempty (Set.fromList unclearRequires)
+
+            case checkAllRequires of
+                Nothing ->
+                    -- unclear even with the prior
+                    failRewrite . RuleConditionUnclear rule $ head unclearRequires
+                -- FIXME head unclearRequires might not be the one
+                -- that makes it fail. Supply foldl1 andBool unclearRequires
+                Just False ->
+                    -- requires is actually false given the prior
+                    RewriteRuleAppT $ pure NotApplied
+                Just True ->
+                    -- can proceed
+                    pure ()
+        Nothing ->
+            unless (null unclearRequires) $
+                failRewrite $
+                    RuleConditionUnclear rule (head unclearRequires)
 
     -- check ensures constraints (new) from rhs: stop and return `Trivial` if
     -- any are false, remove all that are trivially true, return the rest

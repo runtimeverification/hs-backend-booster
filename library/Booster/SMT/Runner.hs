@@ -7,6 +7,7 @@ License     : BSD-3-Clause
 module Booster.SMT.Runner (
     SMTContext (..),
     SMT (..),
+    SMTEncode (..),
     mkContext,
     closeContext,
     runSMT,
