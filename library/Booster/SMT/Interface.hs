@@ -3,7 +3,9 @@ Copyright   : (c) Runtime Verification, 2023
 License     : BSD-3-Clause
 -}
 module Booster.SMT.Interface (
-    SMTContext,
+    SMTContext, -- re-export
+    SMTOptions (..),
+    defaultSMTOptions,
     initSolver,
     closeSolver,
     getModelFor,
@@ -29,9 +31,17 @@ import Booster.SMT.Base as SMT
 import Booster.SMT.Runner as SMT
 import Booster.SMT.Translate as SMT
 
-initSolver :: Log.MonadLoggerIO io => KoreDefinition -> Maybe FilePath -> io SMT.SMTContext
-initSolver def mbTranscript = do
-    ctxt <- mkContext mbTranscript
+newtype SMTOptions = SMTOptions
+    { transcript :: Maybe FilePath
+    }
+    deriving (Eq, Show)
+
+defaultSMTOptions :: SMTOptions
+defaultSMTOptions = SMTOptions{transcript = Nothing}
+
+initSolver :: Log.MonadLoggerIO io => KoreDefinition -> SMTOptions -> io SMT.SMTContext
+initSolver def smtOptions = do
+    ctxt <- mkContext smtOptions.transcript
     logSMT "Checking definition prelude"
     check <-
         runSMT ctxt $
@@ -169,9 +179,9 @@ checkPredicates ::
     forall io.
     Log.MonadLoggerIO io =>
     SMT.SMTContext ->
-    (Set Predicate) ->
+    Set Predicate ->
     Map Variable Term ->
-    (Set Predicate) ->
+    Set Predicate ->
     io (Maybe Bool)
 checkPredicates ctxt givenPs givenSubst psToCheck
     | null psToCheck = pure $ Just True -- or Nothing?
