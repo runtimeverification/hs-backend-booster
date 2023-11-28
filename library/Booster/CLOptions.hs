@@ -139,7 +139,12 @@ adjustLogLevels ls = (standardLevel, customLevels)
 -- with fully-compatible option names
 parseSMTOptions :: Parser (Maybe SMTOptions)
 parseSMTOptions =
-    (Nothing <$ switch (long "no-smt" <> help "Disable SMT solver sub-process"))
+    flag
+        (Just $ SMTOptions Nothing)
+        Nothing
+        ( long "no-smt"
+            <> help "Disable SMT solver sub-process"
+        )
         <|> ( Just . SMTOptions
                 <$> optional
                     ( strOption
