@@ -274,7 +274,6 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     -- in isolation). Stop if false, abort rewrite if indeterminate.
     let ruleRequires =
             concatMap (splitBoolPredicates . coerce . substituteInTerm subst . coerce) rule.requires
-        failIfUnclear = RuleConditionUnclear rule
         notAppliedIfBottom = RewriteRuleAppT $ pure NotApplied
     unclearRequires <-
         catMaybes <$> mapM (checkConstraint id notAppliedIfBottom) ruleRequires
@@ -290,9 +289,10 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
             case checkAllRequires of
                 Nothing ->
                     -- unclear even with the prior
-                    failRewrite . RuleConditionUnclear rule $ head unclearRequires
-                -- FIXME head unclearRequires might not be the one
-                -- that makes it fail. Supply foldl1 andBool unclearRequires
+                    failRewrite $
+                        RuleConditionUnclear rule . coerce $
+                            foldl1 AndTerm $
+                                map coerce unclearRequires
                 Just False ->
                     -- requires is actually false given the prior
                     RewriteRuleAppT $ pure NotApplied

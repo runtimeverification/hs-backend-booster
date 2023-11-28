@@ -271,8 +271,6 @@ respond stateVar =
                                         "No predicates or substitutions given, returning Unknown"
                                     pure $ Left SMT.Unknown
                                 else do
-                                    -- FIXME define a withSolver abstraction
-                                    -- or else, keep the solver running all the time, not per request
                                     solver <-
                                         SMT.initSolver def smtOptions
                                     smtResult <-
