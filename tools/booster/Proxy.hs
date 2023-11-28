@@ -44,7 +44,7 @@ import Kore.JsonRpc.Types qualified as ExecuteRequest (ExecuteRequest (..))
 import Kore.JsonRpc.Types qualified as SimplifyRequest (SimplifyRequest (..))
 import Kore.JsonRpc.Types.Log qualified as RPCLog
 import Kore.Log qualified
-import Kore.Log.DecidePredicateUnknown (DecidePredicateUnknown)
+import Kore.Log.DecidePredicateUnknown (DecidePredicateUnknown, externaliseDecidePredicateUnknown)
 import Kore.Syntax.Definition (SentenceAxiom)
 import Kore.Syntax.Json.Types qualified as KoreJson
 import SMT qualified
@@ -413,7 +413,16 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
     postExecSimplify ::
         LogSettings -> TimeSpec -> Maybe Text -> KoreDefinition -> API 'Res -> m (API 'Res)
     postExecSimplify logSettings start mbModule def = \case
-        Execute res -> Execute <$> simplifyResult res `catch` (\(_err :: DecidePredicateUnknown) -> pure res)
+        Execute res -> do
+            abortedOrSimplified <-
+                (Right <$> simplifyResult res)
+                    `catch` ( \(err :: DecidePredicateUnknown) ->
+                                pure . Left $
+                                    res{reason = Aborted, unknownPredicate = Just . externaliseDecidePredicateUnknown $ err}
+                            )
+            case abortedOrSimplified of
+                Left aborted -> pure $ Execute aborted
+                Right simplified -> pure $ Execute simplified
         other -> pure other
       where
         -- timeLog :: TimeDiff -> Maybe [LogEntry]
