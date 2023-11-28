@@ -89,7 +89,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                         , logFallbacks = execReq.logFallbacks
                         , logTiming = execReq.logTiming
                         }
-             in liftIO (getTime Monotonic) >>= \_start -> do
+             in do
                     bState <- liftIO $ MVar.readMVar boosterState
                     let m = fromMaybe bState.defaultMain execReq._module
                         def =
