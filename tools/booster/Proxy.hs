@@ -289,19 +289,51 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                         Log.logInfoNS "proxy" . Text.pack $
                                             "Kore " <> show koreResult.reason <> " at " <> show koreResult.depth
                                         logStats ExecuteM (time + bTime + kTime, koreTime + kTime)
-                                        pure $
-                                            Right $
-                                                Execute
-                                                    koreResult
-                                                        { depth = currentDepth + boosterResult.depth + koreResult.depth
-                                                        , logs =
-                                                            combineLogs
-                                                                [ rpcLogs
-                                                                , boosterResult.logs
-                                                                , koreResult.logs
-                                                                , fallbackLog
-                                                                ]
-                                                        }
+                                        -- if Kore got stuck when Booster got stuck or branched, then the state is probably vacuous,
+                                        -- but Kore could not detect that because no rules apply. Call the simplifier to confirm.
+                                        if boosterResult.reason `elem` [Branching, Stuck] && koreResult.reason == Stuck
+                                            then do
+                                                simplifyResult <- simplifyExecuteState logSettings r._module def koreResult.state
+                                                case simplifyResult of
+                                                    Left logsOnly -> do
+                                                        -- state was simplified to \bottom, return vacuous
+                                                        Log.logInfoNS "proxy" "Vacuous state after simplification"
+                                                        pure . Right . Execute $
+                                                            makeVacuous
+                                                                logsOnly
+                                                                koreResult{depth = currentDepth + boosterResult.depth + koreResult.depth}
+                                                    Right (simplifiedKoreState, koreStateSimplificationLogs) -> do
+                                                        let accumulatedLogs =
+                                                                combineLogs
+                                                                    [ rpcLogs
+                                                                    , boosterResult.logs
+                                                                    , fallbackLog
+                                                                    , koreResult.logs
+                                                                    , koreStateSimplificationLogs
+                                                                    ]
+                                                        pure $
+                                                            Right $
+                                                                Execute
+                                                                    koreResult
+                                                                        { depth = currentDepth + boosterResult.depth + koreResult.depth
+                                                                        , state = simplifiedKoreState
+                                                                        , logs = accumulatedLogs
+                                                                        }
+                                            else -- otherwise return the state Kore gave us, setting the accumulated depth and logs
+                                            do
+                                                pure $
+                                                    Right $
+                                                        Execute
+                                                            koreResult
+                                                                { depth = currentDepth + boosterResult.depth + koreResult.depth
+                                                                , logs =
+                                                                    combineLogs
+                                                                        [ rpcLogs
+                                                                        , boosterResult.logs
+                                                                        , koreResult.logs
+                                                                        , fallbackLog
+                                                                        ]
+                                                                }
                             -- can only be an error at this point
                             res -> pure res
                 | otherwise -> do
