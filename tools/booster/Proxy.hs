@@ -289,9 +289,10 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                         Log.logInfoNS "proxy" . Text.pack $
                                             "Kore " <> show koreResult.reason <> " at " <> show koreResult.depth
                                         logStats ExecuteM (time + bTime + kTime, koreTime + kTime)
-                                        -- if Kore got stuck when Booster got stuck or branched, then the state is probably vacuous,
-                                        -- but Kore could not detect that because no rules apply. Call the simplifier to confirm.
-                                        if boosterResult.reason `elem` [Branching, Stuck] && koreResult.reason == Stuck
+                                        -- if Kore returned after 0 steps, (i.e. got stuck or branched instantly), then Booster's state
+                                        -- likely was vacuous, but Kore could not detect that because no rules apply.
+                                        -- Call the simplifier to confirm.
+                                        if koreResult.depth == 0
                                             then do
                                                 simplifyResult <- simplifyExecuteState logSettings r._module def koreResult.state
                                                 case simplifyResult of
