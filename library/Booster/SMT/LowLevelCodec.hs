@@ -17,8 +17,6 @@ import Data.ByteString.Builder qualified as BS
 import Data.ByteString.Char8 qualified as BS
 import Data.Char (isSpace)
 import Data.Functor (($>))
-import Data.Ratio
-import Numeric (readHex)
 import Text.Read
 
 import Booster.SMT.Base
@@ -68,31 +66,13 @@ sexprToVal = \case
     Atom "false" ->
         Bool False
     Atom SMTId{bs}
-        | ('#' : 'b' : ds) <- BS.unpack bs
-        , Just n <- binLit ds ->
-            Bits (length ds) n
-        | ('#' : 'x' : ds) <- BS.unpack bs
-        , [(n, [])] <- readHex ds ->
-            Bits (4 * length ds) n
         | Just n <- readMaybe (BS.unpack bs) ->
             Int n
     List [Atom "-", x]
         | Int a <- sexprToVal x ->
             Int (negate a)
-    List [Atom "/", x, y]
-        | Int a <- sexprToVal x
-        , Int b <- sexprToVal y ->
-            Real (a % b)
     expr ->
         Other expr
-  where
-    binLit cs = do
-        ds <- mapM binDigit cs
-        return $ sum $ zipWith (*) (reverse ds) powers2
-    powers2 = 1 : map (2 *) powers2
-    binDigit '0' = Just 0
-    binDigit '1' = Just 1
-    binDigit _ = Nothing
 
 sexpP :: A.Parser SExpr
 sexpP = parseAtom <|> parseList

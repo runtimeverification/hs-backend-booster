@@ -18,11 +18,13 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Data.ByteString.Char8 qualified as BS
 import Data.Coerce
+import Data.Either (isLeft)
+import Data.Either.Extra (fromLeft', fromRight')
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Data.Text as Text (Text, pack, unwords)
+import Data.Text as Text (Text, pack, unpack, unwords)
 
 import Booster.Definition.Base
 import Booster.Pattern.Base
@@ -43,9 +45,15 @@ initSolver :: Log.MonadLoggerIO io => KoreDefinition -> SMTOptions -> io SMT.SMT
 initSolver def smtOptions = do
     ctxt <- mkContext smtOptions.transcript
     logSMT "Checking definition prelude"
+    let prelude = smtDeclarations def
+    case prelude of
+        Left err -> do
+            logSMT $ "Error translating definition to SMT: " <> err
+            error $ "Unable to translate elements of the definition to SMT: " <> Text.unpack err
+        Right{} -> pure ()
     check <-
         runSMT ctxt $
-            mapM_ runCmd (smtDeclarations def) >> runCmd CheckSat
+            mapM_ runCmd (fromRight' prelude) >> runCmd CheckSat
     case check of
         Sat -> pure ctxt
         other -> do
@@ -82,7 +90,7 @@ getModelFor ctxt ps subst
         pure $ Right Map.empty
     | otherwise = runSMT ctxt $ do
         logSMT $ "Checking, constraint count " <> pack (show $ Map.size subst + length ps)
-        let (smtAsserts, transState) =
+        let translated =
                 SMT.runTranslator $ do
                     let mkSMTEquation v t =
                             SMT.eq <$> SMT.translateTerm (Var v) <*> SMT.translateTerm t
@@ -94,9 +102,14 @@ getModelFor ctxt ps subst
             freeVars =
                 Set.unions $
                     Map.keysSet subst : map ((.variables) . getAttributes . coerce) ps
-
-        let freeVarsMap =
-                Map.filterWithKey (const . (`Set.member` Set.map Var freeVars)) transState.mappings
+        when (isLeft translated) $
+            error . Text.unpack $
+                fromLeft' translated
+        let (smtAsserts, transState) = fromRight' translated
+            freeVarsMap =
+                Map.filterWithKey
+                    (const . (`Set.member` Set.map Var freeVars))
+                    transState.mappings
             freeVarsToSExprs = Map.mapKeys getVar $ Map.map Atom freeVarsMap
 
         runCmd_ SMT.Push -- assuming the prelude has been run already,
@@ -140,11 +153,17 @@ getModelFor ctxt ps subst
                     Error msg ->
                         error $ "SMT Error: " <> BS.unpack msg
                     Values pairs ->
-                        let x :: Map Variable Term
-                            x =
-                                Map.map (valueToTerm transState) $
-                                    Map.compose (Map.fromList pairs) freeVarsToSExprs
-                         in pure $ Right x
+                        let (errors, values) =
+                                Map.partition isLeft
+                                    . Map.map (valueToTerm transState)
+                                    $ Map.compose (Map.fromList pairs) freeVarsToSExprs
+                         in if null errors
+                                then pure $ Right $ Map.map fromRight' values
+                                else
+                                    error . unlines $
+                                        ( "SMT errors while converting results: "
+                                            : map (Text.unpack . fromLeft') (Map.elems errors)
+                                        )
                     other ->
                         error $ "Unexpected SMT response to GetValue: " <> show other
   where
@@ -185,19 +204,10 @@ checkPredicates ::
     io (Maybe Bool)
 checkPredicates ctxt givenPs givenSubst psToCheck
     | null psToCheck = pure $ Just True -- or Nothing?
-    | otherwise = runSMT ctxt . runMaybeT $ do
-        let ((smtGiven, sexprsToCheck), transState) =
-                SMT.runTranslator $ do
-                    let mkSMTEquation v t =
-                            SMT.eq <$> SMT.translateTerm (Var v) <*> SMT.translateTerm t
-                    smtSubst <-
-                        mapM (fmap Assert . uncurry mkSMTEquation) $ Map.assocs givenSubst
-                    smtPs <-
-                        mapM (fmap Assert . SMT.translateTerm . coerce) $ Set.toList givenPs
-                    toCheck <-
-                        mapM (SMT.translateTerm . coerce) $ Set.toList psToCheck
-                    pure (smtSubst <> smtPs, toCheck)
-
+    | Left errMsg <- translated = do
+        Log.logErrorNS "booster" $ "SMT translation error: " <> errMsg
+        pure Nothing
+    | Right ((smtGiven, sexprsToCheck), transState) <- translated = runSMT ctxt . runMaybeT $ do
         logSMT $
             Text.unwords
                 [ "Checking"
@@ -254,6 +264,17 @@ checkPredicates ctxt givenPs givenSubst psToCheck
     smtRun_ = lift . SMT.runCmd_
     smtRun :: SMTEncode c => c -> MaybeT (SMT io) Response
     smtRun = lift . SMT.runCmd
+
+    translated = SMT.runTranslator $ do
+        let mkSMTEquation v t =
+                SMT.eq <$> SMT.translateTerm (Var v) <*> SMT.translateTerm t
+        smtSubst <-
+            mapM (fmap Assert . uncurry mkSMTEquation) $ Map.assocs givenSubst
+        smtPs <-
+            mapM (fmap Assert . SMT.translateTerm . coerce) $ Set.toList givenPs
+        toCheck <-
+            mapM (SMT.translateTerm . coerce) $ Set.toList psToCheck
+        pure (smtSubst <> smtPs, toCheck)
 
 logSMT :: Log.MonadLoggerIO io => Text -> io ()
 logSMT = Log.logOtherNS "booster" (Log.LevelOther "SMT")

@@ -16,7 +16,10 @@ module Booster.SMT.Translate (
 ) where
 
 import Control.Monad
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
+import Data.Bifunctor (first)
 import Data.ByteString.Char8 qualified as BS
 import Data.Char (isDigit)
 import Data.Coerce (coerce)
@@ -24,7 +27,8 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Set qualified as Set
-import Data.Tuple (swap)
+import Data.Text (Text, pack)
+import Prettyprinter (pretty)
 import Prettyprinter qualified as Pretty
 import Text.Read (readMaybe)
 
@@ -32,6 +36,7 @@ import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.Pattern.Base
 import Booster.Pattern.Bool
+import Booster.Pattern.Util (sortOfTerm)
 import Booster.Prettyprinter qualified as Pretty
 import Booster.SMT.Base as SMT
 import Booster.SMT.LowLevelCodec as SMT
@@ -45,11 +50,14 @@ initTranslator :: TranslationState
 initTranslator =
     TranslationState{mappings = mempty, counter = 1}
 
-newtype Translator a = Translator (State TranslationState a)
+newtype Translator a = Translator (StateT TranslationState (Except Text) a)
     deriving newtype (Functor, Applicative, Monad)
 
-runTranslator :: Translator a -> (a, TranslationState)
-runTranslator (Translator action) = runState action initTranslator
+throw :: Text -> Translator a
+throw = Translator . lift . throwE
+
+runTranslator :: Translator a -> Either Text (a, TranslationState)
+runTranslator (Translator action) = runExcept $ runStateT action initTranslator
 
 asSMTVar :: Term -> Translator SExpr
 asSMTVar t = Translator $ do
@@ -68,7 +76,14 @@ asSMTVar t = Translator $ do
 translateTerm :: Term -> Translator SExpr
 translateTerm t =
     case t of
-        AndTerm t1 t2 -> error "what now"
+        AndTerm t1 t2
+            | SortBool <- sortOfTerm t1
+            , SortBool <- sortOfTerm t2 ->
+                SMT.and <$> translateTerm t1 <*> translateTerm t2
+            | otherwise ->
+                throw $
+                    "General \and not supported for SMT. Failed to translate "
+                        <> Pretty.renderText (pretty t)
         SymbolApplication sym _sorts args ->
             case sym.attributes.smt of
                 Nothing -> asSMTVar t
@@ -80,7 +95,7 @@ translateTerm t =
                     pure . List $ hook : smtArgs
                 Just (SMTHook sexpr) -> do
                     smtArgs <- mapM translateTerm args
-                    pure $ fillPlaceholders sexpr smtArgs
+                    fillPlaceholders sexpr smtArgs
         DomainValue sort value
             | SortBool <- sort ->
                 pure $ Atom (SMTId value)
@@ -97,75 +112,65 @@ translateTerm t =
 
 -- Atoms of the shape "#<num>" where <num> is a small positive
 -- integer are replaced with the element at index <num>.
-fillPlaceholders :: SExpr -> [SExpr] -> SExpr
+fillPlaceholders :: SExpr -> [SExpr] -> Translator SExpr
 fillPlaceholders target list = go target
   where
-    go :: SExpr -> SExpr
+    go :: SExpr -> Translator SExpr
     go (Atom symb) = fillAtom symb
-    go (List sexprs) = List (map go sexprs)
+    go (List sexprs) = List <$> mapM go sexprs
 
     maxArg = length list
 
-    fillAtom :: SMTId -> SExpr
+    fillAtom :: SMTId -> Translator SExpr
     fillAtom name@(SMTId bs)
         | '#' == BS.head bs
         , BS.length bs > 1
         , Just n <- readMaybe @Int (BS.unpack $ BS.tail bs) =
             if n > maxArg
-                then error $ "Hook argument index out of bounds: " <> show target
-                else list !! (n - 1)
-        | otherwise = Atom name
+                then throw $ "Hook argument index out of bounds: " <> pack (show target)
+                else pure $ list !! (n - 1)
+        | otherwise = pure $ Atom name
 
-valueToTerm :: TranslationState -> Value -> Term
+valueToTerm :: TranslationState -> Value -> Either Text Term
 valueToTerm st = \case
-    Bool True -> TrueBool
-    Bool False -> FalseBool
-    Int i -> DomainValue SortInt (BS.pack $ show i)
-    Real r -> error "unexpected Real value" -- DomainValue SortReal (printf "%0.f" (fromRational r))
-    bits@Bits{} -> error $ "unexpected Bits value " <> show bits -- DomainValue SortBits
+    Bool True -> Right TrueBool
+    Bool False -> Right FalseBool
+    Int i -> Right $ DomainValue SortInt (BS.pack $ show i)
     Other sexpr -> backTranslateFrom st sexpr
 
-backTranslateFrom :: TranslationState -> SExpr -> Term
-backTranslateFrom st = backTranslate
+backTranslateFrom :: TranslationState -> SExpr -> Either Text Term
+backTranslateFrom st = \case
+    Atom s@(SMTId v)
+        | isVar v ->
+            first (pack (show v) <>) $
+                fromMaybe (Left "Not found in reverseMap") $
+                    Map.lookup s reverseMap
+        | v == "true" ->
+            Right TrueBool
+        | v == "false" ->
+            Right FalseBool
+        | BS.all isDigit v ->
+            Right $ DomainValue SortInt v
+        | otherwise ->
+            Left $ "Unable to backtranslate atom " <> pack (show v)
+    List _ -> Left "backtranslate: List case not implemented"
   where
-    reverseMap :: Map SMTId Term
+    reverseMap :: Map SMTId (Either Text Term)
     reverseMap =
-        Map.fromListWithKey
-            (\k x y -> error $ "Duplicate values: " <> show (k, x, y))
-            . map swap
+        Map.map (first $ ("Duplicate bindings in reverseMap: " <>) . pack . show)
+            . Map.fromListWith collectDuplicates
+            . map (\(a, b) -> (b, Right a))
             $ Map.assocs st.mappings
+
+    collectDuplicates (Right x) (Right y) = Left [x, y]
+    collectDuplicates (Left xs) (Right y) = Left $ y : xs
+    collectDuplicates (Right x) (Left ys) = Left $ x : ys
+    collectDuplicates (Left xs) (Left ys) = Left $ xs <> ys
 
     isVar :: BS.ByteString -> Bool
     isVar bs = first4 == "SMT-" && BS.all isDigit rest
       where
         (first4, rest) = BS.splitAt 4 bs
-
-    backTranslate :: SExpr -> Term
-    backTranslate = \case
-        Atom s@(SMTId v)
-            | isVar v ->
-                fromMaybe (error $ show v <> " not found in reverseMap") $
-                    Map.lookup s reverseMap
-            | v == "true" ->
-                TrueBool
-            | v == "false" ->
-                FalseBool
-            | BS.all isDigit v ->
-                DomainValue SortInt v
-            | otherwise ->
-                error $ "Unable to backtranslate atom " <> show v
-        List xs
-            | null xs ->
-                error "backtranslate: empty list"
-            | (fct@Atom{} : args) <- xs ->
-                error
-                    "Reconstructing function application requires symbol metadata (SMTLib)"
-                    SymbolApplication
-                    undefined
-                    []
-                    $ map backTranslate args
-            | otherwise ->
-                error "backtranslate: List case not implemented"
 
 -- render an SMT assertion from an SMT lemma (which exist for both
 -- kinds of equations,"Function" and "Simplification")
@@ -191,13 +196,12 @@ equationToSMTLemma equation
         finalMapping <- Translator $ gets (.mappings)
         -- for detailed error messages:
         let prettyMappings m =
-                Pretty.renderDefault $
-                    Pretty.vsep
-                        [ Pretty.pretty (show v) <> " <== " <> Pretty.pretty t
-                        | (t, v) <- Map.toList m
-                        ]
+                Pretty.vsep
+                    [ Pretty.pretty (show v) <> " <== " <> Pretty.pretty t
+                    | (t, v) <- Map.toList m
+                    ]
             lemmaId =
-                Pretty.renderDefault . head $
+                head $
                     catMaybes
                         [ fmap Pretty.pretty equation.attributes.ruleLabel
                         , fmap Pretty.pretty equation.attributes.location
@@ -206,38 +210,42 @@ equationToSMTLemma equation
         -- free variables (not created by abstraction during
         -- translation) are all-quantified on the outside
         let freeVars = Set.toList (getAttributes equation.lhs).variables
-            -- TODO is the LHS enough? The RHS may have existentials.
-            mkSExpPair :: Variable -> SExpr
+            -- LHS should be ok since RHS of an equation should not have existentials.
+            mkSExpPair :: Variable -> Translator SExpr
             mkSExpPair v
                 | Just smtV <- Map.lookup (Var v) finalMapping =
-                    List [Atom smtV, SMT.sortExpr $ smtSort v.variableSort]
+                    pure $ List [Atom smtV, SMT.sortExpr $ smtSort v.variableSort]
                 | otherwise =
-                    error $
-                        unlines
-                            [ "Free variable " <> show v.variableName <> " not found in "
+                    throw . Pretty.renderText $
+                        Pretty.vsep
+                            [ "Free variable " <> pretty (show v.variableName) <> " not found in "
                             , prettyMappings finalMapping
                             ]
+        varPairs <- mapM mkSExpPair freeVars
         -- An SMT lemma should not contain any uninterpreted
         -- functions. If anything was variable-abstracted apart from
         -- the free variables in the term, this is an error.
         let surplusMappings = foldr (Map.delete . Var) finalMapping freeVars
         unless (Map.null surplusMappings) $ do
-            error $
-                unlines
+            throw . Pretty.renderText $
+                Pretty.vsep
                     [ "Surplus mappings found for lemma " <> lemmaId
                     , prettyMappings surplusMappings
                     ]
         -- reset state but keep variable counter
         Translator . modify $ \s -> s{mappings = Map.empty}
-        pure $ Assert $ List [Atom "forall", List $ map mkSExpPair freeVars, lemmaRaw]
+        pure . Assert $ List [Atom "forall", List varPairs, lemmaRaw]
 
 -- collect and render all declarations from a definition
-smtDeclarations :: KoreDefinition -> [DeclareCommand]
+smtDeclarations :: KoreDefinition -> Either Text [DeclareCommand]
 smtDeclarations def
-    | not (Map.null finalState.mappings) =
-        error $ "Unexpected final state " <> show (finalState.mappings, finalState.counter)
-    | otherwise =
-        concat [sortDecls, funDecls, lemmas]
+    | Left msg <- translatedLemmas =
+        Left $ "Lemma translation failed: " <> msg
+    | Right (_, finalState) <- translatedLemmas
+    , not (Map.null finalState.mappings) =
+        Left . pack $ "Unexpected final state " <> show (finalState.mappings, finalState.counter)
+    | Right (lemmas, _) <- translatedLemmas =
+        Right $ concat [sortDecls, funDecls, lemmas]
   where
     -- declare all sorts except Int and Bool
     sortDecls =
@@ -255,7 +263,7 @@ smtDeclarations def
     allRules = concat . concatMap Map.elems . Map.elems
     extractLemmas = fmap catMaybes . mapM equationToSMTLemma . allRules
 
-    (lemmas, finalState) =
+    translatedLemmas =
         runTranslator $
             (<>) <$> extractLemmas def.functionEquations <*> extractLemmas def.simplifications
 
@@ -268,7 +276,7 @@ smtDeclarations def
         | otherwise = Nothing
 
 smtName :: BS.ByteString -> SMTId
-smtName = SMTId -- keep it simple
+smtName = SMTId
 
 smtSort :: Sort -> SMTSort
 smtSort SortInt = SimpleSMTSort "Int"
@@ -278,5 +286,3 @@ smtSort (SortApp sortName args)
     | otherwise = SMTSort (smtName sortName) $ map smtSort args
 smtSort (SortVar varName) =
     error $ "Sort variable " <> show varName <> " not supported for SMT"
-
--- SimpleSMTSort $ smtName varName -- of course not previously declared...???

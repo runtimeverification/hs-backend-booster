@@ -8,7 +8,6 @@ module Test.Booster.SMT.LowLevel (
 
 import Control.Monad.Logger (runNoLoggingT)
 import Data.ByteString.Char8 qualified as BS
-import Data.Ratio ((%))
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -100,7 +99,6 @@ valueParsing =
         , "true" `parsesAsValue` SMT.Bool True
         , "false" `parsesAsValue` SMT.Bool False
         , "&^#$Rubbish" `parsesAsValue` Other (Atom "&^#$Rubbish")
-        , "(/ 42 43)" `parsesAsValue` SMT.Real (42 % 43)
         ]
   where
     parsesAsValue :: BS.ByteString -> Value -> TestTree

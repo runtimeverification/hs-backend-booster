@@ -82,8 +82,6 @@ data Response
 data Value
     = Bool !Bool
     | Int !Integer
-    | Real !Rational
-    | Bits !Int !Integer
     | Other !SExpr
     deriving stock (Eq, Ord, Show)
 
