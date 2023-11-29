@@ -105,6 +105,9 @@ declare = mapM_ runCmd
 class SMTEncode cmd where
     encode :: cmd -> BS.Builder
 
+    comment :: cmd -> Maybe BS.Builder
+    comment _ = Nothing
+
     -- selecting the actual runner (command_ for Declare and Control, command for query)
     run_ ::
         MonadLoggerIO io =>
@@ -120,7 +123,9 @@ runCmd :: forall cmd io. (SMTEncode cmd, MonadLoggerIO io) => cmd -> SMT io Resp
 runCmd cmd = do
     let cmdBS = encode cmd
     ctxt <- SMT ask
-    whenJust ctxt.mbTranscript $ \h ->
+    whenJust ctxt.mbTranscript $ \h -> do
+        whenJust (comment cmd) $ \c ->
+            liftIO (BS.hPutBuilder h c)
         liftIO (BS.hPutBuilder h $ cmdBS <> "\n")
     output <- run_ cmd ctxt.solver cmdBS
     let result = readResponse output
@@ -137,6 +142,15 @@ runCmd cmd = do
 
 instance SMTEncode DeclareCommand where
     encode = encodeDeclaration
+
+    comment cmd =
+        case getComment cmd of
+            "" -> Nothing
+            bs ->
+                Just
+                    . foldl1 (<>)
+                    . map (\b -> "; " <> BS.byteString b <> "\n")
+                    $ BS.lines bs
 
     run_ _ s = fmap (const "success") . liftIO . Backend.command_ s
 

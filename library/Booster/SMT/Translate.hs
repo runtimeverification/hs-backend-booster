@@ -234,7 +234,21 @@ equationToSMTLemma equation
                     ]
         -- reset state but keep variable counter
         Translator . modify $ \s -> s{mappings = Map.empty}
-        pure . Assert $ List [Atom "forall", List varPairs, lemmaRaw]
+        let varComments =
+                [ smtV <> " <-- " <> v.variableName
+                | (Var v, SMTId smtV) <- Map.assocs finalMapping
+                ]
+            prettyLemma =
+                Pretty.vsep
+                    ( pretty equation.lhs <> " == " <> pretty equation.rhs
+                        : if Set.null equation.requires
+                            then []
+                            else "  requires" : map (Pretty.indent 4 . pretty) (Set.toList equation.requires)
+                    )
+            lemmaComment = BS.pack (Pretty.renderDefault prettyLemma)
+
+        pure . Assert (BS.unlines $ lemmaComment : varComments) $
+            List [Atom "forall", List varPairs, lemmaRaw]
 
 -- collect and render all declarations from a definition
 smtDeclarations :: KoreDefinition -> Either Text [DeclareCommand]
@@ -249,7 +263,7 @@ smtDeclarations def
   where
     -- declare all sorts except Int and Bool
     sortDecls =
-        [ DeclareSort (smtName name) attributes.argCount
+        [ DeclareSort ("User-defined sort " <> name) (smtName name) attributes.argCount
         | (name, (attributes, _)) <- Map.assocs def.sorts
         , name /= "SortInt"
         , name /= "SortBool"
@@ -272,7 +286,12 @@ smtDeclarations def
     declareFunc :: Symbol -> Maybe DeclareCommand
     declareFunc sym
         | Just (SMTLib name) <- sym.attributes.smt =
-            Just $ DeclareFunc (smtName name) (map smtSort sym.argSorts) (smtSort sym.resultSort)
+            Just $
+                DeclareFunc
+                    ("smtlib-attributed function " <> sym.name)
+                    (smtName name)
+                    (map smtSort sym.argSorts)
+                    (smtSort sym.resultSort)
         | otherwise = Nothing
 
 smtName :: BS.ByteString -> SMTId

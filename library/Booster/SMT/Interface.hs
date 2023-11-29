@@ -25,10 +25,12 @@ import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text as Text (Text, pack, unpack, unwords)
+import Prettyprinter (Pretty, pretty)
 
 import Booster.Definition.Base
 import Booster.Pattern.Base
 import Booster.Pattern.Util (sortOfTerm)
+import Booster.Prettyprinter qualified as Pretty
 import Booster.SMT.Base as SMT
 import Booster.SMT.Runner as SMT
 import Booster.SMT.Translate as SMT
@@ -95,9 +97,9 @@ getModelFor ctxt ps subst
                     let mkSMTEquation v t =
                             SMT.eq <$> SMT.translateTerm (Var v) <*> SMT.translateTerm t
                     smtSubst <-
-                        mapM (fmap Assert . uncurry mkSMTEquation) $ Map.assocs subst
+                        mapM (\(v, t) -> Assert "Substitution" <$> mkSMTEquation v t) $ Map.assocs subst
                     smtPs <-
-                        mapM (fmap Assert . SMT.translateTerm . coerce) ps
+                        mapM (\(Predicate p) -> Assert (mkComment p) <$> SMT.translateTerm p) ps
                     pure $ smtSubst <> smtPs
             freeVars =
                 Set.unions $
@@ -118,7 +120,7 @@ getModelFor ctxt ps subst
         -- as well as abstraction variables) before sending assertions
         mapM_
             runCmd
-            [ DeclareConst smtId (SMT.smtSort $ sortOfTerm trm)
+            [ DeclareConst (mkComment trm) smtId (SMT.smtSort $ sortOfTerm trm)
             | (trm, smtId) <- Map.assocs transState.mappings
             ]
 
@@ -169,6 +171,9 @@ getModelFor ctxt ps subst
   where
     getVar (Var v) = v
     getVar _ = error "not a var"
+
+mkComment :: Pretty a => a -> BS.ByteString
+mkComment = BS.pack . Pretty.renderDefault . pretty
 
 {- | Check a predicates, given a set of predicates as known truth.
 
@@ -224,7 +229,7 @@ checkPredicates ctxt givenPs givenSubst psToCheck
         -- as well as abstraction variables) before sending assertions
         mapM_
             smtRun
-            [ DeclareConst smtId (SMT.smtSort $ sortOfTerm trm)
+            [ DeclareConst (mkComment trm) smtId (SMT.smtSort $ sortOfTerm trm)
             | (trm, smtId) <- Map.assocs transState.mappings
             ]
 
@@ -243,10 +248,10 @@ checkPredicates ctxt givenPs givenSubst psToCheck
         -- run check for K ∧ P and then for K ∧ !P
         let allToCheck = SMT.List (Atom "and" : sexprsToCheck)
 
-        smtRun_ $ Assert allToCheck
+        smtRun_ $ Assert "P" allToCheck
         positive <- smtRun CheckSat
         smtRun_ Pop
-        smtRun_ $ Assert (SMT.smtnot allToCheck)
+        smtRun_ $ Assert "not P" (SMT.smtnot allToCheck)
         negative <- smtRun CheckSat
         void $ smtRun Pop
 
@@ -269,9 +274,9 @@ checkPredicates ctxt givenPs givenSubst psToCheck
         let mkSMTEquation v t =
                 SMT.eq <$> SMT.translateTerm (Var v) <*> SMT.translateTerm t
         smtSubst <-
-            mapM (fmap Assert . uncurry mkSMTEquation) $ Map.assocs givenSubst
+            mapM (\(v, t) -> Assert "Substitution" <$> mkSMTEquation v t) $ Map.assocs givenSubst
         smtPs <-
-            mapM (fmap Assert . SMT.translateTerm . coerce) $ Set.toList givenPs
+            mapM (\(Predicate p) -> Assert (mkComment p) <$> SMT.translateTerm p) $ Set.toList givenPs
         toCheck <-
             mapM (SMT.translateTerm . coerce) $ Set.toList psToCheck
         pure (smtSubst <> smtPs, toCheck)
