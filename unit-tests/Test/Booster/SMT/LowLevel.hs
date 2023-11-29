@@ -47,6 +47,22 @@ declTests =
                     , Declare $ DeclareFunc "f" [SMTSort sortName [smtInt]] smtInt
                     ]
         , testCase "declare assertion" $ runsOK [Declare $ Assert $ eq 0 0]
+        , testCase "declare a lemma with quantifiers" $
+            let x = Atom "x"
+                y = Atom "y"
+                intSorted v = List [List [v, Atom "Int"]]
+             in runsOK
+                    [ Declare . Assert $
+                        List
+                            [ Atom "forall"
+                            , intSorted x
+                            , List
+                                [ Atom "exists"
+                                , intSorted y
+                                , eq x (List [Atom "-", y])
+                                ]
+                            ]
+                    ]
         ]
 
 -- we need to run a command with response after declaration commands,
