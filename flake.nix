@@ -2,7 +2,7 @@
   description = "hs-backend-booster";
 
   inputs = {
-    haskell-backend.url = "github:runtimeverification/haskell-backend/b2bade8ce62e5f3add32d87e98244ceb31790f9f";
+    haskell-backend.url = "github:runtimeverification/haskell-backend/827252a324f651f361ac62de40dbf8888a089503";
     stacklock2nix.follows = "haskell-backend/stacklock2nix";
     nixpkgs.follows = "haskell-backend/nixpkgs";
   };
@@ -59,6 +59,7 @@
               decision-diagrams = dontCheck hprev.decision-diagrams;
               fgl = dontCheck hprev.fgl;
               haskeline = dontCheck hprev.haskeline;
+              smtlib-backends-process = dontCheck hprev.smtlib-backends-process;
               hs-backend-booster = overrideCabal hprev.hs-backend-booster
                 (drv: {
                   doCheck = false;
