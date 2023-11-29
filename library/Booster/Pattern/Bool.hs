@@ -5,11 +5,24 @@ Copyright   : (c) Runtime Verification, 2024
 License     : BSD-3-Clause
 -}
 module Booster.Pattern.Bool (
-    -- export everything, modules above can re-export only type names
-    module Booster.Pattern.Bool,
+    foldAndBool,
+    isBottom,
+    negateBool,
+    splitBoolPredicates,
+    -- patterns
+    pattern TrueBool,
+    pattern FalseBool,
+    pattern NotBool,
+    pattern EqualsInt,
+    pattern NEqualsInt,
+    pattern EqualsK,
+    pattern NEqualsK,
 ) where
 
+import Data.ByteString.Char8 (ByteString)
+
 import Booster.Definition.Attributes.Base (
+    SMTType (SMTHook),
     SymbolAttributes (SymbolAttributes),
     SymbolType (TotalFunction),
     pattern CanBeEvaluated,
@@ -30,10 +43,18 @@ import Booster.Pattern.Base (
     pattern SymbolApplication,
  )
 import Booster.Pattern.Util (isConcrete)
+import Booster.SMT.Base (SExpr (Atom), SMTId (..))
 
-pattern TotalFunctionAttributes :: SymbolAttributes
-pattern TotalFunctionAttributes =
-    SymbolAttributes TotalFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing Nothing
+pattern TotalFunctionWithSMT :: ByteString -> SymbolAttributes
+pattern TotalFunctionWithSMT hook =
+    SymbolAttributes
+        TotalFunction
+        IsNotIdem
+        IsNotAssoc
+        IsNotMacroOrAlias
+        CanBeEvaluated
+        Nothing
+        (Just (SMTHook (Atom (SMTId hook))))
 
 pattern AndBool :: Term -> Term -> Term
 pattern AndBool l r =
@@ -43,7 +64,7 @@ pattern AndBool l r =
                 []
                 [SortBool, SortBool]
                 SortBool
-                TotalFunctionAttributes
+                (TotalFunctionWithSMT "and")
             )
         []
         [l, r]
@@ -56,7 +77,7 @@ pattern NotBool t =
                 []
                 [SortBool]
                 SortBool
-                TotalFunctionAttributes
+                (TotalFunctionWithSMT "not")
             )
         []
         [t]
@@ -69,7 +90,7 @@ pattern EqualsInt a b =
                 []
                 [SortInt, SortInt]
                 SortBool
-                TotalFunctionAttributes
+                (TotalFunctionWithSMT "=")
             )
         []
         [a, b]
@@ -80,7 +101,7 @@ pattern NEqualsInt a b =
                 []
                 [SortInt, SortInt]
                 SortBool
-                TotalFunctionAttributes
+                (TotalFunctionWithSMT "distinct")
             )
         []
         [a, b]
@@ -91,7 +112,7 @@ pattern EqualsK a b =
                 []
                 [SortK, SortK]
                 SortBool
-                TotalFunctionAttributes
+                (TotalFunctionWithSMT "=")
             )
         []
         [a, b]
@@ -102,7 +123,7 @@ pattern NEqualsK a b =
                 []
                 [SortK, SortK]
                 SortBool
-                TotalFunctionAttributes
+                (TotalFunctionWithSMT "distinct")
             )
         []
         [a, b]
