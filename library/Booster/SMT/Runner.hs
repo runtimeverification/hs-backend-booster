@@ -88,7 +88,7 @@ closeContext :: MonadLoggerIO io => SMTContext -> io ()
 closeContext ctxt = do
     logOtherNS "booster" (LevelOther "SMT") "Stopping SMT solver"
     whenJust ctxt.mbTranscript $ \h -> liftIO $ do
-        BS.hPutStrLn h "; stopping solver"
+        BS.hPutStrLn h "; stopping solver\n;;;;;;;;;;;;;;;;;;;;;;;"
         hClose h
     liftIO $ ctxt.solverClose
 
@@ -160,9 +160,11 @@ instance SMTEncode QueryCommand where
     run_ _ s = fmap BS.toStrict . liftIO . Backend.command s
 
 instance SMTEncode ControlCommand where
-    encode Push = BS.shortByteString "(push)"
-    encode Pop = BS.shortByteString "(pop)"
-    encode Exit = BS.shortByteString "(exit)"
+    encode Push = "(push)"
+    encode Pop = "(pop)"
+    encode Exit = "(exit)"
+
+    comment _ = Just $ ";;;;;;;\n"
 
     run_ _ s = fmap (const "success") . liftIO . Backend.command_ s
 
