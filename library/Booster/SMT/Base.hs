@@ -53,10 +53,7 @@ data DeclareCommand
     | DeclareConst SMTId SMTSort
     | DeclareSort SMTId Int
     | DeclareFunc SMTId [SMTSort] SMTSort
-    --    | DeclareData [DataDecl] NOT NECESSARY?
     deriving stock (Eq, Ord, Show)
-
-type DataDecl = String -- HACK
 
 data ControlCommand
     = Push -- Int
