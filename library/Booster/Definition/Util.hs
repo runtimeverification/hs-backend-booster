@@ -28,7 +28,7 @@ import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Prettyprinter (Doc, Pretty, pretty)
+import Prettyprinter (Doc, Pretty, pretty, (<+>))
 import Prettyprinter qualified as Pretty
 import Prettyprinter.Render.String qualified as Pretty (renderString)
 
@@ -37,16 +37,18 @@ import Booster.Definition.Base
 import Booster.Pattern.Index (TermIndex (..))
 import Booster.Prettyprinter
 import Booster.Util
+import Booster.Pattern.Base
 
 data Summary = Summary
     { file :: FilePath
     , modNames, sortNames, symbolNames :: [ByteString]
     , subSorts :: Map.Map ByteString [ByteString]
-    , axiomCount, preserveDefinednessCount, containAcSymbolsCount :: Int
+    , axiomCount, preserveDefinednessCount, containAcSymbolsCount, partialSymbolsCount :: Int
     , functionRuleCount, simplificationCount, predicateSimplificationCount :: Int
     , rewriteRules :: Map.Map TermIndex [SourceRef]
     , functionRules :: Map.Map TermIndex [SourceRef]
     , simplifications :: Map.Map TermIndex [SourceRef]
+    , ceils :: Map.Map TermIndex [RewriteRule "Ceil"]
     }
     deriving stock (Eq, Show, Generic)
     deriving anyclass (NFData)
@@ -70,6 +72,10 @@ mkSummary file def =
                 filter (\rule -> rule.computedAttributes.containsAcSymbols) $
                     concat $
                         concatMap Map.elems (Map.elems def.rewriteTheory)
+        , partialSymbolsCount =
+            length $
+                filter (\sym -> sym.attributes.symbolType == PartialFunction) $
+                    Map.elems def.symbols
         , functionRuleCount =
             length $ concat $ concatMap Map.elems (Map.elems def.functionEquations)
         , simplificationCount =
@@ -79,6 +85,7 @@ mkSummary file def =
         , rewriteRules = Map.map sourceRefs def.rewriteTheory
         , functionRules = Map.map sourceRefs def.functionEquations
         , simplifications = Map.map sourceRefs def.simplifications
+        , ceils = Map.map (concat . Map.elems) def.ceils
         }
   where
     sourceRefs :: HasSourceRef x => Map.Map k [x] -> [SourceRef]
@@ -93,6 +100,7 @@ instance Pretty Summary where
             [ list prettyLabel "Modules" summary.modNames
             , list prettyLabel "Sorts" summary.sortNames
             , list prettyLabel "Symbols" summary.symbolNames
+            , "Partial function symbols: " <> pretty summary.partialSymbolsCount
             , "Axioms: " <> pretty summary.axiomCount
             , "Axioms preserving definedness: " <> pretty summary.preserveDefinednessCount
             , "Axioms containing AC symbols: " <> pretty summary.containAcSymbolsCount
@@ -108,6 +116,9 @@ instance Pretty Summary where
                    )
                 <> ( "Simplifications by term index:"
                         : tableView prettyTermIndex pretty summary.simplifications
+                   )
+                <> ( "Ceils:"
+                        : tableView prettyTermIndex prettyRule summary.ceils
                    )
                 <> [mempty]
       where
@@ -130,6 +141,10 @@ instance Pretty Summary where
         prettyTermIndex Anything = "Anything"
         prettyTermIndex (TopSymbol sym) = prettyLabel sym
         prettyTermIndex None = "None"
+
+        prettyRule :: RewriteRule r -> Doc a
+        prettyRule RewriteRule{lhs, rhs} = pretty lhs <+> "=>" <+> pretty rhs
+
 
 data SourceRef
     = Labeled Text

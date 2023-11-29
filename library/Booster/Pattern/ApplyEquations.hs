@@ -6,10 +6,16 @@ module Booster.Pattern.ApplyEquations (
     evaluateTerm,
     evaluatePattern,
     Direction (..),
+    EquationT(..),
+    runEquationT,
+    EquationConfig(..),
+    getConfig,
     EquationPreference (..),
     EquationFailure (..),
     EquationTrace (..),
     ApplyEquationResult (..),
+    applyEquations,
+    handleSimplificationEquation,
     isMatchFailure,
     isSuccess,
     simplifyConstraint,
@@ -431,14 +437,14 @@ applyAtTop pref term = do
         PreferFunctions -> do
             -- when applying equations, we want to catch DoesNotPreserveDefinedness/incosistentmatch/etc
             -- to do with functions, so as not to abort the entire simplification run
-            fromFunctions <- applyEquations def.functionEquations handleFunctionEquation term
+            fromFunctions <- applyEquations False def.functionEquations handleFunctionEquation term
             if fromFunctions == term
-                then applyEquations def.simplifications handleSimplificationEquation term
+                then applyEquations False def.simplifications handleSimplificationEquation term
                 else pure fromFunctions
         PreferSimplifications -> do
-            simplified <- applyEquations def.simplifications handleSimplificationEquation term
+            simplified <- applyEquations False def.simplifications handleSimplificationEquation term
             if simplified == term
-                then applyEquations def.functionEquations handleFunctionEquation term
+                then applyEquations False def.functionEquations handleFunctionEquation term
                 else pure simplified
 
 data ApplyEquationResult
@@ -487,11 +493,12 @@ handleSimplificationEquation success continue _abort = \case
 applyEquations ::
     forall io tag.
     MonadLoggerIO io =>
+    Bool -> 
     Theory (RewriteRule tag) ->
     ResultHandler io ->
     Term ->
     EquationT io Term
-applyEquations theory handler term = do
+applyEquations ignoreDefinedness theory handler term = do
     let index = termTopIndex term
     when (index == None) $
         throw (IndexIsNone term)
@@ -513,6 +520,11 @@ applyEquations theory handler term = do
                     then idxEquations
                     else Map.unionWith (<>) idxEquations anyEquations
 
+    -- liftIO $ print index
+    -- liftIO $ print theory
+
+    -- liftIO $ print equations
+
     processEquations equations
   where
     -- process one equation at a time, until something has happened
@@ -522,7 +534,7 @@ applyEquations theory handler term = do
     processEquations [] =
         pure term -- nothing to do, term stays the same
     processEquations (eq : rest) = do
-        res <- applyEquation term eq
+        res <- applyEquation ignoreDefinedness term eq
         traceRuleApplication term eq.attributes.location eq.attributes.ruleLabel eq.attributes.uniqueId res
         handler (\t -> setChanged >> pure t) (processEquations rest) (pure term) res
 
@@ -549,16 +561,17 @@ traceRuleApplication t loc lbl uid res = do
 applyEquation ::
     forall io tag.
     MonadLoggerIO io =>
+    Bool ->
     Term ->
     RewriteRule tag ->
     EquationT io ApplyEquationResult
-applyEquation term rule = fmap (either id Success) $ runExceptT $ do
+applyEquation ignoreDefinedness term rule = fmap (either id Success) $ runExceptT $ do
     -- ensured by internalisation: no existentials in equations
     unless (null rule.existentials) $
         lift . throw . InternalError $
             "Equation with existentials: " <> Text.pack (show rule)
     -- immediately cancel if not preserving definedness
-    unless (null rule.computedAttributes.notPreservesDefinednessReasons) $
+    unless ignoreDefinedness $ unless (null rule.computedAttributes.notPreservesDefinednessReasons) $
         throwE RuleNotPreservingDefinedness
     -- immediately cancel if rule has concrete() flag and term has variables
     when (allMustBeConcrete rule.attributes.concreteness && not (Set.null (freeVariables term))) $

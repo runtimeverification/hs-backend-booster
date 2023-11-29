@@ -9,6 +9,7 @@ module Main (
 
 import Control.DeepSeq
 import Control.Monad
+import Control.Monad.Logger
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Except
 import Data.Bifunctor (first)
@@ -22,6 +23,7 @@ import System.FilePath
 import Booster.Definition.Util
 import Booster.Prettyprinter as Pretty
 import Booster.Syntax.ParsedKore as ParsedKore
+import Booster.Definition.Ceil (computeCeilsDefinition)
 
 {- | Tests textual kore parser with given arguments and reports
    internalisation results.
@@ -56,6 +58,7 @@ report :: FilePath -> IO (Either String Summary)
 report file = runExceptT $ do
     parsedDef <- liftIO (Text.readFile file) >>= except . parseKoreDefinition file
     internalDef <- except (first (renderDefault . pretty) $ internalise Nothing parsedDef)
+    _ <- runNoLoggingT $ computeCeilsDefinition internalDef
     pure $ mkSummary file internalDef
 
 findByExtension ::

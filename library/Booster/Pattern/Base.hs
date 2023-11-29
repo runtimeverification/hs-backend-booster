@@ -35,13 +35,11 @@ import Data.Bifunctor (second)
 import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
 import Data.Data (Data)
-import Data.Either (fromRight)
 import Data.Functor.Foldable
 import Data.Hashable (Hashable)
 import Data.Hashable qualified as Hashable
 import Data.List as List (foldl1', sort)
 import Data.Map (Map)
-import Data.Map qualified as Map
 import Data.Set (Set, fromList, toList)
 import Data.Set qualified as Set
 import Data.Text qualified as Text
@@ -50,6 +48,7 @@ import GHC.Generics (Generic)
 import Language.Haskell.TH.Syntax (Lift (..))
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
+import Booster.Util (decodeLabel')
 
 type VarName = ByteString
 type SymbolName = ByteString
@@ -71,6 +70,8 @@ pattern SortBool = SortApp "SortBool" []
 pattern SortInt = SortApp "SortInt" []
 pattern SortK = SortApp "SortK" []
 pattern SortKItem = SortApp "SortKItem" []
+pattern SortSet :: Sort
+pattern SortSet = SortApp "SortSet" []
 pattern SortBytes = SortApp "SortBytes" []
 
 -- | A variable for symbolic execution or for terms in a rule.
@@ -765,70 +766,6 @@ data TermOrPredicates -- = Either Predicate Pattern
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
--- | Un-escapes special characters in symbol names
-decodeLabel :: ByteString -> Either String ByteString
-decodeLabel str
-    | BS.null str = Right str
-    | "'" `BS.isPrefixOf` str =
-        let (encoded, rest) = BS.span (/= '\'') (BS.tail str)
-         in (<>) <$> decode encoded <*> decodeLabel (BS.drop 1 rest)
-    | otherwise =
-        let (notEncoded, rest) = BS.span (/= '\'') str
-         in (notEncoded <>) <$> decodeLabel rest
-  where
-    decode :: ByteString -> Either String ByteString
-    decode s
-        | BS.null s = Right s
-        | BS.length code < 4 = Left $ "Bad character code  " <> show code
-        | otherwise =
-            maybe
-                (Left $ "Unknown character code  " <> show code)
-                (\c -> (c <>) <$> decode rest)
-                (Map.lookup code decodeMap)
-      where
-        (code, rest) = BS.splitAt 4 s
-
-decodeMap :: Map.Map ByteString ByteString
-decodeMap =
-    Map.fromList
-        [ ("Spce", " ")
-        , ("Bang", "!")
-        , ("Quot", "\"")
-        , ("Hash", "#")
-        , ("Dolr", "$")
-        , ("Perc", "%")
-        , ("And-", "&")
-        , ("Apos", "'")
-        , ("LPar", "(")
-        , ("RPar", ")")
-        , ("Star", "*")
-        , ("Plus", "+")
-        , ("Comm", ",")
-        , ("Hyph", "-")
-        , ("Stop", ".")
-        , ("Slsh", "/")
-        , ("Coln", ":")
-        , ("SCln", ";")
-        , ("-LT-", "<")
-        , ("Eqls", "=")
-        , ("-GT-", ">")
-        , ("Ques", "?")
-        , ("-AT-", "@")
-        , ("LSqB", "[")
-        , ("RSqB", "]")
-        , ("Bash", "\\")
-        , ("Xor-", "^")
-        , ("Unds", "_")
-        , ("BQuo", "`")
-        , ("LBra", "{")
-        , ("Pipe", "|")
-        , ("RBra", "}")
-        , ("Tild", "~")
-        ]
-
-decodeLabel' :: ByteString -> ByteString
-decodeLabel' orig =
-    fromRight orig (decodeLabel orig)
 
 -- used for printing the string as it appears (with codepoints)
 prettyBS :: ByteString -> Pretty.Doc a
