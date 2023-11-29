@@ -263,7 +263,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     -- simplify Booster's state with Kore's simplifier
                     Log.logInfoNS "proxy" . Text.pack $ "Simplifying booster state and falling back to Kore "
-                    simplifyResult <- simplifyExecuteState logSettings r._module boosterResult.state
+                    simplifyResult <- simplifyExecuteState logSettings r._module def boosterResult.state
                     case simplifyResult of
                         Left logsOnly -> do
                             -- state was simplified to \bottom, return vacuous
@@ -280,7 +280,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                                 , maxDepth = Just $ Depth 1
                                                 }
                                         )
-                            when (isJust mbStatsVar) $
+                            when (isJust statsVar) $
                                 Log.logInfoNS "proxy" . Text.pack $
                                     "Kore fall-back in " <> microsWithUnit kTime
                             case kResult of
@@ -312,6 +312,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                             executionLoop
                                                 logSettings
                                                 mforceSimplification
+                                                def
                                                 ( currentDepth + boosterResult.depth + koreResult.depth
                                                 , time + bTime + kTime
                                                 , koreTime + kTime
