@@ -25,7 +25,7 @@ import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text as Text (Text, pack, unpack, unwords)
-import Prettyprinter (Pretty, pretty)
+import Prettyprinter (Pretty, pretty, vsep)
 
 import Booster.Definition.Base
 import Booster.Pattern.Base
@@ -223,7 +223,7 @@ checkPredicates ctxt givenPs givenSubst psToCheck
                 , pack (show $ Map.size givenSubst)
                 ]
         logSMT . Pretty.renderText $
-            Pretty.vsep ("Predicates to check:": map pretty psToCheck)
+            vsep ("Predicates to check:": map pretty (Set.toList psToCheck))
 
         smtRun_ Push
 
