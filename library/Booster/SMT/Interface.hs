@@ -222,6 +222,8 @@ checkPredicates ctxt givenPs givenSubst psToCheck
                 , "assertions and a substitution of size"
                 , pack (show $ Map.size givenSubst)
                 ]
+        logSMT . Pretty.renderText $
+            Pretty.vsep ("Predicates to check:": map pretty psToCheck)
 
         smtRun_ Push
 
