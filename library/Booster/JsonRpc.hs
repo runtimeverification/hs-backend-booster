@@ -197,6 +197,11 @@ respond stateVar =
                             pure $ Right (addHeader result, patternTraces)
                         (Left ApplyEquations.SideConditionFalse{}, patternTraces, _) -> do
                             let tSort = fromMaybe (error "unknown sort") $ sortOfJson req.state.term
+                            -- pure . Right . RpcTypes.Simplify $
+                            --     RpcTypes.SimplifyResult
+                            --         { state = addHeader $ KoreJson.KJBottom tSort
+                            --         , logs = mkTraces patternTraces
+                            --         }
                             pure $ Right (addHeader $ KoreJson.KJBottom tSort, patternTraces)
                         (Left (ApplyEquations.EquationLoop terms), _traces, _) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
