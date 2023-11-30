@@ -26,6 +26,20 @@ packages:
   original:
     hackage: decision-diagrams-0.2.0.0
 - completed:
+    hackage: smtlib-backends-0.3@sha256:917d88540a9ede7beedbe2ed13b492acddbce394d30ccf5d0ef4f4fba9aa2c12,1157
+    pantry-tree:
+      sha256: 59b578ae7df155a6c73a513358370747e3cc6229ebb44adaba9e0935f811539c
+      size: 275
+  original:
+    hackage: smtlib-backends-0.3
+- completed:
+    hackage: smtlib-backends-process-0.3@sha256:d4d7d02859383e0a43db2d8ce7ef01deffe1bcd356b2ff8626925c3a1c8db922,1600
+    pantry-tree:
+      sha256: d7d8ec52d07f4a59614000fd93d77b109d085d58f2d96e2c4b972f541c4e8287
+      size: 461
+  original:
+    hackage: smtlib-backends-process-0.3
+- completed:
     hackage: typerep-map-0.5.0.0@sha256:34f1ba9b268a6d52e26ae460011a5571e8099b50a3f4a7c8db25dd8efe3be8ee,4667
     pantry-tree:
       sha256: ca5565de307d260dc67f6dae0d4d33eee42a3238183461569b5142ceb909c91d
@@ -40,7 +54,7 @@ packages:
   original:
     hackage: monad-validate-1.2.0.1
 - completed:
-    commit: 0be07d293a1167615ef9342bb1820350f794e893
+    commit: 827252a324f651f361ac62de40dbf8888a089503
     git: https://github.com/runtimeverification/haskell-backend.git
     name: kore
     pantry-tree:
@@ -49,11 +63,11 @@ packages:
     subdir: kore
     version: 0.60.0.0
   original:
-    commit: 0be07d293a1167615ef9342bb1820350f794e893
+    commit: 827252a324f651f361ac62de40dbf8888a089503
     git: https://github.com/runtimeverification/haskell-backend.git
     subdir: kore
 - completed:
-    commit: 0be07d293a1167615ef9342bb1820350f794e893
+    commit: 827252a324f651f361ac62de40dbf8888a089503
     git: https://github.com/runtimeverification/haskell-backend.git
     name: kore-rpc-types
     pantry-tree:
@@ -62,7 +76,7 @@ packages:
     subdir: kore-rpc-types
     version: 0.60.0.0
   original:
-    commit: 0be07d293a1167615ef9342bb1820350f794e893
+    commit: 827252a324f651f361ac62de40dbf8888a089503
     git: https://github.com/runtimeverification/haskell-backend.git
     subdir: kore-rpc-types
 snapshots:
