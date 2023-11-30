@@ -223,7 +223,7 @@ checkPredicates ctxt givenPs givenSubst psToCheck
                 , pack (show $ Map.size givenSubst)
                 ]
         logSMT . Pretty.renderText $
-            vsep ("Predicates to check:": map pretty (Set.toList psToCheck))
+            vsep ("Predicates to check:" : map pretty (Set.toList psToCheck))
 
         smtRun_ Push
 

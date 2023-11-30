@@ -164,7 +164,7 @@ instance SMTEncode ControlCommand where
     encode Pop = "(pop)"
     encode Exit = "(exit)"
 
-    comment _ = Just $ ";;;;;;;\n"
+    comment _ = Just ";;;;;;;\n"
 
     run_ _ s = fmap (const "success") . liftIO . Backend.command_ s
 

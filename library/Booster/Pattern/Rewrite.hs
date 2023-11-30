@@ -313,6 +313,12 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     newConstraints <-
         catMaybes <$> mapM (checkConstraint id trivialIfBottom) ruleEnsures
 
+    -- check all new constraints together with the known side constraints
+    whenJust mbSolver $ \solver ->
+        (lift $ SMT.checkPredicates solver prior mempty (Set.fromList newConstraints)) >>= \case
+            Just False -> RewriteRuleAppT $ pure Trivial
+            _other -> pure ()
+
     let rewritten =
             Pattern
                 (substituteInTerm (refreshExistentials subst) rule.rhs)
