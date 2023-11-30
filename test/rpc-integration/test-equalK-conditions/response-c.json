@@ -2,8 +2,8 @@
     "jsonrpc": "2.0",
     "id": 1,
     "result": {
-        "reason": "aborted",
-        "depth": 0,
+        "reason": "stuck",
+        "depth": 1,
         "state": {
             "term": {
                 "format": "KORE",
@@ -46,7 +46,7 @@
                                                         "name": "SortState",
                                                         "args": []
                                                     },
-                                                    "value": "c"
+                                                    "value": "d"
                                                 }
                                             ]
                                         },
