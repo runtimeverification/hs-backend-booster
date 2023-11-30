@@ -2,42 +2,25 @@ module TEST
   import BOOL
   import K-EQUAL
 
-  syntax State ::= "init" [token]
-                 | "a"    [token]
-                 | "b"    [token]
-                 | "c"    [token]
-                 | "d"    [token]
-                 // | "e"    [token]
-                 // | "f"    [token]
+  syntax State ::= St1()
+                 | St2()
+                 | St3()
+                 | St4()
 
   configuration <k> $PGM:State ~> .K </k>
-//              <state> init:State   </state>
 
-  rule [init]: <k> init => a ... </k>
-//             <state> _ =>      </state>
-
-  rule [AB]: <k> a => b ... </k>
-    requires X ==K a andBool X ==K b
+  rule [AB]: <k> St1() => St2() ... </k>
+    requires X ==K St1() andBool X ==K St2()
     // requires no-confusion in the booster SMT solver
 
-  rule [AC]: <k> a => c ... </k>
+  rule [AC]: <k> St1() => St3() ... </k>
 
   // BTW The :State is necessary. kore-exec crashes with this rule
   // [CD]: <k> (X => d) ~> _Rest </k>
-  rule [CD]: <k> (X:State => d) ~> _Rest </k>
-    requires notBool X ==K a
-     andBool notBool X ==K b
-     andBool notBool X ==K d
-     // X == c considering no-junk and no-confusion, unclear without
-
-// ------ recursive data types ----------------
-
-  syntax Tree ::= Leaf ( KItem )
-              | Inner ( TreeList )
-  syntax TreeList ::= Nil()
-                   | Cons ( Tree , TreeList )
-
-
-  syntax NameCollision ::= Nil() | Leaf() | Inner ( KItem )
+  rule [CD]: <k> (X:State => St4()) ~> _Rest </k>
+    requires notBool X ==K St1()
+     andBool notBool X ==K St2()
+     andBool notBool X ==K St4()
+     // X == St3() considering no-junk and no-confusion, unclear without
 
 endmodule

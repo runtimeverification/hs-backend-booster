@@ -33,13 +33,10 @@
                 ],
                 "args": [
                   {
-                    "tag": "DV",
-                    "sort": {
-                      "tag": "SortApp",
-                      "name": "SortState",
-                      "args": []
-                    },
-                    "value": "c"
+                    "tag": "App",
+                    "name": "LblSt3'LParRParUnds'TEST'Unds'State",
+                    "sorts": [],
+                    "args": []
                   }
                 ]
               },
