@@ -30,6 +30,7 @@ import Booster.Definition.Attributes.Base (
  )
 import Booster.Prettyprinter qualified as KPretty
 
+import Booster.Util (decodeLabel')
 import Control.DeepSeq (NFData (..))
 import Data.Bifunctor (second)
 import Data.ByteString.Char8 (ByteString)
@@ -48,7 +49,6 @@ import GHC.Generics (Generic)
 import Language.Haskell.TH.Syntax (Lift (..))
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
-import Booster.Util (decodeLabel')
 
 type VarName = ByteString
 type SymbolName = ByteString
@@ -65,13 +65,13 @@ data Sort
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
-pattern SortBool, SortInt, SortK, SortKItem, SortBytes :: Sort
+pattern SortBool, SortInt, SortK, SortKItem, SortBytes, SortSet, SortMap :: Sort
 pattern SortBool = SortApp "SortBool" []
 pattern SortInt = SortApp "SortInt" []
 pattern SortK = SortApp "SortK" []
 pattern SortKItem = SortApp "SortKItem" []
-pattern SortSet :: Sort
 pattern SortSet = SortApp "SortSet" []
+pattern SortMap = SortApp "SortMap" []
 pattern SortBytes = SortApp "SortBytes" []
 
 -- | A variable for symbolic execution or for terms in a rule.
@@ -232,7 +232,7 @@ kmapElementSymbol def =
         , resultSort = SortApp def.mapSortName []
         , attributes =
             SymbolAttributes
-                { symbolType = PartialFunction
+                { symbolType = TotalFunction
                 , isIdem = IsNotIdem
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
@@ -765,7 +765,6 @@ data TermOrPredicates -- = Either Predicate Pattern
     | TermAndPredicateAndSubstitution Pattern (Map Variable Term)
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
-
 
 -- used for printing the string as it appears (with codepoints)
 prettyBS :: ByteString -> Pretty.Doc a

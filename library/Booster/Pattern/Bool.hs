@@ -17,7 +17,6 @@ module Booster.Pattern.Bool (
     pattern NEqualsInt,
     pattern EqualsK,
     pattern NEqualsK,
-    pattern InternalCeil,
     pattern SetIn,
 ) where
 
@@ -28,10 +27,9 @@ import Booster.Definition.Attributes.Base (
     SymbolAttributes (SymbolAttributes),
     SymbolType (TotalFunction),
     pattern CanBeEvaluated,
-    pattern CannotBeEvaluated,
     pattern IsNotAssoc,
     pattern IsNotIdem,
-    pattern IsNotMacroOrAlias, 
+    pattern IsNotMacroOrAlias,
  )
 import Booster.Pattern.Base (
     Pattern,
@@ -43,11 +41,11 @@ import Booster.Pattern.Base (
     pattern SortBool,
     pattern SortInt,
     pattern SortK,
-    pattern SymbolApplication, 
     pattern SortKItem,
     pattern SortSet,
+    pattern SymbolApplication,
  )
-import Booster.Pattern.Util (isConcrete, sortOfTerm)
+import Booster.Pattern.Util (isConcrete)
 import Booster.SMT.Base (SExpr (Atom), SMTId (..))
 
 pattern TotalFunctionWithSMT :: ByteString -> SymbolAttributes
@@ -87,7 +85,7 @@ pattern NotBool t =
         []
         [t]
 
-pattern EqualsInt, NEqualsInt, EqualsK, NEqualsK :: Term -> Term -> Term
+pattern EqualsInt, NEqualsInt, EqualsK, NEqualsK, SetIn :: Term -> Term -> Term
 pattern EqualsInt a b =
     SymbolApplication
         ( Symbol
@@ -128,16 +126,16 @@ pattern SetIn a b =
                 []
                 [SortKItem, SortSet]
                 SortBool
-                (SymbolAttributes
-                    TotalFunction
-                    IsNotIdem
-                    IsNotAssoc
-                    IsNotMacroOrAlias
-                    CanBeEvaluated
-                    Nothing
-                    Nothing
-                )
-        )
+                ( SymbolAttributes
+                        TotalFunction
+                        IsNotIdem
+                        IsNotAssoc
+                        IsNotMacroOrAlias
+                        CanBeEvaluated
+                        Nothing
+                        Nothing
+                    )
+            )
         []
         [a, b]
 pattern NEqualsK a b =
@@ -151,28 +149,6 @@ pattern NEqualsK a b =
             )
         []
         [a, b]
-
-pattern InternalCeil :: Term -> Term
-pattern InternalCeil t <- SymbolApplication (Symbol "internal_ceil" _ _ _ _) [] [t]
-    where
-        InternalCeil t = 
-            SymbolApplication
-                ( Symbol
-                        "internal_ceil"
-                        []
-                        [sortOfTerm t]
-                        SortBool
-                        ( SymbolAttributes
-                            TotalFunction
-                            IsNotIdem
-                            IsNotAssoc
-                            IsNotMacroOrAlias
-                            CannotBeEvaluated
-                            Nothing
-                            Nothing)
-                    )
-                []
-                [t]
 
 pattern TrueBool, FalseBool :: Term
 pattern TrueBool = DomainValue SortBool "true"

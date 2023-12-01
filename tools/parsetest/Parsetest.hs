@@ -9,8 +9,8 @@ module Main (
 
 import Control.DeepSeq
 import Control.Monad
-import Control.Monad.Logger
 import Control.Monad.IO.Class
+import Control.Monad.Logger
 import Control.Monad.Trans.Except
 import Data.Bifunctor (first)
 import Data.List (isPrefixOf, partition)
@@ -20,10 +20,10 @@ import System.Directory
 import System.Environment
 import System.FilePath
 
+import Booster.Definition.Ceil (computeCeilsDefinition)
 import Booster.Definition.Util
 import Booster.Prettyprinter as Pretty
 import Booster.Syntax.ParsedKore as ParsedKore
-import Booster.Definition.Ceil (computeCeilsDefinition)
 
 {- | Tests textual kore parser with given arguments and reports
    internalisation results.
@@ -36,30 +36,30 @@ main :: IO ()
 main = do
     (opts, args) <- partition ("-" `isPrefixOf`) <$> getArgs
     let verbose = "-v" `elem` opts
+        veryVerbose = "-vv" `elem` opts
     forM_ args $ \arg -> do
         isDir <- doesDirectoryExist arg
         if isDir
             then do
                 putStrLn $ "Searching directory " <> arg <> "..."
                 files <- findByExtension ".kore" arg
-                mapM_ (testParse verbose) files
-            else testParse verbose arg
+                mapM_ (testParse verbose veryVerbose) files
+            else testParse verbose veryVerbose arg
 
-testParse :: Bool -> FilePath -> IO ()
-testParse verbose f = do
-    putStr $ "Testing " <> f <> "..."
-    result <- report f
+testParse :: Bool -> Bool -> FilePath -> IO ()
+testParse verbose veryVerbose file = do
+    putStr $ "Testing " <> file <> "..."
+    result <- report
     putStrLn $ either ("FAILURE\n" <>) (("SUCCESS\n" <>) . showResult) result
     putStrLn "----------------------------------------"
   where
-    showResult = if verbose then prettySummary else (`deepseq` "DONE")
+    showResult = if verbose || veryVerbose then prettySummary veryVerbose else (`deepseq` "DONE")
 
-report :: FilePath -> IO (Either String Summary)
-report file = runExceptT $ do
-    parsedDef <- liftIO (Text.readFile file) >>= except . parseKoreDefinition file
-    internalDef <- except (first (renderDefault . pretty) $ internalise Nothing parsedDef)
-    _ <- runNoLoggingT $ computeCeilsDefinition internalDef
-    pure $ mkSummary file internalDef
+    report = runExceptT $ do
+        parsedDef <- liftIO (Text.readFile file) >>= except . parseKoreDefinition file
+        internalDef' <- except (first (renderDefault . pretty) $ internalise Nothing parsedDef)
+        (internalDef, ceilSummary) <- runNoLoggingT $ computeCeilsDefinition Nothing internalDef'
+        pure $ mkSummary file internalDef ceilSummary
 
 findByExtension ::
     -- | extension

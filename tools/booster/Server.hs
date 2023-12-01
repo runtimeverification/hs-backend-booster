@@ -11,7 +11,7 @@ import Control.Concurrent.MVar (newMVar)
 import Control.Concurrent.MVar qualified as MVar
 import Control.DeepSeq (force)
 import Control.Exception (AsyncException (UserInterrupt), evaluate, handleJust)
-import Control.Monad (forM_, unless, void, when)
+import Control.Monad (forM, forM_, unless, void, when)
 import Control.Monad.Catch (bracket)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -21,6 +21,7 @@ import Control.Monad.Logger (
     MonadLoggerIO (askLoggerIO),
     ToLogStr (toLogStr),
     defaultLoc,
+    runNoLoggingT,
  )
 import Control.Monad.Logger qualified as Logger
 import Data.Conduit.Network (serverSettings)
@@ -38,6 +39,7 @@ import System.Exit
 import System.IO (hPutStrLn, stderr)
 
 import Booster.CLOptions
+import Booster.Definition.Ceil (computeCeilsDefinition)
 import Booster.JsonRpc qualified as Booster
 import Booster.LLVM.Internal (mkAPI, withDLib)
 import Booster.Syntax.ParsedKore (loadDefinition)
@@ -110,31 +112,39 @@ main = do
                     <> definitionFile
                     <> ", main module "
                     <> show mainModuleName
-        definitions <-
-            liftIO $
-                loadDefinition definitionFile
-                    >>= evaluate . force . either (error . show) id
-        unless (isJust $ Map.lookup mainModuleName definitions) $ do
-            Logger.logErrorNS "proxy" $
-                "Main module " <> mainModuleName <> " not found in " <> Text.pack definitionFile
-            liftIO exitFailure
 
         monadLogger <- askLoggerIO
 
-        let coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
+        liftIO $ void $ withBugReport (ExeName "kore-rpc-booster") BugReportOnError $ \reportDirectory -> withMDLib llvmLibraryFile $ \mdl -> do
+            let coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
 
-            koreLogOptions =
-                (defaultKoreLogOptions (ExeName "") startTime)
-                    { Log.logLevel = coLogLevel
-                    , Log.logEntries = koreLogExtraLevels
-                    , Log.timestampsSwitch = TimestampsDisable
-                    , Log.debugSolverOptions = debugSolverOptions
-                    , Log.logType = LogSomeAction $ LogAction $ \txt -> liftIO $ monadLogger defaultLoc "kore" logLevel $ toLogStr txt
-                    }
-            srvSettings = serverSettings port "*"
+                koreLogOptions =
+                    (defaultKoreLogOptions (ExeName "") startTime)
+                        { Log.logLevel = coLogLevel
+                        , Log.logEntries = koreLogExtraLevels
+                        , Log.timestampsSwitch = TimestampsDisable
+                        , Log.debugSolverOptions = debugSolverOptions
+                        , Log.logType = LogSomeAction $ LogAction $ \txt -> liftIO $ monadLogger defaultLoc "kore" logLevel $ toLogStr txt
+                        }
+                srvSettings = serverSettings port "*"
 
-        liftIO $ void $ withBugReport (ExeName "kore-rpc-booster") BugReportOnError $ \reportDirectory ->
             withLogger reportDirectory koreLogOptions $ \actualLogAction -> do
+                mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
+                definitions <-
+                    liftIO $ do
+                        defMap' <- either (error . show) id <$> loadDefinition definitionFile
+                        defMap <-
+                            Map.fromList
+                                <$> ( forM (Map.toList defMap') $ \(k, def) ->
+                                        (k,) . fst <$> runNoLoggingT (computeCeilsDefinition mLlvmLibrary def)
+                                    )
+                        evaluate $ force defMap
+                unless (isJust $ Map.lookup mainModuleName definitions) $ do
+                    flip runLoggingT monadLogger $
+                        Logger.logErrorNS "proxy" $
+                            "Main module " <> mainModuleName <> " not found in " <> Text.pack definitionFile
+                    liftIO exitFailure
+
                 mvarLogAction <- newMVar actualLogAction
                 let logAction = swappableLogger mvarLogAction
 
@@ -142,37 +152,35 @@ main = do
                 kore@KoreServer{runSMT} <-
                     mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions{tactic = Just defaultTactic}
 
-                withMDLib llvmLibraryFile $ \mdl -> do
-                    mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
-                    boosterState <-
-                        liftIO $
-                            newMVar
-                                Booster.ServerState
-                                    { definitions
-                                    , defaultMain = mainModuleName
-                                    , mLlvmLibrary
-                                    , mSMTOptions = smtOptions
-                                    }
-                    statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
+                boosterState <-
+                    liftIO $
+                        newMVar
+                            Booster.ServerState
+                                { definitions
+                                , defaultMain = mainModuleName
+                                , mLlvmLibrary
+                                , mSMTOptions = smtOptions
+                                }
+                statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
 
-                    runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
+                runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
-                    let koreRespond, boosterRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
-                        koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
-                        boosterRespond = Booster.respond boosterState
+                let koreRespond, boosterRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
+                    koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
+                    boosterRespond = Booster.respond boosterState
 
-                        proxyConfig = ProxyConfig{statsVar, forceFallback, boosterState}
-                        server =
-                            jsonRpcServer
-                                srvSettings
-                                (const $ Proxy.respondEither proxyConfig boosterRespond koreRespond)
-                                [handleErrorCall, handleSomeException]
-                        interruptHandler _ = do
-                            when (logLevel >= LevelInfo) $
-                                hPutStrLn stderr "[Info#proxy] Server shutting down"
-                            whenJust statsVar Stats.showStats
-                            exitSuccess
-                    handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger
+                    proxyConfig = ProxyConfig{statsVar, forceFallback, boosterState}
+                    server =
+                        jsonRpcServer
+                            srvSettings
+                            (const $ Proxy.respondEither proxyConfig boosterRespond koreRespond)
+                            [handleErrorCall, handleSomeException]
+                    interruptHandler _ = do
+                        when (logLevel >= LevelInfo) $
+                            hPutStrLn stderr "[Info#proxy] Server shutting down"
+                        whenJust statsVar Stats.showStats
+                        exitSuccess
+                handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger
   where
     clParser =
         info

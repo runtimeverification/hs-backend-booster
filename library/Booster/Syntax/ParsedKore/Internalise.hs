@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS_GHC -Wno-ambiguous-fields #-}
 
 {- |
@@ -49,12 +48,13 @@ import Booster.Definition.Attributes.Reader as Attributes (
     readLocation,
  )
 import Booster.Definition.Base as Def
-import Booster.Definition.Util (HasSourceRef (..), SourceRef)
-import Booster.Pattern.Base (Variable (..), Predicate (Predicate))
+import Booster.Pattern.Base (Predicate (Predicate), Variable (..))
 import Booster.Pattern.Base qualified as Def
 import Booster.Pattern.Base qualified as Def.Symbol (Symbol (..))
+import Booster.Pattern.Bool (foldAndBool)
 import Booster.Pattern.Bool qualified as Def
 import Booster.Pattern.Index as Idx
+import Booster.Pattern.Util (partitionInternalised)
 import Booster.Pattern.Util qualified as Util
 import Booster.Prettyprinter hiding (attributes)
 import Booster.Syntax.Json.Internalise
@@ -62,8 +62,6 @@ import Booster.Syntax.ParsedKore.Base
 import Booster.Syntax.ParsedKore.Parser (ParsedSentence (SentenceSymbol), parseSentence)
 import Kore.Syntax.Json.Types (Id, Sort)
 import Kore.Syntax.Json.Types qualified as Syntax
-import Booster.Pattern.Util (partitionInternalised)
-import Booster.Pattern.Bool (pattern InternalCeil, foldAndBool)
 
 {- | Traverses all modules of a parsed definition, to build internal
 @KoreDefinition@s for each of the modules (when used as the main
@@ -354,7 +352,7 @@ addModule
                     addToTheoryWith (Idx.termTopIndex . (.lhs)) newSimplifications currentSimpls
                 ceils =
                     addToTheoryWith (Idx.termTopIndex . (.lhs)) newCeils currentCeils
-                    -- addToTheoryWith (Idx.termTopIndex . (\InternalCeil t -> t) . (.lhs)) newCeils currentCeils
+                -- addToTheoryWith (Idx.termTopIndex . (\InternalCeil t -> t) . (.lhs)) newCeils currentCeils
                 sorts = subsortClosure sorts' subsortPairs
             pure $
                 defWithAliases.partial
@@ -805,10 +803,11 @@ internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
                 else
                     [ UndefinedSymbol s.name
                     | s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) rhs.term
-                    ] <> 
-                    [ UndefinedSymbol s.name
-                    | c <- Set.toList lhs.constraints, s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) $ coerce c
                     ]
+                        <> [ UndefinedSymbol s.name
+                           | c <- Set.toList lhs.constraints
+                           , s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) $ coerce c
+                           ]
         containsAcSymbols =
             Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
         computedAttributes =
@@ -1002,7 +1001,6 @@ internaliseSimpleEquation partialDef precond left right sortVars attrs
                 DefinitionPatternError (sourceRef attrs) SubstitutionNotAllowed
         pure $ removeTrueBools $ Util.modifyVariables (Util.modifyVarName ("Eq#" <>)) pat
 
-
 internaliseCeil ::
     KoreDefinition -> -- context
     Syntax.KorePattern -> -- LHS of ceil
@@ -1011,43 +1009,34 @@ internaliseCeil ::
     AxiomAttributes ->
     Except DefinitionError AxiomResult
 internaliseCeil partialDef left right sortVars attrs = do
-        -- this ensures that `left` is a _term_ (invariant guarded by classifyAxiom)
-        lhs <- internalisePattern' $ left
-        rhs_preds <- internalisePredicate' right
-        let
-            -- checking the lhs term, too, as a safe approximation
-            -- (rhs may _introduce_ undefined, lhs may _hide_ it)
-            undefinedSymbols =
-                nub . concatMap (Util.filterTermSymbols (not . Util.isDefinedSymbol)) $
-                    lhs.term : rhs_preds
-            computedAttributes =
-                ComputedAxiomAttributes
-                    { containsAcSymbols =
-                        any (Util.checkTermSymbols Util.checkSymbolIsAc) $ lhs.term : rhs_preds
-                    , notPreservesDefinednessReasons =
-                        if coerce attrs.preserving
-                            then []
-                            else map (UndefinedSymbol . (.name)) undefinedSymbols
-                    }
-            attributes =
-                attrs{concreteness = Util.modifyVarNameConcreteness ("Eq#" <>) attrs.concreteness}
-        pure $
-            CeilAxiom
-                RewriteRule
-                    { lhs = InternalCeil $ uninternaliseCollections lhs.term
-                    , rhs = foldAndBool rhs_preds
-                    , requires = mempty
-                    , ensures = mempty
-                    , attributes
-                    , computedAttributes
-                    , existentials = Set.empty
-                    }
+    -- this ensures that `left` is a _term_ (invariant guarded by classifyAxiom)
+    lhs <- internalisePattern' left
+    rhs_preds <- internalisePredicate' right
+    let
+        computedAttributes =
+            ComputedAxiomAttributes
+                { containsAcSymbols =
+                    any (Util.checkTermSymbols Util.checkSymbolIsAc) $ lhs.term : rhs_preds
+                , notPreservesDefinednessReasons = mempty
+                }
+        attributes =
+            attrs{concreteness = Util.modifyVarNameConcreteness ("Eq#" <>) attrs.concreteness}
+    pure $
+        CeilAxiom
+            RewriteRule
+                { lhs = uninternaliseCollections lhs.term
+                , rhs = foldAndBool rhs_preds
+                , requires = mempty
+                , ensures = mempty
+                , attributes
+                , computedAttributes
+                , existentials = Set.empty
+                }
   where
     uninternaliseCollections (Def.KMap def keyVals rest) = Def.externaliseKmapUnsafe def keyVals rest
     uninternaliseCollections (Def.KList def heads rest) = Def.externaliseKList def heads rest
     uninternaliseCollections (Def.KSet def elems rest) = Def.externaliseKSet def elems rest
-    uninternaliseCollections other =other
-
+    uninternaliseCollections other = other
 
     internalisePattern' t = do
         (pat, substitution) <-
@@ -1058,16 +1047,18 @@ internaliseCeil partialDef left right sortVars attrs = do
                 DefinitionPatternError (sourceRef attrs) SubstitutionNotAllowed
         pure $ removeTrueBools $ Util.modifyVariables (Util.modifyVarName ("Eq#" <>)) pat
 
-    
     internalisePredicate' p = do
         let predicates = explodeAnd p
-        (constraints, ceilConditions, substitutions) <-
-            withExcept (DefinitionPatternError (sourceRef attrs)) $ partitionInternalised
-                <$> mapM (internalisePredicate AllowAlias IgnoreSubsorts (Just sortVars) partialDef) predicates
+        (constraints, _ceilConditions, substitutions) <-
+            withExcept (DefinitionPatternError (sourceRef attrs)) $
+                partitionInternalised
+                    <$> mapM (internalisePredicate AllowAlias IgnoreSubsorts (Just sortVars) partialDef) predicates
         unless (null substitutions) $
             throwE $
                 DefinitionPatternError (sourceRef attrs) SubstitutionNotAllowed
-        pure $ map (Util.modifyVariablesInT (Util.modifyVarName ("Eq#" <>)) . coerce) $ Set.toList constraints <> [coerce $ InternalCeil $ coerce c | c <- ceilConditions]
+        pure $
+            map (Util.modifyVariablesInT (Util.modifyVarName ("Eq#" <>)) . coerce) $
+                Set.toList constraints
 
 {- | Internalises a function rule from its components that were matched
   before.
