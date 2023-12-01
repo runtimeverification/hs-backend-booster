@@ -692,7 +692,8 @@ simplifyConstraints ::
     [Predicate] ->
     io (Either EquationFailure [Predicate], [EquationTrace], SimplifierCache)
 simplifyConstraints doTracing def mbApi mbSMT cache ps =
-    runEquationT doTracing def mbApi mbSMT cache $ mapM ((coerce <$>) . simplifyConstraint' True . coerce) ps
+    runEquationT doTracing def mbApi mbSMT cache $
+        mapM ((coerce <$>) . simplifyConstraint' True . coerce) ps
 
 -- version for internal nested evaluation
 simplifyConstraint' :: MonadLoggerIO io => Bool -> Term -> EquationT io Term
