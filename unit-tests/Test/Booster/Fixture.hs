@@ -18,7 +18,7 @@ import Booster.Pattern.Base
 import Booster.Syntax.Json.Internalise (trm)
 import Booster.Syntax.ParsedKore.Internalise (symb)
 
-someSort, aSubsort, differentSort, kSort, kItemSort, listSort, setSort, boolSort :: Sort
+someSort, aSubsort, differentSort, kSort, kItemSort, listSort, setSort :: Sort
 someSort = SortApp "SomeSort" []
 aSubsort = SortApp "AnotherSort" []
 differentSort = SortApp "DifferentSort" []
@@ -26,7 +26,6 @@ kSort = SortApp "SortK" []
 kItemSort = SortApp "SortKItem" []
 listSort = SortApp testKListDef.listSortName []
 setSort = SortApp testKSetDef.listSortName []
-boolSort = SortApp "SortBool" []
 
 testDefinition :: KoreDefinition
 testDefinition =
@@ -41,7 +40,6 @@ testDefinition =
                 , kSort `withSubsorts` []
                 , listSort `withSubsorts` []
                 , setSort `withSubsorts` []
-                , boolSort `withSubsorts` []
                 ]
         , symbols =
             Map.fromList
@@ -51,7 +49,6 @@ testDefinition =
                 , ("con4", con4)
                 , ("f1", f1)
                 , ("f2", f2)
-                , ("eqK", eqK)
                 ]
                 <> listSymbols
                 <> setSymbols
@@ -84,14 +81,13 @@ app s = SymbolApplication s []
 inj :: Sort -> Sort -> Term -> Term
 inj = Injection
 
-con1, con2, con3, con4, f1, f2, eqK :: Symbol
+con1, con2, con3, con4, f1, f2 :: Symbol
 con1 = [symb| symbol con1{}(SomeSort{}) : SomeSort{} [constructor{}()] |]
 con2 = [symb| symbol con2{}(SomeSort{}) : SomeSort{} [constructor{}()] |]
 con3 = [symb| symbol con3{}(SomeSort{}, SomeSort{}) : SomeSort{} [constructor{}()] |]
 con4 = [symb| symbol con4{}(SomeSort{}, SomeSort{}) : AnotherSort{} [constructor{}()] |]
 f1 = [symb| symbol f1{}(SomeSort{}) : SomeSort{} [function{}(), total{}()] |]
 f2 = [symb| symbol f2{}(SomeSort{}) : SomeSort{} [function{}()] |]
-eqK = [symb| symbol eqK{}(SortKItem{}, SortKItem{}) : SomeBool{} [function{}()] |]
 
 --------------------------------------------------------------------------------
 
@@ -233,10 +229,8 @@ listConcatSym, listElemSym, listUnitSym :: Symbol
     withMeta sym =
         sym
             { attributes = sym.attributes{collectionMetadata = Just $ KListMeta testKListDef}
-            , sortVars = sym.sortVars
+            , sortVars = sym.sortVars -- disambiguates the record update
             }
-    -- disambiguates the record update
-
     cSym =
         [symb| symbol Lbl'Unds'TestList'Unds'{}(SortTestList{}, SortTestList{}) : SortTestList{} [function{}(), total{}(), assoc{}()] |]
     eSym = [symb| symbol LblTestListItem{}(SomeSort{}) : SortTestList{} [function{}(), total{}()] |]
@@ -271,10 +265,8 @@ setConcatSym, setElemSym, setUnitSym :: Symbol
     withMeta sym =
         sym
             { attributes = sym.attributes{collectionMetadata = Just $ KSetMeta testKSetDef}
-            , sortVars = sym.sortVars
+            , sortVars = sym.sortVars -- disambiguates the record update
             }
-    -- disambiguates the record update
-
     cSym =
         [symb| symbol Lbl'Unds'TestSet'Unds'{}(SortTestSet{}, SortTestSet{}) : SortTestSet{} [function{}(), assoc{}()] |]
     eSym = [symb| symbol LblTestSetItem{}(SomeSort{}) : SortTestSet{} [function{}(), total{}()] |]

@@ -21,6 +21,7 @@ module Booster.Pattern.Util (
     isDefinedSymbol,
     checkSymbolIsAc,
     checkTermSymbols,
+    isBottom,
     isConcrete,
     filterTermSymbols,
     sizeOfTerm,
@@ -273,6 +274,9 @@ filterTermSymbols check = cata $ \case
                         <> maybe [elemSym | check elemSym] (filter check [concatSym, elemSym] <>) rest
                 more ->
                     filter check [concatSym, elemSym] <> fromMaybe [] rest <> concat more
+
+isBottom :: Pattern -> Bool
+isBottom = (Predicate FalseBool `elem`) . constraints
 
 -- | Calculate size of a term in bytes
 sizeOfTerm :: Term -> Int

@@ -9,7 +9,6 @@ module Test.Booster.Pattern.Binary (
 import Booster.Definition.Attributes.Base
 import Booster.Pattern.Base
 import Booster.Pattern.Binary
-import Booster.Pattern.Bool
 import Booster.Pattern.Util (sortOfTerm)
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)

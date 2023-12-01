@@ -16,7 +16,6 @@ module Booster.Pattern.Binary (
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.Pattern.Base
-import Booster.Pattern.Bool (pattern TrueBool)
 import Booster.Pattern.Util (sortOfTerm)
 import Control.Monad (forM_, unless)
 import Control.Monad.Extra (forM)

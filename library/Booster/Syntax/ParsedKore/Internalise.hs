@@ -52,7 +52,6 @@ import Booster.Definition.Util (HasSourceRef (..), SourceRef)
 import Booster.Pattern.Base (Variable (..))
 import Booster.Pattern.Base qualified as Def
 import Booster.Pattern.Base qualified as Def.Symbol (Symbol (..))
-import Booster.Pattern.Bool qualified as Def
 import Booster.Pattern.Index as Idx
 import Booster.Pattern.Util qualified as Util
 import Booster.Prettyprinter hiding (attributes)
