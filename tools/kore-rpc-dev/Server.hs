@@ -213,7 +213,7 @@ koreExtraLogs =
             , (LevelOther "RewriteSuccess", ["DebugAppliedRewriteRules"])
             ]
 
-data CLProxyOptions = CLProxyOptions
+newtype CLProxyOptions = CLProxyOptions
     { clOptions :: CLOptions
     }
 
