@@ -92,8 +92,7 @@ test_evaluateFunction =
             eval BottomUp subj @?= Right result
         ]
   where
-    eval direction =
-        unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm False direction funDef Nothing Nothing
+    eval direction = unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm False direction funDef Nothing Nothing
 
     isTooManyIterations (Left (TooManyIterations _n _ _)) = pure ()
     isTooManyIterations (Left err) = assertFailure $ "Unexpected error " <> show err
@@ -120,8 +119,7 @@ test_simplify =
             simpl BottomUp subj @?= Right result
         ]
   where
-    simpl direction =
-        unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm False direction simplDef Nothing Nothing
+    simpl direction = unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm False direction simplDef Nothing Nothing
     a = var "A" someSort
 
 test_simplifyPattern :: TestTree
@@ -147,8 +145,7 @@ test_simplifyPattern =
             simpl subj @?= Right result
         ]
   where
-    simpl =
-        unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluatePattern False simplDef Nothing Nothing mempty
+    simpl = unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluatePattern False simplDef Nothing Nothing mempty
     a = var "A" someSort
 
 test_simplifyConstraint :: TestTree

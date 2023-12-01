@@ -587,52 +587,20 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                         rule.requires
             unclearConditions' <- catMaybes <$> mapM (checkConstraint ConditionFalse) required
 
-            mbSolver <- (.smtSolver) <$> lift getConfig
-            prior <- (.predicates) <$> lift getState
-
-            case mbSolver of
-                Nothing ->
-                    -- throw immediately on any unclear condition
-                    unless (null unclearConditions') $
-                        throwE $
-                            IndeterminateCondition unclearConditions'
-                Just solver -> do
-                    -- check unclear conditions in the context of the prior constraints
-                    checkAll <-
-                        lift $ SMT.checkPredicates solver prior mempty (Set.fromList unclearConditions')
-                    case checkAll of
-                        Nothing ->
-                            -- unclear even with the prior constraints
-                            throwE $ IndeterminateCondition unclearConditions'
-                        Just False ->
-                            -- unclear conditions are falsified by the prior constraints
-                            throwE . ConditionFalse . coerce $
-                                foldl1 AndTerm $
-                                    map coerce unclearConditions'
-                        Just True ->
-                            -- unclear conditions are implied by the prior constraints
-                            pure ()
-
-            -- check ensured conditions, filter out any true ones,
-            -- prune if any is false
-            let ensured =
-                    concatMap
-                        (splitBoolPredicates . substituteInPredicate subst)
-                        (Set.toList rule.ensures)
-            ensuredConditions <-
-                -- throws if an ensured condition found to be false
-                catMaybes <$> mapM (checkConstraint EnsuresFalse) ensured
-            -- check everything in context if SMT solver is available
-            whenJust mbSolver $ \solver -> do
-                (lift $ SMT.checkPredicates solver prior mempty (Set.fromList ensuredConditions)) >>= \case
-                    Just False ->
-                        throwE . EnsuresFalse . coerce $
-                            foldl1 AndTerm $
-                                map coerce ensuredConditions
-                    _other -> pure ()
-
-            lift $ pushConstraints $ Set.fromList ensuredConditions
-            pure $ substituteInTerm subst rule.rhs
+            case unclearConditions' of
+                [] -> do
+                    -- check ensured conditions, filter any
+                    -- true ones, prune if any is false
+                    let ensured =
+                            concatMap
+                                (splitBoolPredicates . substituteInPredicate subst)
+                                (Set.toList rule.ensures)
+                    ensuredConditions <-
+                        -- throws if an ensured condition found to be false
+                        catMaybes <$> mapM (checkConstraint EnsuresFalse) ensured
+                    lift $ pushConstraints $ Set.fromList ensuredConditions
+                    pure $ substituteInTerm subst rule.rhs
+                unclearConditions -> throwE $ IndeterminateCondition unclearConditions
   where
     -- evaluate/simplify a predicate, cut the operation short when it
     -- is Bottom.
@@ -724,8 +692,7 @@ simplifyConstraints ::
     [Predicate] ->
     io (Either EquationFailure [Predicate], [EquationTrace], SimplifierCache)
 simplifyConstraints doTracing def mbApi mbSMT cache ps =
-    runEquationT doTracing def mbApi mbSMT cache $
-        mapM ((coerce <$>) . simplifyConstraint' True . coerce) ps
+    runEquationT doTracing def mbApi mbSMT cache $ mapM ((coerce <$>) . simplifyConstraint' True . coerce) ps
 
 -- version for internal nested evaluation
 simplifyConstraint' :: MonadLoggerIO io => Bool -> Term -> EquationT io Term
