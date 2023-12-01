@@ -35,18 +35,35 @@ import Booster.SMT.Base as SMT
 import Booster.SMT.Runner as SMT
 import Booster.SMT.Translate as SMT
 
-newtype SMTOptions = SMTOptions
+-- Includes all options from kore-rpc used by current clients. The
+-- parser in CLOptions uses compatible names and we use the same
+-- defaults. Not all options are supported in booster.
+data SMTOptions = SMTOptions
     { transcript :: Maybe FilePath
+    -- ^ optional log file
+    , timeout :: Int
+    -- ^ optional timeout for requests, 0 for none
+    , retryLimit :: Maybe Int
+    -- ^ optional retry. Nothing for no retry, 0 for unlimited
+    , tactic :: Maybe SExpr
+    -- ^ optional tactic (used verbatim) to replace (check-sat)
     }
     deriving (Eq, Show)
 
 defaultSMTOptions :: SMTOptions
-defaultSMTOptions = SMTOptions{transcript = Nothing}
+defaultSMTOptions =
+    SMTOptions
+        { transcript = Nothing
+        , timeout = 125
+        , retryLimit = Just 3
+        , tactic = Nothing
+        }
 
 initSolver :: Log.MonadLoggerIO io => KoreDefinition -> SMTOptions -> io SMT.SMTContext
 initSolver def smtOptions = do
     ctxt <- mkContext smtOptions.transcript
     logSMT "Checking definition prelude"
+    -- FIXME set timeout value before doing anything with the solver
     let prelude = smtDeclarations def
     case prelude of
         Left err -> do
