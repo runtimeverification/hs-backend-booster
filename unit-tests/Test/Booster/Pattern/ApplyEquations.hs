@@ -92,7 +92,7 @@ test_evaluateFunction =
             eval BottomUp subj @?= Right result
         ]
   where
-    eval direction = unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm False direction funDef Nothing
+    eval direction = unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm False direction funDef Nothing Nothing
 
     isTooManyIterations (Left (TooManyIterations _n _ _)) = pure ()
     isTooManyIterations (Left err) = assertFailure $ "Unexpected error " <> show err
@@ -119,7 +119,7 @@ test_simplify =
             simpl BottomUp subj @?= Right result
         ]
   where
-    simpl direction = unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm False direction simplDef Nothing
+    simpl direction = unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm False direction simplDef Nothing Nothing
     a = var "A" someSort
 
 test_simplifyPattern :: TestTree
@@ -145,7 +145,7 @@ test_simplifyPattern =
             simpl subj @?= Right result
         ]
   where
-    simpl = unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluatePattern False simplDef Nothing mempty
+    simpl = unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluatePattern False simplDef Nothing Nothing mempty
     a = var "A" someSort
 
 test_simplifyConstraint :: TestTree
@@ -179,7 +179,7 @@ test_simplifyConstraint =
         unsafePerformIO
             . runNoLoggingT
             . (fst3 <$>)
-            . simplifyConstraint False testDefinition Nothing mempty
+            . simplifyConstraint False testDefinition Nothing Nothing mempty
 
 test_errors :: TestTree
 test_errors =
@@ -192,7 +192,7 @@ test_errors =
                 loopTerms =
                     [f $ app con1 [a], f $ app con2 [a], f $ app con3 [a, a], f $ app con1 [a]]
             isLoop loopTerms . unsafePerformIO . runNoLoggingT $
-                fst3 <$> evaluateTerm False TopDown loopDef Nothing subj
+                fst3 <$> evaluateTerm False TopDown loopDef Nothing Nothing subj
         ]
   where
     isLoop ts (Left (EquationLoop ts')) = ts @?= ts'
