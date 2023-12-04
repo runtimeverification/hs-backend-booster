@@ -26,9 +26,10 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Writer (runWriterT, tell)
 import Data.ByteString.Char8 (isPrefixOf, stripPrefix)
 import Data.Coerce (coerce)
-import Data.DList qualified as DList
+import Data.Foldable (toList)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe, maybeToList)
+import Data.Sequence qualified as Seq
 import Data.Set qualified as Set
 import GHC.Generics qualified as GHC
 import Prettyprinter (Pretty (..))
@@ -76,25 +77,14 @@ computeCeilsDefinition ::
 computeCeilsDefinition mllvm def@KoreDefinition{rewriteTheory} = do
     (rewriteTheory', ceilSummaries) <-
         runWriterT $
-            Map.fromList
-                <$> forM
-                    (Map.toList rewriteTheory)
-                    ( \(k, v) ->
-                        (k,) . Map.fromList
-                            <$> ( forM (Map.toList v) $ \(k', rs) ->
-                                    (k',)
-                                        <$> forM
-                                            rs
-                                            ( \r -> do
-                                                lift (computeCeilRule mllvm def r) >>= \case
-                                                    Nothing -> pure r
-                                                    Just summary@ComputeCeilSummary{newRule} -> do
-                                                        tell (DList.singleton summary)
-                                                        pure $ fromMaybe r newRule
-                                            )
-                                )
-                    )
-    pure (def{rewriteTheory = rewriteTheory'}, DList.toList ceilSummaries)
+            let ceilComputation r = do
+                    lift (computeCeilRule mllvm def r) >>= \case
+                        Nothing -> pure r
+                        Just summary@ComputeCeilSummary{newRule} -> do
+                            tell (Seq.singleton summary)
+                            pure $ fromMaybe r newRule
+             in mapM (mapM (mapM ceilComputation)) rewriteTheory
+    pure (def{rewriteTheory = rewriteTheory'}, toList ceilSummaries)
 
 computeCeilRule ::
     MonadLoggerIO io =>

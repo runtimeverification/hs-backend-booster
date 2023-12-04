@@ -72,7 +72,6 @@ library:
   - containers
   - deepseq
   - deriving-aeson
-  - dlist
   - exceptions
   - extra
   - filepath
