@@ -13,12 +13,11 @@ Files test/jsonrpc-examples/foundry-proof.simplify.request and test/jsonrpc-exam
 ---
 >             "patterns": [
 >                 {
-283a280,283
->                                                                         {
+284a281,296
 >                                                                             "tag": "App",
 >                                                                             "name": "inj",
 >                                                                             "sorts": [
-284a285,296
+>                                                                                 {
 >                                                                                     "tag": "SortApp",
 >                                                                                     "name": "SortInt",
 >                                                                                     "args": []
@@ -35,13 +34,10 @@ Files test/jsonrpc-examples/foundry-proof.simplify.request and test/jsonrpc-exam
 <                                                                             "name": "SortAccount",
 ---
 >                                                                                         "name": "SortInt",
-290a303
->                                                                                     }
-291a305
->                                                                             ]
-576a591,606
->                                                             "args": [
->                                                                 {
+293a306,307
+>                                                                         }
+>                                                                     ]
+578a593,608
 >                                                                     "tag": "App",
 >                                                                     "name": "inj",
 >                                                                     "sorts": [
@@ -56,24 +52,16 @@ Files test/jsonrpc-examples/foundry-proof.simplify.request and test/jsonrpc-exam
 >                                                                             "args": []
 >                                                                         }
 >                                                                     ],
+>                                                                     "args": [
+>                                                                         {
 583c613
 <                                                                     "name": "SortAccount",
 ---
 >                                                                                 "name": "SortInt",
-584a615
->                                                                             }
-585a617
->                                                                     ]
-1666a1699,1933
->                                     "sort": {
->                                         "tag": "SortApp",
->                                         "name": "SortInt",
->                                         "args": []
->                                     }
->                                 }
->                             ]
->                         }
->                     ]
+587a618,619
+>                                                                 }
+>                                                             ]
+1675a1708,1938
 >                 },
 >                 {
 >                     "tag": "And",
@@ -300,7 +288,13 @@ Files test/jsonrpc-examples/foundry-proof.simplify.request and test/jsonrpc-exam
 >                                                             {
 >                                                                 "tag": "EVar",
 >                                                                 "name": "VarNUMBER'Unds'CELL",
-1673a1941,1953
+>                                                                 "sort": {
+>                                                                     "tag": "SortApp",
+>                                                                     "name": "SortInt",
+>                                                                     "args": []
+>                                                                 }
+1676a1940,2218
+>                                                         ]
 >                                                     },
 >                                                     {
 >                                                         "tag": "App",
@@ -314,7 +308,7 @@ Files test/jsonrpc-examples/foundry-proof.simplify.request and test/jsonrpc-exam
 >                                                                     "tag": "SortApp",
 >                                                                     "name": "SortInt",
 >                                                                     "args": []
-1674a1955,1964
+>                                                                 }
 >                                                             },
 >                                                             {
 >                                                                 "tag": "DV",
@@ -325,9 +319,10 @@ Files test/jsonrpc-examples/foundry-proof.simplify.request and test/jsonrpc-exam
 >                                                                 },
 >                                                                 "value": "57896044618658097711785492504343953926634992332820282019728792003956564819967"
 >                                                             }
-1676a1967
+>                                                         ]
+>                                                     }
 >                                                 ]
-1677a1969,2025
+>                                             }
 >                                         },
 >                                         {
 >                                             "tag": "And",
@@ -385,7 +380,7 @@ Files test/jsonrpc-examples/foundry-proof.simplify.request and test/jsonrpc-exam
 >                                                                             "args": []
 >                                                                         },
 >                                                                         "value": "9223372036854775807"
-1678a2027,2050
+>                                                                     }
 >                                                                 ]
 >                                                             },
 >                                                             {
@@ -410,7 +405,7 @@ Files test/jsonrpc-examples/foundry-proof.simplify.request and test/jsonrpc-exam
 >                                                                             "args": []
 >                                                                         },
 >                                                                         "value": "115792089237316195423570985008687907853269984665640564039457584007913129639936"
-1679a2052,2221
+>                                                                     }
 >                                                                 ]
 >                                                             }
 >                                                         ]
@@ -578,8 +573,4 @@ Files test/jsonrpc-examples/foundry-proof.simplify.request and test/jsonrpc-exam
 >                     ]
 >                 }
 >             ]
->         }
->     }
-> }
-\ No newline at end of file
 
