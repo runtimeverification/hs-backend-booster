@@ -357,7 +357,7 @@ internalisePredicate allowAlias checkSubsorts sortVars definition@KoreDefinition
 
     lookupInternalSort' = lookupInternalSort sortVars sorts pat
 
-    foldPreds [] = pure $ IsPredicate $ Internal.Predicate $ Internal.TrueBool
+    foldPreds [] = pure $ IsPredicate $ Internal.Predicate Internal.TrueBool
     foldPreds [x] = pure x
     foldPreds (ip : ips) = do
         ip' <- foldPreds ips
