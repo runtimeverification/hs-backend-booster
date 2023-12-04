@@ -2,7 +2,7 @@
   description = "hs-backend-booster";
 
   inputs = {
-    haskell-backend.url = "github:runtimeverification/haskell-backend/827252a324f651f361ac62de40dbf8888a089503";
+    haskell-backend.url = "github:runtimeverification/haskell-backend/0be07d293a1167615ef9342bb1820350f794e893";
     stacklock2nix.follows = "haskell-backend/stacklock2nix";
     nixpkgs.follows = "haskell-backend/nixpkgs";
   };
@@ -11,24 +11,11 @@
     let
       perSystem = nixpkgs.lib.genAttrs nixpkgs.lib.systems.flakeExposed;
       nixpkgsCleanFor = system: import nixpkgs { inherit system; };
-
-      # temporary fix for https://github.com/cdepillabout/stacklock2nix/issues/38
-      stacklock2nix-patched = system: (nixpkgsCleanFor system).stdenvNoCC.mkDerivation {
-        name = "stacklock2nix-patched";
-        src = stacklock2nix;
-        dontBuild = true;
-        patches = [ ./stacklock2nix.patch ];
-        installPhase = ''
-          mkdir $out
-          cp -r nix/* $out/
-        '';
-      };
-
       nixpkgsFor = system:
         import nixpkgs {
           inherit system;
           overlays =
-            [ (import "${(stacklock2nix-patched system)}/overlay.nix") self.overlay haskell-backend.overlays.z3 ];
+            [ stacklock2nix.overlay self.overlay haskell-backend.overlays.z3 ];
         };
       withZ3 = pkgs: pkg: exe:
         pkgs.stdenv.mkDerivation {
