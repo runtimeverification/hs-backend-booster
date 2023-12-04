@@ -18,7 +18,7 @@ import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.Bool
 import Booster.Pattern.Util (isConcrete, sortOfTerm)
 import Control.DeepSeq (NFData)
-import Control.Monad (foldM, forM)
+import Control.Monad (foldM)
 import Control.Monad.Extra (concatMapM)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Logger (MonadLoggerIO)
