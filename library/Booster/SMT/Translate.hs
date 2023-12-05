@@ -263,7 +263,7 @@ smtDeclarations def
   where
     -- declare all sorts except Int and Bool
     sortDecls =
-        [ DeclareSort ("User-defined sort " <> name) (smtName name) attributes.argCount
+        [ DeclareSort ("User-defined sort " <> name) (quoted name) attributes.argCount
         | (name, (attributes, _)) <- Map.assocs def.sorts
         , name /= "SortInt"
         , name /= "SortBool"
@@ -294,14 +294,16 @@ smtDeclarations def
                     (smtSort sym.resultSort)
         | otherwise = Nothing
 
-smtName :: BS.ByteString -> SMTId
+smtName, quoted :: BS.ByteString -> SMTId
 smtName = SMTId
+-- All Kore sort names (except Int and Bool) need to be quoted |...| here.
+quoted bs = SMTId $ "|" <> bs <> "|"
 
 smtSort :: Sort -> SMTSort
 smtSort SortInt = SimpleSMTSort "Int"
 smtSort SortBool = SimpleSMTSort "Bool"
 smtSort (SortApp sortName args)
-    | null args = SimpleSMTSort $ smtName sortName
-    | otherwise = SMTSort (smtName sortName) $ map smtSort args
+    | null args = SimpleSMTSort $ quoted sortName
+    | otherwise = SMTSort (quoted sortName) $ map smtSort args
 smtSort (SortVar varName) =
     error $ "Sort variable " <> show varName <> " not supported for SMT"
