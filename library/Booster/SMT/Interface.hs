@@ -77,7 +77,9 @@ initSolver def smtOptions = do
         Sat -> pure ctxt
         other -> do
             logSMT $ "Initial SMT definition check returned " <> pack (show other)
-            error "Refusing to work with a potentially inconsistent SMT setup"
+            closeContext ctxt
+            error $
+                "Aborting due to potentially-inconsistent SMT setup: Initial check returned " <> show other
 
 closeSolver :: Log.MonadLoggerIO io => SMT.SMTContext -> io ()
 closeSolver ctxt = do
