@@ -11,7 +11,7 @@ import Control.Concurrent.MVar (newMVar)
 import Control.Concurrent.MVar qualified as MVar
 import Control.DeepSeq (force)
 import Control.Exception (AsyncException (UserInterrupt), evaluate, handleJust)
-import Control.Monad (forM, forM_, unless, void, when)
+import Control.Monad (forM_, unless, void, when)
 import Control.Monad.Catch (bracket)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO (liftIO))
