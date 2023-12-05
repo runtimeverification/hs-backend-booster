@@ -580,7 +580,7 @@ bindVariable var term = do
                     | otherwise ->
                         -- the term in the binding could be _equivalent_
                         -- (not necessarily syntactically equal) to term'
-                        failWith $ VariableConflict var oldTerm term
+                        enqueueRegularProblem oldTerm term
                 Nothing -> do
                     let
                         -- apply existing substitutions to term
