@@ -64,6 +64,7 @@ executables:
     - optparse-applicative
     - text
     - directory
+    - monad-logger
     ghc-options:
     - -rtsopts
     - -eventlog

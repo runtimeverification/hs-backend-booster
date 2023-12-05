@@ -131,14 +131,10 @@ main = do
             withLogger reportDirectory koreLogOptions $ \actualLogAction -> do
                 mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
                 definitions <-
-                    liftIO $ do
-                        defMap' <- either (error . show) id <$> loadDefinition definitionFile
-                        defMap <-
-                            Map.fromList
-                                <$> ( forM (Map.toList defMap') $ \(k, def) ->
-                                        (k,) . fst <$> runNoLoggingT (computeCeilsDefinition mLlvmLibrary def)
-                                    )
-                        evaluate $ force defMap
+                    liftIO $
+                        loadDefinition definitionFile
+                            >>= mapM (mapM ((fst <$>) . runNoLoggingT . computeCeilsDefinition mLlvmLibrary))
+                            >>= evaluate . force . either (error . show) id
                 unless (isJust $ Map.lookup mainModuleName definitions) $ do
                     flip runLoggingT monadLogger $
                         Logger.logErrorNS "proxy" $
