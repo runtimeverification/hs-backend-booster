@@ -93,7 +93,7 @@ main = do
                     , smtOptions
                     , eventlogEnabledUserEvents
                     }
-            , proxyOptions = ProxyOptions{printStats, forceFallback}
+            , proxyOptions = ProxyOptions{printStats, forceFallback, boosterSMT}
             } = options
         (logLevel, customLevels) = adjustLogLevels logLevels
         levelFilter :: Logger.LogSource -> LogLevel -> Bool
@@ -141,16 +141,8 @@ main = do
                 mvarLogAction <- newMVar actualLogAction
                 let logAction = swappableLogger mvarLogAction
 
-                -- FIXME why do we need this? Does tactic == Nothing cause errors?
-                let defaultTactic =
-                        fromMaybe
-                            (KoreSMT.List [KoreSMT.Atom "check-sat-using", KoreSMT.Atom "smt"])
-                            koreSolverOptions.tactic
                 kore@KoreServer{runSMT} <-
-                    mkKoreServer
-                        Log.LoggerEnv{logAction}
-                        clOPts
-                        koreSolverOptions{timeOut = koreSolverOptions.timeOut, tactic = Just defaultTactic}
+                    mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions
 
                 withMDLib llvmLibraryFile $ \mdl -> do
                     mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
@@ -161,7 +153,7 @@ main = do
                                     { definitions
                                     , defaultMain = mainModuleName
                                     , mLlvmLibrary
-                                    , mSMTOptions = smtOptions
+                                    , mSMTOptions = if boosterSMT then smtOptions else Nothing
                                     }
                     statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
 
@@ -223,6 +215,8 @@ data ProxyOptions = ProxyOptions
     -- ^ print timing statistics per request and on shutdown
     , forceFallback :: Maybe Depth
     -- ^ force fallback every n-steps
+    , boosterSMT :: Bool
+    -- ^ whether to use an SMT solver in booster code (but keeping kore-rpc's SMT solver)
     }
 
 parserInfoModifiers :: InfoMod options
@@ -250,6 +244,12 @@ clProxyOptionsParser =
                         <> help "Perform pattern-wide simplification every N steps"
                         <> showDefault
                     )
+                )
+            <*> flag
+                True
+                False
+                ( long "no-booster-smt"
+                    <> help "Disable SMT solver for booster code (but keep enabled for legacy code)"
                 )
 
 translateSMTOpts :: Maybe SMTOptions -> KoreSMT.KoreSolverOptions
