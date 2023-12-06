@@ -9,28 +9,34 @@ module Main (
     main,
 ) where
 
-
-import Data.ByteString.Lazy qualified as BS
-import System.Environment (getArgs)
+import Booster.Prettyprinter (renderDefault)
+import Booster.Syntax.Json (KoreJson (..))
+import Booster.Syntax.Json.Internalise (
+    internalisePattern,
+    pattern CheckSubsorts,
+    pattern DisallowAlias,
+ )
+import Booster.Syntax.ParsedKore (internalise, parseKoreDefinition)
+import Control.Monad.Trans.Except
 import Data.Aeson (eitherDecode)
-import Booster.Syntax.Json.Internalise (internalisePattern, pattern DisallowAlias, pattern CheckSubsorts)
+import Data.ByteString.Lazy qualified as BS
 import Data.Text.IO qualified as Text
 import Prettyprinter
-import Booster.Syntax.ParsedKore (parseKoreDefinition, internalise)
-import Control.Monad.Trans.Except
-import Booster.Prettyprinter (renderDefault)
-import Booster.Syntax.Json (KoreJson(..))
-
+import System.Environment (getArgs)
 
 main :: IO ()
 main = do
     [def, json] <- getArgs
-    parsedDef <- either (error . renderDefault . pretty) id . parseKoreDefinition def <$> Text.readFile def
+    parsedDef <-
+        either (error . renderDefault . pretty) id . parseKoreDefinition def <$> Text.readFile def
     let internalDef = either (error . renderDefault . pretty) id $ internalise Nothing parsedDef
 
     fileContent <- BS.readFile json
     case eitherDecode fileContent of
         Left err -> putStrLn $ "Error: " ++ err
         Right KoreJson{term} -> do
-            let (trm, _subst) = either (error . show) id $ runExcept $ internalisePattern DisallowAlias CheckSubsorts Nothing internalDef term
+            let (trm, _subst) =
+                    either (error . show) id $
+                        runExcept $
+                            internalisePattern DisallowAlias CheckSubsorts Nothing internalDef term
             putStrLn $ renderDefault $ pretty trm
