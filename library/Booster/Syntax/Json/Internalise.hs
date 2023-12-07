@@ -87,11 +87,11 @@ pattern IgnoreSubsorts = Flag False
 
 -- helper types for predicate and pattern internalisation
 data InternalisedPredicate
-    = IsPredicate Internal.Predicate
-    | IsCeil Internal.Ceil
-    | IsSubstitution Internal.Variable Internal.Term
-    deriving stock (Eq, Ord, Show, Generic)
-    deriving anyclass (NFData)
+    = BoolPred Internal.Predicate
+    | CeilPred Internal.Ceil
+    | SubstitutionPred Internal.Variable Internal.Term
+    | UnsupportedPred Syntax.KorePattern
+    deriving stock (Eq, Show)
 
 data TermOrPredicates -- = Either Predicate Pattern
     = BoolOrCeilOrSubstitutionPredicates
@@ -114,9 +114,9 @@ partitionInternalised ::
 partitionInternalised =
     foldr
         ( \r (preds, ceils, subs) -> case r of
-            IsPredicate pr -> (Set.insert pr preds, ceils, subs)
-            IsCeil c -> (preds, c : ceils, subs)
-            IsSubstitution k v -> (preds, ceils, Map.insert k v subs)
+            BoolPred pr -> (Set.insert pr preds, ceils, subs)
+            CeilPred c -> (preds, c : ceils, subs)
+            SubstitutionPred k v -> (preds, ceils, Map.insert k v subs)
         )
         mempty
 
@@ -322,21 +322,21 @@ internalisePredicate allowAlias checkSubsorts sortVars definition@KoreDefinition
     Syntax.KJSVar{} -> term
     Syntax.KJApp{} -> term
     Syntax.KJString{} -> term
-    Syntax.KJTop{} -> pure $ IsPredicate $ Internal.Predicate Internal.TrueBool
+    Syntax.KJTop{} -> pure $ BoolPred $ Internal.Predicate Internal.TrueBool
     Syntax.KJBottom{} -> notSupported -- TODO should we throw here?
     Syntax.KJNot{arg} -> do
         recursion arg >>= \case
-            IsPredicate (Internal.Predicate (Internal.EqualsInt a b)) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NEqualsInt a b
-            IsPredicate (Internal.Predicate (Internal.EqualsK a b)) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NEqualsK a b
-            IsPredicate (Internal.Predicate p) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NotBool p
-            IsSubstitution k v ->
+            BoolPred (Internal.Predicate (Internal.EqualsInt a b)) -> pure $ BoolPred $ Internal.Predicate $ Internal.NEqualsInt a b
+            BoolPred (Internal.Predicate (Internal.EqualsK a b)) -> pure $ BoolPred $ Internal.Predicate $ Internal.NEqualsK a b
+            BoolPred (Internal.Predicate p) -> pure $ BoolPred $ Internal.Predicate $ Internal.NotBool p
+            SubstitutionPred k v ->
                 if "@" `isPrefixOf` k.variableName
                     then notSupported -- @ variables are set variables, the negation of which we do not support internalising
                     else case sortOfTerm v of
-                        Internal.SortInt -> pure $ IsPredicate $ Internal.Predicate $ Internal.NEqualsInt (Internal.Var k) v
+                        Internal.SortInt -> pure $ BoolPred $ Internal.Predicate $ Internal.NEqualsInt (Internal.Var k) v
                         otherSort ->
                             pure $
-                                IsPredicate $
+                                BoolPred $
                                     Internal.Predicate $
                                         Internal.NEqualsK (Internal.KSeq otherSort $ Internal.Var k) (Internal.KSeq otherSort v)
             _ -> notSupported
@@ -351,7 +351,7 @@ internalisePredicate allowAlias checkSubsorts sortVars definition@KoreDefinition
     Syntax.KJMu{} -> notSupported
     Syntax.KJNu{} -> notSupported
     Syntax.KJCeil{arg} ->
-        IsCeil . Internal.Ceil <$> internaliseTerm allowAlias checkSubsorts sortVars definition arg
+        CeilPred . Internal.Ceil <$> internaliseTerm allowAlias checkSubsorts sortVars definition arg
     Syntax.KJFloor{} -> notSupported
     Syntax.KJEquals{argSort, first = arg1, second = arg2} -> do
         -- distinguish term and predicate equality
@@ -366,16 +366,16 @@ internalisePredicate allowAlias checkSubsorts sortVars definition@KoreDefinition
                 ensureEqualSorts (sortOfTerm a) argS
                 ensureEqualSorts (sortOfTerm b) argS
                 case (argS, a, b) of
-                    (Internal.SortBool, Internal.TrueBool, x) -> pure $ IsPredicate $ Internal.Predicate x
-                    (Internal.SortBool, x, Internal.TrueBool) -> pure $ IsPredicate $ Internal.Predicate x
-                    (Internal.SortBool, Internal.FalseBool, x) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NotBool x
-                    (Internal.SortBool, x, Internal.FalseBool) -> pure $ IsPredicate $ Internal.Predicate $ Internal.NotBool x
-                    (_, Internal.Var x, t) -> pure $ IsSubstitution x t
-                    (_, t, Internal.Var x) -> pure $ IsSubstitution x t
-                    (Internal.SortInt, _, _) -> pure $ IsPredicate $ Internal.Predicate $ Internal.EqualsInt a b
+                    (Internal.SortBool, Internal.TrueBool, x) -> pure $ BoolPred $ Internal.Predicate x
+                    (Internal.SortBool, x, Internal.TrueBool) -> pure $ BoolPred $ Internal.Predicate x
+                    (Internal.SortBool, Internal.FalseBool, x) -> pure $ BoolPred $ Internal.Predicate $ Internal.NotBool x
+                    (Internal.SortBool, x, Internal.FalseBool) -> pure $ BoolPred $ Internal.Predicate $ Internal.NotBool x
+                    (_, Internal.Var x, t) -> pure $ SubstitutionPred x t
+                    (_, t, Internal.Var x) -> pure $ SubstitutionPred x t
+                    (Internal.SortInt, _, _) -> pure $ BoolPred $ Internal.Predicate $ Internal.EqualsInt a b
                     (otherSort, _, _) ->
                         pure $
-                            IsPredicate $
+                            BoolPred $
                                 Internal.Predicate $
                                     Internal.EqualsK (Internal.KSeq otherSort a) (Internal.KSeq otherSort b)
             (False, False) -> notSupported
@@ -396,15 +396,15 @@ internalisePredicate allowAlias checkSubsorts sortVars definition@KoreDefinition
 
     lookupInternalSort' = lookupInternalSort sortVars sorts pat
 
-    foldPreds [] = pure $ IsPredicate $ Internal.Predicate Internal.TrueBool
+    foldPreds [] = pure $ BoolPred $ Internal.Predicate Internal.TrueBool
     foldPreds [x] = pure x
     foldPreds (ip : ips) = do
         ip' <- foldPreds ips
         case (ip, ip') of
-            (IsPredicate (Internal.Predicate p), IsPredicate (Internal.Predicate p')) -> pure $ IsPredicate $ Internal.Predicate $ p `Internal.AndBool` p'
-            (IsPredicate (Internal.Predicate p), IsSubstitution x t) -> pure $ IsPredicate $ Internal.Predicate $ p `Internal.AndBool` mkEq x t
-            (IsSubstitution x t, IsPredicate (Internal.Predicate p)) -> pure $ IsPredicate $ Internal.Predicate $ mkEq x t `Internal.AndBool` p
-            (IsSubstitution x t, IsSubstitution x' t') -> pure $ IsPredicate $ Internal.Predicate $ mkEq x t `Internal.AndBool` mkEq x' t'
+            (BoolPred (Internal.Predicate p), BoolPred (Internal.Predicate p')) -> pure $ BoolPred $ Internal.Predicate $ p `Internal.AndBool` p'
+            (BoolPred (Internal.Predicate p), SubstitutionPred x t) -> pure $ BoolPred $ Internal.Predicate $ p `Internal.AndBool` mkEq x t
+            (SubstitutionPred x t, BoolPred (Internal.Predicate p)) -> pure $ BoolPred $ Internal.Predicate $ mkEq x t `Internal.AndBool` p
+            (SubstitutionPred x t, SubstitutionPred x' t') -> pure $ BoolPred $ Internal.Predicate $ mkEq x t `Internal.AndBool` mkEq x' t'
             _ -> notSupported
 
     mkEq x t = case sortOfTerm t of
