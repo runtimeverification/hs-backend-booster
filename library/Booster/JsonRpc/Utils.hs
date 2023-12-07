@@ -31,7 +31,6 @@ import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readProcessWithExitCode)
 
 import Booster.Definition.Base qualified as Internal
-import Booster.Pattern.Base qualified as Internal
 import Booster.Prettyprinter
 import Booster.Syntax.Json.Internalise
 import Data.Map qualified as Map
@@ -235,8 +234,8 @@ diffBy :: Internal.KoreDefinition -> KorePattern -> KorePattern -> Maybe String
 diffBy def pat1 pat2 =
     renderDiff (internalise pat1) (internalise pat2)
   where
-    renderBS :: Internal.TermOrPredicates -> BS.ByteString
-    renderBS (Internal.BoolOrCeilOrSubstitutionPredicates constraints ceils substitutions) =
+    renderBS :: TermOrPredicates -> BS.ByteString
+    renderBS (BoolOrCeilOrSubstitutionPredicates constraints ceils substitutions) =
         BS.pack . renderDefault $
             Pretty.vsep $
                 concat
@@ -246,7 +245,7 @@ diffBy def pat1 pat2 =
                     , "Substitutions:"
                         : fmap (Pretty.indent 4) (map (\(k, v) -> pretty k <+> "=" <+> pretty v) (Map.toList substitutions))
                     ]
-    renderBS (Internal.TermAndPredicateAndSubstitution p m) =
+    renderBS (TermAndPredicateAndSubstitution p m) =
         BS.pack . renderDefault $
             pretty p <+> vsep (map (\(k, v) -> pretty k <+> "=" <+> pretty v) (Map.toList m))
     internalise =

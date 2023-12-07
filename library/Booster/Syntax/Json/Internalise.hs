@@ -21,6 +21,8 @@ module Booster.Syntax.Json.Internalise (
     textToBS,
     trm,
     handleBS,
+    TermOrPredicates (..),
+    retractPattern,
     pattern IsQQ,
     pattern IsNotQQ,
     pattern AllowAlias,
@@ -30,6 +32,7 @@ module Booster.Syntax.Json.Internalise (
 ) where
 
 import Control.Applicative ((<|>))
+import Control.DeepSeq (NFData)
 import Control.Monad
 import Control.Monad.Extra
 import Control.Monad.Trans.Except
@@ -48,6 +51,7 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text as Text (Text, intercalate, pack, unpack)
 import Data.Text.Encoding (decodeLatin1)
+import GHC.Generics (Generic)
 import Language.Haskell.TH (ExpQ, Lit (..), appE, litE, mkName, varE)
 import Language.Haskell.TH.Quote
 import Prettyprinter (pretty)
@@ -55,10 +59,9 @@ import Prettyprinter (pretty)
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Attributes.Base qualified as Internal
 import Booster.Definition.Base (KoreDefinition (..), emptyKoreDefinition)
-import Booster.Pattern.Base (InternalisedPredicate (..))
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Bool qualified as Internal
-import Booster.Pattern.Util (partitionInternalised, sortOfTerm)
+import Booster.Pattern.Util (sortOfTerm)
 import Booster.Prettyprinter (renderDefault)
 import Booster.Syntax.Json.Externalise (externaliseSort)
 import Booster.Syntax.ParsedKore.Parser (parsePattern)
@@ -82,6 +85,42 @@ pattern IgnoreSubsorts = Flag False
 
 {-# COMPLETE CheckSubsorts, IgnoreSubsorts #-}
 
+-- helper types for predicate and pattern internalisation
+data InternalisedPredicate
+    = IsPredicate Internal.Predicate
+    | IsCeil Internal.Ceil
+    | IsSubstitution Internal.Variable Internal.Term
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
+
+data TermOrPredicates -- = Either Predicate Pattern
+    = BoolOrCeilOrSubstitutionPredicates
+        !(Set Internal.Predicate)
+        ![Internal.Ceil]
+        (Map Internal.Variable Internal.Term)
+    | TermAndPredicateAndSubstitution
+        Internal.Pattern
+        (Map Internal.Variable Internal.Term)
+    deriving stock (Eq, Ord, Show, Generic)
+    deriving anyclass (NFData)
+
+retractPattern :: TermOrPredicates -> Maybe Internal.Pattern
+retractPattern (TermAndPredicateAndSubstitution patt _) = Just patt
+retractPattern _ = Nothing
+
+partitionInternalised ::
+    [InternalisedPredicate] ->
+    (Set Internal.Predicate, [Internal.Ceil], Map Internal.Variable Internal.Term)
+partitionInternalised =
+    foldr
+        ( \r (preds, ceils, subs) -> case r of
+            IsPredicate pr -> (Set.insert pr preds, ceils, subs)
+            IsCeil c -> (preds, c : ceils, subs)
+            IsSubstitution k v -> (preds, ceils, Map.insert k v subs)
+        )
+        mempty
+
+-- main interface functions
 internalisePattern ::
     Flag "alias" ->
     Flag "subsorts" ->
@@ -121,15 +160,15 @@ internaliseTermOrPredicate ::
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     Syntax.KorePattern ->
-    Except [PatternError] Internal.TermOrPredicates
+    Except [PatternError] TermOrPredicates
 internaliseTermOrPredicate allowAlias checkSubsorts sortVars definition syntaxPatt =
     ( withExcept (: []) $ do
         (constraints, ceilConditions, substitutions) <-
             partitionInternalised
                 <$> mapM (internalisePredicate allowAlias checkSubsorts sortVars definition) (explodeAnd syntaxPatt)
-        pure $ Internal.BoolOrCeilOrSubstitutionPredicates constraints ceilConditions substitutions
+        pure $ BoolOrCeilOrSubstitutionPredicates constraints ceilConditions substitutions
     )
-        <|> uncurry Internal.TermAndPredicateAndSubstitution
+        <|> uncurry TermAndPredicateAndSubstitution
             <$> (withExcept (: []) $ internalisePattern allowAlias checkSubsorts sortVars definition syntaxPatt)
 
 lookupInternalSort ::

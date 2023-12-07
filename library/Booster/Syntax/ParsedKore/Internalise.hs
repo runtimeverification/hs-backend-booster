@@ -827,7 +827,7 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
     -- filter out literal `Top` constraints
     lhs <-
         fmap (removeTrueBools . Util.modifyVariables (Util.modifyVarName ("Rule#" <>))) $
-            Util.retractPattern result
+            retractPattern result
                 `orFailWith` DefinitionTermOrPredicateError ref (PatternExpected result)
     existentials' <- fmap Set.fromList $ withExcept (DefinitionPatternError ref) $ mapM mkVar exs
     let renameVariable v
@@ -873,7 +873,7 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
         unless (null substitution) $ throwE $ DefinitionPatternError ref SubstitutionNotAllowed
         pure $ removeTrueBools $ Util.modifyVariables f pat
 
-expandAlias :: Alias -> [Def.Term] -> Except DefinitionError Def.TermOrPredicates
+expandAlias :: Alias -> [Def.Term] -> Except DefinitionError TermOrPredicates
 expandAlias alias currentArgs
     | length alias.args /= length currentArgs =
         throwE $
@@ -885,7 +885,7 @@ expandAlias alias currentArgs
   where
     substitute substitution Def.Pattern{term, constraints, ceilConditions} = do
         pure $
-            Def.TermAndPredicateAndSubstitution
+            TermAndPredicateAndSubstitution
                 Def.Pattern
                     { term = Util.substituteInTerm substitution term
                     , constraints =
@@ -1266,7 +1266,7 @@ instance Pretty AxiomError where
                 runExcept (Attributes.readLocation rule.attributes)
 
 newtype TermOrPredicateError
-    = PatternExpected Def.TermOrPredicates
+    = PatternExpected TermOrPredicates
     deriving stock (Eq, Show)
 
 symb :: QuasiQuoter

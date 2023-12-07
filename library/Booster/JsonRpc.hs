@@ -46,7 +46,6 @@ import Booster.Pattern.ApplyEquations qualified as ApplyEquations
 import Booster.Pattern.Base (
     Pattern (..),
     Term,
-    TermOrPredicates (..),
     Variable,
  )
 import Booster.Pattern.Base qualified as Pattern
@@ -62,6 +61,7 @@ import Booster.SMT.Interface qualified as SMT
 import Booster.Syntax.Json (KoreJson (..), addHeader, sortOfJson)
 import Booster.Syntax.Json.Externalise
 import Booster.Syntax.Json.Internalise (
+    TermOrPredicates (..),
     internalisePattern,
     internaliseTermOrPredicate,
     pattern CheckSubsorts,
