@@ -18,7 +18,7 @@ cabal build all
 KORE_RPC_BOOSTER=$(cabal exec which kore-rpc-booster)
 BOOSTER_DEV=$(cabal exec which booster-dev)
 KORE_RPC_DEV=$(cabal exec which kore-rpc-dev)
-export CLIENT=$(cabal exec which rpc-client)
+export CLIENT=$(cabal exec which kore-rpc-client)
 
 cd test/rpc-integration
 for dir in $(ls -d test-*); do
@@ -43,7 +43,7 @@ for dir in $(ls -d test-*); do
             ;;
         "foundry-bug-report")
             SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time $@
-            SERVER="$KORE_RPC_BOOSTER --interim-simplification 100" ./runDirectoryTest.sh test-$name --time $@
+            SERVER=$KORE_RPC_BOOSTER SERVER_OPTS="--interim-simplification 100" ./runDirectoryTest.sh test-$name --time $@
             ;;
         "imp")
             SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time $@

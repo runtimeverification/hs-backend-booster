@@ -2,6 +2,7 @@ resolver: lts-20.26
 
 packages:
 - .
+- dev-tools
 
 # Dependency packages to be pulled from upstream that are not in the resolver.
 extra-deps:
@@ -13,7 +14,7 @@ extra-deps:
   - typerep-map-0.5.0.0
   - monad-validate-1.2.0.1
   - git: https://github.com/runtimeverification/haskell-backend.git
-    commit: 827252a324f651f361ac62de40dbf8888a089503
+    commit: a5847301404583e16d55cd4d051b8e605d704fbc
     subdirs:
       - kore
       - kore-rpc-types

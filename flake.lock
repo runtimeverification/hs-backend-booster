@@ -7,17 +7,17 @@
         "z3": "z3"
       },
       "locked": {
-        "lastModified": 1701192512,
-        "narHash": "sha256-VWytUWtgTCaEYuRlFdRMQxt+La/xaPbC8KlxemyMBf0=",
+        "lastModified": 1701950567,
+        "narHash": "sha256-e4A4dTW8GYQ0KPHcAb1PVaLXqGpKUJuQNJLlM7HO74Y=",
         "owner": "runtimeverification",
         "repo": "haskell-backend",
-        "rev": "827252a324f651f361ac62de40dbf8888a089503",
+        "rev": "a5847301404583e16d55cd4d051b8e605d704fbc",
         "type": "github"
       },
       "original": {
         "owner": "runtimeverification",
         "repo": "haskell-backend",
-        "rev": "827252a324f651f361ac62de40dbf8888a089503",
+        "rev": "a5847301404583e16d55cd4d051b8e605d704fbc",
         "type": "github"
       }
     },
@@ -51,11 +51,11 @@
     },
     "stacklock2nix": {
       "locked": {
-        "lastModified": 1696895532,
-        "narHash": "sha256-QXQ7frsy7D8V81oE6HQBZhlL48Vr7iPR5fSZfNaTdg0=",
+        "lastModified": 1700633677,
+        "narHash": "sha256-ATrA3tZZYo9aj9IAZZNqyvtkz4Ub1Q3q5OgADwxImTA=",
         "owner": "cdepillabout",
         "repo": "stacklock2nix",
-        "rev": "10d531672cada2e02ac49b1b18293e7a94938a38",
+        "rev": "84694f48ddd8e49b96a02216ca2ab406fba25e65",
         "type": "github"
       },
       "original": {
