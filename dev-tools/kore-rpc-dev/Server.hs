@@ -9,7 +9,7 @@ License     : BSD-3-Clause
 module Main (main) where
 
 import Control.Concurrent.MVar (newMVar)
-import Control.Concurrent.MVar qualified as MVar
+
 import Control.Exception (AsyncException (UserInterrupt), handleJust)
 import Control.Monad (forM_, void, when)
 import Control.Monad.Catch (bracket)
@@ -24,6 +24,7 @@ import Control.Monad.Logger (
 import Control.Monad.Logger qualified as Log
 import Control.Monad.Logger qualified as Logger
 import Data.Aeson.Types (Value (..))
+import Data.Bifunctor(second)
 import Data.Conduit.Network (serverSettings)
 import Data.IORef (writeIORef)
 import Data.InternedText (globalInternedTextCache)
@@ -76,7 +77,7 @@ import Options.SMT as KoreSMT (KoreSolverOptions (..), Solver (..))
 import SMT qualified as KoreSMT
 
 data KoreServer = KoreServer
-    { serverState :: MVar.MVar Kore.ServerState
+    { serverState :: Kore.ServerState
     , mainModule :: Text
     , runSMT ::
         forall a.
@@ -88,17 +89,17 @@ data KoreServer = KoreServer
     }
 
 respond ::
-    forall m.
+    forall m s.
     Log.MonadLogger m =>
-    Respond (API 'Req) m (API 'Res) ->
-    Respond (API 'Req) m (API 'Res)
+    Respond (API 'Req) m (API 'Res, Maybe s) ->
+    Respond (API 'Req) m (API 'Res, Maybe s)
 respond kore req = case req of
     Execute _ ->
         loggedKore ExecuteM req >>= \case
-            Right (Execute koreResult) -> do
+            Right (Execute koreResult, _) -> do
                 Log.logInfoNS "proxy" . Text.pack $
                     "Kore " <> show koreResult.reason <> " at " <> show koreResult.depth
-                pure . Right . Execute $ koreResult
+                pure . Right . (,Nothing) . Execute $ koreResult
             res -> pure res
     Implies _ -> loggedKore ImpliesM req
     Simplify simplifyReq -> handleSimplify simplifyReq
@@ -108,19 +109,19 @@ respond kore req = case req of
     Cancel ->
         pure $ Left $ ErrorObj "Cancel not supported" (-32601) Null
   where
-    handleSimplify :: SimplifyRequest -> m (Either ErrorObj (API 'Res))
+    handleSimplify :: SimplifyRequest -> m (Either ErrorObj (API 'Res, Maybe s))
     handleSimplify simplifyReq = do
         let koreReq = Simplify simplifyReq
         koreResult <- kore koreReq
         case koreResult of
-            Right (Simplify koreRes) -> do
-                pure . Right . Simplify $
+            Right (Simplify koreRes, _) -> do
+                pure . Right . (,Nothing) . Simplify $
                     SimplifyResult
                         { state = koreRes.state
                         , logs = koreRes.logs
                         }
             koreError ->
-                pure koreError
+                pure $ second (const Nothing) <$> koreError
 
     loggedKore method r = do
         Log.logInfoNS "proxy" . Text.pack $ show method <> " (using kore)"
@@ -174,12 +175,13 @@ main = do
                 kore@KoreServer{runSMT} <- mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions
                 runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
-                let koreRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
-                    koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
+                let koreRespond :: Kore.ServerState -> Respond (API 'Req) (LoggingT IO) (API 'Res, Maybe Kore.ServerState)
+                    koreRespond s = Kore.respond s (ModuleName kore.mainModule) runSMT
                     server =
                         jsonRpcServer
                             srvSettings
-                            (const $ respond koreRespond)
+                            kore.serverState
+                            (\_rawReq s -> respond (koreRespond s))
                             [handleErrorCall, handleSomeException]
                     interruptHandler _ = do
                         when (logLevel >= LevelInfo) $
@@ -264,10 +266,7 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
         liftIO $ writeIORef globalInternedTextCache internedTextCache
 
         loadedDefinition <- GlobalMain.loadDefinitions [definitionFile]
-        serverState <-
-            liftIO $
-                MVar.newMVar
-                    Kore.ServerState
+        let serverState = Kore.ServerState
                         { serializedModules = Map.singleton (ModuleName mainModuleName) sd
                         , loadedDefinition
                         }

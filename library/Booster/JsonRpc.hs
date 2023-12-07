@@ -16,7 +16,6 @@ module Booster.JsonRpc (
 ) where
 
 import Control.Applicative ((<|>))
-import Control.Concurrent (MVar, newMVar, putMVar, readMVar, takeMVar)
 import Control.Monad
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class
@@ -82,9 +81,9 @@ import Kore.Syntax.Json.Types qualified as Syntax
 respond ::
     forall m.
     MonadLoggerIO m =>
-    MVar ServerState ->
-    Respond (RpcTypes.API 'RpcTypes.Req) m (RpcTypes.API 'RpcTypes.Res)
-respond stateVar =
+    ServerState ->
+    Respond (RpcTypes.API 'RpcTypes.Req) m (RpcTypes.API 'RpcTypes.Res, Maybe ServerState)
+respond state =
     \case
         RpcTypes.Execute req
             | isJust req.stepTimeout -> pure $ Left $ RpcError.unsupportedOption ("step-timeout" :: String)
@@ -122,19 +121,15 @@ respond stateVar =
                                     Just $
                                         fromIntegral (toNanoSecs (diffTimeSpec stop start)) / 1e9
                                 else Nothing
-                    pure $ execResponse duration req result substitution
+                    pure $ (,Nothing) <$> execResponse duration req result substitution
         RpcTypes.AddModule req -> do
             -- block other request executions while modifying the server state
-            state <- liftIO $ takeMVar stateVar
-            let abortWith err = do
-                    liftIO (putMVar stateVar state)
-                    pure $ Left err
-                listNames :: (HasField "name" a b, HasField "getId" b Text) => [a] -> Text
+            let listNames :: (HasField "name" a b, HasField "getId" b Text) => [a] -> Text
                 listNames = Text.intercalate ", " . map (.name.getId)
 
             case parseKoreModule "rpc-request" req._module of
                 Left errMsg ->
-                    abortWith $ RpcError.backendError RpcError.CouldNotParsePattern errMsg
+                    pure $ Left $ RpcError.backendError RpcError.CouldNotParsePattern errMsg
                 Right newModule ->
                     -- constraints on add-module imposed by LLVM simplification library:
                     let checkModule = do
@@ -146,12 +141,11 @@ respond stateVar =
                                     "Module introduces new symbols: " <> listNames newModule.symbols
                      in case runExcept (checkModule >> addToDefinitions newModule state.definitions) of
                             Left err ->
-                                abortWith $ RpcError.backendError RpcError.CouldNotVerifyPattern err
+                                pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern err
                             Right newDefinitions -> do
-                                liftIO $ putMVar stateVar state{definitions = newDefinitions}
                                 Log.logInfo $
                                     "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
-                                pure $ Right $ RpcTypes.AddModule $ RpcTypes.AddModuleResult $ getId newModule.name
+                                pure $ Right (RpcTypes.AddModule $ RpcTypes.AddModuleResult $ getId newModule.name, Just state{definitions = newDefinitions})
         RpcTypes.Simplify req -> withContext req._module $ \(def, mLlvmLibrary, mSMTOptions) -> do
             start <- liftIO $ getTime Monotonic
             let internalised =
@@ -231,10 +225,10 @@ respond stateVar =
 
             let duration =
                     fromIntegral (toNanoSecs (diffTimeSpec stop start)) / 1e9
-                mkSimplifyResponse state traceData =
+                mkSimplifyResponse s traceData =
                     RpcTypes.Simplify
-                        RpcTypes.SimplifyResult{state, logs = mkTraces duration traceData}
-            pure $ second (uncurry mkSimplifyResponse) result
+                        RpcTypes.SimplifyResult{state = s, logs = mkTraces duration traceData}
+            pure $ (,Nothing) <$> second (uncurry mkSimplifyResponse) result
         RpcTypes.GetModel req -> withContext req._module $ \case
             (_, _, Nothing) -> do
                 Log.logErrorNS "booster" "get-model request, not supported without SMT solver"
@@ -283,7 +277,7 @@ respond stateVar =
                                     pure smtResult
                         Log.logOtherNS "booster" (Log.LevelOther "SMT") $
                             "SMT result: " <> pack (either show (("Subst: " <>) . show . Map.size) smtResult)
-                        pure . Right . RpcTypes.GetModel $ case smtResult of
+                        pure . Right . (,Nothing) . RpcTypes.GetModel $ case smtResult of
                             Left SMT.Unsat ->
                                 RpcTypes.GetModelResult
                                     { satisfiable = RpcTypes.Unsat
@@ -331,11 +325,10 @@ respond stateVar =
     withContext ::
         Maybe Text ->
         ( (KoreDefinition, Maybe LLVM.API, Maybe SMT.SMTOptions) ->
-          m (Either ErrorObj (RpcTypes.API 'RpcTypes.Res))
+          m (Either ErrorObj a)
         ) ->
-        m (Either ErrorObj (RpcTypes.API 'RpcTypes.Res))
+        m (Either ErrorObj a)
     withContext mbMainModule action = do
-        state <- liftIO $ readMVar stateVar
         let mainName = fromMaybe state.defaultMain mbMainModule
         case Map.lookup mainName state.definitions of
             Nothing -> pure $ Left $ RpcError.backendError RpcError.CouldNotFindModule mainName
@@ -350,13 +343,12 @@ runServer ::
     (LogLevel, [LogLevel]) ->
     IO ()
 runServer port definitions defaultMain mLlvmLibrary mSMTOptions (logLevel, customLevels) =
-    do
-        stateVar <- newMVar ServerState{definitions, defaultMain, mLlvmLibrary, mSMTOptions}
-        Log.runStderrLoggingT . Log.filterLogger levelFilter $
-            jsonRpcServer
-                srvSettings
-                (const $ respond stateVar)
-                [RpcError.handleErrorCall, RpcError.handleSomeException]
+    Log.runStderrLoggingT . Log.filterLogger levelFilter $
+        jsonRpcServer
+            srvSettings
+            ServerState{definitions, defaultMain, mLlvmLibrary, mSMTOptions}
+            (const $ respond)
+            [RpcError.handleErrorCall, RpcError.handleSomeException]
   where
     levelFilter _source lvl =
         lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError

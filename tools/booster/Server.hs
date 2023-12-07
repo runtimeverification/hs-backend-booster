@@ -8,7 +8,6 @@ License     : BSD-3-Clause
 module Main (main) where
 
 import Control.Concurrent.MVar (newMVar)
-import Control.Concurrent.MVar qualified as MVar
 import Control.DeepSeq (force)
 import Control.Exception (AsyncException (UserInterrupt), evaluate, handleJust)
 import Control.Monad (forM_, unless, void, when)
@@ -141,14 +140,12 @@ main = do
                 mvarLogAction <- newMVar actualLogAction
                 let logAction = swappableLogger mvarLogAction
 
-                kore@KoreServer{runSMT} <-
+                kore@KoreServer{runSMT, serverState = koreState} <-
                     mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions
 
                 withMDLib llvmLibraryFile $ \mdl -> do
                     mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
-                    boosterState <-
-                        liftIO $
-                            newMVar
+                    let boosterState =
                                 Booster.ServerState
                                     { definitions
                                     , defaultMain = mainModuleName
@@ -159,15 +156,15 @@ main = do
 
                     runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
-                    let koreRespond, boosterRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
-                        koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
-                        boosterRespond = Booster.respond boosterState
+                    let koreRespond :: Kore.ServerState -> Respond (API 'Req) (LoggingT IO) (API 'Res, Maybe Kore.ServerState)
+                        koreRespond st = Kore.respond st (ModuleName kore.mainModule) runSMT
 
                         proxyConfig = ProxyConfig{statsVar, forceFallback, boosterState}
                         server =
                             jsonRpcServer
                                 srvSettings
-                                (const $ Proxy.respondEither proxyConfig boosterRespond koreRespond)
+                                (boosterState, koreState)
+                                (\_rawReq (bState, kState) -> Proxy.respondEither proxyConfig (bState, kState) (Booster.respond bState) (koreRespond kState))
                                 [handleErrorCall, handleSomeException]
                         interruptHandler _ = do
                             when (logLevel >= LevelInfo) $
@@ -289,9 +286,7 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
         liftIO $ writeIORef globalInternedTextCache internedTextCache
 
         loadedDefinition <- GlobalMain.loadDefinitions [definitionFile]
-        serverState <-
-            liftIO $
-                MVar.newMVar
+        let serverState =
                     Kore.ServerState
                         { serializedModules = Map.singleton (ModuleName mainModuleName) sd
                         , loadedDefinition
