@@ -1,10 +1,16 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Booster.CLOptions (CLOptions (..), clOptionsParser, adjustLogLevels, versionInfoParser) where
+module Booster.CLOptions (
+    CLOptions (..),
+    clOptionsParser,
+    adjustLogLevels,
+    versionInfoParser,
+) where
 
 import Booster.Trace (CustomUserEventType)
 import Booster.VersionInfo (VersionInfo (..), versionInfo)
 import Control.Monad.Logger (LogLevel (..))
+import Data.ByteString.Char8 qualified as BS (pack)
 import Data.List (intercalate, partition)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
@@ -12,13 +18,18 @@ import Options.Applicative
 import Text.Casing (fromHumps, fromKebab, toKebab, toPascal)
 import Text.Read (readMaybe)
 
+import Booster.SMT.Interface (SMTOptions (..), defaultSMTOptions)
+import Booster.SMT.LowLevelCodec qualified as SMT (parseSExpr)
+
 data CLOptions = CLOptions
     { definitionFile :: FilePath
     , mainModuleName :: Text
     , llvmLibraryFile :: Maybe FilePath
     , port :: Int
     , logLevels :: [LogLevel]
-    , eventlogEnabledUserEvents :: [CustomUserEventType]
+    , smtOptions :: Maybe SMTOptions
+    , -- developer options below
+      eventlogEnabledUserEvents :: [CustomUserEventType]
     , hijackEventlogFile :: Maybe FilePath
     }
     deriving (Show)
@@ -63,6 +74,8 @@ clOptionsParser =
                         )
                 )
             )
+        <*> parseSMTOptions
+        -- developer options below
         <*> many
             ( option
                 (eitherReader readEventLogTracing)
@@ -112,6 +125,7 @@ allowedLogLevels =
     , ("SimplifyKore", "Log all simplification in kore-rpc")
     , ("SimplifySuccess", "Log successful simplifications (booster and kore-rpc)")
     , ("Depth", "Log the current depth of the state")
+    , ("SMT", "Log the SMT-solver interactions")
     ]
 
 -- Partition provided log levels into standard and custom ones, and
@@ -122,6 +136,68 @@ adjustLogLevels ls = (standardLevel, customLevels)
   where
     (stds, customLevels) = partition (<= LevelError) ls
     standardLevel = if null stds then LevelInfo else minimum stds
+
+-- SMTOptions aligned with Options.SMT from kore-rpc, with
+-- fully-compatible option names in the parser
+parseSMTOptions :: Parser (Maybe SMTOptions)
+parseSMTOptions =
+    flag
+        (Just defaultSMTOptions)
+        Nothing
+        ( long "no-smt"
+            <> help "Disable SMT solver sub-process"
+        )
+        <|> fmap
+            Just
+            ( SMTOptions
+                <$> optional
+                    ( strOption
+                        ( metavar "PATH"
+                            <> long "solver-transcript"
+                            <> help "Destination file for SMT transcript (should not exist prior)"
+                        )
+                    )
+                <*> option
+                    nonnegativeInt
+                    ( metavar "TIMEOUT"
+                        <> long "smt-timeout"
+                        <> help "Timeout for SMT requests, in milliseconds (0 for Nothing)."
+                        <> value smtDefaults.timeout
+                        <> showDefault
+                    )
+                <*> optional
+                    ( option
+                        nonnegativeInt
+                        ( metavar "COUNT"
+                            <> long "smt-retry-limit"
+                            <> help "Optional Retry-limit for SMT requests - with scaling timeout."
+                            <> value (fromMaybe 0 smtDefaults.retryLimit)
+                            <> showDefault
+                        )
+                    )
+                <*> optional
+                    ( option
+                        readTactic
+                        ( metavar "TACTIC"
+                            <> long "smt-tactic"
+                            <> help
+                                "Optional Z3 tactic to use when checking satisfiability. \
+                                \Example: '(check-sat-using smt)' (i.e., plain 'check-sat')"
+                        )
+                    )
+            )
+  where
+    smtDefaults = defaultSMTOptions
+
+    nonnegativeInt :: ReadM Int
+    nonnegativeInt =
+        auto >>= \case
+            i
+                | i < 0 -> readerError "must be a non-negative integer."
+                | otherwise -> pure i
+
+    readTactic =
+        either (readerError . ("Invalid s-expression. " <>)) pure . SMT.parseSExpr . BS.pack =<< str
 
 versionInfoParser :: Parser (a -> a)
 versionInfoParser =

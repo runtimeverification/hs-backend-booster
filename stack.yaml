@@ -2,16 +2,19 @@ resolver: lts-20.26
 
 packages:
 - .
+- dev-tools
 
 # Dependency packages to be pulled from upstream that are not in the resolver.
 extra-deps:
   - chronos-1.1.5
   - co-log-0.5.0.0
   - decision-diagrams-0.2.0.0
+  - smtlib-backends-0.3
+  - smtlib-backends-process-0.3
   - typerep-map-0.5.0.0
   - monad-validate-1.2.0.1
   - git: https://github.com/runtimeverification/haskell-backend.git
-    commit: 827252a324f651f361ac62de40dbf8888a089503
+    commit: 0be07d293a1167615ef9342bb1820350f794e893
     subdirs:
       - kore
       - kore-rpc-types
