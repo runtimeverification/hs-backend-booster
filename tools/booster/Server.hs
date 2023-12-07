@@ -146,17 +146,18 @@ main = do
                 withMDLib llvmLibraryFile $ \mdl -> do
                     mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
                     let boosterState =
-                                Booster.ServerState
-                                    { definitions
-                                    , defaultMain = mainModuleName
-                                    , mLlvmLibrary
-                                    , mSMTOptions = if boosterSMT then smtOptions else Nothing
-                                    }
+                            Booster.ServerState
+                                { definitions
+                                , defaultMain = mainModuleName
+                                , mLlvmLibrary
+                                , mSMTOptions = if boosterSMT then smtOptions else Nothing
+                                }
                     statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
 
                     runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
-                    let koreRespond :: Kore.ServerState -> Respond (API 'Req) (LoggingT IO) (API 'Res, Maybe Kore.ServerState)
+                    let koreRespond ::
+                            Kore.ServerState -> Respond (API 'Req) (LoggingT IO) (API 'Res, Maybe Kore.ServerState)
                         koreRespond st = Kore.respond st (ModuleName kore.mainModule) runSMT
 
                         proxyConfig = ProxyConfig{statsVar, forceFallback, boosterState}
@@ -164,7 +165,8 @@ main = do
                             jsonRpcServer
                                 srvSettings
                                 (boosterState, koreState)
-                                (\_rawReq (bState, kState) -> Proxy.respondEither proxyConfig (bState, kState) (Booster.respond bState) (koreRespond kState))
+                                ( \_rawReq (bState, kState) -> Proxy.respondEither proxyConfig (bState, kState) (Booster.respond bState) (koreRespond kState)
+                                )
                                 [handleErrorCall, handleSomeException]
                         interruptHandler _ = do
                             when (logLevel >= LevelInfo) $
@@ -287,10 +289,10 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
 
         loadedDefinition <- GlobalMain.loadDefinitions [definitionFile]
         let serverState =
-                    Kore.ServerState
-                        { serializedModules = Map.singleton (ModuleName mainModuleName) sd
-                        , loadedDefinition
-                        }
+                Kore.ServerState
+                    { serializedModules = Map.singleton (ModuleName mainModuleName) sd
+                    , loadedDefinition
+                    }
 
         pure $
             Proxy.KoreServer

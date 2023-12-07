@@ -145,7 +145,11 @@ respond state =
                             Right newDefinitions -> do
                                 Log.logInfo $
                                     "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
-                                pure $ Right (RpcTypes.AddModule $ RpcTypes.AddModuleResult $ getId newModule.name, Just state{definitions = newDefinitions})
+                                pure $
+                                    Right
+                                        ( RpcTypes.AddModule $ RpcTypes.AddModuleResult $ getId newModule.name
+                                        , Just state{definitions = newDefinitions}
+                                        )
         RpcTypes.Simplify req -> withContext req._module $ \(def, mLlvmLibrary, mSMTOptions) -> do
             start <- liftIO $ getTime Monotonic
             let internalised =

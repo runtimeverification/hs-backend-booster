@@ -24,7 +24,7 @@ import Control.Monad.Logger (
 import Control.Monad.Logger qualified as Log
 import Control.Monad.Logger qualified as Logger
 import Data.Aeson.Types (Value (..))
-import Data.Bifunctor(second)
+import Data.Bifunctor (second)
 import Data.Conduit.Network (serverSettings)
 import Data.IORef (writeIORef)
 import Data.InternedText (globalInternedTextCache)
@@ -175,7 +175,8 @@ main = do
                 kore@KoreServer{runSMT} <- mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions
                 runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
-                let koreRespond :: Kore.ServerState -> Respond (API 'Req) (LoggingT IO) (API 'Res, Maybe Kore.ServerState)
+                let koreRespond ::
+                        Kore.ServerState -> Respond (API 'Req) (LoggingT IO) (API 'Res, Maybe Kore.ServerState)
                     koreRespond s = Kore.respond s (ModuleName kore.mainModule) runSMT
                     server =
                         jsonRpcServer
@@ -266,10 +267,11 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
         liftIO $ writeIORef globalInternedTextCache internedTextCache
 
         loadedDefinition <- GlobalMain.loadDefinitions [definitionFile]
-        let serverState = Kore.ServerState
-                        { serializedModules = Map.singleton (ModuleName mainModuleName) sd
-                        , loadedDefinition
-                        }
+        let serverState =
+                Kore.ServerState
+                    { serializedModules = Map.singleton (ModuleName mainModuleName) sd
+                    , loadedDefinition
+                    }
 
         pure $
             KoreServer

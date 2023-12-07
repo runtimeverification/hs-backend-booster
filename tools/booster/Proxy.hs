@@ -117,7 +117,10 @@ respondEither ProxyConfig{statsVar, forceFallback} (boosterState, _koreState) bo
     Cancel ->
         pure $ Left $ ErrorObj "Cancel not supported" (-32601) Null
   where
-    handleSimplify :: SimplifyRequest -> Maybe TimeSpec -> m (Either ErrorObj (API 'Res, Maybe (Booster.ServerState, Kore.ServerState)))
+    handleSimplify ::
+        SimplifyRequest ->
+        Maybe TimeSpec ->
+        m (Either ErrorObj (API 'Res, Maybe (Booster.ServerState, Kore.ServerState)))
     handleSimplify simplifyReq mbStart = do
         -- execute in booster first, then in kore. Log the difference
         (boosterResult, boosterTime) <-
@@ -178,9 +181,10 @@ respondEither ProxyConfig{statsVar, forceFallback} (boosterState, _koreState) bo
                 pure . Left $ ErrorObj "Wrong result type" (-32002) $ toJSON _wrong
             Left _wrong -> pure $ Left _wrong
 
-    loggedKore :: APIMethod
-        -> API 'Req
-        -> m (Either ErrorObj (API 'Res, Maybe (Booster.ServerState, Kore.ServerState)))
+    loggedKore ::
+        APIMethod ->
+        API 'Req ->
+        m (Either ErrorObj (API 'Res, Maybe (Booster.ServerState, Kore.ServerState)))
     loggedKore method r = do
         Log.logInfoNS "proxy" . Text.pack $ show method <> " (using kore)"
         (result, time) <- Stats.timed $ kore r
@@ -200,7 +204,11 @@ respondEither ProxyConfig{statsVar, forceFallback} (boosterState, _koreState) bo
         | otherwise =
             pure ()
 
-    handleExecute :: LogSettings -> KoreDefinition -> ExecuteRequest -> m (Either ErrorObj (API 'Res, Maybe (Booster.ServerState, Kore.ServerState)))
+    handleExecute ::
+        LogSettings ->
+        KoreDefinition ->
+        ExecuteRequest ->
+        m (Either ErrorObj (API 'Res, Maybe (Booster.ServerState, Kore.ServerState)))
     handleExecute logSettings def =
         executionLoop logSettings forceFallback def (0, 0.0, 0.0, Nothing)
 
@@ -329,8 +337,8 @@ respondEither ProxyConfig{statsVar, forceFallback} (boosterState, _koreState) bo
                                                 "Kore " <> show koreResult.reason <> " at " <> show koreResult.depth
                                             logStats ExecuteM (time + bTime + kTime, koreTime + kTime)
                                             pure $
-                                                Right $ 
-                                                    (Execute
+                                                Right $
+                                                    ( Execute
                                                         koreResult
                                                             { depth = currentDepth + boosterResult.depth + koreResult.depth
                                                             , logs =
@@ -341,7 +349,8 @@ respondEither ProxyConfig{statsVar, forceFallback} (boosterState, _koreState) bo
                                                                     , fallbackLog
                                                                     ]
                                                             }
-                                                    , Nothing)
+                                                    , Nothing
+                                                    )
                                 -- can only be an error at this point
                                 res -> pure $ second (const Nothing) <$> res
                 | otherwise -> do
@@ -353,11 +362,13 @@ respondEither ProxyConfig{statsVar, forceFallback} (boosterState, _koreState) bo
                     logStats ExecuteM (time + bTime, koreTime)
                     pure $
                         Right $
-                            (Execute
+                            ( Execute
                                 boosterResult
                                     { depth = currentDepth + boosterResult.depth
                                     , logs = combineLogs [rpcLogs, boosterResult.logs]
-                                    }, Nothing)
+                                    }
+                            , Nothing
+                            )
             -- can only be an error at this point
             res -> pure $ second (const Nothing) <$> res
 
@@ -419,10 +430,15 @@ respondEither ProxyConfig{statsVar, forceFallback} (boosterState, _koreState) bo
                     }
 
     postExecSimplify ::
-        LogSettings -> TimeSpec -> Maybe Text -> KoreDefinition -> API 'Res -> m (API 'Res, Maybe (Booster.ServerState, Kore.ServerState))
+        LogSettings ->
+        TimeSpec ->
+        Maybe Text ->
+        KoreDefinition ->
+        API 'Res ->
+        m (API 'Res, Maybe (Booster.ServerState, Kore.ServerState))
     postExecSimplify logSettings start mbModule def = \case
         Execute res -> (,Nothing) . Execute <$> simplifyResult res
-        other -> pure (other,Nothing)
+        other -> pure (other, Nothing)
       where
         -- timeLog :: TimeDiff -> Maybe [LogEntry]
         timeLog stop
