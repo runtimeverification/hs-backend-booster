@@ -29,6 +29,8 @@ module Booster.Syntax.Json.Internalise (
     pattern DisallowAlias,
     pattern CheckSubsorts,
     pattern IgnoreSubsorts,
+    -- for test only
+    InternalisedPredicate (..),
 ) where
 
 import Control.Applicative ((<|>))
@@ -390,7 +392,7 @@ internalisePredicate allowAlias checkSubsorts sortVars definition@KoreDefinition
     Syntax.KJRightAssoc{} -> term
   where
     term = throwE $ PredicateExpected pat
-    notSupported = throwE $ NotSupported pat
+    notSupported = pure $ UnsupportedPred pat
 
     recursion = internalisePredicate allowAlias checkSubsorts sortVars definition
 
