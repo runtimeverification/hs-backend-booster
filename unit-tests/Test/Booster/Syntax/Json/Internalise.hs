@@ -1,7 +1,6 @@
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
-
 -}
 module Test.Booster.Syntax.Json.Internalise (
     test_internalise,
@@ -9,13 +8,14 @@ module Test.Booster.Syntax.Json.Internalise (
 
 import Control.Monad.Trans.Except
 import Data.Coerce
+import Data.Set qualified as Set
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import Booster.Pattern.Base as Internal
 import Booster.Pattern.Bool as Internal
 import Booster.Syntax.Json.Internalise
-import Kore.Syntax.Json.Types as Syntax hiding (LeftRight(..))
+import Kore.Syntax.Json.Types as Syntax hiding (LeftRight (..))
 import Test.Booster.Fixture
 
 test_internalise :: TestTree
@@ -29,28 +29,35 @@ testPredicates :: TestTree
 testPredicates =
     testGroup
         "Internalising different kinds of predicates"
-        [ shouldWork
+        [ shouldBeBool
             "basic boolean predicate (simply false)"
             (KJEquals boolSort' someSort' (KJDV boolSort' "true") (KJDV boolSort' "false"))
-            (BoolPred . coerce $ FalseBool )
+            (coerce FalseBool)
         , -- tricky cases
-          let unsupported =
-                  KJNot someSort' . KJAnd someSort' $
-                      [ KJCeil boolSort' someSort' $ KJDV boolSort' "true"
-                      , KJEquals boolSort' someSort' (KJDV boolSort' "true") (KJDV boolSort' "false")
-                      ]
-           in shouldWork
-                  "Unsupported conjunction under a not with ceil and an equation"
-                  unsupported
-                  (UnsupportedPred unsupported)
+          let notAndCeil =
+                KJNot someSort' . KJAnd someSort' $
+                    [ KJCeil boolSort' someSort' $ KJDV boolSort' "true"
+                    , KJEquals boolSort' someSort' (KJDV boolSort' "true") (KJDV boolSort' "false")
+                    ]
+           in expectUnsupported
+                "conjunction under a not with ceil and an equation"
+                notAndCeil
+                notAndCeil
         ]
   where
-    internalise = internalisePredicate DisallowAlias IgnoreSubsorts Nothing testDefinition
-    shouldWork name pat expected =
-        testCase name $ Right expected @=? runExcept (internalise pat)
+    internaliseAll = internalisePredicates DisallowAlias IgnoreSubsorts Nothing testDefinition
+    internalise = internaliseAll . (: [])
+
+    shouldBeBool name pat expected =
+        testCase name $
+            Right (Set.singleton expected, mempty, mempty, []) @=? runExcept (internalise pat)
+
+    expectUnsupported description pat expected =
+        testCase ("Unsupported: " <> description) $
+            Right (mempty, mempty, mempty, [expected]) @=? runExcept (internalise pat)
 
 -- syntax equivalents of sorts in testDefinition
 someSort', boolSort', intSort' :: Syntax.Sort
 someSort' = Syntax.SortApp (Id "SomeSort") []
 boolSort' = Syntax.SortApp (Id "SortBool") []
-intSort' =  Syntax.SortApp (Id "SortInt") []
+intSort' = Syntax.SortApp (Id "SortInt") []
