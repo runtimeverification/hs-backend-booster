@@ -420,11 +420,13 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
     postExecSimplify ::
         LogSettings -> TimeSpec -> Maybe Text -> KoreDefinition -> API 'Res -> m (API 'Res)
     postExecSimplify logSettings start mbModule def = \case
-        Execute res -> Execute <$> 
-                (simplifyResult res
-                    `catch` ( \(err :: DecidePredicateUnknown) ->
-                                pure res{reason = Aborted, unknownPredicate = Just . externaliseDecidePredicateUnknown $ err}
-                            ))
+        Execute res ->
+            Execute
+                <$> ( simplifyResult res
+                        `catch` ( \(err :: DecidePredicateUnknown) ->
+                                    pure res{reason = Aborted, unknownPredicate = Just . externaliseDecidePredicateUnknown $ err}
+                                )
+                    )
         other -> pure other
       where
         -- timeLog :: TimeDiff -> Maybe [LogEntry]
