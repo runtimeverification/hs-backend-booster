@@ -1075,7 +1075,8 @@ internaliseCeil partialDef left right sortVars attrs = do
                 DefinitionPatternError (sourceRef attrs) SubstitutionNotAllowed
         unless (null unsupported) $
             throwE $
-                DefinitionPatternError (sourceRef attrs) $ NotSupported (head unsupported)
+                DefinitionPatternError (sourceRef attrs) $
+                    NotSupported (head unsupported)
         pure $
             map (Util.modifyVariablesInT (Util.modifyVarName ("Eq#" <>)) . coerce) $
                 Set.toList constraints
