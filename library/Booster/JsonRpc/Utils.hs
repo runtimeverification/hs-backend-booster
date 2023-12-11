@@ -235,19 +235,25 @@ diffBy def pat1 pat2 =
     renderDiff (internalise pat1) (internalise pat2)
   where
     renderBS :: TermOrPredicates -> BS.ByteString
-    renderBS (BoolOrCeilOrSubstitutionPredicates constraints ceils substitutions) =
-        BS.pack . renderDefault $
-            Pretty.vsep $
-                concat
-                    [ "Conditions:"
-                        : fmap (Pretty.indent 4 . pretty) (Set.toList constraints)
-                    , fmap (Pretty.indent 4 . pretty) ceils
-                    , "Substitutions:"
-                        : fmap (Pretty.indent 4) (map (\(k, v) -> pretty k <+> "=" <+> pretty v) (Map.toList substitutions))
-                    ]
-    renderBS (TermAndPredicateAndSubstitution p m) =
-        BS.pack . renderDefault $
+    renderBS (Predicates ps) =
+        ( BS.pack . renderDefault . Pretty.vsep $
+            concat
+                [ "Conditions:"
+                    : fmap (Pretty.indent 4 . pretty) (Set.toList ps.boolPredicates)
+                , "Ceil conditions:"
+                    : map (Pretty.indent 4 . pretty) (Set.toList ps.ceilPredicates)
+                , "Substitutions:"
+                    : fmap (Pretty.indent 4) (map (\(k, v) -> pretty k <+> "=" <+> pretty v) (Map.toList ps.substitution))
+                ]
+        )
+            <> if null ps.unsupported
+                then ""
+                else BS.unlines ("Unsupported parts:" : map Json.encode ps.unsupported)
+    renderBS (TermAndPredicates p m u) =
+        ( BS.pack . renderDefault $
             pretty p <+> vsep (map (\(k, v) -> pretty k <+> "=" <+> pretty v) (Map.toList m))
+        )
+            <> if null u then "" else BS.unlines ("Unsupported parts: " : map Json.encode u)
     internalise =
         either
             (("Pattern could not be internalised: " <>) . Json.encode)

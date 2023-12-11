@@ -22,6 +22,7 @@ module Booster.Syntax.Json.Internalise (
     trm,
     handleBS,
     TermOrPredicates (..),
+    InternalisedPredicates (..),
     retractPattern,
     pattern IsQQ,
     pattern IsNotQQ,
@@ -97,19 +98,24 @@ data InternalisedPredicate
     | UnsupportedPred Syntax.KorePattern
     deriving stock (Eq, Show)
 
+data InternalisedPredicates = InternalisedPredicates
+    { boolPredicates :: Set Internal.Predicate
+    , ceilPredicates :: Set Internal.Ceil
+    , substitution :: Map Internal.Variable Internal.Term
+    , unsupported :: [Syntax.KorePattern]
+    }
+    deriving stock (Eq, Show)
+
 data TermOrPredicates -- = Either Predicate Pattern
-    = BoolOrCeilOrSubstitutionPredicates
-        !(Set Internal.Predicate)
-        ![Internal.Ceil]
-        (Map Internal.Variable Internal.Term)
-    | TermAndPredicateAndSubstitution
+    = Predicates InternalisedPredicates
+    | TermAndPredicates
         Internal.Pattern
         (Map Internal.Variable Internal.Term)
-    deriving stock (Eq, Ord, Show, Generic)
-    deriving anyclass (NFData)
+        [Syntax.KorePattern]
+    deriving stock (Eq, Show)
 
 retractPattern :: TermOrPredicates -> Maybe Internal.Pattern
-retractPattern (TermAndPredicateAndSubstitution patt _) = Just patt
+retractPattern (TermAndPredicates patt _ _) = Just patt
 retractPattern _ = Nothing
 
 -- main interface functions
@@ -119,7 +125,7 @@ internalisePattern ::
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     Syntax.KorePattern ->
-    Except PatternError (Internal.Pattern, Map Internal.Variable Internal.Term)
+    Except PatternError (Internal.Pattern, Map Internal.Variable Internal.Term, [Syntax.KorePattern])
 internalisePattern allowAlias checkSubsorts sortVars definition p = do
     (terms, predicates) <- partitionM isTermM $ explodeAnd p
 
@@ -128,10 +134,13 @@ internalisePattern allowAlias checkSubsorts sortVars definition p = do
     -- construct an AndTerm from all terms (checking sort consistency)
     term <- andTerm p =<< mapM (internaliseTerm allowAlias checkSubsorts sortVars definition) terms
     -- internalise all predicates
-    (constraints, ceilConditions, substitutions, _unsupported) <-
+    (constraints, ceilConditions, substitutions, unsupported) <-
         internalisePredicates allowAlias checkSubsorts sortVars definition predicates
     pure
-        (Internal.Pattern{term, constraints, ceilConditions = Set.toList ceilConditions}, substitutions)
+        ( Internal.Pattern{term, constraints, ceilConditions = Set.toList ceilConditions}
+        , substitutions
+        , unsupported
+        )
   where
     andTerm :: Syntax.KorePattern -> [Internal.Term] -> Except PatternError Internal.Term
     andTerm _ [] = error "BUG: andTerm called with empty term list"
@@ -155,12 +164,15 @@ internaliseTermOrPredicate ::
     Except [PatternError] TermOrPredicates
 internaliseTermOrPredicate allowAlias checkSubsorts sortVars definition syntaxPatt =
     ( withExcept (: []) $ do
-        (constraints, ceilConditions, substitutions, _unsupported) <-
+        (constraints, ceilConditions, substitutions, unsupported) <-
             internalisePredicates allowAlias checkSubsorts sortVars definition [syntaxPatt]
-        pure $ BoolOrCeilOrSubstitutionPredicates constraints (Set.toList ceilConditions) substitutions
+        pure . Predicates $ InternalisedPredicates constraints ceilConditions substitutions unsupported
     )
-        <|> uncurry TermAndPredicateAndSubstitution
-            <$> (withExcept (: []) $ internalisePattern allowAlias checkSubsorts sortVars definition syntaxPatt)
+        <|> ( withExcept (: []) $ do
+                (pat, substitution, unsupported) <-
+                    internalisePattern allowAlias checkSubsorts sortVars definition syntaxPatt
+                pure $ TermAndPredicates pat substitution unsupported
+            )
 
 lookupInternalSort ::
     Maybe [Syntax.Id] ->
