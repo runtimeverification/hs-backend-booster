@@ -95,7 +95,7 @@ computeCeilRule ::
 computeCeilRule mllvm def r@RewriteRule.RewriteRule{lhs, requires, rhs, attributes, computedAttributes}
     | null computedAttributes.notPreservesDefinednessReasons = pure Nothing
     | otherwise = do
-        (res, _, _) <- runEquationT False def mllvm mempty $ do
+        (res, _, _) <- runEquationT False def mllvm Nothing mempty $ do
             lhsCeils <- Set.fromList <$> computeCeil lhs
             let subtractLHSceils = (Set.\\ lhsCeils) . Set.fromList
             requiresCeils <-
