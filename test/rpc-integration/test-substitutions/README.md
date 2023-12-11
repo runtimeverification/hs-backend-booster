@@ -29,8 +29,10 @@ is not simplified using `kore-rpc`.
   - with an additional constraint `Y = 1 +Int X`
   - leading to a contradictory constraint `X = 1 +Int X` after
     rewriting and adding `Y =Int X` from the `ensures`-clause
-    - `kore-rpc-booster` returns `vacuous`
-    - `booster-dev` returns `stuck` (does not detect contradiction)
+    - `kore-rpc-booster` returns `vacuous` after 1 step
+    - `kore-rpc-dev` returns `vacuous` after 0 steps (detects the contradiction earlier)
+    - `kore-rpc-dev` reproduces the exact input as `state` while
+      `kore-rpc-booster` splits off `substitution` (from input) and `predicate` (from the rule)
 * `state-circular-equations.execute`
   - starts from `concrete-subst`
   - with two equations that have circular dependencies: `Y = 1 +Int X`, `X = Y -Int 1`
@@ -38,4 +40,6 @@ is not simplified using `kore-rpc`.
 * `state-symbolic-bottom-predicate.execute`
   - starts from `symbolic-subst`
   - with an equation that is instantly false: `X = 1 +Int X`
-  - leading to a vacuous state (in `kore-rpc-booster`) (nonetheless rewritten once)
+  - leading to a vacuous state in `kore-rpc-booster` (nonetheless rewritten once)
+  - while `kore-rpc-dev` returns `stuck` instantly after 0 steps,
+    returning the exact input as `state`.
