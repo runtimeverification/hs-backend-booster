@@ -15,6 +15,7 @@ import Data.Set qualified as Set
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.Pattern.Base
+import Booster.SMT.Base
 import Booster.Syntax.Json.Internalise (trm)
 import Booster.Syntax.ParsedKore.Internalise (symb)
 
@@ -52,7 +53,7 @@ testDefinition =
                 , ("f1", f1)
                 , ("f2", f2)
                 , ("f3", f3)
-                , ("eqK", eqK)
+                , ("Lbl'UndsEqlsEqls'K'Und'", eqK)
                 ]
                 <> listSymbols
                 <> setSymbols
@@ -93,7 +94,25 @@ con4 = [symb| symbol con4{}(SomeSort{}, SomeSort{}) : AnotherSort{} [constructor
 f1 = [symb| symbol f1{}(SomeSort{}) : SomeSort{} [function{}(), total{}()] |]
 f2 = [symb| symbol f2{}(SomeSort{}) : SomeSort{} [function{}()] |]
 f3 = [symb| symbol f3{}(SomeSort{}) : SortTestKMap{} [function{}()] |]
-eqK = [symb| symbol eqK{}(SortKItem{}, SortKItem{}) : SomeBool{} [function{}()] |]
+eqK =
+    Symbol
+        { name = "Lbl'UndsEqlsEqls'K'Unds'"
+        , sortVars = []
+        , argSorts = [SortApp "SortK" [], SortApp "SortK" []]
+        , resultSort = SortApp "SortBool" []
+        , attributes =
+                SymbolAttributes
+                { collectionMetadata = Nothing
+                , symbolType = TotalFunction
+                , isIdem = IsNotIdem
+                , isAssoc = IsNotAssoc
+                , isMacroOrAlias = IsNotMacroOrAlias
+                , hasEvaluators = CanBeEvaluated
+                , smt = Just (SMTHook (Atom "="))
+                }
+        }
+kseq = [symb| symbol kseq{}(SortKItem{}, SortK{}) : SortK{} [constructor{}()] |]
+dotk = [symb| symbol dotk{}() : SortK{} [constructor{}()] |]
 
 --------------------------------------------------------------------------------
 
