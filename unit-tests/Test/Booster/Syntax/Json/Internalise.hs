@@ -67,23 +67,25 @@ testSubstitutions =
         "Recognising and checking substitutions"
         [ test
             "Basic substitution equation"
-            ( "X" .==> dv' "something")
+            ("X" .==> dv' "something")
             (hasSubstitution [("X", someSort, DomainValue someSort "something")])
         , test
             "Several substitutions"
-            (equations'
-                [  "X" .==> dv' "something"
-                ,  "Y" .==> dv' "something-else"
-                ])
-            (hasSubstitution
+            ( equations'
+                [ "X" .==> dv' "something"
+                , "Y" .==> dv' "something-else"
+                ]
+            )
+            ( hasSubstitution
                 [ ("X", someSort, DomainValue someSort "something")
                 , ("Y", someSort, DomainValue someSort "something-else")
-                ])
+                ]
+            )
         , let varX = Var (Variable someSort "X")
-          in test
-                 "X => f(X) is not a substitution"
-                 ( "X" .==> KJApp (Id "f1") [] [KJEVar (Id "X") someSort'])
-                 (hasEquations [(varX, SymbolApplication f1 [] [varX])])
+           in test
+                "X => f(X) is not a substitution"
+                ("X" .==> KJApp (Id "f1") [] [KJEVar (Id "X") someSort'])
+                (hasEquations [(varX, SymbolApplication f1 [] [varX])])
         ]
   where
     test name syntax expected =
@@ -94,12 +96,12 @@ testSubstitutions =
 
     hasSubstitution triplets =
         let expectedSubstitution =
-                Map.fromList [ (Variable s v, t)  | (v, s, t) <- triplets ]
+                Map.fromList [(Variable s v, t) | (v, s, t) <- triplets]
          in InternalisedPredicates mempty mempty expectedSubstitution mempty
 
     hasEquations pairs =
         let expectedPreds =
-                Set.fromList [ t ==. t' | (t, t') <- pairs ]
+                Set.fromList [t ==. t' | (t, t') <- pairs]
          in InternalisedPredicates expectedPreds mempty mempty mempty
 
 (.==>) :: Text -> Syntax.KorePattern -> Syntax.KorePattern

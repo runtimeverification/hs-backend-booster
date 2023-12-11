@@ -101,7 +101,7 @@ eqK =
         , argSorts = [SortApp "SortK" [], SortApp "SortK" []]
         , resultSort = SortApp "SortBool" []
         , attributes =
-                SymbolAttributes
+            SymbolAttributes
                 { collectionMetadata = Nothing
                 , symbolType = TotalFunction
                 , isIdem = IsNotIdem
