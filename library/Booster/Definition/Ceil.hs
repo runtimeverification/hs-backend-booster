@@ -97,10 +97,9 @@ computeCeilRule mllvm def r@RewriteRule.RewriteRule{lhs, requires, rhs, attribut
     | otherwise = do
         (res, _, _) <- runEquationT False def mllvm Nothing mempty $ do
             lhsCeils <- Set.fromList <$> computeCeil lhs
-            let subtractLHSceils = (Set.\\ lhsCeils) . Set.fromList
-            requiresCeils <-
-                simplifyCeils =<< (subtractLHSceils <$> concatMapM (computeCeil . coerce) (Set.toList requires))
-            rhsCeils <- simplifyCeils =<< (subtractLHSceils <$> computeCeil rhs)
+            requiresCeils <- Set.fromList <$> concatMapM (computeCeil . coerce) (Set.toList requires)
+            let subtractLHSAndRequiresCeils = (Set.\\ (lhsCeils `Set.union` requiresCeils)) . Set.fromList
+            rhsCeils <- simplifyCeils =<< (subtractLHSAndRequiresCeils <$> computeCeil rhs)
 
             pure $
                 Just $
