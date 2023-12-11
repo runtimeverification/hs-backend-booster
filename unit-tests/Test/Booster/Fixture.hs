@@ -86,7 +86,7 @@ app s = SymbolApplication s []
 inj :: Sort -> Sort -> Term -> Term
 inj = Injection
 
-con1, con2, con3, con4, f1, f2, f3, eqK :: Symbol
+con1, con2, con3, con4, f1, f2, f3, eqK, kseq, dotk :: Symbol
 con1 = [symb| symbol con1{}(SomeSort{}) : SomeSort{} [constructor{}()] |]
 con2 = [symb| symbol con2{}(SomeSort{}) : SomeSort{} [constructor{}()] |]
 con3 = [symb| symbol con3{}(SomeSort{}, SomeSort{}) : SomeSort{} [constructor{}()] |]

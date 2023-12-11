@@ -114,14 +114,15 @@ equations' :: [Syntax.KorePattern] -> Syntax.KorePattern
 equations' = KJAnd someSort'
 
 -- syntax equivalents of sorts in testDefinition
-someSort', boolSort', intSort' :: Syntax.Sort
+someSort', boolSort' {- , intSort' -} :: Syntax.Sort
 someSort' = Syntax.SortApp (Id "SomeSort") []
 boolSort' = Syntax.SortApp (Id "SortBool") []
-intSort' = Syntax.SortApp (Id "SortInt") []
+
+-- intSort' = Syntax.SortApp (Id "SortInt") []
 
 -- produces a K-equals predicate
 (==.) :: Internal.Term -> Internal.Term -> Internal.Predicate
 t ==. t' = Predicate $ SymbolApplication eqK [] [inDotK t, inDotK t']
   where
     inDotK :: Internal.Term -> Internal.Term
-    inDotK t = SymbolApplication kseq [] [t, SymbolApplication dotk [] []]
+    inDotK x = SymbolApplication kseq [] [inj someSort kItemSort x, SymbolApplication dotk [] []]
