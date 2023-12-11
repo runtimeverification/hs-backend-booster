@@ -35,7 +35,6 @@ module Booster.Syntax.Json.Internalise (
 ) where
 
 import Control.Applicative ((<|>))
-import Control.DeepSeq (NFData)
 import Control.Monad
 import Control.Monad.Extra
 import Control.Monad.Trans.Except
@@ -56,7 +55,6 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text as Text (Text, intercalate, pack, unpack)
 import Data.Text.Encoding (decodeLatin1)
-import GHC.Generics (Generic)
 import Language.Haskell.TH (ExpQ, Lit (..), appE, litE, mkName, varE)
 import Language.Haskell.TH.Quote
 import Prettyprinter (pretty)
@@ -134,12 +132,16 @@ internalisePattern allowAlias checkSubsorts sortVars definition p = do
     -- construct an AndTerm from all terms (checking sort consistency)
     term <- andTerm p =<< mapM (internaliseTerm allowAlias checkSubsorts sortVars definition) terms
     -- internalise all predicates
-    (constraints, ceilConditions, substitutions, unsupported) <-
+    internalPs <-
         internalisePredicates allowAlias checkSubsorts sortVars definition predicates
     pure
-        ( Internal.Pattern{term, constraints, ceilConditions = Set.toList ceilConditions}
-        , substitutions
-        , unsupported
+        ( Internal.Pattern
+            { term
+            , constraints = internalPs.boolPredicates
+            , ceilConditions = Set.toList internalPs.ceilPredicates
+            }
+        , internalPs.substitution
+        , internalPs.unsupported
         )
   where
     andTerm :: Syntax.KorePattern -> [Internal.Term] -> Except PatternError Internal.Term
@@ -163,10 +165,8 @@ internaliseTermOrPredicate ::
     Syntax.KorePattern ->
     Except [PatternError] TermOrPredicates
 internaliseTermOrPredicate allowAlias checkSubsorts sortVars definition syntaxPatt =
-    ( withExcept (: []) $ do
-        (constraints, ceilConditions, substitutions, unsupported) <-
-            internalisePredicates allowAlias checkSubsorts sortVars definition [syntaxPatt]
-        pure . Predicates $ InternalisedPredicates constraints ceilConditions substitutions unsupported
+    ( withExcept (: []) . fmap Predicates $
+        internalisePredicates allowAlias checkSubsorts sortVars definition [syntaxPatt]
     )
         <|> ( withExcept (: []) $ do
                 (pat, substitution, unsupported) <-
@@ -325,13 +325,7 @@ internalisePredicates ::
     Maybe [Syntax.Id] ->
     KoreDefinition ->
     [Syntax.KorePattern] ->
-    Except
-        PatternError
-        ( Set Internal.Predicate
-        , Set Internal.Ceil
-        , Map Internal.Variable Internal.Term
-        , [Syntax.KorePattern]
-        )
+    Except PatternError InternalisedPredicates
 internalisePredicates allowAlias checkSubsorts sortVars definition ps = do
     internalised <-
         concatMapM (internalisePred allowAlias checkSubsorts sortVars definition) $
@@ -341,11 +335,12 @@ internalisePredicates allowAlias checkSubsorts sortVars definition ps = do
             mkSubstitution [s | s@SubstitutionPred{} <- internalised]
 
     pure
-        ( Set.fromList $ [p | BoolPred p <- internalised] <> moreEquations
-        , Set.fromList $ [p | CeilPred p <- internalised]
-        , substitution
-        , [p | UnsupportedPred p <- internalised]
-        )
+        InternalisedPredicates
+            { boolPredicates = Set.fromList $ [p | BoolPred p <- internalised] <> moreEquations
+            , ceilPredicates = Set.fromList $ [p | CeilPred p <- internalised]
+            , substitution
+            , unsupported = [p | UnsupportedPred p <- internalised]
+            }
   where
     mkSubstitution ::
         [InternalisedPredicate] -> (Map Internal.Variable Internal.Term, [Internal.Predicate])

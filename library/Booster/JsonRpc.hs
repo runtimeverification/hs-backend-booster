@@ -232,20 +232,21 @@ respond stateVar =
                             mLlvmLibrary
                             solver
                             mempty
-                            (Set.toList ps.boolPredicates) >>= \case
-                            (Right newPreds, traces, _) -> do
-                                let predicateSort =
-                                        fromMaybe (error "not a predicate") $
-                                            sortOfJson req.state.term
-                                    result =
-                                        map (externalisePredicate predicateSort) newPreds
-                                            <> map (externaliseCeil predicateSort) (Set.toList ps.ceilPredicates)
-                                            <> map (uncurry $ externaliseSubstitution predicateSort) (Map.toList ps.substitution)
-                                            <> ps.unsupported
+                            (Set.toList ps.boolPredicates)
+                            >>= \case
+                                (Right newPreds, traces, _) -> do
+                                    let predicateSort =
+                                            fromMaybe (error "not a predicate") $
+                                                sortOfJson req.state.term
+                                        result =
+                                            map (externalisePredicate predicateSort) newPreds
+                                                <> map (externaliseCeil predicateSort) (Set.toList ps.ceilPredicates)
+                                                <> map (uncurry $ externaliseSubstitution predicateSort) (Map.toList ps.substitution)
+                                                <> ps.unsupported
 
-                                pure $ Right (addHeader $ Syntax.KJAnd predicateSort result, traces)
-                            (Left something, _traces, _) ->
-                                pure . Left . RpcError.backendError RpcError.Aborted $ show something -- FIXME
+                                    pure $ Right (addHeader $ Syntax.KJAnd predicateSort result, traces)
+                                (Left something, _traces, _) ->
+                                    pure . Left . RpcError.backendError RpcError.Aborted $ show something -- FIXME
             whenJust solver SMT.closeSolver
             stop <- liftIO $ getTime Monotonic
 

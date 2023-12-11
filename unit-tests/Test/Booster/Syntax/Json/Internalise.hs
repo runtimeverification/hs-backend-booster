@@ -22,11 +22,11 @@ test_internalise :: TestTree
 test_internalise =
     testGroup
         "Internalising patterns"
-        [ testPredicates
+        [ testBasicPredicates
         ]
 
-testPredicates :: TestTree
-testPredicates =
+testBasicPredicates :: TestTree
+testBasicPredicates =
     testGroup
         "Internalising different kinds of predicates"
         [ shouldBeBool
@@ -50,11 +50,13 @@ testPredicates =
 
     shouldBeBool name pat expected =
         testCase name $
-            Right (Set.singleton expected, mempty, mempty, []) @=? runExcept (internalise pat)
+            Right (InternalisedPredicates (Set.singleton expected) mempty mempty [])
+                @=? runExcept (internalise pat)
 
     expectUnsupported description pat expected =
         testCase ("Unsupported: " <> description) $
-            Right (mempty, mempty, mempty, [expected]) @=? runExcept (internalise pat)
+            Right (InternalisedPredicates mempty mempty mempty [expected])
+                @=? runExcept (internalise pat)
 
 -- syntax equivalents of sorts in testDefinition
 someSort', boolSort', intSort' :: Syntax.Sort
