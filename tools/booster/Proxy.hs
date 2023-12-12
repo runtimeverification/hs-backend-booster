@@ -253,19 +253,17 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                             Log.logInfoNS "proxy" "Vacuous state after simplification"
                             pure . Right . Execute $ makeVacuous logsOnly boosterResult
                         Right (simplifiedBoosterState, boosterStateSimplificationLogs) -> do
-                            let accumulatedLogs =
-                                    combineLogs
-                                        [ rpcLogs
-                                        , boosterResult.logs
-                                        , boosterStateSimplificationLogs
-                                        ]
-
                             put
                                 loopState
                                     { depth = currentDepth + boosterResult.depth
                                     , time = time + bTime
                                     , koreTime
-                                    , rpcLogs = accumulatedLogs
+                                    , rpcLogs =
+                                        combineLogs
+                                            [ rpcLogs
+                                            , boosterResult.logs
+                                            , boosterStateSimplificationLogs
+                                            ]
                                     }
                             executionLoop
                                 r{ExecuteRequest.state = execStateToKoreJson simplifiedBoosterState}
@@ -319,20 +317,19 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                                     "kore depth-bound, continuing... (currently at "
                                                         <> show (currentDepth + boosterResult.depth + koreResult.depth)
                                                         <> ")"
-                                            let accumulatedLogs =
-                                                    combineLogs
-                                                        [ rpcLogs
-                                                        , boosterResult.logs
-                                                        , boosterStateSimplificationLogs
-                                                        , koreResult.logs
-                                                        , fallbackLog
-                                                        ]
                                             put
                                                 loopState
                                                     { depth = currentDepth + boosterResult.depth + koreResult.depth
                                                     , time = time + bTime + kTime
                                                     , koreTime = koreTime + kTime
-                                                    , rpcLogs = accumulatedLogs
+                                                    , rpcLogs =
+                                                        combineLogs
+                                                            [ rpcLogs
+                                                            , boosterResult.logs
+                                                            , boosterStateSimplificationLogs
+                                                            , koreResult.logs
+                                                            , fallbackLog
+                                                            ]
                                                     }
                                             executionLoop
                                                 r{ExecuteRequest.state = execStateToKoreJson koreResult.state}
