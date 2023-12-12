@@ -17,7 +17,7 @@ import Test.Tasty.HUnit
 import Booster.Pattern.Base as Internal
 import Booster.Pattern.Bool as Internal
 import Booster.Syntax.Json.Internalise
-import Kore.Syntax.Json.Types as Syntax hiding (LeftRight (..))
+import Kore.Syntax.Json.Types as Syntax hiding (LeftRight (..), var)
 import Test.Booster.Fixture
 
 test_internalise :: TestTree
@@ -68,7 +68,7 @@ testSubstitutions =
         [ test
             "Basic substitution equation"
             ("X" .==> dv' "something")
-            (hasSubstitution [("X", someSort, DomainValue someSort "something")])
+            (hasSubstitution [("X", dv someSort "something")])
         , test
             "Several substitutions"
             ( equations'
@@ -77,15 +77,36 @@ testSubstitutions =
                 ]
             )
             ( hasSubstitution
-                [ ("X", someSort, DomainValue someSort "something")
-                , ("Y", someSort, DomainValue someSort "something-else")
+                [ ("X", dv someSort "something")
+                , ("Y", dv someSort "something-else")
                 ]
             )
-        , let varX = Var (Variable someSort "X")
+        , let varX = var "X" someSort
            in test
                 "X => f(X) is not a substitution"
-                ("X" .==> KJApp (Id "f1") [] [KJEVar (Id "X") someSort'])
-                (hasEquations [(varX, SymbolApplication f1 [] [varX])])
+                ("X" .==> app' "f1" [var' "X"])
+                (hasEquations [(varX, app f1 [varX])])
+        , let var_ = flip var someSort
+           in test
+                "Circular references in substitutions are broken up"
+                ( equations'
+                    [ "X" .==> app' "con1" [var' "Y"]
+                    , "Y" .==> app' "con2" [var' "Z"]
+                    , "Z" .==> app' "f1" [var' "X"]
+                    ]
+                )
+                ( hasEquations [(var_ "X", app con1 [var_ "Y"])]
+                    .<> hasSubstitution [("Y", app con2 [var_ "Z"]), ("Z", app f1 [var_ "X"])]
+                )
+        , let var_ = flip var someSort
+           in test
+                "Ambiguous substitutions are turned into equations"
+                ( equations'
+                    [ "X" .==> var' "Y"
+                    , "X" .==> var' "Z"
+                    ]
+                )
+                (hasEquations [(var_ "X", var_ "Y"), (var_ "X", var_ "Z")])
         ]
   where
     test name syntax expected =
@@ -94,15 +115,31 @@ testSubstitutions =
     internalise =
         runExcept . internalisePredicates DisallowAlias IgnoreSubsorts Nothing testDefinition
 
-    hasSubstitution triplets =
+    var' name = KJEVar (Id name) someSort'
+    app' sym = KJApp (Id sym) []
+
+    hasSubstitution pairs =
         let expectedSubstitution =
-                Map.fromList [(Variable s v, t) | (v, s, t) <- triplets]
+                Map.fromList [(Variable someSort v, t) | (v, t) <- pairs]
          in InternalisedPredicates mempty mempty expectedSubstitution mempty
 
     hasEquations pairs =
         let expectedPreds =
                 Set.fromList [t ==. t' | (t, t') <- pairs]
          in InternalisedPredicates expectedPreds mempty mempty mempty
+
+-- basically a semigroup instance but in the general case the
+-- substitutions would have to be trimmed. We don't need it in the
+-- main code (could cause inefficiencies) so it lives here.
+(.<>) :: InternalisedPredicates -> InternalisedPredicates -> InternalisedPredicates
+ps1 .<> ps2 =
+    InternalisedPredicates
+        { boolPredicates = ps1.boolPredicates <> ps2.boolPredicates
+        , ceilPredicates = ps1.ceilPredicates <> ps2.ceilPredicates
+        , substitution =
+            Map.unionWithKey (\k _ _ -> error ("Duplicate key " <> show k)) ps1.substitution ps2.substitution
+        , unsupported = ps1.unsupported <> ps2.unsupported
+        }
 
 (.==>) :: Text -> Syntax.KorePattern -> Syntax.KorePattern
 v .==> t' = KJEquals someSort' someSort' (KJEVar (Id v) someSort') t'
