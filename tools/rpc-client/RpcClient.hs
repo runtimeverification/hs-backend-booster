@@ -114,6 +114,9 @@ makeRequest time name s request handleResponse = do
     readResponse :: IO BS.ByteString
     readResponse = do
         part <- recv s bufSize
+        when (BS.length part == 0) $ do
+            putStrLn "[Error] Empty response from server. Did the server crash?"
+            exitWith (ExitFailure 3)
         if '\n' `BS.elem` part
             then pure part
             else do
