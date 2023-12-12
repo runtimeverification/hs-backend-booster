@@ -16,6 +16,7 @@ import Control.Concurrent.MVar qualified as MVar
 import Control.Monad.Catch (MonadCatch (..), catch)
 import Control.Monad.Logger qualified as Log
 import Control.Monad.Reader
+import Control.Monad.State hiding (state)
 import Control.Monad.Trans.Except (runExcept)
 import Data.Aeson (ToJSON (..))
 import Data.Aeson.KeyMap qualified as Aeson
@@ -207,7 +208,8 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
     handleExecute :: LogSettings -> KoreDefinition -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
     handleExecute logSettings def =
         flip runReaderT ExecutionLoopParams{logSettings, definition = def}
-            . executionLoop
+            . flip
+                evalStateT
                 ExecuteLoopState
                     { depth = 0
                     , mforceSimplification = forceFallback
@@ -215,13 +217,15 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                     , koreTime = 0.0
                     , rpcLogs = Nothing
                     }
+            . executionLoop
 
     executionLoop ::
-        ExecuteLoopState ->
         ExecuteRequest ->
-        ReaderT ExecutionLoopParams m (Either ErrorObj (API 'Res))
-    executionLoop loopState@ExecuteLoopState{depth = currentDepth@(Depth cDepth), mforceSimplification, time, koreTime, rpcLogs} r = do
+        StateT ExecuteLoopState (ReaderT ExecutionLoopParams m) (Either ErrorObj (API 'Res))
+    executionLoop r = do
         ExecutionLoopParams{logSettings} <- ask
+        loopState@ExecuteLoopState{depth = currentDepth@(Depth cDepth), mforceSimplification, time, koreTime, rpcLogs} <-
+            get
         Log.logInfoNS "proxy" . Text.pack $
             if currentDepth == 0
                 then "Starting execute request"
@@ -235,14 +239,14 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                 (Just forceDepth, _) -> Just forceDepth
                 (_, Just maxDepth) -> Just $ maxDepth - currentDepth
                 _ -> Nothing
-        (bResult, bTime) <- lift $ Stats.timed $ booster (Execute r{maxDepth = mbDepthLimit})
+        (bResult, bTime) <- lift $ lift $ Stats.timed $ booster (Execute r{maxDepth = mbDepthLimit})
         case bResult of
             Right (Execute boosterResult)
                 -- the execution reached the depth bound due to a forced Kore simplification
                 | boosterResult.reason == DepthBound && isJust mforceSimplification -> do
                     Log.logInfoNS "proxy" . Text.pack $
                         "Forced simplification at " <> show (currentDepth + boosterResult.depth)
-                    simplifyResult <- simplifyExecuteState r._module boosterResult.state
+                    simplifyResult <- lift $ simplifyExecuteState r._module boosterResult.state
                     case simplifyResult of
                         Left logsOnly -> do
                             -- state was simplified to \bottom, return vacuous
@@ -255,13 +259,15 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                         , boosterResult.logs
                                         , boosterStateSimplificationLogs
                                         ]
-                            executionLoop
+
+                            put
                                 loopState
                                     { depth = currentDepth + boosterResult.depth
                                     , time = time + bTime
                                     , koreTime
                                     , rpcLogs = accumulatedLogs
                                     }
+                            executionLoop
                                 r{ExecuteRequest.state = execStateToKoreJson simplifiedBoosterState}
                 -- if the new backend aborts, branches or gets stuck, revert to the old one
                 --
@@ -273,7 +279,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     -- simplify Booster's state with Kore's simplifier
                     Log.logInfoNS "proxy" . Text.pack $ "Simplifying booster state and falling back to Kore "
-                    simplifyResult <- simplifyExecuteState r._module boosterResult.state
+                    simplifyResult <- lift $ simplifyExecuteState r._module boosterResult.state
                     case simplifyResult of
                         Left logsOnly -> do
                             -- state was simplified to \bottom, return vacuous
@@ -283,14 +289,15 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                             -- attempt to do one step in the old backend
                             (kResult, kTime) <-
                                 lift $
-                                    Stats.timed $
-                                        kore
-                                            ( Execute
-                                                r
-                                                    { state = execStateToKoreJson simplifiedBoosterState
-                                                    , maxDepth = Just $ Depth 1
-                                                    }
-                                            )
+                                    lift $
+                                        Stats.timed $
+                                            kore
+                                                ( Execute
+                                                    r
+                                                        { state = execStateToKoreJson simplifiedBoosterState
+                                                        , maxDepth = Just $ Depth 1
+                                                        }
+                                                )
                             when (isJust statsVar) $
                                 Log.logInfoNS "proxy" . Text.pack $
                                     "Kore fall-back in " <> microsWithUnit kTime
@@ -320,13 +327,14 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                                         , koreResult.logs
                                                         , fallbackLog
                                                         ]
-                                            executionLoop
+                                            put
                                                 loopState
                                                     { depth = currentDepth + boosterResult.depth + koreResult.depth
                                                     , time = time + bTime + kTime
                                                     , koreTime = koreTime + kTime
                                                     , rpcLogs = accumulatedLogs
                                                     }
+                                            executionLoop
                                                 r{ExecuteRequest.state = execStateToKoreJson koreResult.state}
                                         _ -> do
                                             -- otherwise we have hit a different
@@ -334,7 +342,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                             -- return, setting the correct depth
                                             Log.logInfoNS "proxy" . Text.pack $
                                                 "Kore " <> show koreResult.reason <> " at " <> show koreResult.depth
-                                            lift $ logStats ExecuteM (time + bTime + kTime, koreTime + kTime)
+                                            lift $ lift $ logStats ExecuteM (time + bTime + kTime, koreTime + kTime)
                                             pure $
                                                 Right $
                                                     Execute
@@ -356,7 +364,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                     -- depth, in case we previously looped
                     Log.logInfoNS "proxy" . Text.pack $
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
-                    lift $ logStats ExecuteM (time + bTime, koreTime)
+                    lift $ lift $ logStats ExecuteM (time + bTime, koreTime)
                     pure $
                         Right $
                             Execute
@@ -521,12 +529,12 @@ combineLogs logSources
     | otherwise = Just $ concat $ catMaybes logSources
 
 makeVacuous :: Maybe [RPCLog.LogEntry] -> ExecuteResult -> ExecuteResult
-makeVacuous newLogs execState =
-    execState
+makeVacuous newLogs executeState =
+    executeState
         { reason = Vacuous
         , nextStates = Nothing
         , rule = Nothing
-        , logs = combineLogs [execState.logs, newLogs]
+        , logs = combineLogs [executeState.logs, newLogs]
         }
 
 mkFallbackLogEntry :: ExecuteResult -> ExecuteResult -> RPCLog.LogEntry
