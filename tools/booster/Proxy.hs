@@ -71,6 +71,28 @@ data ProxyConfig = ProxyConfig
 serverError :: String -> Value -> ErrorObj
 serverError detail = ErrorObj ("Server error: " <> detail) (-32032)
 
+data ExecutionLoopParams = ExecutionLoopParams
+    { logSettings :: !LogSettings
+    , definition :: !KoreDefinition
+    }
+
+data ExecuteLoopState = ExecuteLoopState
+    { depth :: !Depth
+    , mforceSimplification :: !(Maybe Depth)
+    , time :: !Double
+    , koreTime :: !Double
+    , rpcLogs :: !(Maybe [RPCLog.LogEntry])
+    }
+
+data LogSettings = LogSettings
+    { logSuccessfulSimplifications :: !(Maybe Bool)
+    , logFailedSimplifications :: !(Maybe Bool)
+    , logSuccessfulRewrites :: !(Maybe Bool)
+    , logFailedRewrites :: !(Maybe Bool)
+    , logFallbacks :: !(Maybe Bool)
+    , logTiming :: !(Maybe Bool)
+    }
+
 respondEither ::
     forall m.
     Log.MonadLogger m =>
@@ -496,28 +518,6 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                         else Just filteredNexts
                                 , logs = combineLogs $ timeLog params.logSettings.logTiming stop : res.logs : newLogs
                                 }
-
-data ExecutionLoopParams = ExecutionLoopParams
-    { logSettings :: LogSettings
-    , definition :: KoreDefinition
-    }
-
-data ExecuteLoopState = ExecuteLoopState
-    { depth :: Depth
-    , mforceSimplification :: Maybe Depth
-    , time :: Double
-    , koreTime :: Double
-    , rpcLogs :: Maybe [RPCLog.LogEntry]
-    }
-
-data LogSettings = LogSettings
-    { logSuccessfulSimplifications :: Maybe Bool
-    , logFailedSimplifications :: Maybe Bool
-    , logSuccessfulRewrites :: Maybe Bool
-    , logFailedRewrites :: Maybe Bool
-    , logFallbacks :: Maybe Bool
-    , logTiming :: Maybe Bool
-    }
 
 -- | Combine multiple, possibly empty/non-existent (Nothing) lists of logs into one
 combineLogs :: [Maybe [RPCLog.LogEntry]] -> Maybe [RPCLog.LogEntry]
