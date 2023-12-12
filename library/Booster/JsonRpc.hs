@@ -36,6 +36,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Records
 import Numeric.Natural
+import Prettyprinter (pretty)
 import System.Clock (Clock (Monotonic), diffTimeSpec, getTime, toNanoSecs)
 
 import Booster.Definition.Attributes.Base (getUniqueId, uniqueId)
@@ -56,9 +57,10 @@ import Booster.Pattern.Rewrite (
     performRewrite,
  )
 import Booster.Pattern.Util (sortOfPattern)
+import Booster.Prettyprinter (renderText)
 import Booster.SMT.Base qualified as SMT
 import Booster.SMT.Interface qualified as SMT
-import Booster.Syntax.Json (KoreJson (..), addHeader, sortOfJson)
+import Booster.Syntax.Json (KoreJson (..), addHeader, prettyPattern, sortOfJson)
 import Booster.Syntax.Json.Externalise
 import Booster.Syntax.Json.Internalise (
     InternalisedPredicates (..),
@@ -101,10 +103,14 @@ respond stateVar =
                     Log.logDebug $ "Error internalising cterm" <> Text.pack (show patternError)
                     pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternError
                 Right (pat, substitution, unsupported) -> do
-                    unless (null unsupported) $
+                    unless (null unsupported) $ do
                         Log.logWarnNS
                             "booster"
                             "Execute: ignoring unsupported predicate parts"
+                        Log.logOtherNS
+                            "booster"
+                            (Log.LevelOther "ErrorDetails")
+                            (Text.unlines $ map prettyPattern unsupported)
                     let cutPoints = fromMaybe [] req.cutPointRules
                         terminals = fromMaybe [] req.terminalRules
                         mbDepth = fmap RpcTypes.getNat req.maxDepth
@@ -190,15 +196,24 @@ respond stateVar =
 
             result <- case internalised of
                 Left patternErrors -> do
-                    Log.logError $ "Error internalising cterm: " <> Text.pack (show patternErrors)
+                    Log.logErrorNS "booster" $
+                        "Error internalising cterm: " <> Text.pack (show patternErrors)
+                    Log.logOtherNS
+                        "booster"
+                        (Log.LevelOther "ErrorDetails")
+                        (prettyPattern req.state.term)
                     pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternErrors
                 -- term and predicate (pattern)
                 Right (TermAndPredicates pat substitution unsupported) -> do
                     Log.logInfoNS "booster" "Simplifying a pattern"
-                    unless (null unsupported) $
+                    unless (null unsupported) $ do
                         Log.logWarnNS
                             "booster"
                             "Simplify: ignoring unsupported predicates in input"
+                        Log.logOtherNS
+                            "booster"
+                            (Log.LevelOther "ErrorDetails")
+                            (Text.unlines $ map prettyPattern unsupported)
                     ApplyEquations.evaluatePattern doTracing def mLlvmLibrary solver mempty pat >>= \case
                         (Right newPattern, patternTraces, _) -> do
                             let (term, mbPredicate, mbSubstitution) = externalisePattern newPattern substitution
@@ -222,10 +237,14 @@ respond stateVar =
                                 (addHeader $ Syntax.KJTop (fromMaybe (error "not a predicate") $ sortOfJson req.state.term), [])
                     | otherwise -> do
                         Log.logInfoNS "booster" "Simplifying predicates"
-                        unless (null ps.unsupported) $
+                        unless (null ps.unsupported) $ do
                             Log.logWarnNS
                                 "booster"
                                 "Simplify: ignoring unsupported predicates in input"
+                            Log.logOtherNS
+                                "booster"
+                                (Log.LevelOther "ErrorDetails")
+                                (Text.unlines $ map prettyPattern ps.unsupported)
                         ApplyEquations.simplifyConstraints
                             doTracing
                             def
@@ -266,7 +285,12 @@ respond stateVar =
                             internaliseTermOrPredicate DisallowAlias CheckSubsorts Nothing def req.state.term
                 case internalised of
                     Left patternErrors -> do
-                        Log.logError $ "Error internalising cterm: " <> Text.pack (show patternErrors)
+                        Log.logErrorNS "booster" $
+                            "Error internalising cterm: " <> Text.pack (show patternErrors)
+                        Log.logOtherNS
+                            "booster"
+                            (Log.LevelOther "ErrorDetails")
+                            (prettyPattern req.state.term)
                         pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternErrors
                     -- various predicates obtained
                     Right things -> do
@@ -278,16 +302,33 @@ respond stateVar =
                                     Log.logWarnNS
                                         "booster"
                                         "get-model ignores supplied terms and only checks predicates"
-                                    unless (null unsupported) $
+                                    Log.logOtherNS
+                                        "booster"
+                                        (Log.LevelOther "ErrorDetails")
+                                        (renderText $ pretty pat.term)
+                                    unless (null unsupported) $ do
                                         Log.logWarnNS
                                             "booster"
                                             " get-model: ignoring unsupported predicates"
+                                        Log.logOtherNS
+                                            "booster"
+                                            (Log.LevelOther "ErrorDetails")
+                                            (Text.unlines $ map prettyPattern unsupported)
                                     pure (Set.toList pat.constraints, substitution)
                                 Predicates ps -> do
-                                    unless (null ps.ceilPredicates && null ps.unsupported) $
+                                    unless (null ps.ceilPredicates && null ps.unsupported) $ do
                                         Log.logWarnNS
                                             "booster"
                                             "get-model: ignoring supplied ceils and unsupported predicates"
+                                        Log.logOtherNS
+                                            "booster"
+                                            (Log.LevelOther "ErrorDetails")
+                                            ( Text.unlines $
+                                                map
+                                                    (renderText . ("#Ceil:" <>) . pretty)
+                                                    (Set.toList ps.ceilPredicates)
+                                                    <> map prettyPattern ps.unsupported
+                                            )
                                     pure (Set.toList ps.boolPredicates, ps.substitution)
 
                         smtResult <-
