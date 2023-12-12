@@ -202,15 +202,18 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
 
     handleExecute :: LogSettings -> KoreDefinition -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
     handleExecute logSettings def =
-        executionLoop ExecutionLoopEnv{logSettings, definition = def} forceFallback (0, 0.0, 0.0, Nothing)
+        executionLoop
+            ExecutionLoopEnv{logSettings, definition = def}
+            forceFallback
+            ExecuteLoopState{depth = 0, time = 0.0, koreTime = 0.0, rpcLogs = Nothing}
 
     executionLoop ::
         ExecutionLoopEnv ->
         Maybe Depth ->
-        (Depth, Double, Double, Maybe [RPCLog.LogEntry]) ->
+        ExecuteLoopState ->
         ExecuteRequest ->
         m (Either ErrorObj (API 'Res))
-    executionLoop params@ExecutionLoopEnv{logSettings} mforceSimplification (currentDepth@(Depth cDepth), !time, !koreTime, !rpcLogs) r = do
+    executionLoop params@ExecutionLoopEnv{logSettings} mforceSimplification loopState@ExecuteLoopState{depth = currentDepth@(Depth cDepth), time, koreTime, rpcLogs} r = do
         Log.logInfoNS "proxy" . Text.pack $
             if currentDepth == 0
                 then "Starting execute request"
@@ -247,11 +250,12 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                             executionLoop
                                 params
                                 mforceSimplification
-                                ( currentDepth + boosterResult.depth
-                                , time + bTime
-                                , koreTime
-                                , accumulatedLogs
-                                )
+                                loopState
+                                    { depth = currentDepth + boosterResult.depth
+                                    , time = time + bTime
+                                    , koreTime
+                                    , rpcLogs = accumulatedLogs
+                                    }
                                 r{ExecuteRequest.state = execStateToKoreJson simplifiedBoosterState}
                 -- if the new backend aborts, branches or gets stuck, revert to the old one
                 --
@@ -312,11 +316,12 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                             executionLoop
                                                 params
                                                 mforceSimplification
-                                                ( currentDepth + boosterResult.depth + koreResult.depth
-                                                , time + bTime + kTime
-                                                , koreTime + kTime
-                                                , accumulatedLogs
-                                                )
+                                                loopState
+                                                    { depth = currentDepth + boosterResult.depth + koreResult.depth
+                                                    , time = time + bTime + kTime
+                                                    , koreTime = koreTime + kTime
+                                                    , rpcLogs = accumulatedLogs
+                                                    }
                                                 r{ExecuteRequest.state = execStateToKoreJson koreResult.state}
                                         _ -> do
                                             -- otherwise we have hit a different
@@ -486,13 +491,17 @@ data ExecutionLoopEnv = ExecutionLoopEnv
     , definition :: KoreDefinition
     }
 
--- data ExecuteLoopState = ExecuteLoopState
---     {}
+data ExecuteLoopState = ExecuteLoopState
+    { depth :: Depth
+    , time :: Double
+    , koreTime :: Double
+    , rpcLogs :: Maybe [RPCLog.LogEntry]
+    }
 
 -- LogSettings ->
 -- Maybe Depth ->
 -- KoreDefinition ->
--- (Depth, Double, Double, Maybe [RPCLog.LogEntry]) ->
+-- (Depth, Double, Double, ) ->
 -- ExecuteRequest ->
 
 data LogSettings = LogSettings
