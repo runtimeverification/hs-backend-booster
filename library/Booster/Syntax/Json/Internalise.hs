@@ -341,18 +341,30 @@ internalisePredicates allowAlias checkSubsorts sortVars definition ps = do
             , substitution
             , unsupported = [p | UnsupportedPred p <- internalised]
             }
-  where
-    mkSubstitution ::
-        [InternalisedPredicate] -> (Map Internal.Variable Internal.Term, [Internal.Predicate])
-    mkSubstitution initialSubst =
-        let substMap, duplicates :: Map Internal.Variable [Internal.Term]
-            (substMap, duplicates) =
-                Map.partition ((== 1) . length) $
-                    Map.fromListWith (<>) [(v, [t]) | SubstitutionPred v t <- initialSubst]
-            equations =
-                [mkEq v t | (v, ts) <- Map.assocs duplicates, t <- ts]
-         in execState breakCycles (Map.map head substMap, equations)
 
+{- | Vet a given set of substitution predicates (Var -> Term), returning
+   a checked consistent substitution (Map) and bool equations for
+   everything that could not be part of this substitution
+
+1. ambiguous substitutions (several substitutions for the same
+   variable) are turned into BoolPredicate equations
+
+2. The resulting substitution (with unique replacement for each
+   variable) is checked for cycles. For each cycle, one of the
+   substitution equations is turned into a BoolPredicate equation,
+   iteratively until the substitution is acyclic.
+-}
+mkSubstitution ::
+    [InternalisedPredicate] -> (Map Internal.Variable Internal.Term, [Internal.Predicate])
+mkSubstitution initialSubst =
+    let substMap, duplicates :: Map Internal.Variable [Internal.Term]
+        (substMap, duplicates) =
+            Map.partition ((== 1) . length) $
+                Map.fromListWith (<>) [(v, [t]) | SubstitutionPred v t <- initialSubst]
+        equations =
+            [mkEq v t | (v, ts) <- Map.assocs duplicates, t <- ts]
+     in execState breakCycles (Map.map head substMap, equations)
+  where
     breakCycles :: State (Map Internal.Variable Internal.Term, [Internal.Predicate]) ()
     breakCycles = do
         assocs <- gets (Map.assocs . fst)
