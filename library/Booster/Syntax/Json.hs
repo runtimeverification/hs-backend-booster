@@ -129,14 +129,14 @@ prettyPattern = Text.toStrict . TB.toLazyText . go
             "#Bottom" <> curlies [prettySort sort]
         KJNot{sort, arg} ->
             "#Not" <> curlies [prettySort sort] <> parens [go arg]
-        p@KJAnd{} ->
-            arity2 "#And" p
-        p@KJOr{} ->
-            arity2 "#Or" p
-        p@KJImplies{} ->
-            arity2 "#Implies" p
-        p@KJIff{} ->
-            arity2 "#Iff" p
+        KJAnd{sort, patterns} ->
+            "#And" <> curlies [prettySort sort] <> parens (map go patterns)
+        KJOr{sort, patterns} ->
+            "#Or" <> curlies [prettySort sort] <> parens (map go patterns)
+        KJImplies{sort, first, second} ->
+            "#Implies" <> curlies [prettySort sort] <> parens [go first, go second]
+        KJIff{sort, first, second} ->
+            "#Iff" <> curlies [prettySort sort] <> parens [go first, go second]
         KJForall{sort, var, varSort, arg} ->
             "#Forall"
                 <> curlies [prettySort sort]
@@ -196,9 +196,3 @@ prettyPattern = Text.toStrict . TB.toLazyText . go
     commaSep [] = ""
     commaSep [x] = x
     commaSep (x : xs) = x <> TB.singleton ',' <> commaSep xs
-
-    arity2 :: Text -> KorePattern -> TB.Builder
-    arity2 name p =
-        TB.fromText name
-            <> curlies [prettySort p.sort]
-            <> parens [go p.first, go p.second]
