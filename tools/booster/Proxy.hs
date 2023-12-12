@@ -100,7 +100,12 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                             fromMaybe (error $ "Module " <> show m <> " not found") $
                                 Map.lookup m bState.definitions
                     handleExecute logSettings def execReq
-                        >>= traverse (postExecSimplify ExecutionLoopEnv{logSettings, definition = def} start execReq._module)
+                        >>= traverse
+                            ( postExecSimplify
+                                ExecutionLoopParams{logSettings, definition = def}
+                                start
+                                execReq._module
+                            )
     Implies _ ->
         loggedKore ImpliesM req
     Simplify simplifyReq ->
@@ -203,17 +208,15 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
     handleExecute :: LogSettings -> KoreDefinition -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
     handleExecute logSettings def =
         executionLoop
-            ExecutionLoopEnv{logSettings, definition = def}
-            forceFallback
-            ExecuteLoopState{depth = 0, time = 0.0, koreTime = 0.0, rpcLogs = Nothing}
+            ExecutionLoopParams{logSettings, definition = def}
+            ExecuteLoopState{depth = 0, mforceSimplification = forceFallback, time = 0.0, koreTime = 0.0, rpcLogs = Nothing}
 
     executionLoop ::
-        ExecutionLoopEnv ->
-        Maybe Depth ->
+        ExecutionLoopParams ->
         ExecuteLoopState ->
         ExecuteRequest ->
         m (Either ErrorObj (API 'Res))
-    executionLoop params@ExecutionLoopEnv{logSettings} mforceSimplification loopState@ExecuteLoopState{depth = currentDepth@(Depth cDepth), time, koreTime, rpcLogs} r = do
+    executionLoop loopParams@ExecutionLoopParams{logSettings} loopState@ExecuteLoopState{depth = currentDepth@(Depth cDepth), mforceSimplification, time, koreTime, rpcLogs} r = do
         Log.logInfoNS "proxy" . Text.pack $
             if currentDepth == 0
                 then "Starting execute request"
@@ -234,7 +237,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                 | boosterResult.reason == DepthBound && isJust mforceSimplification -> do
                     Log.logInfoNS "proxy" . Text.pack $
                         "Forced simplification at " <> show (currentDepth + boosterResult.depth)
-                    simplifyResult <- simplifyExecuteState params r._module boosterResult.state
+                    simplifyResult <- simplifyExecuteState loopParams r._module boosterResult.state
                     case simplifyResult of
                         Left logsOnly -> do
                             -- state was simplified to \bottom, return vacuous
@@ -248,8 +251,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                         , boosterStateSimplificationLogs
                                         ]
                             executionLoop
-                                params
-                                mforceSimplification
+                                loopParams
                                 loopState
                                     { depth = currentDepth + boosterResult.depth
                                     , time = time + bTime
@@ -267,7 +269,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     -- simplify Booster's state with Kore's simplifier
                     Log.logInfoNS "proxy" . Text.pack $ "Simplifying booster state and falling back to Kore "
-                    simplifyResult <- simplifyExecuteState params r._module boosterResult.state
+                    simplifyResult <- simplifyExecuteState loopParams r._module boosterResult.state
                     case simplifyResult of
                         Left logsOnly -> do
                             -- state was simplified to \bottom, return vacuous
@@ -314,8 +316,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                                         , fallbackLog
                                                         ]
                                             executionLoop
-                                                params
-                                                mforceSimplification
+                                                loopParams
                                                 loopState
                                                     { depth = currentDepth + boosterResult.depth + koreResult.depth
                                                     , time = time + bTime + kTime
@@ -367,12 +368,12 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
     -- otherwise the logs and the simplified state (after splitting it
     -- into term and predicates by an internal trivial execute call).
     simplifyExecuteState ::
-        ExecutionLoopEnv ->
+        ExecutionLoopParams ->
         Maybe Text ->
         ExecuteState ->
         m (Either (Maybe [RPCLog.LogEntry]) (ExecuteState, Maybe [RPCLog.LogEntry]))
     simplifyExecuteState
-        ExecutionLoopEnv
+        ExecutionLoopParams
             { logSettings = LogSettings{logSuccessfulSimplifications, logFailedSimplifications, logTiming}
             , definition = def
             }
@@ -421,7 +422,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                     }
 
     postExecSimplify ::
-        ExecutionLoopEnv -> TimeSpec -> Maybe Text -> API 'Res -> m (API 'Res)
+        ExecutionLoopParams -> TimeSpec -> Maybe Text -> API 'Res -> m (API 'Res)
     postExecSimplify params start mbModule = \case
         Execute res ->
             Execute
@@ -486,23 +487,18 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                 , logs = combineLogs $ timeLog stop : res.logs : newLogs
                                 }
 
-data ExecutionLoopEnv = ExecutionLoopEnv
+data ExecutionLoopParams = ExecutionLoopParams
     { logSettings :: LogSettings
     , definition :: KoreDefinition
     }
 
 data ExecuteLoopState = ExecuteLoopState
     { depth :: Depth
+    , mforceSimplification :: Maybe Depth
     , time :: Double
     , koreTime :: Double
     , rpcLogs :: Maybe [RPCLog.LogEntry]
     }
-
--- LogSettings ->
--- Maybe Depth ->
--- KoreDefinition ->
--- (Depth, Double, Double, ) ->
--- ExecuteRequest ->
 
 data LogSettings = LogSettings
     { logSuccessfulSimplifications :: Maybe Bool
