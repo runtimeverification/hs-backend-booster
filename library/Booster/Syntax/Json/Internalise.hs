@@ -353,6 +353,8 @@ internalisePredicates allowAlias checkSubsorts sortVars definition ps = do
    variable) is checked for cycles. For each cycle, one of the
    substitution equations is turned into a BoolPredicate equation,
    iteratively until the substitution is acyclic.
+
+Also see https://gist.github.com/jberthold/984a5a8d87c6ce9c0b5b97ddd3a2e9f2
 -}
 mkSubstitution ::
     [InternalisedPredicate] -> (Map Internal.Variable Internal.Term, [Internal.Predicate])
