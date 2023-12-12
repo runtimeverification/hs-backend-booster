@@ -282,7 +282,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                                 , maxDepth = Just $ Depth 1
                                                 }
                                         )
-                            when (isJust statsVar) $
+                            when (isJust statsVar) $ do
                                 Log.logInfoNS "proxy" . Text.pack $
                                     "Kore fall-back in " <> microsWithUnit kTime
                             case kResult of
@@ -292,6 +292,18 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                             if fromMaybe False logSettings.logFallbacks
                                                 then Just [mkFallbackLogEntry boosterResult koreResult]
                                                 else Nothing
+                                    case (boosterResult.reason, koreResult.reason) of
+                                        (Aborted, res) ->
+                                            Log.logOtherNS "proxy" (Log.LevelOther "Aborts") $
+                                                "Booster aborted, kore yields " <> Text.pack (show res)
+                                        (bRes, kRes)
+                                            | bRes /= kRes ->
+                                                Log.logOtherNS "proxy" (Log.LevelOther "Aborts") $
+                                                    "Booster and kore disagree: " <> Text.pack (show (bRes, kRes))
+                                            | otherwise ->
+                                                Log.logOtherNS "proxy" (Log.LevelOther "Aborts") $
+                                                    "kore confirms result " <> Text.pack (show bRes)
+
                                     case koreResult.reason of
                                         DepthBound -> do
                                             -- if we made one step, add the number of

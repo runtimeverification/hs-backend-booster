@@ -608,6 +608,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
     logRewrite = logOther (LevelOther "Rewrite")
     logRewriteSuccess = logOther (LevelOther "RewriteSuccess")
     logSimplify = logOther (LevelOther "Simplify")
+    logAborts = logOther (LevelOther "Aborts")
 
     prettyText :: Pretty a => a -> Text
     prettyText = pack . renderDefault . pretty
@@ -794,6 +795,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                                 withSimplified pat' "Retrying with simplified pattern" (doSteps True)
                         Left failure -> do
                             rewriteTrace $ RewriteStepFailed failure
+                            logAborts . renderText $ pretty failure
                             let msg = "Aborted after " <> showCounter counter
                             if wasSimplified
                                 then logRewrite msg >> pure (RewriteAborted failure pat')
