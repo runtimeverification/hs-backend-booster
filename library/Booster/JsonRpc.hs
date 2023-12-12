@@ -246,7 +246,7 @@ respond stateVar =
 
                                     pure $ Right (addHeader $ Syntax.KJAnd predicateSort result, traces)
                                 (Left something, _traces, _) ->
-                                    pure . Left . RpcError.backendError RpcError.Aborted $ show something -- FIXME
+                                    pure . Left . RpcError.backendError RpcError.Aborted $ show something
             whenJust solver SMT.closeSolver
             stop <- liftIO $ getTime Monotonic
 
