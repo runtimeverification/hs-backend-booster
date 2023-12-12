@@ -100,7 +100,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                             fromMaybe (error $ "Module " <> show m <> " not found") $
                                 Map.lookup m bState.definitions
                     handleExecute logSettings def execReq
-                        >>= traverse (postExecSimplify logSettings start execReq._module def)
+                        >>= traverse (postExecSimplify ExecutionLoopEnv{logSettings, definition = def} start execReq._module)
     Implies _ ->
         loggedKore ImpliesM req
     Simplify simplifyReq ->
@@ -202,16 +202,15 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
 
     handleExecute :: LogSettings -> KoreDefinition -> ExecuteRequest -> m (Either ErrorObj (API 'Res))
     handleExecute logSettings def =
-        executionLoop logSettings forceFallback def (0, 0.0, 0.0, Nothing)
+        executionLoop ExecutionLoopEnv{logSettings, definition = def} forceFallback (0, 0.0, 0.0, Nothing)
 
     executionLoop ::
-        LogSettings ->
+        ExecutionLoopEnv ->
         Maybe Depth ->
-        KoreDefinition ->
         (Depth, Double, Double, Maybe [RPCLog.LogEntry]) ->
         ExecuteRequest ->
         m (Either ErrorObj (API 'Res))
-    executionLoop logSettings mforceSimplification def (currentDepth@(Depth cDepth), !time, !koreTime, !rpcLogs) r = do
+    executionLoop params@ExecutionLoopEnv{logSettings} mforceSimplification (currentDepth@(Depth cDepth), !time, !koreTime, !rpcLogs) r = do
         Log.logInfoNS "proxy" . Text.pack $
             if currentDepth == 0
                 then "Starting execute request"
@@ -232,7 +231,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                 | boosterResult.reason == DepthBound && isJust mforceSimplification -> do
                     Log.logInfoNS "proxy" . Text.pack $
                         "Forced simplification at " <> show (currentDepth + boosterResult.depth)
-                    simplifyResult <- simplifyExecuteState logSettings r._module def boosterResult.state
+                    simplifyResult <- simplifyExecuteState params r._module boosterResult.state
                     case simplifyResult of
                         Left logsOnly -> do
                             -- state was simplified to \bottom, return vacuous
@@ -246,9 +245,8 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                         , boosterStateSimplificationLogs
                                         ]
                             executionLoop
-                                logSettings
+                                params
                                 mforceSimplification
-                                def
                                 ( currentDepth + boosterResult.depth
                                 , time + bTime
                                 , koreTime
@@ -265,7 +263,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                         "Booster " <> show boosterResult.reason <> " at " <> show boosterResult.depth
                     -- simplify Booster's state with Kore's simplifier
                     Log.logInfoNS "proxy" . Text.pack $ "Simplifying booster state and falling back to Kore "
-                    simplifyResult <- simplifyExecuteState logSettings r._module def boosterResult.state
+                    simplifyResult <- simplifyExecuteState params r._module boosterResult.state
                     case simplifyResult of
                         Left logsOnly -> do
                             -- state was simplified to \bottom, return vacuous
@@ -312,9 +310,8 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                                         , fallbackLog
                                                         ]
                                             executionLoop
-                                                logSettings
+                                                params
                                                 mforceSimplification
-                                                def
                                                 ( currentDepth + boosterResult.depth + koreResult.depth
                                                 , time + bTime + kTime
                                                 , koreTime + kTime
@@ -365,15 +362,16 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
     -- otherwise the logs and the simplified state (after splitting it
     -- into term and predicates by an internal trivial execute call).
     simplifyExecuteState ::
-        LogSettings ->
+        ExecutionLoopEnv ->
         Maybe Text ->
-        KoreDefinition ->
         ExecuteState ->
         m (Either (Maybe [RPCLog.LogEntry]) (ExecuteState, Maybe [RPCLog.LogEntry]))
     simplifyExecuteState
-        LogSettings{logSuccessfulSimplifications, logFailedSimplifications, logTiming}
+        ExecutionLoopEnv
+            { logSettings = LogSettings{logSuccessfulSimplifications, logFailedSimplifications, logTiming}
+            , definition = def
+            }
         mbModule
-        def
         s = do
             Log.logInfoNS "proxy" "Simplifying execution state"
             simplResult <-
@@ -418,8 +416,8 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                     }
 
     postExecSimplify ::
-        LogSettings -> TimeSpec -> Maybe Text -> KoreDefinition -> API 'Res -> m (API 'Res)
-    postExecSimplify logSettings start mbModule def = \case
+        ExecutionLoopEnv -> TimeSpec -> Maybe Text -> API 'Res -> m (API 'Res)
+    postExecSimplify params start mbModule = \case
         Execute res ->
             Execute
                 <$> ( simplifyResult res
@@ -431,7 +429,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
       where
         -- timeLog :: TimeDiff -> Maybe [LogEntry]
         timeLog stop
-            | fromMaybe False logSettings.logTiming =
+            | fromMaybe False params.logSettings.logTiming =
                 let duration =
                         fromIntegral (toNanoSecs (diffTimeSpec stop start)) / 1e9
                  in Just [RPCLog.ProcessingTime Nothing duration]
@@ -441,7 +439,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
         simplifyResult :: ExecuteResult -> m ExecuteResult
         simplifyResult res@ExecuteResult{reason, state, nextStates} = do
             Log.logInfoNS "proxy" . Text.pack $ "Simplifying state in " <> show reason <> " result"
-            simplified <- simplifyExecuteState logSettings mbModule def state
+            simplified <- simplifyExecuteState params mbModule state
             case simplified of
                 Left logsOnly -> do
                     -- state simplified to \bottom, return vacuous
@@ -452,7 +450,7 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                     simplifiedNexts <-
                         maybe
                             (pure [])
-                            (mapM $ simplifyExecuteState logSettings mbModule def)
+                            (mapM $ simplifyExecuteState params mbModule)
                             nextStates
                     stop <- liftIO $ getTime Monotonic
                     let (logsOnly, (filteredNexts, filteredNextLogs)) =
@@ -482,6 +480,20 @@ respondEither ProxyConfig{statsVar, forceFallback, boosterState} booster kore re
                                         else Just filteredNexts
                                 , logs = combineLogs $ timeLog stop : res.logs : newLogs
                                 }
+
+data ExecutionLoopEnv = ExecutionLoopEnv
+    { logSettings :: LogSettings
+    , definition :: KoreDefinition
+    }
+
+-- data ExecuteLoopState = ExecuteLoopState
+--     {}
+
+-- LogSettings ->
+-- Maybe Depth ->
+-- KoreDefinition ->
+-- (Depth, Double, Double, Maybe [RPCLog.LogEntry]) ->
+-- ExecuteRequest ->
 
 data LogSettings = LogSettings
     { logSuccessfulSimplifications :: Maybe Bool
