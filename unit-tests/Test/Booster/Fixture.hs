@@ -54,6 +54,8 @@ testDefinition =
                 , ("f2", f2)
                 , ("f3", f3)
                 , ("Lbl'UndsEqlsEqls'K'Und'", eqK)
+                , ("kseq", kseq)
+                , ("dotk", dotk)
                 ]
                 <> listSymbols
                 <> setSymbols
