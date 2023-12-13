@@ -15,10 +15,11 @@ import Data.Foldable ()
 import Data.Set qualified as Set
 import Data.Text.Encoding qualified as Text
 
-import Booster.Pattern.Base (externaliseKmapUnsafe)
+import Booster.Definition.Attributes.Base qualified as Internal
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Bool qualified as Internal
 import Booster.Pattern.Util (sortOfTerm)
+import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Kore.Syntax.Json.Types qualified as Syntax
@@ -76,11 +77,62 @@ externaliseTerm = \case
             (symbolNameToId Internal.injectionSymbol.name)
             (map externaliseSort [source, target])
             [externaliseTerm trm]
-    Internal.KMap def keyVals rest -> externaliseTerm $ externaliseKmapUnsafe def keyVals rest
-    Internal.KList def heads rest ->
-        externaliseTerm $ Internal.externaliseKList def heads rest
-    Internal.KSet def heads rest ->
-        externaliseTerm $ Internal.externaliseKSet def heads rest
+    Internal.KMap
+        Internal.KMapDefinition
+            { symbolNames = Internal.KCollectionSymbolNames{unitSymbolName, elementSymbolName, concatSymbolName}
+            }
+        keyVals
+        rest ->
+            externaliseCollection
+                (Syntax.KJApp (symbolNameToId unitSymbolName) [] [])
+                (symbolNameToId concatSymbolName)
+                $ externaliseCollectionElements elementSymbolName
+                $ map (\(k, v) -> Left [k, v]) keyVals
+                    <> maybe [] ((: []) . Right) rest
+    Internal.KList
+        Internal.KListDefinition
+            { symbolNames = Internal.KCollectionSymbolNames{unitSymbolName, elementSymbolName, concatSymbolName}
+            }
+        heads
+        rest ->
+            externaliseCollection
+                (Syntax.KJApp (symbolNameToId unitSymbolName) [] [])
+                (symbolNameToId concatSymbolName)
+                $ externaliseCollectionElements elementSymbolName
+                $ map (Left . (: [])) heads
+                    <> maybe [] (\(mid, tails) -> Right mid : map (Left . (: [])) tails) rest
+    Internal.KSet
+        Internal.KListDefinition
+            { symbolNames = Internal.KCollectionSymbolNames{unitSymbolName, elementSymbolName, concatSymbolName}
+            }
+        heads
+        rest ->
+            externaliseCollection
+                (Syntax.KJApp (symbolNameToId unitSymbolName) [] [])
+                (symbolNameToId concatSymbolName)
+                $ externaliseCollectionElements elementSymbolName
+                $ map (Left . (: [])) heads
+                    <> maybe [] ((: []) . Right) rest
+  where
+    externaliseCollectionElements ::
+        Internal.SymbolName -> [Either [Internal.Term] Internal.Term] -> [Syntax.KorePattern]
+    externaliseCollectionElements elSym =
+        map
+            ( either
+                ( Syntax.KJApp
+                    (symbolNameToId elSym)
+                    []
+                    . map externaliseTerm
+                )
+                externaliseTerm
+            )
+
+    externaliseCollection ::
+        Syntax.KorePattern -> Syntax.Id -> [Syntax.KorePattern] -> Syntax.KorePattern
+    externaliseCollection unit con = \case
+        [] -> unit
+        [x] -> x
+        x : xs -> Syntax.KJRightAssoc con [] $ x NE.:| xs
 
 externalisePredicate :: Syntax.Sort -> Internal.Predicate -> Syntax.KorePattern
 externalisePredicate sort (Internal.Predicate t) =
