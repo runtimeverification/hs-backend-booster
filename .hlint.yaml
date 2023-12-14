@@ -6,3 +6,5 @@
 - arguments: [ -XOverloadedRecordDot ]
 
 - ignore: { name: "Use <$>", name: "Move brackets to avoid $" }
+- ignore:
+    { name: "Use camelCase" }

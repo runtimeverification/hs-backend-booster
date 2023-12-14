@@ -802,12 +802,12 @@ eval'in_keys = \case
             k' <- applyTerm BottomUp PreferFunctions k
             mapKeys <- mapM (applyTerm BottomUp PreferFunctions . fst) pairs
 
-            case k' `elem` mapKeys of
-                True -> do
+            if k' `elem` mapKeys
+                then do
                     -- the same key after evaluation
                     logOtherNS "booster" (LevelOther "Simplify") "Key was found"
                     pure $ Success TrueBool
-                False -> do
+                else do
                     logOtherNS "booster" (LevelOther "Simplify") $
                         "Key not found in concrete part. "
                             <> "Opaque part of map is "
