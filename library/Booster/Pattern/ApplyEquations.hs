@@ -31,6 +31,7 @@ import Control.Monad.Logger.CallStack (
     MonadLogger,
     MonadLoggerIO,
     logOther,
+    logOtherNS,
  )
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
@@ -49,7 +50,7 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text, pack)
 import Data.Text qualified as Text
-import Prettyprinter
+import Prettyprinter as Pretty
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
@@ -59,8 +60,9 @@ import Booster.Pattern.Base
 import Booster.Pattern.Bool
 import Booster.Pattern.Index
 import Booster.Pattern.Match
+import Booster.Pattern.Unify (FailReason (..))
 import Booster.Pattern.Util
-import Booster.Prettyprinter (renderDefault)
+import Booster.Prettyprinter (renderDefault, renderText)
 import Booster.SMT.Interface qualified as SMT
 
 newtype EquationT io a
@@ -524,7 +526,14 @@ applyEquations theory handler term = do
                     then idxEquations
                     else Map.unionWith (<>) idxEquations anyEquations
 
-    processEquations equations
+    -- try built-in functionality for this index first if it exists,
+    -- otherwise, or if that fails, use equations from the definition.
+    let builtIn = Map.lookup index builtIns
+        tryBuiltin f =
+            f term >>= handleSimplificationEquation (\t -> setChanged >> pure t) (processEquations equations) undefined
+
+    maybe (processEquations equations) tryBuiltin builtIn
+
   where
     -- process one equation at a time, until something has happened
     processEquations ::
@@ -769,3 +778,70 @@ simplifyConstraint' recurseIntoEvalBool = \case
             else
                 (if recurseIntoEvalBool then evalBool else pure) $
                     EqualsK (KSeq (sortOfTerm l) l) (KSeq (sortOfTerm r) r)
+
+------------------------------------------------------------
+-- Built-in functions
+
+-- FIXME this should live in a different module as soon as we have more of them
+-- This will require splitting the types like EquationT from the functions using them.
+builtIns :: MonadLoggerIO io => Map TermIndex (Term -> EquationT io ApplyEquationResult)
+builtIns = Map.fromList
+    [ (TopSymbol in_keys, eval'in_keys)
+    ]
+-- built-ins will either succeed or not (never indeterminate)
+-- They _must_ succeed on concrete values.
+
+in_keys :: SymbolName
+in_keys = "Lbl'Unds'in'Unds'keys'LParUndsRParUnds'MAP'Unds'Bool'Unds'KItem'Unds'Map"
+
+eval'in_keys :: MonadLoggerIO io => Term -> EquationT io ApplyEquationResult
+eval'in_keys = \case
+    app@(SymbolApplication sym _sorts args)
+        | sym.name == in_keys
+        , [k, m@(KMap _ pairs opaque)] <- args -> do
+                logOtherNS "booster" (LevelOther "Simplify") . renderText $
+                    Pretty.vsep
+                        [ "in_keys built-in function triggered with arguments:"
+                        , pretty k
+                        , pretty m
+                        ]
+                -- evaluate k and all concrete map keys (required
+                -- because we are evaluating top-down)
+                k' <- applyTerm TopDown PreferFunctions k
+                mapKeys <- mapM (applyTerm TopDown PreferFunctions . fst) pairs
+
+                case k' `elem` mapKeys of
+                    True -> do -- the same key after evaluation
+                        logOtherNS "booster" (LevelOther "Simplify") "Key was found"
+                        pure $ Success TrueBool
+                    False -> do
+                        logOtherNS "booster" (LevelOther "Simplify") $
+                            "Key not found in concrete part. " <>
+                                "Opaque part of map is " <>
+                                maybe "empty" (renderText . pretty) opaque
+                        pure $
+                            maybe (Success FalseBool) (const IndeterminateMatch) opaque
+
+        | otherwise -> -- bug in indexing or argument not a KMap
+              wrongFunction app
+    other -> -- bug in indexing
+        wrongFunction other
+  where
+      wrongFunction =
+          pure
+              . FailedMatch
+              . General
+              . DifferentValues
+                  (SymbolApplication
+                      in_keysSymbol
+                      []
+                      [DotDotDot, KMap undefined [(DotDotDot, DotDotDot)] Nothing]
+                  )
+      in_keysSymbol =
+          Symbol
+              { name = in_keys
+              , sortVars = []
+              , argSorts = [SortKItem, SortMap]
+              , resultSort = SortBool
+              , attributes = undefined
+              }
