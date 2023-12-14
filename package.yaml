@@ -26,6 +26,7 @@ default-extensions:
   DerivingVia
   DuplicateRecordFields
   EmptyCase
+  FlexibleContexts
   FlexibleInstances
   FunctionalDependencies
   GADTs
@@ -150,6 +151,7 @@ executables:
       - kore
       - kore-rpc-types
       - monad-logger
+      - mtl
       - optparse-applicative
       - prettyprinter
       - recursion-schemes
