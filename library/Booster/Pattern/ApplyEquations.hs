@@ -520,10 +520,10 @@ applyEquations theory handler term = do
     -- otherwise, or if that fails, use equations from the definition.
     let builtIn = Map.lookup index builtIns
         tryBuiltin f =
-            f term >>= handleSimplificationEquation (\t -> setChanged >> pure t) (processEquations equations) undefined
+            f term
+                >>= handleSimplificationEquation (\t -> setChanged >> pure t) (processEquations equations) undefined
 
     maybe (processEquations equations) tryBuiltin builtIn
-
   where
     -- process one equation at a time, until something has happened
     processEquations ::
@@ -775,9 +775,11 @@ simplifyConstraint' recurseIntoEvalBool = \case
 -- FIXME this should live in a different module as soon as we have more of them
 -- This will require splitting the types like EquationT from the functions using them.
 builtIns :: MonadLoggerIO io => Map TermIndex (Term -> EquationT io ApplyEquationResult)
-builtIns = Map.fromList
-    [ (TopSymbol in_keys, eval'in_keys)
-    ]
+builtIns =
+    Map.fromList
+        [ (TopSymbol in_keys, eval'in_keys)
+        ]
+
 -- built-ins will either succeed or not (never indeterminate)
 -- They _must_ succeed on concrete values.
 
@@ -789,49 +791,50 @@ eval'in_keys = \case
     app@(SymbolApplication sym _sorts args)
         | sym.name == in_keys
         , [k, m@(KMap _ pairs opaque)] <- args -> do
-                logOtherNS "booster" (LevelOther "Simplify") . renderText $
-                    Pretty.vsep
-                        [ "in_keys built-in function triggered with arguments:"
-                        , pretty k
-                        , pretty m
-                        ]
-                -- evaluate k and all concrete map keys (required
-                -- because we are evaluating top-down)
-                k' <- applyTerm BottomUp PreferFunctions k
-                mapKeys <- mapM (applyTerm BottomUp PreferFunctions . fst) pairs
+            logOtherNS "booster" (LevelOther "Simplify") . renderText $
+                Pretty.vsep
+                    [ "in_keys built-in function triggered with arguments:"
+                    , pretty k
+                    , pretty m
+                    ]
+            -- evaluate k and all concrete map keys (required
+            -- because we are evaluating top-down)
+            k' <- applyTerm BottomUp PreferFunctions k
+            mapKeys <- mapM (applyTerm BottomUp PreferFunctions . fst) pairs
 
-                case k' `elem` mapKeys of
-                    True -> do -- the same key after evaluation
-                        logOtherNS "booster" (LevelOther "Simplify") "Key was found"
-                        pure $ Success TrueBool
-                    False -> do
-                        logOtherNS "booster" (LevelOther "Simplify") $
-                            "Key not found in concrete part. " <>
-                                "Opaque part of map is " <>
-                                maybe "empty" (renderText . pretty) opaque
-                        pure $
-                            maybe (Success FalseBool) (const IndeterminateMatch) opaque
-
+            case k' `elem` mapKeys of
+                True -> do
+                    -- the same key after evaluation
+                    logOtherNS "booster" (LevelOther "Simplify") "Key was found"
+                    pure $ Success TrueBool
+                False -> do
+                    logOtherNS "booster" (LevelOther "Simplify") $
+                        "Key not found in concrete part. "
+                            <> "Opaque part of map is "
+                            <> maybe "empty" (renderText . pretty) opaque
+                    pure $
+                        maybe (Success FalseBool) (const IndeterminateMatch) opaque
         | otherwise -> -- bug in indexing or argument not a KMap
-              wrongFunction app
-    other -> -- bug in indexing
+            wrongFunction app
+    other ->
+        -- bug in indexing
         wrongFunction other
   where
-      wrongFunction =
-          pure
-              . FailedMatch
-              . General
-              . DifferentValues
-                  (SymbolApplication
-                      in_keysSymbol
-                      []
-                      [DotDotDot, KMap undefined [(DotDotDot, DotDotDot)] Nothing]
-                  )
-      in_keysSymbol =
-          Symbol
-              { name = in_keys
-              , sortVars = []
-              , argSorts = [SortKItem, SortMap]
-              , resultSort = SortBool
-              , attributes = undefined
-              }
+    wrongFunction =
+        pure
+            . FailedMatch
+            . General
+            . DifferentValues
+                ( SymbolApplication
+                    in_keysSymbol
+                    []
+                    [DotDotDot, KMap undefined [(DotDotDot, DotDotDot)] Nothing]
+                )
+    in_keysSymbol =
+        Symbol
+            { name = in_keys
+            , sortVars = []
+            , argSorts = [SortKItem, SortMap]
+            , resultSort = SortBool
+            , attributes = undefined
+            }
