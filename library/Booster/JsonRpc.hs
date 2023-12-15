@@ -23,13 +23,14 @@ import Control.Monad.IO.Class
 import Control.Monad.Logger.CallStack (LogLevel (LevelError), MonadLoggerIO)
 import Control.Monad.Logger.CallStack qualified as Log
 import Control.Monad.Trans.Except (runExcept, throwE)
+import Crypto.Hash (SHA256 (..), hashWith)
 import Data.Bifunctor (second)
 import Data.Conduit.Network (serverSettings)
 import Data.Foldable
 import Data.List (singleton)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe, isNothing)
 import Data.Sequence (Seq)
 import Data.Text (Text, pack)
 import Data.Text qualified as Text
@@ -71,7 +72,8 @@ import Booster.Syntax.Json.Internalise (
     pattern DisallowAlias,
  )
 import Booster.Syntax.ParsedKore (parseKoreModule)
-import Booster.Syntax.ParsedKore.Base
+import Booster.Syntax.ParsedKore.Base hiding (ParsedModule)
+import Booster.Syntax.ParsedKore.Base qualified as ParsedModule(ParsedModule(..)) 
 import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinitions)
 import Data.Set qualified as Set
 import Kore.JsonRpc.Error qualified as RpcError
@@ -134,16 +136,18 @@ respond stateVar =
                                         fromIntegral (toNanoSecs (diffTimeSpec stop start)) / 1e9
                                 else Nothing
                     pure $ execResponse duration req result substitution unsupported
-        RpcTypes.AddModule req -> do
+        RpcTypes.AddModule RpcTypes.AddModuleRequest{_module, nameAsId = nameAsId'} -> do
             -- block other request executions while modifying the server state
             state <- liftIO $ takeMVar stateVar
-            let abortWith err = do
+            let nameAsId = fromMaybe False nameAsId'
+                moduleHash = Text.pack $ ('m' :) . show . hashWith SHA256 $ Text.encodeUtf8 _module
+                abortWith err = do
                     liftIO (putMVar stateVar state)
                     pure $ Left err
                 listNames :: (HasField "name" a b, HasField "getId" b Text) => [a] -> Text
                 listNames = Text.intercalate ", " . map (.name.getId)
 
-            case parseKoreModule "rpc-request" req._module of
+            case parseKoreModule "rpc-request" _module of
                 Left errMsg ->
                     abortWith $ RpcError.backendError RpcError.CouldNotParsePattern errMsg
                 Right newModule ->
@@ -155,14 +159,23 @@ respond stateVar =
                             unless (null newModule.symbols) $
                                 throwE . AddModuleError $
                                     "Module introduces new symbols: " <> listNames newModule.symbols
-                     in case runExcept (checkModule >> addToDefinitions newModule state.definitions) of
+
+                            when
+                                ( nameAsId
+                                    && isJust (Map.lookup (getId $ newModule.name) state.definitions)
+                                    && isNothing (Map.lookup moduleHash state.definitions)
+                                ) $
+                                -- if a module with the same name already exists, but it's contents are different to the current module, throw an error
+                                    throwE . AddModuleError $
+                                        "Duplicate Module"
+                     in case runExcept (checkModule >> addToDefinitions newModule{ParsedModule.name = Id moduleHash} state.definitions) of
                             Left err ->
                                 abortWith $ RpcError.backendError RpcError.CouldNotVerifyPattern err
                             Right newDefinitions -> do
-                                liftIO $ putMVar stateVar state{definitions = newDefinitions}
+                                liftIO $ putMVar stateVar state{definitions = if nameAsId then Map.insert (getId $ newModule.name) (newDefinitions Map.! moduleHash) newDefinitions else newDefinitions}
                                 Log.logInfo $
                                     "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
-                                pure $ Right $ RpcTypes.AddModule $ RpcTypes.AddModuleResult $ getId newModule.name
+                                pure $ Right $ RpcTypes.AddModule $ RpcTypes.AddModuleResult $ moduleHash
         RpcTypes.Simplify req -> withContext req._module $ \(def, mLlvmLibrary, mSMTOptions) -> do
             start <- liftIO $ getTime Monotonic
             let internalised =
