@@ -30,7 +30,7 @@ import Data.Foldable
 import Data.List (singleton)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe, isNothing)
+import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, mapMaybe)
 import Data.Sequence (Seq)
 import Data.Text (Text, pack)
 import Data.Text qualified as Text
@@ -73,7 +73,7 @@ import Booster.Syntax.Json.Internalise (
  )
 import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base hiding (ParsedModule)
-import Booster.Syntax.ParsedKore.Base qualified as ParsedModule(ParsedModule(..)) 
+import Booster.Syntax.ParsedKore.Base qualified as ParsedModule (ParsedModule (..))
 import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinitions)
 import Data.Set qualified as Set
 import Kore.JsonRpc.Error qualified as RpcError
@@ -164,15 +164,25 @@ respond stateVar =
                                 ( nameAsId
                                     && isJust (Map.lookup (getId $ newModule.name) state.definitions)
                                     && isNothing (Map.lookup moduleHash state.definitions)
-                                ) $
+                                )
+                                $
                                 -- if a module with the same name already exists, but it's contents are different to the current module, throw an error
-                                    throwE . AddModuleError $
-                                        "Duplicate Module"
-                     in case runExcept (checkModule >> addToDefinitions newModule{ParsedModule.name = Id moduleHash} state.definitions) of
+                                throwE . AddModuleError
+                                $ "Duplicate Module"
+                     in case runExcept
+                            (checkModule >> addToDefinitions newModule{ParsedModule.name = Id moduleHash} state.definitions) of
                             Left err ->
                                 abortWith $ RpcError.backendError RpcError.CouldNotVerifyPattern err
                             Right newDefinitions -> do
-                                liftIO $ putMVar stateVar state{definitions = if nameAsId then Map.insert (getId $ newModule.name) (newDefinitions Map.! moduleHash) newDefinitions else newDefinitions}
+                                liftIO $
+                                    putMVar
+                                        stateVar
+                                        state
+                                            { definitions =
+                                                if nameAsId
+                                                    then Map.insert (getId $ newModule.name) (newDefinitions Map.! moduleHash) newDefinitions
+                                                    else newDefinitions
+                                            }
                                 Log.logInfo $
                                     "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
                                 pure $ Right $ RpcTypes.AddModule $ RpcTypes.AddModuleResult $ moduleHash

@@ -49,7 +49,7 @@ import System.Time.Extra (Seconds, sleep)
 import Booster.JsonRpc (rpcJsonConfig)
 import Booster.JsonRpc.Utils (diffJson, isIdentical, renderResult)
 import Booster.Syntax.Json qualified as Syntax
-import qualified Data.Text.IO as Text
+import Data.Text.IO qualified as Text
 
 main :: IO ()
 main = do
@@ -558,13 +558,14 @@ prepareRequestData (AddModule file) mbOptFile opts = do
     unless (null opts) $
         logWarn_ "Raw mode, ignoring given request options"
     moduleText <- liftIO $ Text.readFile file
-    paramsFromFile <- liftIO $ 
-        maybe
-            (pure JsonKeyMap.empty)
-            ( BS.readFile
-                >=> either error (pure . getObject) . Json.eitherDecode @Json.Value
-            )
-            mbOptFile
+    paramsFromFile <-
+        liftIO $
+            maybe
+                (pure JsonKeyMap.empty)
+                ( BS.readFile
+                    >=> either error (pure . getObject) . Json.eitherDecode @Json.Value
+                )
+                mbOptFile
     let params = paramsFromFile <> object opts
     pure . Json.encode $
         object
