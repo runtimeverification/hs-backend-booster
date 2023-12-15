@@ -185,7 +185,7 @@ respond stateVar =
                                             }
                                 Log.logInfo $
                                     "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
-                                pure $ Right $ RpcTypes.AddModule $ RpcTypes.AddModuleResult $ moduleHash
+                                pure $ Right $ RpcTypes.AddModule $ RpcTypes.AddModuleResult moduleHash
         RpcTypes.Simplify req -> withContext req._module $ \(def, mLlvmLibrary, mSMTOptions) -> do
             start <- liftIO $ getTime Monotonic
             let internalised =
