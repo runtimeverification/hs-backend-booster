@@ -699,13 +699,14 @@ simplifyConstraints ::
     io (Either EquationFailure [Predicate], [EquationTrace], SimplifierCache)
 simplifyConstraints doTracing def mbApi mbSMT cache ps =
     runEquationT doTracing def mbApi mbSMT cache $
-        mapM ((coerce <$>) . simplifyConstraint' True . coerce) ps
+        concatMap splitAndBools <$>
+            mapM ((coerce <$>) . simplifyConstraint' True . coerce) ps
 
 -- version for internal nested evaluation
 simplifyConstraint' :: MonadLoggerIO io => Bool -> Term -> EquationT io Term
--- We are assuming all predicates are of the form 'true \equals P' and
--- evaluating them using simplifyBool if they are concrete.
--- Non-concrete \equals predicates are simplified using evaluateTerm.
+-- Evaluates terms of boolean sort (coming from predicates of the form
+-- 'true \equals P' using simplifyBool if they are concrete, or using
+-- evaluateTerm.
 simplifyConstraint' recurseIntoEvalBool = \case
     t@(Term TermAttributes{canBeEvaluated} _)
         | isConcrete t && canBeEvaluated -> do
@@ -717,7 +718,7 @@ simplifyConstraint' recurseIntoEvalBool = \case
                             then TrueBool
                             else FalseBool
                 Nothing -> if recurseIntoEvalBool then evalBool t else pure t
-    NotBool x -> negateBool <$> recursion x
+    t@(NotBool _) -> evalBool t -- always evaluate under notBool
     EqualsK (KSeq _ l) (KSeq _ r) -> evalEqualsK l r
     NEqualsK (KSeq _ l) (KSeq _ r) -> negateBool <$> evalEqualsK l r
     t -> if recurseIntoEvalBool then evalBool t else pure t
@@ -728,8 +729,6 @@ simplifyConstraint' recurseIntoEvalBool = \case
         result <- iterateEquations 100 TopDown PreferFunctions t
         EquationT $ lift $ lift $ put prior
         pure result
-
-    recursion = simplifyConstraint' recurseIntoEvalBool
 
     evalEqualsK l@(SymbolApplication sL _ argsL) r@(SymbolApplication sR _ argsR)
         | isConstructorSymbol sL && isConstructorSymbol sR =
