@@ -109,9 +109,9 @@ instance Pretty InternalisedPredicates where
     pretty ps =
         Pretty.vsep $
             ("Bool predicates: " : map pretty (Set.toList ps.boolPredicates))
-            <> ("Ceil predicates: " : map pretty (Set.toList ps.ceilPredicates))
-            <> ("Substitution: " : map pretty (Map.assocs ps.substitution))
-            <> ("Unsupported predicates: " : map (pretty . show) ps.unsupported)
+                <> ("Ceil predicates: " : map pretty (Set.toList ps.ceilPredicates))
+                <> ("Substitution: " : map pretty (Map.assocs ps.substitution))
+                <> ("Unsupported predicates: " : map (pretty . show) ps.unsupported)
 
 data TermOrPredicates -- = Either Predicate Pattern
     = Predicates InternalisedPredicates
