@@ -60,7 +60,7 @@ import Booster.Pattern.Bool
 import Booster.Pattern.Index
 import Booster.Pattern.Match
 import Booster.Pattern.Util
-import Booster.Prettyprinter (renderDefault)
+import Booster.Prettyprinter (renderDefault, renderText)
 import Booster.SMT.Interface qualified as SMT
 
 newtype EquationT io a
@@ -237,8 +237,11 @@ iterateEquations ::
     EquationPreference ->
     Term ->
     EquationT io Term
-iterateEquations maxIterations direction preference startTerm =
-    go startTerm
+iterateEquations maxIterations direction preference startTerm = do
+    logOther (LevelOther "Simplify") $ "Evaluating " <> renderText (pretty startTerm)
+    result <- go startTerm
+    logOther (LevelOther "Simplify") $ "Result: " <> renderText (pretty result)
+    pure result
   where
     go :: MonadLoggerIO io => Term -> EquationT io Term
     go currentTerm
