@@ -589,7 +589,7 @@ toExecState pat sub unsupported =
         }
   where
     (t, p, s) = externalisePattern pat sub
-    termSort = fromMaybe (error "unknown sort") $ sortOfJson t
+    termSort = externaliseSort $ sortOfPattern pat
     allUnsupported = Syntax.KJAnd termSort unsupported
     addUnsupported
         | null unsupported = id
