@@ -27,6 +27,7 @@ import Control.Monad.Logger qualified as Logger
 import Data.Conduit.Network (serverSettings)
 import Data.IORef (writeIORef)
 import Data.InternedText (globalInternedTextCache)
+import Data.List (intercalate)
 import Data.List.Extra (splitOn)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
@@ -278,9 +279,9 @@ clProxyOptionsParser =
                 (eitherReader $ mapM reasonReader . splitOn ",")
                 ( long "fallback-on"
                     <> metavar "REASON1,REASON2..."
-                    <> help "Halt reasons for which requests should be re-executed with kore-rpc"
                     <> value [Branching, Stuck, Aborted]
-                    <> showDefault
+                    <> help "Halt reasons for which requests should be re-executed with kore-rpc"
+                    <> showDefaultWith (intercalate "," . map show)
                 )
             <*> flag
                 True
