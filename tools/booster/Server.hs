@@ -276,7 +276,7 @@ clProxyOptionsParser =
                 )
             <*> option
                 (eitherReader $ mapM reasonReader . splitOn ",")
-                (long "fallback-on"
+                ( long "fallback-on"
                     <> metavar "REASON1,REASON2..."
                     <> help "Halt reasons for which requests should be re-executed with kore-rpc"
                     <> value [Branching, Stuck, Aborted]
@@ -295,8 +295,6 @@ clProxyOptionsParser =
         "Stuck" -> Right Stuck
         "Aborted" -> Right Aborted
         other -> Left $ "Reason `" <> other <> "' not supported"
-
-
 
 translateSMTOpts :: Maybe SMTOptions -> KoreSMT.KoreSolverOptions
 translateSMTOpts = \case

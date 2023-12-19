@@ -430,14 +430,14 @@ respondEither cfg@ProxyConfig{statsVar, boosterState} booster kore req = case re
     postExecSimplify logSettings start mbModule def
         | not cfg.simplifyAtEnd = pure
         | otherwise = \case
-        Execute res ->
-            Execute
-                <$> ( simplifyResult res
-                        `catch` ( \(err :: DecidePredicateUnknown) ->
-                                    pure res{reason = Aborted, unknownPredicate = Just . externaliseDecidePredicateUnknown $ err}
-                                )
-                    )
-        other -> pure other
+            Execute res ->
+                Execute
+                    <$> ( simplifyResult res
+                            `catch` ( \(err :: DecidePredicateUnknown) ->
+                                        pure res{reason = Aborted, unknownPredicate = Just . externaliseDecidePredicateUnknown $ err}
+                                    )
+                        )
+            other -> pure other
       where
         -- timeLog :: TimeDiff -> Maybe [LogEntry]
         timeLog stop
