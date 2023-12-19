@@ -669,8 +669,10 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                     logOtherNS "booster" (LevelOther "ErrorDetails") $
                         let termDiffs = zipWith (curry mkDiffTerms) (t : ts) ts
                             l = length ts
-                         in "Evaluation loop of length " <> prettyText l <> ": \n" <>
-                              Text.unlines (map (prettyText . fst) termDiffs)
+                         in "Evaluation loop of length "
+                                <> prettyText l
+                                <> ": \n"
+                                <> Text.unlines (map (prettyText . fst) termDiffs)
                     rewriteTrace $ RewriteSimplified traces (Just r)
                     pure $ Just p
                 Left other -> do
