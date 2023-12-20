@@ -2,7 +2,7 @@
   description = "hs-backend-booster";
 
   inputs = {
-    haskell-backend.url = "github:runtimeverification/haskell-backend/0f4666519bf78cf03383384aeaad0a074ae3fb0b";
+    haskell-backend.url = "github:runtimeverification/haskell-backend/ca05f14b7957fec9f2a5ab3444cae01c5a76f12f";
     stacklock2nix.follows = "haskell-backend/stacklock2nix";
     nixpkgs.follows = "haskell-backend/nixpkgs";
   };
