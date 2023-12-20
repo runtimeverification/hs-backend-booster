@@ -29,12 +29,15 @@ module Booster.Pattern.Util (
     abstractSymbolicConstructorArguments,
     cellSymbolStats,
     cellVariableStats,
+    stripVarOriginPrefix,
 ) where
 
+import Control.Applicative ((<|>))
+import Data.Attoparsec.ByteString.Char8 qualified as A
 import Data.Bifunctor (bimap, first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
-import Data.Char (ord)
+import Data.Char (chr, isDigit, ord)
 import Data.Coerce (coerce)
 import Data.Functor.Foldable (Corecursive (embed), cata)
 import Data.Map (Map)
@@ -113,10 +116,25 @@ modifyVariablesInT f = cata $ \case
 modifyVarName :: (VarName -> VarName) -> Variable -> Variable
 modifyVarName f v = v{variableName = f v.variableName}
 
+{- | Strip variable provenance prefixes introduced
+in "Syntax.ParsedKore.Internalize.internationalization"
+-}
+stripVarOriginPrefix :: VarName -> VarName
+stripVarOriginPrefix name =
+    let noRule = BS.stripPrefix "Rule#" name
+        noEx = BS.stripPrefix "Ex#" name
+     in fromMaybe name $ noRule <|> noEx
+
 freshenVar :: Variable -> Set Variable -> Variable
 freshenVar v@Variable{variableName = vn} vs
-    | v `Set.member` vs = freshenVar v{variableName = vn <> "'"} vs
+    | v `Set.member` vs = freshenVar v{variableName = incrementNameCounter vn} vs
     | otherwise = v
+  where
+    incrementNameCounter :: VarName -> VarName
+    incrementNameCounter vname =
+        let (name, counter) = BS.spanEnd (isDigit . chr . fromIntegral) vname
+            newCounter = fromMaybe (0 :: Int) $ A.maybeResult $ A.parse A.decimal counter
+         in name <> (BS.pack . map (fromIntegral . ord) . show) newCounter
 
 {- | Abstract a term into a variable, making sure the variable name is disjoint from the given set of variables.
      Return the resulting singleton substitution.

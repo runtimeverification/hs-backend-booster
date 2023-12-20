@@ -320,23 +320,25 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
             Just False -> RewriteRuleAppT $ pure Trivial
             _other -> pure ()
 
+    let refreshedSubst = refreshExistentials subst
     let rewritten =
             Pattern
-                (substituteInTerm (refreshExistentials subst) rule.rhs)
+                (substituteInTerm refreshedSubst rule.rhs)
                 -- adding new constraints that have not been trivially `Top`
                 ( Set.fromList newConstraints
-                    <> Set.map (coerce . substituteInTerm subst . coerce) pat.constraints
+                    <> Set.map (coerce . substituteInTerm refreshedSubst . coerce) pat.constraints
                 )
-                ceilConditions
+                (map (coerce . substituteInTerm refreshedSubst . coerce) ceilConditions)
     return (rule, rewritten)
   where
     failRewrite = lift . throw
 
-    refreshExistentials subst
-        | Set.null (rule.existentials `Set.intersection` Map.keysSet subst) = subst
-        | otherwise =
-            let substVars = Map.keysSet subst
-             in subst `Map.union` Map.fromSet (\v -> Var $ freshenVar v substVars) rule.existentials
+    refreshExistentials subst =
+        let freeVars = Set.unions . map freeVariables . Map.elems $ subst
+         in subst
+                `Map.union` Map.fromSet
+                    (\v -> Var $ freshenVar v{variableName = stripVarOriginPrefix v.variableName} freeVars)
+                    rule.existentials
 
     checkConstraint ::
         (Predicate -> a) ->
