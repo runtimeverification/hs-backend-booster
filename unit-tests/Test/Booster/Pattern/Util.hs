@@ -48,15 +48,7 @@ app s = SymbolApplication s []
 
 asConstructor :: SymbolAttributes
 asConstructor =
-    SymbolAttributes
-        Constructor
-        IsNotIdem
-        IsNotAssoc
-        IsNotMacroOrAlias
-        CanBeEvaluated
-        Nothing
-        Nothing
-        Nothing
+    SymbolAttributes Constructor IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing Nothing
 
 con1 :: Symbol
 con1 =

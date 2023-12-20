@@ -608,7 +608,6 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
     logRewrite = logOther (LevelOther "Rewrite")
     logRewriteSuccess = logOther (LevelOther "RewriteSuccess")
     logSimplify = logOther (LevelOther "Simplify")
-    logAborts = logOther (LevelOther "Aborts")
 
     prettyText :: Pretty a => a -> Text
     prettyText = renderText . pretty
@@ -665,14 +664,10 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                     rewriteTrace $ RewriteSimplified traces (Just r)
                     pure $ Just p
                 Left r@(EquationLoop (t : ts)) -> do
+                    let termDiffs = zipWith (curry mkDiffTerms) (t : ts) ts
                     logError "Equation evaluation loop"
-                    logOtherNS "booster" (LevelOther "ErrorDetails") $
-                        let termDiffs = zipWith (curry mkDiffTerms) (t : ts) ts
-                            l = length ts
-                         in "Evaluation loop of length "
-                                <> prettyText l
-                                <> ": \n"
-                                <> Text.unlines (map (prettyText . fst) termDiffs)
+                    logSimplify $
+                        "produced the evaluation loop: " <> Text.unlines (map (prettyText . fst) termDiffs)
                     rewriteTrace $ RewriteSimplified traces (Just r)
                     pure $ Just p
                 Left other -> do
@@ -807,7 +802,6 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                                 withSimplified pat' "Retrying with simplified pattern" (doSteps True)
                         Left failure -> do
                             rewriteTrace $ RewriteStepFailed failure
-                            logAborts . renderText $ pretty failure
                             let msg = "Aborted after " <> showCounter counter
                             if wasSimplified
                                 then logRewrite msg >> pure (RewriteAborted failure pat')

@@ -188,7 +188,6 @@ instance HasAttributes ParsedSymbol where
             <*> hasConcreteEvaluators
             <*> pure Nothing
             <*> smt
-            <*> (attributes .:? "hook")
 
 instance HasAttributes ParsedSort where
     type Attributes ParsedSort = SortAttributes

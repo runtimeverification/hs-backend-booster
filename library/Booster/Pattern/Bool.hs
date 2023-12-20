@@ -9,7 +9,6 @@ module Booster.Pattern.Bool (
     isBottom,
     negateBool,
     splitBoolPredicates,
-    splitAndBools,
     -- patterns
     pattern TrueBool,
     pattern FalseBool,
@@ -61,7 +60,6 @@ pattern TotalFunctionWithSMT hook =
         CanBeEvaluated
         Nothing
         (Just (SMTHook (Atom (SMTId hook))))
-        Nothing
 
 pattern AndBool :: Term -> Term -> Term
 pattern AndBool l r =
@@ -149,7 +147,6 @@ pattern SetIn a b =
                         CanBeEvaluated
                         Nothing
                         Nothing
-                        Nothing
                     )
             )
         []
@@ -193,12 +190,4 @@ splitBoolPredicates p@(Predicate t)
     | isConcrete t = [p]
     | otherwise = case t of
         AndBool l r -> concatMap (splitBoolPredicates . Predicate) [l, r]
-        _other -> [p]
-
-{- | Break apart a predicate composed of top-level Y1 andBool ... Yn
-(not considering whether any of the subterms is concrete).
--}
-splitAndBools :: Predicate -> [Predicate]
-splitAndBools p@(Predicate t)
-    | AndBool l r <- t = concatMap (splitAndBools . Predicate) [l, r]
-    | otherwise = [p]
+        other -> [Predicate other]

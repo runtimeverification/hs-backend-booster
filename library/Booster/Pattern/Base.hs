@@ -190,7 +190,6 @@ unitSymbol def =
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Just def
                 , smt = Nothing
-                , hook = Nothing
                 }
         }
   where
@@ -214,7 +213,6 @@ concatSymbol def =
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Just def
                 , smt = Nothing
-                , hook = Nothing
                 }
         }
   where
@@ -240,7 +238,6 @@ kmapElementSymbol def =
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Just $ KMapMeta def
                 , smt = Nothing
-                , hook = Nothing
                 }
         }
 
@@ -260,7 +257,6 @@ klistElementSymbol def =
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Just $ KListMeta def
                 , smt = Nothing
-                , hook = Nothing
                 }
         }
 
@@ -697,7 +693,6 @@ injectionSymbol =
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Nothing
                 , smt = Nothing
-                , hook = Nothing
                 }
         }
 
@@ -728,16 +723,7 @@ pattern KSeq sort a =
                 []
                 [SortKItem, SortK]
                 SortK
-                ( SymbolAttributes
-                        Constructor
-                        IsNotIdem
-                        IsNotAssoc
-                        IsNotMacroOrAlias
-                        CanBeEvaluated
-                        Nothing
-                        Nothing
-                        Nothing
-                    )
+                (SymbolAttributes Constructor IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing Nothing)
             )
         []
         [ Injection sort SortKItem a
@@ -747,16 +733,7 @@ pattern KSeq sort a =
                         []
                         []
                         SortK
-                        ( SymbolAttributes
-                                Constructor
-                                IsNotIdem
-                                IsNotAssoc
-                                IsNotMacroOrAlias
-                                CanBeEvaluated
-                                Nothing
-                                Nothing
-                                Nothing
-                            )
+                        (SymbolAttributes Constructor IsNotIdem IsNotAssoc IsNotMacroOrAlias CanBeEvaluated Nothing Nothing)
                     )
                 []
                 []

@@ -112,7 +112,6 @@ eqK =
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , hasEvaluators = CanBeEvaluated
                 , smt = Just (SMTHook (Atom "="))
-                , hook = Nothing
                 }
         }
 kseq = [symb| symbol kseq{}(SortKItem{}, SortK{}) : SortK{} [constructor{}()] |]

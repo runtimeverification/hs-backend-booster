@@ -118,8 +118,7 @@ clOptionsParser =
 -- custom log levels that can be selected
 allowedLogLevels :: [(String, String)]
 allowedLogLevels =
-    [ ("Aborts", "Log information related to aborting execution")
-    , ("Rewrite", "Log all rewriting in booster")
+    [ ("Rewrite", "Log all rewriting in booster")
     , ("RewriteKore", "Log all rewriting in kore-rpc fall-backs")
     , ("RewriteSuccess", "Log successful rewrites (booster and kore-rpc)")
     , ("Simplify", "Log all simplification/evaluation in booster")

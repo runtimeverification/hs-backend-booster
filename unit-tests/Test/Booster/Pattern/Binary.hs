@@ -46,7 +46,6 @@ genSymbolUnknownSort =
                 CannotBeEvaluated
                 Nothing
                 Nothing
-                Nothing
     )
         <$> Gen.utf8 (Range.linear 0 32) Gen.alphaNum
 
