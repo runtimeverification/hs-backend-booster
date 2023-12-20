@@ -4,7 +4,6 @@
 Copyright   : (c) Runtime Verification, 2023
 License     : BSD-3-Clause
 -}
-
 module Booster.Pattern.Binary (
     Version (..),
     Block (..),
