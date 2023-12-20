@@ -1,5 +1,6 @@
-/.stack-work*
+.stack-work*
 /*.cabal
+/dev-tools/*.cabal
 *~
 /dist-newstyle
 /.direnv
@@ -11,3 +12,4 @@ result*
 /test/rpc-integration/resources/*.dylib
 .DS_Store
 /*.code-workspace
+/scripts/logs

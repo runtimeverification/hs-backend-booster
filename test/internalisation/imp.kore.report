@@ -217,6 +217,7 @@ Symbols: 183
   - dotk
   - inj
   - kseq
+Partial function symbols: 60
 Axioms: 38
 Axioms preserving definedness: 35
 Axioms containing AC symbols: 0
@@ -537,36 +538,10 @@ Simplifications by term index:
 - Lbl_modInt_: 2
   - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1242, 5)
   - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1162, 8)
-Predicate simplifications by term index:
-- \ceil: 6
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1179, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1178, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1182, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1181, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1180, 8)
-  - UNKNOWN
-- \equalsTerm: 24
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1222, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1220, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2201, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2199, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1218, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1216, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2197, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2195, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (972, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (974, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (969, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (967, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1223, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2202, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1219, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2198, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (973, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (968, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1221, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2200, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1217, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2196, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (971, 8)
-  - /home/jost/work/RV/code/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (966, 8)
+Ceils:
+- Lbl_%Int_: #Ceil( _%Int_(Eq#@VarI1:SortInt{}, Eq#@VarI2:SortInt{}) ) => _=/=Int_(Eq#@VarI2:SortInt{}, "0")
+- Lbl_/Int_: #Ceil( _/Int_(Eq#@VarI1:SortInt{}, Eq#@VarI2:SortInt{}) ) => _=/=Int_(Eq#@VarI2:SortInt{}, "0")
+- Lbl_<<Int_: #Ceil( _<<Int_(Eq#@VarI1:SortInt{}, Eq#@VarI2:SortInt{}) ) => _>=Int_(Eq#@VarI2:SortInt{}, "0")
+- Lbl_>>Int_: #Ceil( _>>Int_(Eq#@VarI1:SortInt{}, Eq#@VarI2:SortInt{}) ) => _>=Int_(Eq#@VarI2:SortInt{}, "0")
+- Lbl_Map_: #Ceil( _Map_(_|->_(Eq#@VarK0:SortKItem{}, Eq#@VarK1:SortKItem{}), Eq#@VarRest:SortMap{}) ) => notBool_(_in_keys(_)_MAP_Bool_KItem_Map(Eq#@VarK0:SortKItem{}, Eq#@VarRest:SortMap{}))
+- Lbl_modInt_: #Ceil( _modInt_(Eq#@VarI1:SortInt{}, Eq#@VarI2:SortInt{}) ) => _=/=Int_(Eq#@VarI2:SortInt{}, "0")

@@ -1,5 +1,3 @@
-{-# LANGUAGE PatternSynonyms #-}
-
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -8,13 +6,20 @@ module Booster.Pattern.ApplyEquations (
     evaluateTerm,
     evaluatePattern,
     Direction (..),
+    EquationT (..),
+    runEquationT,
+    EquationConfig (..),
+    getConfig,
     EquationPreference (..),
     EquationFailure (..),
     EquationTrace (..),
     ApplyEquationResult (..),
+    applyEquations,
+    handleSimplificationEquation,
     isMatchFailure,
     isSuccess,
     simplifyConstraint,
+    simplifyConstraints,
     SimplifierCache,
 ) where
 
@@ -29,10 +34,10 @@ import Control.Monad.Logger.CallStack (
  )
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
-import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State
 import Data.Bifunctor (second)
+import Data.Coerce (coerce)
 import Data.Foldable (toList, traverse_)
 import Data.Functor.Foldable
 import Data.List (elemIndex)
@@ -51,11 +56,12 @@ import Booster.Definition.Base
 import Booster.LLVM
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.Base
+import Booster.Pattern.Bool
 import Booster.Pattern.Index
 import Booster.Pattern.Match
-import Booster.Pattern.Simplify
 import Booster.Pattern.Util
-import Booster.Prettyprinter (renderDefault)
+import Booster.Prettyprinter (renderDefault, renderText)
+import Booster.SMT.Interface qualified as SMT
 
 newtype EquationT io a
     = EquationT (ReaderT EquationConfig (ExceptT EquationFailure (StateT EquationState io)) a)
@@ -76,7 +82,7 @@ data EquationFailure
     | TooManyIterations Int Term Term
     | EquationLoop [Term]
     | TooManyRecursions [Term]
-    | SideConditionsFalse [Predicate]
+    | SideConditionFalse Predicate
     | InternalError Text
     deriving stock (Eq, Show)
 
@@ -96,16 +102,18 @@ instance Pretty EquationFailure where
             vsep $
                 "Recursion limit exceeded. The following terms were evaluated:"
                     : map pretty ts
-        SideConditionsFalse ps ->
+        SideConditionFalse p ->
             vsep $
-                "Side conditions were found to be false during evaluation (pruning)"
-                    : map pretty ps
+                [ "A side condition was found to be false during evaluation (pruning)"
+                , pretty p
+                ]
         InternalError msg ->
             "Internal error during evaluation: " <> pretty msg
 
 data EquationConfig = EquationConfig
     { definition :: KoreDefinition
     , llvmApi :: Maybe LLVM.API
+    , smtSolver :: Maybe SMT.SMTContext
     , doTracing :: Bool
     }
 
@@ -159,21 +167,22 @@ instance Pretty EquationTrace where
                 ]
                     ++ map pretty cs
                     ++ ["using " <> locationInfo]
-        ConditionFalse ->
+        ConditionFalse p ->
             vsep
                 [ "Simplifying term"
                 , prettyTerm
                 , "failed with false condition"
+                , pretty p
                 , "using " <> locationInfo
                 ]
-        EnsuresFalse ps ->
-            vsep $
+        EnsuresFalse p ->
+            vsep
                 [ "Simplifying term"
                 , prettyTerm
                 , "using " <> locationInfo
-                , "resulted in ensuring false conditions"
+                , "resulted in ensuring false condition"
+                , pretty p
                 ]
-                    <> map pretty ps
         MatchConstraintViolated constrained varName ->
             vsep
                 [ "Concreteness constraint violated: "
@@ -265,14 +274,15 @@ runEquationT ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    Maybe SMT.SMTContext ->
     SimplifierCache ->
     EquationT io a ->
     io (Either EquationFailure a, [EquationTrace], SimplifierCache)
-runEquationT doTracing definition llvmApi sCache (EquationT m) = do
+runEquationT doTracing definition llvmApi smtSolver sCache (EquationT m) = do
     (res, endState) <-
         flip runStateT (startState sCache) $
             runExceptT $
-                runReaderT m EquationConfig{definition, llvmApi, doTracing}
+                runReaderT m EquationConfig{definition, llvmApi, smtSolver, doTracing}
     pure (res, toList endState.trace, endState.cache)
 
 iterateEquations ::
@@ -283,8 +293,11 @@ iterateEquations ::
     EquationPreference ->
     Term ->
     EquationT io Term
-iterateEquations maxRecursion maxIterations direction preference startTerm =
-    pushRecursion startTerm >>= checkCounter >> go startTerm <* popRecursion
+iterateEquations maxRecursion maxIterations direction preference startTerm = do
+    logOther (LevelOther "Simplify") $ "Evaluating " <> renderText (pretty startTerm)
+    result <- pushRecursion startTerm >>= checkCounter >> go startTerm <* popRecursion
+    logOther (LevelOther "Simplify") $ "Result: " <> renderText (pretty result)
+    pure result
   where
     checkCounter counter
         | counter > maxRecursion =
@@ -317,10 +330,11 @@ evaluateTerm ::
     Direction ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    Maybe SMT.SMTContext ->
     Term ->
     io (Either EquationFailure Term, [EquationTrace], SimplifierCache)
-evaluateTerm doTracing direction def llvmApi =
-    runEquationT doTracing def llvmApi mempty
+evaluateTerm doTracing direction def llvmApi smtSolver =
+    runEquationT doTracing def llvmApi smtSolver mempty
         . evaluateTerm' direction
 
 -- version for internal nested evaluation
@@ -339,18 +353,19 @@ evaluatePattern ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    Maybe SMT.SMTContext ->
     SimplifierCache ->
     Pattern ->
     io (Either EquationFailure Pattern, [EquationTrace], SimplifierCache)
-evaluatePattern doTracing def mLlvmLibrary cache =
-    runEquationT doTracing def mLlvmLibrary cache . evaluatePattern'
+evaluatePattern doTracing def mLlvmLibrary smtSolver cache =
+    runEquationT doTracing def mLlvmLibrary smtSolver cache . evaluatePattern'
 
 -- version for internal nested evaluation
 evaluatePattern' ::
     MonadLoggerIO io =>
     Pattern ->
     EquationT io Pattern
-evaluatePattern' Pattern{term, constraints} = do
+evaluatePattern' Pattern{term, constraints, ceilConditions} = do
     pushConstraints constraints
     newTerm <- evaluateTerm' TopDown term
     -- after evaluating the term, evaluate all (existing and
@@ -358,15 +373,15 @@ evaluatePattern' Pattern{term, constraints} = do
     traverse_ simplifyAssumedPredicate . predicates =<< getState
     -- this may yield additional new constraints, left unevaluated
     evaluatedConstraints <- predicates <$> getState
-    pure Pattern{constraints = evaluatedConstraints, term = newTerm}
+    pure Pattern{constraints = evaluatedConstraints, term = newTerm, ceilConditions}
   where
     -- evaluate the given predicate assuming all others
     simplifyAssumedPredicate p = do
         allPs <- predicates <$> getState
         let otherPs = Set.delete p allPs
         eqState $ modify $ \s -> s{predicates = otherPs}
-        newP <- simplifyConstraint' p
-        pushConstraints $ Set.singleton newP
+        newP <- simplifyConstraint' True $ coerce p
+        pushConstraints $ Set.singleton $ coerce newP
 
 ----------------------------------------
 
@@ -506,8 +521,8 @@ data ApplyEquationResult
     | FailedMatch MatchFailReason
     | IndeterminateMatch
     | IndeterminateCondition [Predicate]
-    | ConditionFalse
-    | EnsuresFalse [Predicate]
+    | ConditionFalse Predicate
+    | EnsuresFalse Predicate
     | RuleNotPreservingDefinedness
     | MatchConstraintViolated Constrained VarName
     deriving stock (Eq, Show)
@@ -528,8 +543,8 @@ handleFunctionEquation success continue abort = \case
     FailedMatch _ -> continue
     IndeterminateMatch -> abort
     IndeterminateCondition{} -> abort
-    ConditionFalse -> continue
-    EnsuresFalse ps -> throw $ SideConditionsFalse ps
+    ConditionFalse _ -> continue
+    EnsuresFalse p -> throw $ SideConditionFalse p
     RuleNotPreservingDefinedness -> abort
     MatchConstraintViolated{} -> continue
 
@@ -539,8 +554,8 @@ handleSimplificationEquation success continue _abort = \case
     FailedMatch _ -> continue
     IndeterminateMatch -> continue
     IndeterminateCondition{} -> continue
-    ConditionFalse -> continue
-    EnsuresFalse ps -> throw $ SideConditionsFalse ps
+    ConditionFalse _ -> continue
+    EnsuresFalse p -> throw $ SideConditionFalse p
     RuleNotPreservingDefinedness -> continue
     MatchConstraintViolated{} -> continue
 
@@ -638,42 +653,36 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
             -- check required conditions, using substitution
             let required =
                     concatMap
-                        (splitBoolPredicates . substituteInPredicate subst)
+                        (splitBoolPredicates . coerce . substituteInTerm subst . coerce)
                         rule.requires
-            unclearConditions' <- runMaybeT $ catMaybes <$> mapM checkConstraint required
+            unclearConditions' <- catMaybes <$> mapM (checkConstraint ConditionFalse) required
 
             case unclearConditions' of
-                Nothing -> throwE ConditionFalse
-                Just unclearConditions ->
-                    if not $ null unclearConditions
-                        then throwE $ IndeterminateCondition unclearConditions
-                        else do
-                            -- check ensured conditions, filter any
-                            -- true ones, prune if any is false
-                            let ensured =
-                                    concatMap
-                                        (splitBoolPredicates . substituteInPredicate subst)
-                                        (Set.toList rule.ensures)
-                            mbEnsuredConditions <-
-                                runMaybeT $ catMaybes <$> mapM checkConstraint ensured
-                            case mbEnsuredConditions of
-                                -- throws if an ensured condition found to be false
-                                Nothing -> throwE $ EnsuresFalse ensured
-                                -- pushes new ensured conditions and return result
-                                Just conditions ->
-                                    lift $ pushConstraints $ Set.fromList conditions
-                            pure $ substituteInTerm subst rule.rhs
+                [] -> do
+                    -- check ensured conditions, filter any
+                    -- true ones, prune if any is false
+                    let ensured =
+                            concatMap
+                                (splitBoolPredicates . substituteInPredicate subst)
+                                (Set.toList rule.ensures)
+                    ensuredConditions <-
+                        -- throws if an ensured condition found to be false
+                        catMaybes <$> mapM (checkConstraint EnsuresFalse) ensured
+                    lift $ pushConstraints $ Set.fromList ensuredConditions
+                    pure $ substituteInTerm subst rule.rhs
+                unclearConditions -> throwE $ IndeterminateCondition unclearConditions
   where
     -- Simplify given predicate in a nested EquationT execution.
     -- Return Nothing immediately if it is Bottom, return (Just
     -- Nothing) if it is Top, otherwise return (Just simplified).
     checkConstraint ::
+        (Predicate -> ApplyEquationResult) ->
         Predicate ->
-        MaybeT (ExceptT ApplyEquationResult (EquationT io)) (Maybe Predicate)
-    checkConstraint p = do
-        lift . logOther (LevelOther "Simplify") $
+        ExceptT ApplyEquationResult (EquationT io) (Maybe Predicate)
+    checkConstraint whenBottom (Predicate p) = do
+        logOther (LevelOther "Simplify") $
             "Recursive simplification of predicate: " <> pack (renderDefault (pretty p))
-        let fallBackToP :: EquationFailure -> EquationT io Predicate
+        let fallBackToP :: EquationFailure -> EquationT io Term
             fallBackToP e = do
                 logOther (LevelOther "Simplify") . pack . renderDefault $
                     "Aborting recursive simplification:" <> pretty e
@@ -681,11 +690,11 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
         -- exceptions need to be handled differently in the recursion,
         -- falling back to the unsimplified constraint instead of aborting.
         simplified <-
-            lift . lift $ simplifyConstraint' p `catch_` fallBackToP
+            lift $ simplifyConstraint' True p `catch_` fallBackToP
         case simplified of
-            Bottom -> fail "Rule condition was False"
-            Top -> pure Nothing
-            other -> pure $ Just other
+            FalseBool -> throwE . whenBottom $ coerce p
+            TrueBool -> pure Nothing
+            other -> pure . Just $ coerce other
 
     allMustBeConcrete (AllConstrained Concrete) = True
     allMustBeConcrete _ = False
@@ -733,14 +742,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
 
 --------------------------------------------------------------------
 
--- | Helper pattern for simplifyConstraint
-pattern TrueBool :: Term
-pattern TrueBool = DomainValue SortBool "true"
-
-pattern FalseBool :: Term
-pattern FalseBool = DomainValue SortBool "false"
-
-{- | Simplification for boolean predicates
+{- Simplification for boolean predicates
 
     This is used during rewriting to simplify side conditions of rules
     (to decide whether or not a rule can apply, not to retain the
@@ -755,42 +757,47 @@ simplifyConstraint ::
     Bool ->
     KoreDefinition ->
     Maybe LLVM.API ->
+    Maybe SMT.SMTContext ->
     SimplifierCache ->
     Predicate ->
     io (Either EquationFailure Predicate, [EquationTrace], SimplifierCache)
-simplifyConstraint doTracing def mbApi cache p =
-    runEquationT doTracing def mbApi cache $ simplifyConstraint' p
+simplifyConstraint doTracing def mbApi mbSMT cache (Predicate p) =
+    runEquationT doTracing def mbApi mbSMT cache $ (coerce <$>) . simplifyConstraint' True $ p
+
+simplifyConstraints ::
+    MonadLoggerIO io =>
+    Bool ->
+    KoreDefinition ->
+    Maybe LLVM.API ->
+    Maybe SMT.SMTContext ->
+    SimplifierCache ->
+    [Predicate] ->
+    io (Either EquationFailure [Predicate], [EquationTrace], SimplifierCache)
+simplifyConstraints doTracing def mbApi mbSMT cache ps =
+    runEquationT doTracing def mbApi mbSMT cache $
+        concatMap splitAndBools
+            <$> mapM ((coerce <$>) . simplifyConstraint' True . coerce) ps
 
 -- version for internal nested evaluation
-simplifyConstraint' :: MonadLoggerIO io => Predicate -> EquationT io Predicate
--- We are assuming all predicates are of the form 'true \equals P' and
--- evaluating them using simplifyBool if they are concrete.
--- Non-concrete \equals predicates are simplified using evaluateTerm.
-simplifyConstraint' = \case
-    EqualsTerm TrueBool t@(Term attributes _)
-        | isConcrete t && attributes.canBeEvaluated -> do
+simplifyConstraint' :: MonadLoggerIO io => Bool -> Term -> EquationT io Term
+-- Evaluates terms of boolean sort (coming from predicates of the form
+-- 'true \equals P' using simplifyBool if they are concrete, or using
+-- evaluateTerm.
+simplifyConstraint' recurseIntoEvalBool = \case
+    t@(Term TermAttributes{canBeEvaluated} _)
+        | isConcrete t && canBeEvaluated -> do
             mbApi <- (.llvmApi) <$> getConfig
             case mbApi of
                 Just api ->
-                    if simplifyBool api t
-                        then pure Top
-                        else pure Bottom
-                Nothing ->
-                    evalBool t >>= prune
-        | otherwise ->
-            evalBool t >>= prune
-    EqualsTerm t TrueBool ->
-        -- normalise to 'true' in first argument (like 'kore-rpc')
-        simplifyConstraint' (EqualsTerm TrueBool t)
-    other ->
-        pure other -- should not occur, predicates should be 'true \equals _'
+                    pure $
+                        if simplifyBool api t
+                            then TrueBool
+                            else FalseBool
+                Nothing -> if recurseIntoEvalBool then evalBool t else pure t
+    EqualsK (KSeq _ l) (KSeq _ r) -> evalEqualsK l r
+    NEqualsK (KSeq _ l) (KSeq _ r) -> negateBool <$> evalEqualsK l r
+    t -> if recurseIntoEvalBool then evalBool t else pure t
   where
-    prune =
-        pure . \case
-            TrueBool -> Top
-            FalseBool -> Bottom
-            other -> EqualsTerm TrueBool other
-
     evalBool :: MonadLoggerIO io => Term -> EquationT io Term
     evalBool t = do
         prior <- getState -- save prior state so we can revert
@@ -798,3 +805,42 @@ simplifyConstraint' = \case
         result <- iterateEquations 5 100 TopDown PreferFunctions t
         eqState $ put prior
         pure result
+
+    evalEqualsK l@(SymbolApplication sL _ argsL) r@(SymbolApplication sR _ argsR)
+        | isConstructorSymbol sL && isConstructorSymbol sR =
+            if sL == sR
+                then foldAndBool <$> zipWithM evalEqualsK argsL argsR
+                else pure FalseBool
+        | otherwise =
+            (if recurseIntoEvalBool then evalBool else pure) $
+                EqualsK (KSeq (sortOfTerm l) l) (KSeq (sortOfTerm r) r)
+    evalEqualsK (SymbolApplication symbol _ _) DomainValue{}
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK (SymbolApplication symbol _ _) Injection{}
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK (SymbolApplication symbol _ _) KMap{}
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK (SymbolApplication symbol _ _) KList{}
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK (SymbolApplication symbol _ _) KSet{}
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK DomainValue{} (SymbolApplication symbol _ _)
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK Injection{} (SymbolApplication symbol _ _)
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK KMap{} (SymbolApplication symbol _ _)
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK KList{} (SymbolApplication symbol _ _)
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK KSet{} (SymbolApplication symbol _ _)
+        | isConstructorSymbol symbol = pure FalseBool
+    evalEqualsK (Injection s1L s2L l) (Injection s1R s2R r)
+        | s1L == s1R && s2L == s2R = evalEqualsK l r
+    evalEqualsK l@DomainValue{} r@DomainValue{} =
+        pure $ if l == r then TrueBool else FalseBool
+    evalEqualsK l r =
+        if l == r
+            then pure TrueBool
+            else
+                (if recurseIntoEvalBool then evalBool else pure) $
+                    EqualsK (KSeq (sortOfTerm l) l) (KSeq (sortOfTerm r) r)

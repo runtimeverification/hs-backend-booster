@@ -1979,6 +1979,7 @@ Symbols: 1720
   - dotk
   - inj
   - kseq
+Partial function symbols: 628
 Axioms: 352
 Axioms preserving definedness: 296
 Axioms containing AC symbols: 0
@@ -5829,47 +5830,15 @@ Simplifications by term index:
   - evm-semantics/tests/specs/lemmas.k :  (290, 10)
   - evm-semantics/tests/specs/lemmas.k :  (291, 10)
   - evm-semantics/tests/specs/lemmas.k :  (48, 10)
-Predicate simplifications by term index:
-- \ceil: 11
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (411, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1085, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1084, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1088, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1087, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1086, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1996, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1995, 8)
-  - UNKNOWN
-  - UNKNOWN
-  - UNKNOWN
-- \equalsTerm: 30
-  - evm-semantics/tests/specs/lemmas.k :  (408, 10)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1128, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1126, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2107, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2105, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1124, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1122, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2103, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2101, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (878, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (444, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (446, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (880, 8)
-  - evm-semantics/.build/usr/lib/kevm/include/kframework/infinite-gas.md :  (62, 10)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (875, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (873, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1129, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2108, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1125, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2104, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (443, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (445, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (879, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (874, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1127, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2106, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (1123, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (2102, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (877, 8)
-  - /Users/anapantilie/RV/k/k-distribution/target/release/k/include/kframework/builtin/domains.md :  (872, 8)
+Ceils:
+- LblMap:lookup: #Ceil( Map:lookup(Eq#@VarM:SortMap{}, Eq#@VarK:SortKItem{}) ) => _in_keys(_)_MAP_Bool_KItem_Map(Eq#@VarK:SortKItem{}, Eq#@VarM:SortMap{})
+- Lbl_%Int_: #Ceil( _%Int_(Eq#@VarI1:SortInt{}, Eq#@VarI2:SortInt{}) ) => _=/=Int_(Eq#@VarI2:SortInt{}, "0")
+- Lbl_/Int_: #Ceil( _/Int_(Eq#@VarI1:SortInt{}, Eq#@VarI2:SortInt{}) ) => _=/=Int_(Eq#@VarI2:SortInt{}, "0")
+- Lbl_<<Int_: #Ceil( _<<Int_(Eq#@VarI1:SortInt{}, Eq#@VarI2:SortInt{}) ) => _>=Int_(Eq#@VarI2:SortInt{}, "0")
+- Lbl_>>Int_: #Ceil( _>>Int_(Eq#@VarI1:SortInt{}, Eq#@VarI2:SortInt{}) ) => _>=Int_(Eq#@VarI2:SortInt{}, "0")
+- Lbl_AccountCellMap_: #Ceil( _AccountCellMap_(AccountCellMapItem(Eq#@VarK0:SortAcctIDCell{}, Eq#@VarK1:SortAccountCell{}), Eq#@VarRest:SortAccountCellMap{}) ) => notBool_(AccountCellMap:in_keys(Eq#@VarK0:SortAcctIDCell{}, Eq#@VarRest:SortAccountCellMap{}))
+- Lbl_Map_: #Ceil( _Map_(_|->_(Eq#@VarK0:SortKItem{}, Eq#@VarK1:SortKItem{}), Eq#@VarRest:SortMap{}) ) => notBool_(_in_keys(_)_MAP_Bool_KItem_Map(Eq#@VarK0:SortKItem{}, Eq#@VarRest:SortMap{}))
+- Lbl_MessageCellMap_: #Ceil( _MessageCellMap_(MessageCellMapItem(Eq#@VarK0:SortMsgIDCell{}, Eq#@VarK1:SortMessageCell{}), Eq#@VarRest:SortMessageCellMap{}) ) => notBool_(MessageCellMap:in_keys(Eq#@VarK0:SortMsgIDCell{}, Eq#@VarRest:SortMessageCellMap{}))
+- Lbl_modInt_: #Ceil( _modInt_(Eq#@VarI1:SortInt{}, Eq#@VarI2:SortInt{}) ) => _=/=Int_(Eq#@VarI2:SortInt{}, "0")
+- LblpadLeftBytes(_,_,_)_BYTES-HOOKED_Bytes_Bytes_Int_Int: #Ceil( padLeftBytes(_,_,_)_BYTES-HOOKED_Bytes_Bytes_Int_Int(Eq#Var_Gen0:SortBytes{}, Eq#VarLEN:SortInt{}, Eq#VarVAL:SortInt{}) ) => _andBool_(_andBool_(_<=Int_("0", Eq#VarLEN:SortInt{}), _<=Int_("0", Eq#VarVAL:SortInt{})), _<Int_(Eq#VarVAL:SortInt{}, "256"))
+- LblpadRightBytes(_,_,_)_BYTES-HOOKED_Bytes_Bytes_Int_Int: #Ceil( padRightBytes(_,_,_)_BYTES-HOOKED_Bytes_Bytes_Int_Int(Eq#Var_Gen0:SortBytes{}, Eq#VarLEN:SortInt{}, Eq#VarVAL:SortInt{}) ) => _andBool_(_andBool_(_<=Int_("0", Eq#VarLEN:SortInt{}), _<=Int_("0", Eq#VarVAL:SortInt{})), _<Int_(Eq#VarVAL:SortInt{}, "256"))

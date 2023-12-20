@@ -24,6 +24,10 @@ import GHC.Generics qualified as GHC
 import Booster.Definition.Attributes.Base
 import Booster.Pattern.Base
 import Booster.Pattern.Index (TermIndex)
+import Control.Applicative ((<|>))
+import Data.Maybe (fromMaybe)
+import Data.Text (Text)
+import Prettyprinter (Pretty (..))
 
 {- | A Kore definition is constructed from a main module with its
    transitive imports.
@@ -43,7 +47,7 @@ data KoreDefinition = KoreDefinition
     , rewriteTheory :: Theory (RewriteRule "Rewrite")
     , functionEquations :: Theory (RewriteRule "Function")
     , simplifications :: Theory (RewriteRule "Simplification")
-    , predicateSimplifications :: Theory PredicateEquation
+    , ceils :: Theory (RewriteRule "Ceil")
     }
     deriving stock (Eq, Show, GHC.Generic)
     deriving anyclass (NFData)
@@ -65,7 +69,7 @@ emptyKoreDefinition attributes =
         , rewriteTheory = Map.empty
         , functionEquations = Map.empty
         , simplifications = Map.empty
-        , predicateSimplifications = Map.empty
+        , ceils = Map.empty
         }
 
 data RewriteRule (tag :: k) = RewriteRule
@@ -84,17 +88,33 @@ data Alias = Alias
     { name :: AliasName
     , params :: [Sort]
     , args :: [Variable]
-    , rhs :: TermOrPredicate
+    , rhs :: Pattern
     }
     deriving stock (Eq, Ord, Show, GHC.Generic)
     deriving anyclass (NFData)
 
-data PredicateEquation = PredicateEquation
-    { target :: Predicate
-    , conditions :: [Predicate]
-    , rhs :: [Predicate]
-    , attributes :: AxiomAttributes
-    , computedAttributes :: ComputedAxiomAttributes
-    }
+data SourceRef
+    = Labeled Text
+    | Located Location
+    | UNKNOWN
     deriving stock (Eq, Ord, Show, GHC.Generic)
     deriving anyclass (NFData)
+
+instance Pretty SourceRef where
+    pretty = \case
+        Located l -> pretty l
+        Labeled l -> pretty l
+        UNKNOWN -> "UNKNOWN"
+
+-- | class of entities that have a location or ID to present to users
+class HasSourceRef a where
+    sourceRef :: a -> SourceRef
+
+instance HasSourceRef AxiomAttributes where
+    sourceRef attribs =
+        fromMaybe UNKNOWN $
+            fmap Labeled attribs.ruleLabel
+                <|> fmap Located attribs.location
+
+instance HasSourceRef (RewriteRule a) where
+    sourceRef r = sourceRef r.attributes

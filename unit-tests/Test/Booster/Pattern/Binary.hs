@@ -9,6 +9,7 @@ module Test.Booster.Pattern.Binary (
 import Booster.Definition.Attributes.Base
 import Booster.Pattern.Base
 import Booster.Pattern.Binary
+import Booster.Pattern.Bool
 import Booster.Pattern.Util (sortOfTerm)
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
@@ -37,7 +38,15 @@ genSymbolUnknownSort :: Gen Symbol
 genSymbolUnknownSort =
     ( \name ->
         Symbol name [] [] (SortApp "UNKNOWN" []) $
-            SymbolAttributes PartialFunction IsNotIdem IsNotAssoc IsNotMacroOrAlias CannotBeEvaluated Nothing
+            SymbolAttributes
+                PartialFunction
+                IsNotIdem
+                IsNotAssoc
+                IsNotMacroOrAlias
+                CannotBeEvaluated
+                Nothing
+                Nothing
+                Nothing
     )
         <$> Gen.utf8 (Range.linear 0 32) Gen.alphaNum
 
@@ -54,24 +63,11 @@ genTerm =
 
 genPredicate :: Gen Predicate
 genPredicate =
-    Gen.recursive
-        Gen.choice
-        [pure Bottom, pure Top]
-        [ AndPredicate <$> genPredicate <*> genPredicate
-        , Ceil <$> genTerm
-        , EqualsTerm <$> genTerm <*> genTerm
-        , EqualsPredicate <$> genPredicate <*> genPredicate
-        , Exists <$> genVariable <*> genPredicate
-        , Forall <$> genVariable <*> genPredicate
-        , Iff <$> genPredicate <*> genPredicate
-        , Implies <$> genPredicate <*> genPredicate
-        , In <$> genTerm <*> genTerm
-        , Not <$> genPredicate
-        , Or <$> genPredicate <*> genPredicate
-        ]
+    Predicate
+        <$> Gen.choice [pure TrueBool, pure FalseBool, genTerm]
 
 genPattern :: Gen Pattern
-genPattern = Pattern <$> genTerm <*> (Set.fromList <$> upTo 10 genPredicate)
+genPattern = (\t cs -> Pattern t cs mempty) <$> genTerm <*> (Set.fromList <$> upTo 10 genPredicate)
 
 test_BinaryRoundTrips :: [TestTree]
 test_BinaryRoundTrips =

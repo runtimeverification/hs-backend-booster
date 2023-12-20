@@ -1,4 +1,7 @@
 {-# LANGUAGE QuasiQuotes #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use ++" #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -8,6 +11,7 @@ module Test.Booster.Pattern.ApplyEquations (
     test_evaluateFunction,
     test_simplify,
     test_simplifyPattern,
+    test_simplifyConstraint,
     test_errors,
 ) where
 
@@ -23,7 +27,9 @@ import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.Pattern.ApplyEquations
 import Booster.Pattern.Base
+import Booster.Pattern.Bool
 import Booster.Pattern.Index (TermIndex (..))
+import Booster.Pattern.Util (sortOfTerm)
 import Booster.Syntax.Json.Internalise (trm)
 import Test.Booster.Fixture hiding (inj)
 
@@ -90,7 +96,8 @@ test_evaluateFunction =
             eval BottomUp subj @?= Right result
         ]
   where
-    eval direction = unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm False direction funDef Nothing
+    eval direction =
+        unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm False direction funDef Nothing Nothing
 
     isTooManyIterations (Left (TooManyIterations _n _ _)) = pure ()
     isTooManyIterations (Left err) = assertFailure $ "Unexpected error " <> show err
@@ -117,39 +124,105 @@ test_simplify =
             simpl BottomUp subj @?= Right result
         ]
   where
-    simpl direction = unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm False direction simplDef Nothing
+    simpl direction =
+        unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm False direction simplDef Nothing Nothing
     a = var "A" someSort
 
 test_simplifyPattern :: TestTree
 test_simplifyPattern =
     testGroup
-        "Performing simplifications"
+        "Performing Pattern simplifications"
         [ testCase "No simplification applies" $ do
             let subj = [trm| f1{}(f2{}(A:SomeSort{})) |]
-            simpl Pattern{term = subj, constraints = mempty}
-                @?= Right Pattern{term = subj, constraints = mempty}
-            simpl Pattern{term = subj, constraints = mempty}
-                @?= Right Pattern{term = subj, constraints = mempty}
+            simpl (Pattern_ subj) @?= Right (Pattern_ subj)
+            simpl (Pattern_ subj) @?= Right (Pattern_ subj)
         , -- con1(con2(f2(a))) => con2(f2(a))
           testCase "Simplification of constructors" $ do
             let subj = app con1 [app con2 [app f2 [a]]]
-            simpl Pattern{term = subj, constraints = mempty}
-                @?= Right Pattern{term = app con2 [app f2 [a]], constraints = mempty}
-            simpl Pattern{term = subj, constraints = mempty}
-                @?= Right Pattern{term = app con2 [app f2 [a]], constraints = mempty}
+            simpl (Pattern_ subj)
+                @?= Right (Pattern_ $ app con2 [app f2 [a]])
+            simpl (Pattern_ subj)
+                @?= Right (Pattern_ $ app con2 [app f2 [a]])
         , -- con3(f2(a), f2(a)) => inj{sub,some}(con4(f2(a), f2(a)))
           testCase "Simplification with argument match" $ do
-            let subj = Pattern{term = [trm| con3{}(f2{}(A:SomeSort{}), f2{}(A:SomeSort{})) |], constraints = mempty}
+            let subj = Pattern_ [trm| con3{}(f2{}(A:SomeSort{}), f2{}(A:SomeSort{})) |]
                 result =
-                    Pattern
-                        { term = [trm| inj{AnotherSort{}, SomeSort{}}(con4{}(f2{}(A:SomeSort{}), f2{}(A:SomeSort{}))) |]
-                        , constraints = mempty
-                        }
+                    Pattern_ [trm| inj{AnotherSort{}, SomeSort{}}(con4{}(f2{}(A:SomeSort{}), f2{}(A:SomeSort{}))) |]
             simpl subj @?= Right result
         ]
   where
-    simpl = unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluatePattern False simplDef Nothing mempty
+    simpl =
+        unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluatePattern False simplDef Nothing Nothing mempty
     a = var "A" someSort
+
+test_simplifyConstraint :: TestTree
+test_simplifyConstraint =
+    testGroup
+        "Performing Predicate simplifications"
+        [ testGroup
+            "==K simplification"
+            $ concat
+                [ testCaseEqualsK
+                    "Same constructor, same variable"
+                    [trm| con1{}(A:SomeSort{}) |]
+                    [trm| con1{}(A:SomeSort{}) |]
+                    (const TrueBool)
+                    (const TrueBool)
+                , testCaseEqualsK
+                    "Same constructor, different variables"
+                    [trm| con1{}(A:SomeSort{}) |]
+                    [trm| con1{}(B:SomeSort{}) |]
+                    (const (EqualsK (KSeq someSort [trm| A:SomeSort{} |]) (KSeq someSort [trm| B:SomeSort{} |])))
+                    (const (EqualsK (KSeq someSort [trm| B:SomeSort{} |]) (KSeq someSort [trm| A:SomeSort{} |])))
+                , testCaseEqualsK
+                    "Different constructors, same variable"
+                    [trm| con1{}(A:SomeSort{}) |]
+                    [trm| con2{}(A:SomeSort{}) |]
+                    (const FalseBool)
+                    (const FalseBool)
+                , testCaseEqualsK
+                    "Constructor with domain value"
+                    [trm| con1{}(A:SomeSort{}) |]
+                    [trm| \dv{SomeSort{}}("hey") |]
+                    (const FalseBool)
+                    (const FalseBool)
+                , testCaseEqualsK
+                    "Function with map, indeterminate"
+                    [trm| f3{}(A:SomeSort{}) |]
+                    (KMap testKMapDefinition [] Nothing)
+                    id
+                    id
+                , testCaseEqualsK
+                    "Constructor with function, indeterminate"
+                    [trm| con1{}(B:SomeSort{}) |]
+                    [trm| f2{}(A:SomeSort{}) |]
+                    id
+                    id
+                , testCaseEqualsK
+                    "Constructor with variable, indeterminate"
+                    [trm| con1{}(B:SomeSort{}) |]
+                    [trm| A:SomeSort{} |]
+                    id
+                    id
+                ]
+        ]
+  where
+    testCaseEqualsK name lhs rhs exp1 exp2 =
+        [ testCase name $
+            let subj =
+                    EqualsK (KSeq (sortOfTerm lhs) lhs) (KSeq (sortOfTerm rhs) rhs)
+             in simpl (Predicate subj) @?= Right (Predicate (exp1 subj))
+        , testCase (name <> " (flipped)") $
+            let subj =
+                    EqualsK (KSeq (sortOfTerm rhs) rhs) (KSeq (sortOfTerm lhs) lhs)
+             in simpl (Predicate subj) @?= Right (Predicate (exp2 subj))
+        ]
+
+    simpl =
+        unsafePerformIO
+            . runNoLoggingT
+            . (fst3 <$>)
+            . simplifyConstraint False testDefinition Nothing Nothing mempty
 
 test_errors :: TestTree
 test_errors =
@@ -162,7 +235,7 @@ test_errors =
                 loopTerms =
                     [f $ app con1 [a], f $ app con2 [a], f $ app con3 [a, a], f $ app con1 [a]]
             isLoop loopTerms . unsafePerformIO . runNoLoggingT $
-                fst3 <$> evaluateTerm False TopDown loopDef Nothing subj
+                fst3 <$> evaluateTerm False TopDown loopDef Nothing Nothing subj
         ]
   where
     isLoop ts (Left (EquationLoop ts')) = ts @?= ts'
@@ -296,6 +369,7 @@ equation ruleLabel lhs rhs priority =
                 , preserving = Flag False
                 , concreteness = Unconstrained
                 , uniqueId = Nothing
+                , smtLemma = Flag False
                 }
         , computedAttributes = ComputedAxiomAttributes False []
         , existentials = mempty

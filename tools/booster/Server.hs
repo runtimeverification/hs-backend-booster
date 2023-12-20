@@ -21,14 +21,19 @@ import Control.Monad.Logger (
     MonadLoggerIO (askLoggerIO),
     ToLogStr (toLogStr),
     defaultLoc,
+    runNoLoggingT,
  )
 import Control.Monad.Logger qualified as Logger
 import Data.Conduit.Network (serverSettings)
 import Data.IORef (writeIORef)
 import Data.InternedText (globalInternedTextCache)
+import Data.List (intercalate)
+import Data.List.Extra (splitOn)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import Data.Set qualified as Set
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text (decodeUtf8)
 import Options.Applicative
 import System.Clock (
     Clock (..),
@@ -38,11 +43,14 @@ import System.Exit
 import System.IO (hPutStrLn, stderr)
 
 import Booster.CLOptions
+import Booster.Definition.Ceil (computeCeilsDefinition)
 import Booster.JsonRpc qualified as Booster
 import Booster.LLVM.Internal (mkAPI, withDLib)
+import Booster.SMT.Base qualified as SMT (SExpr (..), SMTId (..))
+import Booster.SMT.Interface (SMTOptions (..))
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
-import Data.Text qualified as Text
+import Data.Limit (Limit (..))
 import GlobalMain qualified
 import Kore.Attribute.Symbol (StepperAttributes)
 import Kore.BugReport (BugReportOption (..), withBugReport)
@@ -50,9 +58,9 @@ import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
 import Kore.Internal.TermLike (TermLike, VariableName)
 import Kore.JsonRpc (ServerState (..))
 import Kore.JsonRpc qualified as Kore
-import Kore.JsonRpc.Error
+import Kore.JsonRpc.Error hiding (Aborted)
 import Kore.JsonRpc.Server
-import Kore.JsonRpc.Types (API, ReqOrRes (Req, Res))
+import Kore.JsonRpc.Types (API, HaltReason (..), ReqOrRes (Req, Res))
 import Kore.JsonRpc.Types.Depth (Depth (..))
 import Kore.Log (
     ExeName (..),
@@ -68,10 +76,10 @@ import Kore.Log.DebugSolver qualified as Log
 import Kore.Log.Registry qualified as Log
 import Kore.Rewrite.SMT.Lemma (declareSMTLemmas)
 import Kore.Syntax.Definition (ModuleName (ModuleName), SentenceAxiom)
-import Options.SMT (KoreSolverOptions (..), parseKoreSolverOptions)
+import Options.SMT as KoreSMT (KoreSolverOptions (..), Solver (..))
 import Proxy (KoreServer (..), ProxyConfig (..))
 import Proxy qualified
-import SMT qualified
+import SMT qualified as KoreSMT
 import Stats qualified
 
 main :: IO ()
@@ -84,13 +92,19 @@ main = do
                     { definitionFile
                     , mainModuleName
                     , port
-                    , logLevels
                     , llvmLibraryFile
+                    , logLevels
+                    , smtOptions
                     , eventlogEnabledUserEvents
                     }
-            , koreSolverOptions
-            , proxyOptions = ProxyOptions{printStats, forceFallback}
-            , debugSolverOptions
+            , proxyOptions =
+                ProxyOptions
+                    { printStats
+                    , forceFallback
+                    , boosterSMT
+                    , fallbackReasons
+                    , simplifyAtEnd
+                    }
             } = options
         (logLevel, customLevels) = adjustLogLevels logLevels
         levelFilter :: Logger.LogSource -> LogLevel -> Bool
@@ -98,6 +112,7 @@ main = do
             lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
         koreLogExtraLevels =
             Set.unions $ mapMaybe (`Map.lookup` koreExtraLogs) customLevels
+        koreSolverOptions = translateSMTOpts smtOptions
 
     Logger.runStderrLoggingT $ Logger.filterLogger levelFilter $ do
         liftIO $ forM_ eventlogEnabledUserEvents $ \t -> do
@@ -109,63 +124,77 @@ main = do
                     <> definitionFile
                     <> ", main module "
                     <> show mainModuleName
-        definitions <-
-            liftIO $
-                loadDefinition definitionFile
-                    >>= evaluate . force . either (error . show) id
-        unless (isJust $ Map.lookup mainModuleName definitions) $ do
-            Logger.logErrorNS "proxy" $
-                "Main module " <> mainModuleName <> " not found in " <> Text.pack definitionFile
-            liftIO exitFailure
 
         monadLogger <- askLoggerIO
 
-        let coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
+        liftIO $ void $ withBugReport (ExeName "kore-rpc-booster") BugReportOnError $ \reportDirectory -> withMDLib llvmLibraryFile $ \mdl -> do
+            let coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
+                koreLogOptions =
+                    (defaultKoreLogOptions (ExeName "") startTime)
+                        { Log.logLevel = coLogLevel
+                        , Log.logEntries = koreLogExtraLevels
+                        , Log.timestampsSwitch = TimestampsDisable
+                        , Log.debugSolverOptions =
+                            Log.DebugSolverOptions . fmap (<> ".kore") $ smtOptions >>= (.transcript)
+                        , Log.logType = LogSomeAction $ LogAction $ \txt -> liftIO $ monadLogger defaultLoc "kore" logLevel $ toLogStr txt
+                        }
+                srvSettings = serverSettings port "*"
 
-            koreLogOptions =
-                (defaultKoreLogOptions (ExeName "") startTime)
-                    { Log.logLevel = coLogLevel
-                    , Log.logEntries = koreLogExtraLevels
-                    , Log.timestampsSwitch = TimestampsDisable
-                    , Log.debugSolverOptions = debugSolverOptions
-                    , Log.logType = LogSomeAction $ LogAction $ \txt -> liftIO $ monadLogger defaultLoc "kore" logLevel $ toLogStr txt
-                    }
-            srvSettings = serverSettings port "*"
-
-        liftIO $ void $ withBugReport (ExeName "kore-rpc-booster") BugReportOnError $ \reportDirectory ->
             withLogger reportDirectory koreLogOptions $ \actualLogAction -> do
+                mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
+                definitions <-
+                    liftIO $
+                        loadDefinition definitionFile
+                            >>= mapM (mapM ((fst <$>) . runNoLoggingT . computeCeilsDefinition mLlvmLibrary))
+                            >>= evaluate . force . either (error . show) id
+                unless (isJust $ Map.lookup mainModuleName definitions) $ do
+                    flip runLoggingT monadLogger $
+                        Logger.logErrorNS "proxy" $
+                            "Main module " <> mainModuleName <> " not found in " <> Text.pack definitionFile
+                    liftIO exitFailure
+
                 mvarLogAction <- newMVar actualLogAction
                 let logAction = swappableLogger mvarLogAction
 
-                let defaultTactic = fromMaybe (SMT.List [SMT.Atom "check-sat-using", SMT.Atom "smt"]) koreSolverOptions.tactic
                 kore@KoreServer{runSMT} <-
-                    mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions{tactic = Just defaultTactic}
+                    mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions
 
-                withMDLib llvmLibraryFile $ \mdl -> do
-                    mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
-                    boosterState <-
-                        liftIO $
-                            newMVar Booster.ServerState{definitions, defaultMain = mainModuleName, mLlvmLibrary}
-                    statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
+                boosterState <-
+                    liftIO $
+                        newMVar
+                            Booster.ServerState
+                                { definitions
+                                , defaultMain = mainModuleName
+                                , mLlvmLibrary
+                                , mSMTOptions = if boosterSMT then smtOptions else Nothing
+                                }
+                statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
 
-                    runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
+                runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
-                    let koreRespond, boosterRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
-                        koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
-                        boosterRespond = Booster.respond boosterState
+                let koreRespond, boosterRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
+                    koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
+                    boosterRespond = Booster.respond boosterState
 
-                        proxyConfig = ProxyConfig{statsVar, forceFallback, boosterState}
-                        server =
-                            jsonRpcServer
-                                srvSettings
-                                (const $ Proxy.respondEither proxyConfig boosterRespond koreRespond)
-                                [handleErrorCall, handleSomeException]
-                        interruptHandler _ = do
-                            when (logLevel >= LevelInfo) $
-                                hPutStrLn stderr "[Info#proxy] Server shutting down"
-                            whenJust statsVar Stats.showStats
-                            exitSuccess
-                    handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger
+                    proxyConfig =
+                        ProxyConfig
+                            { statsVar
+                            , forceFallback
+                            , boosterState
+                            , fallbackReasons
+                            , simplifyAtEnd
+                            }
+                    server =
+                        jsonRpcServer
+                            srvSettings
+                            (const $ Proxy.respondEither proxyConfig boosterRespond koreRespond)
+                            [Kore.handleDecidePredicateUnknown, handleErrorCall, handleSomeException]
+                    interruptHandler _ = do
+                        when (logLevel >= LevelInfo) $
+                            hPutStrLn stderr "[Info#proxy] Server shutting down"
+                        whenJust statsVar Stats.showStats
+                        exitSuccess
+                handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger
   where
     clParser =
         info
@@ -199,8 +228,6 @@ koreExtraLogs =
 data CLProxyOptions = CLProxyOptions
     { clOptions :: CLOptions
     , proxyOptions :: ProxyOptions
-    , koreSolverOptions :: !KoreSolverOptions
-    , debugSolverOptions :: !Log.DebugSolverOptions
     }
 
 data ProxyOptions = ProxyOptions
@@ -208,6 +235,12 @@ data ProxyOptions = ProxyOptions
     -- ^ print timing statistics per request and on shutdown
     , forceFallback :: Maybe Depth
     -- ^ force fallback every n-steps
+    , boosterSMT :: Bool
+    -- ^ whether to use an SMT solver in booster code (but keeping kore-rpc's SMT solver)
+    , fallbackReasons :: [HaltReason]
+    -- ^ halt reasons to re-execute (fallback) to double-check the result
+    , simplifyAtEnd :: Bool
+    -- ^ whether to run a post-exec simplification
     }
 
 parserInfoModifiers :: InfoMod options
@@ -220,8 +253,6 @@ clProxyOptionsParser =
     CLProxyOptions
         <$> clOptionsParser
         <*> parseProxyOptions
-        <*> parseKoreSolverOptions
-        <*> Log.parseDebugSolverOptions
   where
     parseProxyOptions =
         ProxyOptions
@@ -238,6 +269,59 @@ clProxyOptionsParser =
                         <> showDefault
                     )
                 )
+            <*> flag
+                True
+                False
+                ( long "no-booster-smt"
+                    <> help "Disable SMT solver for booster code (but keep enabled for legacy code)"
+                )
+            <*> option
+                (eitherReader $ mapM reasonReader . splitOn ",")
+                ( long "fallback-on"
+                    <> metavar "REASON1,REASON2..."
+                    <> value [Branching, Stuck, Aborted]
+                    <> help "Halt reasons for which requests should be re-executed with kore-rpc"
+                    <> showDefaultWith (intercalate "," . map show)
+                )
+            <*> flag
+                True
+                False
+                ( long "no-post-exec-simplify"
+                    <> help "disable post-exec simplification"
+                )
+
+    reasonReader :: String -> Either String HaltReason
+    reasonReader = \case
+        "Branching" -> Right Branching
+        "Stuck" -> Right Stuck
+        "Aborted" -> Right Aborted
+        other -> Left $ "Reason `" <> other <> "' not supported"
+
+translateSMTOpts :: Maybe SMTOptions -> KoreSMT.KoreSolverOptions
+translateSMTOpts = \case
+    Just smtOpts ->
+        defaultKoreSolverOptions
+            { timeOut = KoreSMT.TimeOut . Limit . fromIntegral $ smtOpts.timeout
+            , retryLimit =
+                KoreSMT.RetryLimit . maybe Unlimited (Limit . fromIntegral) $ smtOpts.retryLimit
+            , tactic = fmap translateSExpr smtOpts.tactic
+            }
+    Nothing ->
+        defaultKoreSolverOptions{solver = KoreSMT.None}
+  where
+    defaultKoreSolverOptions =
+        KoreSMT.KoreSolverOptions
+            { timeOut = KoreSMT.TimeOut Unlimited
+            , retryLimit = KoreSMT.RetryLimit Unlimited
+            , rLimit = KoreSMT.RLimit Unlimited
+            , resetInterval = KoreSMT.ResetInterval 100
+            , prelude = KoreSMT.Prelude Nothing
+            , solver = KoreSMT.Z3
+            , tactic = Nothing
+            }
+    translateSExpr :: SMT.SExpr -> KoreSMT.SExpr
+    translateSExpr (SMT.Atom (SMT.SMTId x)) = KoreSMT.Atom (Text.decodeUtf8 x)
+    translateSExpr (SMT.List ss) = KoreSMT.List $ map translateSExpr ss
 
 mkKoreServer :: Log.LoggerEnv IO -> CLOptions -> KoreSolverOptions -> IO KoreServer
 mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainModuleName} koreSolverOptions =
@@ -266,14 +350,14 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
                 , loggerEnv
                 }
   where
-    KoreSolverOptions{timeOut, rLimit, resetInterval, prelude, tactic} = koreSolverOptions
+    KoreSMT.KoreSolverOptions{timeOut, retryLimit, tactic} = koreSolverOptions
+    smtConfig :: KoreSMT.Config
     smtConfig =
-        SMT.defaultConfig
-            { SMT.timeOut = timeOut
-            , SMT.rLimit = rLimit
-            , SMT.resetInterval = resetInterval
-            , SMT.prelude = prelude
-            , SMT.tactic = tactic
+        KoreSMT.defaultConfig
+            { KoreSMT.executable = KoreSMT.defaultConfig.executable -- hack to shut up GHC field warning
+            , KoreSMT.timeOut = timeOut
+            , KoreSMT.retryLimit = retryLimit
+            , KoreSMT.tactic = tactic
             }
 
     -- SMT solver with user declared lemmas
@@ -281,17 +365,17 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
         forall a.
         SmtMetadataTools StepperAttributes ->
         [SentenceAxiom (TermLike VariableName)] ->
-        SMT.SMT a ->
+        KoreSMT.SMT a ->
         IO a
     runSMT metadataTools lemmas m =
         flip Log.runLoggerT logAction $
-            bracket (SMT.newSolver smtConfig) SMT.stopSolver $ \refSolverHandle -> do
-                let userInit = SMT.runWithSolver $ declareSMTLemmas metadataTools lemmas
+            bracket (KoreSMT.newSolver smtConfig) KoreSMT.stopSolver $ \refSolverHandle -> do
+                let userInit = KoreSMT.runWithSolver $ declareSMTLemmas metadataTools lemmas
                     solverSetup =
-                        SMT.SolverSetup
+                        KoreSMT.SolverSetup
                             { userInit
                             , refSolverHandle
                             , config = smtConfig
                             }
-                SMT.initSolver solverSetup
-                SMT.runWithSolver m solverSetup
+                KoreSMT.initSolver solverSetup
+                KoreSMT.runWithSolver m solverSetup

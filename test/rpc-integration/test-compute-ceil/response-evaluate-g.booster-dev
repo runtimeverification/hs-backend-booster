@@ -2,8 +2,8 @@
     "jsonrpc": "2.0",
     "id": 1,
     "result": {
-        "reason": "vacuous",
-        "depth": 0,
+        "reason": "aborted",
+        "depth": 1,
         "state": {
             "term": {
                 "format": "KORE",
@@ -29,7 +29,7 @@
                                             "sorts": [
                                                 {
                                                     "tag": "SortApp",
-                                                    "name": "SortState",
+                                                    "name": "SortInt",
                                                     "args": []
                                                 },
                                                 {
@@ -43,10 +43,10 @@
                                                     "tag": "DV",
                                                     "sort": {
                                                         "tag": "SortApp",
-                                                        "name": "SortState",
+                                                        "name": "SortInt",
                                                         "args": []
                                                     },
-                                                    "value": "init"
+                                                    "value": "2"
                                                 }
                                             ]
                                         },
@@ -57,22 +57,6 @@
                                             "args": []
                                         }
                                     ]
-                                }
-                            ]
-                        },
-                        {
-                            "tag": "App",
-                            "name": "Lbl'-LT-'int'-GT-'",
-                            "sorts": [],
-                            "args": [
-                                {
-                                    "tag": "DV",
-                                    "sort": {
-                                        "tag": "SortApp",
-                                        "name": "SortInt",
-                                        "args": []
-                                    },
-                                    "value": "0"
                                 }
                             ]
                         },

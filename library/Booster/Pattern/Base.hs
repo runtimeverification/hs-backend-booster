@@ -3,7 +3,7 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskellQuotes #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -30,18 +30,16 @@ import Booster.Definition.Attributes.Base (
  )
 import Booster.Prettyprinter qualified as KPretty
 
+import Booster.Util (decodeLabel')
 import Control.DeepSeq (NFData (..))
 import Data.Bifunctor (second)
 import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
 import Data.Data (Data)
-import Data.Either (fromRight)
 import Data.Functor.Foldable
-import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Hashable (Hashable)
 import Data.Hashable qualified as Hashable
 import Data.List as List (foldl1', sort)
-import Data.Map qualified as Map
 import Data.Set (Set, fromList, toList)
 import Data.Set qualified as Set
 import Data.Text qualified as Text
@@ -66,8 +64,14 @@ data Sort
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
-pattern SortBool :: Sort
+pattern SortBool, SortInt, SortK, SortKItem, SortBytes, SortSet, SortMap :: Sort
 pattern SortBool = SortApp "SortBool" []
+pattern SortInt = SortApp "SortInt" []
+pattern SortK = SortApp "SortK" []
+pattern SortKItem = SortApp "SortKItem" []
+pattern SortSet = SortApp "SortSet" []
+pattern SortMap = SortApp "SortMap" []
+pattern SortBytes = SortApp "SortBytes" []
 
 -- | A variable for symbolic execution or for terms in a rule.
 data Variable = Variable
@@ -185,6 +189,8 @@ unitSymbol def =
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Just def
+                , smt = Nothing
+                , hook = Nothing
                 }
         }
   where
@@ -207,6 +213,8 @@ concatSymbol def =
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Just def
+                , smt = Nothing
+                , hook = Nothing
                 }
         }
   where
@@ -225,12 +233,14 @@ kmapElementSymbol def =
         , resultSort = SortApp def.mapSortName []
         , attributes =
             SymbolAttributes
-                { symbolType = PartialFunction
+                { symbolType = TotalFunction
                 , isIdem = IsNotIdem
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Just $ KMapMeta def
+                , smt = Nothing
+                , hook = Nothing
                 }
         }
 
@@ -249,6 +259,8 @@ klistElementSymbol def =
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Just $ KListMeta def
+                , smt = Nothing
+                , hook = Nothing
                 }
         }
 
@@ -684,14 +696,12 @@ injectionSymbol =
                 , isMacroOrAlias = IsNotMacroOrAlias
                 , hasEvaluators = CanBeEvaluated
                 , collectionMetadata = Nothing
+                , smt = Nothing
+                , hook = Nothing
                 }
         }
 
 -- convenience patterns
-pattern AndBool :: [Term] -> Term
-pattern AndBool ts <-
-    SymbolApplication (Symbol "Lbl'Unds'andBool'Unds'" _ _ _ _) _ ts
-
 pattern DV :: Sort -> Symbol
 pattern DV sort <- Symbol "\\dv" _ _ sort _
 
@@ -699,26 +709,58 @@ pattern DotDotDot :: Term
 pattern DotDotDot = DomainValue (SortApp "internalDummySort" []) "..."
 
 {- | A predicate describes constraints on terms. It will always evaluate
-   to 'Top' or 'Bottom'. Notice that 'Predicate's don't have a sort.
+   to 'TrueBool' or 'FalseBool'. Notice that 'Predicate's don't have a sort.
 -}
-data Predicate
-    = AndPredicate Predicate Predicate
-    | Bottom
-    | Ceil Term
-    | EqualsTerm Term Term
-    | EqualsPredicate Predicate Predicate
-    | Exists Variable Predicate
-    | Forall Variable Predicate
-    | Iff Predicate Predicate
-    | Implies Predicate Predicate
-    | In Term Term
-    | Not Predicate
-    | Or Predicate Predicate
-    | Top
+newtype Predicate = Predicate Term
     deriving stock (Eq, Ord, Show, Generic, Data)
     deriving anyclass (NFData)
 
-makeBaseFunctor ''Predicate
+newtype Ceil = Ceil Term
+    deriving stock (Eq, Ord, Show, Generic, Data)
+    deriving anyclass (NFData)
+
+-- kseq{}(inj{<sort>, SortKItem{}}(<a>),dotk{}()
+pattern KSeq :: Sort -> Term -> Term
+pattern KSeq sort a =
+    SymbolApplication
+        ( Symbol
+                "kseq"
+                []
+                [SortKItem, SortK]
+                SortK
+                ( SymbolAttributes
+                        Constructor
+                        IsNotIdem
+                        IsNotAssoc
+                        IsNotMacroOrAlias
+                        CanBeEvaluated
+                        Nothing
+                        Nothing
+                        Nothing
+                    )
+            )
+        []
+        [ Injection sort SortKItem a
+            , SymbolApplication
+                ( Symbol
+                        "dotk"
+                        []
+                        []
+                        SortK
+                        ( SymbolAttributes
+                                Constructor
+                                IsNotIdem
+                                IsNotAssoc
+                                IsNotMacroOrAlias
+                                CanBeEvaluated
+                                Nothing
+                                Nothing
+                                Nothing
+                            )
+                    )
+                []
+                []
+            ]
 
 --------------------
 
@@ -726,80 +768,15 @@ makeBaseFunctor ''Predicate
 data Pattern = Pattern
     { term :: Term
     , constraints :: !(Set Predicate)
+    , ceilConditions :: ![Ceil]
     }
     deriving stock (Eq, Ord, Show, Generic, Data)
     deriving anyclass (NFData)
 
-data TermOrPredicate -- = Either Predicate Pattern
-    = APredicate Predicate
-    | TermAndPredicate Pattern
-    deriving stock (Eq, Ord, Show, Generic)
-    deriving anyclass (NFData)
-
--- | Un-escapes special characters in symbol names
-decodeLabel :: ByteString -> Either String ByteString
-decodeLabel str
-    | BS.null str = Right str
-    | "'" `BS.isPrefixOf` str =
-        let (encoded, rest) = BS.span (/= '\'') (BS.tail str)
-         in (<>) <$> decode encoded <*> decodeLabel (BS.drop 1 rest)
-    | otherwise =
-        let (notEncoded, rest) = BS.span (/= '\'') str
-         in (notEncoded <>) <$> decodeLabel rest
-  where
-    decode :: ByteString -> Either String ByteString
-    decode s
-        | BS.null s = Right s
-        | BS.length code < 4 = Left $ "Bad character code  " <> show code
-        | otherwise =
-            maybe
-                (Left $ "Unknown character code  " <> show code)
-                (\c -> (c <>) <$> decode rest)
-                (Map.lookup code decodeMap)
-      where
-        (code, rest) = BS.splitAt 4 s
-
-decodeMap :: Map.Map ByteString ByteString
-decodeMap =
-    Map.fromList
-        [ ("Spce", " ")
-        , ("Bang", "!")
-        , ("Quot", "\"")
-        , ("Hash", "#")
-        , ("Dolr", "$")
-        , ("Perc", "%")
-        , ("And-", "&")
-        , ("Apos", "'")
-        , ("LPar", "(")
-        , ("RPar", ")")
-        , ("Star", "*")
-        , ("Plus", "+")
-        , ("Comm", ",")
-        , ("Hyph", "-")
-        , ("Stop", ".")
-        , ("Slsh", "/")
-        , ("Coln", ":")
-        , ("SCln", ";")
-        , ("-LT-", "<")
-        , ("Eqls", "=")
-        , ("-GT-", ">")
-        , ("Ques", "?")
-        , ("-AT-", "@")
-        , ("LSqB", "[")
-        , ("RSqB", "]")
-        , ("Bash", "\\")
-        , ("Xor-", "^")
-        , ("Unds", "_")
-        , ("BQuo", "`")
-        , ("LBra", "{")
-        , ("Pipe", "|")
-        , ("RBra", "}")
-        , ("Tild", "~")
-        ]
-
-decodeLabel' :: ByteString -> ByteString
-decodeLabel' orig =
-    fromRight orig (decodeLabel orig)
+pattern Pattern_ :: Term -> Pattern
+pattern Pattern_ t <- Pattern t _ _
+    where
+        Pattern_ t = Pattern t mempty mempty
 
 -- used for printing the string as it appears (with codepoints)
 prettyBS :: ByteString -> Pretty.Doc a
@@ -859,60 +836,13 @@ instance Pretty Variable where
             <> pretty var.variableSort
 
 instance Pretty Predicate where
-    pretty =
-        \case
-            AndPredicate p1 p2 ->
-                "\\andPredicate"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [p1, p2]
-            Bottom ->
-                "\\bottom"
-                    <> KPretty.noParameters
-                    <> KPretty.noArguments
-            Ceil t ->
-                "\\ceil"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [t]
-            EqualsTerm t1 t2 ->
-                "\\equalsTerm"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [t1, t2]
-            EqualsPredicate p1 p2 ->
-                "\\equalsPredicate"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [p1, p2]
-            Exists v p ->
-                "\\exists"
-                    <> KPretty.noParameters
-                    <> KPretty.arguments' [pretty v, pretty p]
-            Forall v p ->
-                "\\forall"
-                    <> KPretty.noParameters
-                    <> KPretty.arguments' [pretty v, pretty p]
-            Iff p1 p2 ->
-                "\\iff"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [p1, p2]
-            Implies p1 p2 ->
-                "\\implies"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [p1, p2]
-            In t1 t2 ->
-                "\\in"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [t1, t2]
-            Not p ->
-                "\\not"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [p]
-            Or p1 p2 ->
-                "\\or"
-                    <> KPretty.noParameters
-                    <> KPretty.argumentsP [p1, p2]
-            Top ->
-                "\\top"
-                    <> KPretty.noParameters
-                    <> KPretty.noArguments
+    pretty (Predicate t) = pretty t
+
+instance Pretty Ceil where
+    pretty (Ceil t) =
+        "\\ceil"
+            <> KPretty.noParameters
+            <> KPretty.argumentsP [t]
 
 instance Pretty Pattern where
     pretty patt =
@@ -922,3 +852,4 @@ instance Pretty Pattern where
             , "Conditions:"
             ]
                 <> fmap (Pretty.indent 4 . pretty) (Set.toList patt.constraints)
+                <> fmap (Pretty.indent 4 . pretty) patt.ceilConditions

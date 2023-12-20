@@ -5,14 +5,11 @@ License     : BSD-3-Clause
 module Booster.Pattern.Util (
     applySubst,
     sortOfTerm,
-    sortOfTermOrPredicate,
     sortOfPattern,
-    retractPattern,
     substituteInTerm,
     substituteInPredicate,
     modifyVariables,
     modifyVariablesInT,
-    modifyVariablesInP,
     modifyVarName,
     modifyVarNameConcreteness,
     freeVariables,
@@ -22,7 +19,6 @@ module Booster.Pattern.Util (
     isDefinedSymbol,
     checkSymbolIsAc,
     checkTermSymbols,
-    isBottom,
     isConcrete,
     filterTermSymbols,
     sizeOfTerm,
@@ -76,16 +72,8 @@ applySubst subst var@(SortVar n) =
 applySubst subst (SortApp n args) =
     SortApp n $ map (applySubst subst) args
 
-sortOfTermOrPredicate :: TermOrPredicate -> Maybe Sort
-sortOfTermOrPredicate (TermAndPredicate Pattern{term}) = Just (sortOfTerm term)
-sortOfTermOrPredicate (APredicate _) = Nothing
-
 sortOfPattern :: Pattern -> Sort
 sortOfPattern pat = sortOfTerm pat.term
-
-retractPattern :: TermOrPredicate -> Maybe Pattern
-retractPattern (TermAndPredicate patt) = Just patt
-retractPattern _ = Nothing
 
 substituteInTerm :: Map Variable Term -> Term -> Term
 substituteInTerm substitution = goSubst
@@ -107,35 +95,19 @@ substituteInTerm substitution = goSubst
                 KSet def (map goSubst elements) (goSubst <$> rest)
 
 substituteInPredicate :: Map Variable Term -> Predicate -> Predicate
-substituteInPredicate substitution = cata $ \case
-    EqualsTermF t1 t2 ->
-        EqualsTerm (substituteInTerm substitution t1) (substituteInTerm substitution t2)
-    other -> embed other
+substituteInPredicate substitution = coerce . substituteInTerm substitution . coerce
 
 modifyVariables :: (Variable -> Variable) -> Pattern -> Pattern
 modifyVariables f p =
     Pattern
         { term = modifyVariablesInT f p.term
-        , constraints = Set.map (modifyVariablesInP f) p.constraints
+        , constraints = Set.map (coerce $ modifyVariablesInT f) p.constraints
+        , ceilConditions = map (coerce $ modifyVariablesInT f) p.ceilConditions
         }
 
 modifyVariablesInT :: (Variable -> Variable) -> Term -> Term
 modifyVariablesInT f = cata $ \case
     VarF v -> Var (f v)
-    other -> embed other
-
-modifyVariablesInP :: (Variable -> Variable) -> Predicate -> Predicate
-modifyVariablesInP f = cata $ \case
-    EqualsTermF t1 t2 ->
-        EqualsTerm (modifyVariablesInT f t1) (modifyVariablesInT f t2)
-    InF t1 t2 ->
-        In (modifyVariablesInT f t1) (modifyVariablesInT f t2)
-    CeilF t ->
-        Ceil (modifyVariablesInT f t)
-    ExistsF v pr ->
-        Exists (f v) (modifyVariablesInP f pr)
-    ForallF v pr ->
-        Forall (f v) (modifyVariablesInP f pr)
     other -> embed other
 
 modifyVarName :: (VarName -> VarName) -> Variable -> Variable
@@ -290,9 +262,6 @@ filterTermSymbols check = cata $ \case
                         <> maybe [elemSym | check elemSym] (filter check [concatSym, elemSym] <>) rest
                 more ->
                     filter check [concatSym, elemSym] <> fromMaybe [] rest <> concat more
-
-isBottom :: Pattern -> Bool
-isBottom = (Bottom `elem`) . constraints
 
 -- | Calculate size of a term in bytes
 sizeOfTerm :: Term -> Int

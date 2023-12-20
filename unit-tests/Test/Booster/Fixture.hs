@@ -15,10 +15,11 @@ import Data.Set qualified as Set
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.Pattern.Base
+import Booster.SMT.Base
 import Booster.Syntax.Json.Internalise (trm)
 import Booster.Syntax.ParsedKore.Internalise (symb)
 
-someSort, aSubsort, differentSort, kSort, kItemSort, listSort, setSort :: Sort
+someSort, aSubsort, differentSort, kSort, kItemSort, listSort, setSort, boolSort :: Sort
 someSort = SortApp "SomeSort" []
 aSubsort = SortApp "AnotherSort" []
 differentSort = SortApp "DifferentSort" []
@@ -26,6 +27,7 @@ kSort = SortApp "SortK" []
 kItemSort = SortApp "SortKItem" []
 listSort = SortApp testKListDef.listSortName []
 setSort = SortApp testKSetDef.listSortName []
+boolSort = SortApp "SortBool" []
 
 testDefinition :: KoreDefinition
 testDefinition =
@@ -40,6 +42,7 @@ testDefinition =
                 , kSort `withSubsorts` []
                 , listSort `withSubsorts` []
                 , setSort `withSubsorts` []
+                , boolSort `withSubsorts` []
                 ]
         , symbols =
             Map.fromList
@@ -49,6 +52,10 @@ testDefinition =
                 , ("con4", con4)
                 , ("f1", f1)
                 , ("f2", f2)
+                , ("f3", f3)
+                , ("Lbl'UndsEqlsEqls'K'Und'", eqK)
+                , ("kseq", kseq)
+                , ("dotk", dotk)
                 ]
                 <> listSymbols
                 <> setSymbols
@@ -56,7 +63,7 @@ testDefinition =
         , rewriteTheory = Map.empty
         , functionEquations = Map.empty
         , simplifications = Map.empty
-        , predicateSimplifications = Map.empty
+        , ceils = Map.empty
         }
   where
     super `withSubsorts` subs =
@@ -82,13 +89,34 @@ app s = SymbolApplication s []
 inj :: Sort -> Sort -> Term -> Term
 inj = Injection
 
-con1, con2, con3, con4, f1, f2 :: Symbol
+con1, con2, con3, con4, f1, f2, f3, eqK, kseq, dotk :: Symbol
 con1 = [symb| symbol con1{}(SomeSort{}) : SomeSort{} [constructor{}()] |]
 con2 = [symb| symbol con2{}(SomeSort{}) : SomeSort{} [constructor{}()] |]
 con3 = [symb| symbol con3{}(SomeSort{}, SomeSort{}) : SomeSort{} [constructor{}()] |]
 con4 = [symb| symbol con4{}(SomeSort{}, SomeSort{}) : AnotherSort{} [constructor{}()] |]
 f1 = [symb| symbol f1{}(SomeSort{}) : SomeSort{} [function{}(), total{}()] |]
 f2 = [symb| symbol f2{}(SomeSort{}) : SomeSort{} [function{}()] |]
+f3 = [symb| symbol f3{}(SomeSort{}) : SortTestKMap{} [function{}()] |]
+eqK =
+    Symbol
+        { name = "Lbl'UndsEqlsEqls'K'Unds'"
+        , sortVars = []
+        , argSorts = [SortApp "SortK" [], SortApp "SortK" []]
+        , resultSort = SortApp "SortBool" []
+        , attributes =
+            SymbolAttributes
+                { collectionMetadata = Nothing
+                , symbolType = TotalFunction
+                , isIdem = IsNotIdem
+                , isAssoc = IsNotAssoc
+                , isMacroOrAlias = IsNotMacroOrAlias
+                , hasEvaluators = CanBeEvaluated
+                , smt = Just (SMTHook (Atom "="))
+                , hook = Nothing
+                }
+        }
+kseq = [symb| symbol kseq{}(SortKItem{}, SortK{}) : SortK{} [constructor{}()] |]
+dotk = [symb| symbol dotk{}() : SortK{} [constructor{}()] |]
 
 --------------------------------------------------------------------------------
 
@@ -119,7 +147,9 @@ emptyKMap
     , concreteKMapWithOneItemAndRest
     , symbolicKMapWithOneItem
     , symbolicKMapWithTwoItems
-    , concreteAndSymbolicKMapWithTwoItems ::
+    , concreteAndSymbolicKMapWithTwoItems
+    , functionKMapWithOneItemAndRest
+    , functionKMapWithOneItem ::
         Term
 emptyKMap = KMap testKMapDefinition [] Nothing
 concreteKMapWithOneItem =
@@ -188,6 +218,24 @@ concreteAndSymbolicKMapWithTwoItems =
             )
         ]
         Nothing
+functionKMapWithOneItemAndRest =
+    KMap
+        testKMapDefinition
+        [
+            ( [trm| f1{}() |]
+            , [trm| \dv{SortTestKMapItem{}}("value") |]
+            )
+        ]
+        (Just [trm| REST:SortTestKMap{}|])
+functionKMapWithOneItem =
+    KMap
+        testKMapDefinition
+        [
+            ( [trm| f1{}() |]
+            , [trm| B:SortTestKMapItem{} |]
+            )
+        ]
+        Nothing
 
 --------------------------------------------------------------------------------
 
@@ -210,8 +258,10 @@ listConcatSym, listElemSym, listUnitSym :: Symbol
     withMeta sym =
         sym
             { attributes = sym.attributes{collectionMetadata = Just $ KListMeta testKListDef}
-            , sortVars = sym.sortVars -- disambiguates the record update
+            , sortVars = sym.sortVars
             }
+    -- disambiguates the record update
+
     cSym =
         [symb| symbol Lbl'Unds'TestList'Unds'{}(SortTestList{}, SortTestList{}) : SortTestList{} [function{}(), total{}(), assoc{}()] |]
     eSym = [symb| symbol LblTestListItem{}(SomeSort{}) : SortTestList{} [function{}(), total{}()] |]
@@ -246,8 +296,10 @@ setConcatSym, setElemSym, setUnitSym :: Symbol
     withMeta sym =
         sym
             { attributes = sym.attributes{collectionMetadata = Just $ KSetMeta testKSetDef}
-            , sortVars = sym.sortVars -- disambiguates the record update
+            , sortVars = sym.sortVars
             }
+    -- disambiguates the record update
+
     cSym =
         [symb| symbol Lbl'Unds'TestSet'Unds'{}(SortTestSet{}, SortTestSet{}) : SortTestSet{} [function{}(), assoc{}()] |]
     eSym = [symb| symbol LblTestSetItem{}(SomeSort{}) : SortTestSet{} [function{}(), total{}()] |]

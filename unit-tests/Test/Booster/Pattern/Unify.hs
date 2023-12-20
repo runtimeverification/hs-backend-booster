@@ -125,9 +125,8 @@ constructors =
               z = var "Z" someSort
               t1 = app con3 [var "X" someSort, var "X" someSort]
               t2 = app con3 [y, z]
-           in test "Matching the same variable in a constructor (failing)" t1 t2 $
-                failed $
-                    VariableConflict (Variable someSort "X") y z
+           in test "Matching the same variable in a constructor (indeterminate)" t1 t2 $
+                remainder [(y, z)]
         ]
 
 functions :: TestTree
@@ -418,6 +417,26 @@ internalMaps =
                             )
                         ]
                         Nothing
+                    )
+                ]
+            )
+        , test
+            "Can unify {\"f()\" |-> B} with {\"f()\" |-> \"value\", ...REST}"
+            functionKMapWithOneItem
+            functionKMapWithOneItemAndRest
+            ( success
+                [
+                    ( "REST"
+                    , kmapSort
+                    , KMap
+                        testKMapDefinition
+                        []
+                        Nothing
+                    )
+                ,
+                    ( "B"
+                    , SortApp "SortTestKMapItem" []
+                    , [trm| \dv{SortTestKMapItem{}}("value") |]
                     )
                 ]
             )
