@@ -14,7 +14,7 @@ extra-deps:
   - typerep-map-0.5.0.0
   - monad-validate-1.2.0.1
   - git: https://github.com/runtimeverification/haskell-backend.git
-    commit: 798f4da84380117c63dd9dacfecc124b4b360f0a
+    commit: ca05f14b7957fec9f2a5ab3444cae01c5a76f12f
     subdirs:
       - kore
       - kore-rpc-types
