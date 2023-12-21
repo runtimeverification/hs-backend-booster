@@ -73,7 +73,7 @@ externaliseTerm = \case
     Internal.Var Internal.Variable{variableSort = iSort, variableName = iName, variableInternalType} ->
         Syntax.KJEVar
             ( varNameToId $ case variableInternalType of
-                FromExists n -> "EX" <> maybe "" (BS.pack . show) n <> iName
+                FromExists n -> maybe "" (BS.pack . show) n <> iName
                 _ -> iName
             )
             (externaliseSort iSort)

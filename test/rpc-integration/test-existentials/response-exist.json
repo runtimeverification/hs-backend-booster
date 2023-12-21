@@ -46,7 +46,7 @@
                                                     "args": [
                                                         {
                                                             "tag": "EVar",
-                                                            "name": "EXVar'Ques'Any",
+                                                            "name": "Var'Ques'Any",
                                                             "sort": {
                                                                 "tag": "SortApp",
                                                                 "name": "SortFoo",
@@ -55,7 +55,7 @@
                                                         },
                                                         {
                                                             "tag": "EVar",
-                                                            "name": "EXVar'Ques'Other",
+                                                            "name": "Var'Ques'Other",
                                                             "sort": {
                                                                 "tag": "SortApp",
                                                                 "name": "SortBaz",
