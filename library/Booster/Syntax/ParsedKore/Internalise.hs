@@ -792,9 +792,6 @@ internaliseRewriteRuleNoAlias ::
     Except DefinitionError (RewriteRule k)
 internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
     let ref = sourceRef axAttributes
-    -- prefix all variables in lhs and rhs with "Rule#" to avoid
-    -- name clashes with patterns from the user
-    -- filter out literal `Top` constraints
     lhs <- internalisePattern' FromRule ref id left
     existentials' <- fmap Set.fromList $ withExcept (DefinitionPatternError ref) $ mapM mkVar exs
     let renameVariable v
