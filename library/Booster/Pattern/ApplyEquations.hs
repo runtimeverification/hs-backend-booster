@@ -439,7 +439,12 @@ applyAtTop pref term = do
     tryBuiltins = do
         case term of
             SymbolApplication sym _sorts args
-                | Just hook <- flip Map.lookup Builtin.hooks =<< sym.attributes.hook ->
+                | Just hook <- flip Map.lookup Builtin.hooks =<< sym.attributes.hook -> do
+                    logOther (LevelOther "Simplify") $
+                        "Calling hooked function " <>
+                            fromJust sym.attributes.hook <>
+                            " for " <>
+                            renderText (pretty term)
                     either (throw . InternalError) checkChanged
                         . runExcept
                         $ hook args
@@ -448,9 +453,13 @@ applyAtTop pref term = do
     -- for the (unlikely) case that a built-in reproduces itself, we
     -- cannot blindly set the changed flag when we have applied a hook
     checkChanged :: Maybe Term -> EquationT io (Maybe Term)
-    checkChanged Nothing = pure Nothing
-    checkChanged (Just t) =
-        unless (t == term) setChanged >> pure (Just t)
+    checkChanged Nothing =
+        logOther (LevelOther "Simplify") "Hook returned no result" >> pure Nothing
+    checkChanged (Just t) = do
+        logOther (LevelOther "Simplify") . renderText $
+            "Hook returned " <> pretty t
+        unless (t == term) setChanged
+        pure (Just t)
 
     tryEquations :: EquationT io Term
     tryEquations = do

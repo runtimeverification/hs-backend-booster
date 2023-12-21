@@ -43,7 +43,7 @@ hooks =
 builtinsKEQUAL :: Map Text BuiltinFunction
 builtinsKEQUAL =
     Map.fromList
-        [ "KEQUALS.ite" ~~> iteHook
+        [ "KEQUAL.ite" ~~> iteHook
         ]
 
 iteHook :: BuiltinFunction
