@@ -167,7 +167,8 @@ respond stateVar =
         RpcTypes.Simplify req -> withContext req._module $ \(def, mLlvmLibrary, mSMTOptions) -> do
             start <- liftIO $ getTime Monotonic
             let internalised =
-                    runExcept $ internaliseTermOrPredicate DisallowAlias CheckSubsorts FromConfig Nothing def req.state.term
+                    runExcept $
+                        internaliseTermOrPredicate DisallowAlias CheckSubsorts FromConfig Nothing def req.state.term
             let mkEquationTraces
                     | doTracing =
                         Just

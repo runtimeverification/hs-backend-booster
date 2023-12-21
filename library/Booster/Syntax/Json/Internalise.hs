@@ -141,7 +141,9 @@ internalisePattern allowAlias checkSubsorts variableInternalType sortVars defini
     when (null terms) $ throwE $ NoTermFound p
 
     -- construct an AndTerm from all terms (checking sort consistency)
-    term <- andTerm p =<< mapM (internaliseTerm allowAlias checkSubsorts variableInternalType sortVars definition) terms
+    term <-
+        andTerm p
+            =<< mapM (internaliseTerm allowAlias checkSubsorts variableInternalType sortVars definition) terms
     -- internalise all predicates
     internalPs <-
         internalisePredicates allowAlias checkSubsorts variableInternalType sortVars definition predicates
