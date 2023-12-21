@@ -440,8 +440,17 @@ applyAtTop pref term = do
         case term of
             SymbolApplication sym _sorts args
                 | Just hook <- flip Map.lookup Builtin.hooks =<< sym.attributes.hook ->
-                    either (throw . InternalError) pure $ runExcept $ hook args
+                    either (throw . InternalError) checkChanged
+                        . runExcept
+                        $ hook args
             _other -> pure Nothing
+
+    -- for the (unlikely) case that a built-in reproduces itself, we
+    -- cannot blindly set the changed flag when we have applied a hook
+    checkChanged :: Maybe Term -> EquationT io (Maybe Term)
+    checkChanged Nothing = pure Nothing
+    checkChanged (Just t) =
+        unless (t == term) setChanged >> pure (Just t)
 
     tryEquations :: EquationT io Term
     tryEquations = do
