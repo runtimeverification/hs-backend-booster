@@ -60,7 +60,7 @@ iteHook args
             FalseBool -> pure $ Just elseVal
             _other -> pure Nothing
     | otherwise =
-        throwE . renderText $ "if-then-else: wrong arity " <> pretty (length args)
+        throwE . renderText $ "KEQUAL.ite: wrong arity " <> pretty (length args)
 
 -- check for simple (parameter-less) sorts
 shouldHaveSort :: Term -> SortName -> Except Text ()
