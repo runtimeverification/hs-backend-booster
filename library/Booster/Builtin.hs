@@ -18,7 +18,6 @@ import Data.Map qualified as Map
 import Data.Text (Text)
 import Prettyprinter (pretty, vsep)
 
-import Booster.Definition.Attributes.Base
 import Booster.Pattern.Base
 import Booster.Pattern.Bool
 import Booster.Pattern.Util
