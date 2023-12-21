@@ -441,10 +441,10 @@ applyAtTop pref term = do
             SymbolApplication sym _sorts args
                 | Just hook <- flip Map.lookup Builtin.hooks =<< sym.attributes.hook -> do
                     logOther (LevelOther "Simplify") $
-                        "Calling hooked function " <>
-                            fromJust sym.attributes.hook <>
-                            " for " <>
-                            renderText (pretty term)
+                        "Calling hooked function "
+                            <> fromJust sym.attributes.hook
+                            <> " for "
+                            <> renderText (pretty term)
                     either (throw . InternalError) checkChanged
                         . runExcept
                         $ hook args
