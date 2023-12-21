@@ -240,8 +240,8 @@ unify1
 ----- Variables
 -- twice the exact same variable: verify sorts are equal
 unify1
-    (Var var1@(Variable varSort1 varName1))
-    (Var var2@(Variable varSort2 varName2))
+    (Var var1@(Variable varSort1 varName1 _))
+    (Var var2@(Variable varSort2 varName2 _))
         -- same variable: forbidden!
         | var1 == var2 =
             internalError $ "Shared variable: " <> show var1

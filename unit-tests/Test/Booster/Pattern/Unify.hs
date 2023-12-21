@@ -176,7 +176,7 @@ varsAndValues =
         , let v1 = var "X" someSort
               v2 = var "X" differentSort
            in test "same variable name, different sort" v1 v2 $
-                failed (VariableConflict (Variable someSort "X") v1 v2)
+                failed (VariableConflict (Variable someSort "X" FromConfig) v1 v2)
         , let d1 = dv someSort "1"
               d2 = dv someSort "1"
            in test "same domain values (same sort)" d1 d2 $
@@ -463,7 +463,7 @@ success :: [(VarName, Sort, Term)] -> UnificationResult
 success assocs =
     UnificationSuccess $
         Map.fromList
-            [ (Variable{variableSort, variableName}, term)
+            [ (Variable{variableSort, variableName, variableInternalType = FromConfig}, term)
             | (variableName, variableSort, term) <- assocs
             ]
 

@@ -10,6 +10,7 @@ module Booster.Pattern.Util (
     substituteInPredicate,
     modifyVariables,
     modifyVariablesInT,
+    -- modifyVariablesInP,
     modifyVarName,
     modifyVarNameConcreteness,
     freeVariables,
@@ -125,7 +126,7 @@ abstractTerm :: Set Variable -> Term -> (Term, Term)
 abstractTerm vs term =
     let
         varName = BS.pack . map (fromIntegral . ord) $ "HSVAR" <> show (abs (getAttributes term).hash)
-        var = Variable (sortOfTerm term) varName
+        var = Variable (sortOfTerm term) varName (FromExists Nothing)
      in
         (Var (freshenVar var vs), term)
 
@@ -159,6 +160,20 @@ abstractSymbolicConstructorArguments constructorNames term = goSubst (freeVariab
                 (bimap (goSubst freeVars) (map (goSubst freeVars)) <$> rest)
         KSet def elements rest ->
             KSet def (map (goSubst freeVars) elements) (goSubst freeVars <$> rest)
+
+-- modifyVariablesInP :: (Variable -> Variable) -> Predicate -> Predicate
+-- modifyVariablesInP f = cata $ \case
+--     -- EqualsTermF t1 t2 ->
+--     --     EqualsTerm (modifyVariablesInT f t1) (modifyVariablesInT f t2)
+--     InF t1 t2 ->
+--         In (modifyVariablesInT f t1) (modifyVariablesInT f t2)
+--     CeilF t ->
+--         Ceil (modifyVariablesInT f t)
+--     ExistsF v pr ->
+--         Exists (f v) (modifyVariablesInP f pr)
+--     ForallF v pr ->
+--         Forall (f v) (modifyVariablesInP f pr)
+--     other -> embed other
 
 modifyVarNameConcreteness :: (ByteString -> ByteString) -> Concreteness -> Concreteness
 modifyVarNameConcreteness f = \case

@@ -29,7 +29,6 @@ import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Sequence (Seq, (|>))
-import Data.Set qualified as Set
 import Data.Text as Text (Text, pack, unlines)
 import Numeric.Natural
 import Prettyprinter
@@ -49,9 +48,11 @@ import Booster.Pattern.Bool
 import Booster.Pattern.Index (TermIndex (..), kCellTermIndex)
 import Booster.Pattern.Unify
 import Booster.Pattern.Util
+
 import Booster.Prettyprinter
 import Booster.SMT.Interface qualified as SMT
 import Data.Coerce (coerce)
+import Data.Set qualified as Set
 
 newtype RewriteT io err a = RewriteT
     {unRewriteT :: ReaderT RewriteConfig (StateT SimplifierCache (ExceptT err io)) a}

@@ -34,6 +34,7 @@ import System.Clock (Clock (Monotonic), TimeSpec, diffTimeSpec, getTime, toNanoS
 import Booster.Definition.Base (KoreDefinition)
 import Booster.JsonRpc as Booster (ServerState (..), execStateToKoreJson, toExecState)
 import Booster.JsonRpc.Utils (diffBy)
+import Booster.Pattern.Base qualified as Booster
 import Booster.Syntax.Json.Internalise
 import Kore.Attribute.Symbol (StepperAttributes)
 import Kore.IndexedModule.MetadataTools (SmtMetadataTools)
@@ -399,6 +400,7 @@ respondEither cfg@ProxyConfig{statsVar, boosterState} booster kore req = case re
                                     internalisePattern
                                         DisallowAlias
                                         IgnoreSubsorts
+                                        Booster.FromConfig
                                         Nothing
                                         def
                                         simplified.state.term

@@ -212,7 +212,7 @@ unifyNotMatch =
             -- "non-match" substitution:
             subst =
                 Map.fromList
-                    [ (Variable someSort "X", dv someSort "otherThing")
+                    [ (Variable someSort "X" FromConfig, dv someSort "otherThing")
                     ]
         [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con3{}( X:SomeSort{}, \dv{SomeSort{}}("thing") ) ), ConfigVar:SortK{}) ) |]
             `failsWith` UnificationIsNotMatch rule3 t subst

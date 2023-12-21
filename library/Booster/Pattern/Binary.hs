@@ -264,7 +264,7 @@ decodeBlock mbSize = do
             KOREVariable -> do
                 var <- decodeString
                 [sort] <- popStackSorts 1
-                pushStack $ BTerm $ Var $ Variable sort var
+                pushStack $ BTerm $ Var $ Variable sort var FromConfig
             h -> fail $ "Invalid header " <> show h
 
     getStack
@@ -464,7 +464,7 @@ encodeSort = \case
 
 encodeTerm :: Term -> Put
 encodeTerm = \case
-    Var (Variable sort name) -> do
+    Var (Variable sort name _) -> do
         encodeSort sort
         putWord8 KOREVariablePattern
         putWord8 KOREVariable

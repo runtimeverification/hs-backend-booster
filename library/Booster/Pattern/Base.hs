@@ -45,6 +45,7 @@ import Data.Set qualified as Set
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics (Generic)
+import GHC.Natural (Natural)
 import Language.Haskell.TH.Syntax (Lift (..))
 import Prettyprinter (Pretty (..))
 import Prettyprinter qualified as Pretty
@@ -73,10 +74,15 @@ pattern SortSet = SortApp "SortSet" []
 pattern SortMap = SortApp "SortMap" []
 pattern SortBytes = SortApp "SortBytes" []
 
+data VarType = FromConfig | FromRule | FromExists (Maybe Natural)
+    deriving stock (Eq, Ord, Show, Generic, Data, Lift)
+    deriving anyclass (NFData, Hashable)
+
 -- | A variable for symbolic execution or for terms in a rule.
 data Variable = Variable
     { variableSort :: Sort
     , variableName :: VarName
+    , variableInternalType :: VarType
     }
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)

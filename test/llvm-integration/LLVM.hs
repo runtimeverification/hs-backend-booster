@@ -140,7 +140,7 @@ latin1Prop api = property $ do
     fromSyntacticString =
         either (error . show) id
             . runExcept
-            . Syntax.internaliseTerm AllowAlias IgnoreSubsorts Nothing testDef
+            . Syntax.internaliseTerm AllowAlias IgnoreSubsorts FromConfig Nothing testDef
             . Syntax.KJDV syntaxStringSort
     syntaxStringSort :: Syntax.Sort
     syntaxStringSort = Syntax.SortApp (Syntax.Id "SortString") []

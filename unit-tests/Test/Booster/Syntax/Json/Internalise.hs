@@ -48,7 +48,7 @@ testBasicPredicates =
                 notAndCeil
         ]
   where
-    internaliseAll = internalisePredicates DisallowAlias IgnoreSubsorts Nothing testDefinition
+    internaliseAll = internalisePredicates DisallowAlias IgnoreSubsorts FromConfig Nothing testDefinition
     internalise = internaliseAll . (: [])
 
     shouldBeBool name pat expected =
@@ -113,14 +113,14 @@ testSubstitutions =
         testCase name $
             Right expected @=? internalise [syntax]
     internalise =
-        runExcept . internalisePredicates DisallowAlias IgnoreSubsorts Nothing testDefinition
+        runExcept . internalisePredicates DisallowAlias IgnoreSubsorts FromConfig Nothing testDefinition
 
     var' name = KJEVar (Id name) someSort'
     app' sym = KJApp (Id sym) []
 
     hasSubstitution pairs =
         let expectedSubstitution =
-                Map.fromList [(Variable someSort v, t) | (v, t) <- pairs]
+                Map.fromList [(Variable someSort v FromConfig, t) | (v, t) <- pairs]
          in InternalisedPredicates mempty mempty expectedSubstitution mempty
 
     hasEquations pairs =

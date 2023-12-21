@@ -31,6 +31,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readProcessWithExitCode)
 
 import Booster.Definition.Base qualified as Internal
+import Booster.Pattern.Base (VarType (..))
 import Booster.Prettyprinter
 import Booster.Syntax.Json.Internalise
 import Data.Map qualified as Map
@@ -259,4 +260,4 @@ diffBy def pat1 pat2 =
             (("Pattern could not be internalised: " <>) . Json.encode)
             renderBS
             . runExcept
-            . internaliseTermOrPredicate DisallowAlias IgnoreSubsorts Nothing def
+            . internaliseTermOrPredicate DisallowAlias IgnoreSubsorts FromConfig Nothing def

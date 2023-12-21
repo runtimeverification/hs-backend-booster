@@ -9,6 +9,7 @@ module Main (
     main,
 ) where
 
+import Booster.Pattern.Base (VarType (..))
 import Booster.Prettyprinter (renderDefault)
 import Booster.Syntax.Json (KoreJson (..))
 import Booster.Syntax.Json.Internalise (
@@ -38,5 +39,5 @@ main = do
             let (trm, _subst, _unsupported) =
                     either (error . show) id $
                         runExcept $
-                            internalisePattern DisallowAlias CheckSubsorts Nothing internalDef term
+                            internalisePattern DisallowAlias CheckSubsorts FromConfig Nothing internalDef term
             putStrLn $ renderDefault $ pretty trm

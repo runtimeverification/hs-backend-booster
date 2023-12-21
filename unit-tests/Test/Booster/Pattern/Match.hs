@@ -91,7 +91,7 @@ composite =
               pat = app con3 [var "X" someSort, var "X" someSort] -- same!
               subj = app con3 [a, b]
            in test "Matching two constructor argument to be the same (failing)" pat subj $
-                failed (VariableConflict (Variable someSort "X") a b)
+                failed (VariableConflict (Variable someSort "X" FromConfig) a b)
         ]
 
 varsAndValues :: TestTree
@@ -233,7 +233,7 @@ success :: [(VarName, Sort, Term)] -> MatchResult
 success assocs =
     MatchSuccess $
         Map.fromList
-            [ (Variable{variableSort, variableName}, term)
+            [ (Variable{variableSort, variableName, variableInternalType = FromConfig}, term)
             | (variableName, variableSort, term) <- assocs
             ]
 

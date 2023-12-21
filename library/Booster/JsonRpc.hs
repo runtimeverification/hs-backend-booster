@@ -47,6 +47,7 @@ import Booster.Pattern.ApplyEquations qualified as ApplyEquations
 import Booster.Pattern.Base (
     Pattern (..),
     Term,
+    VarType (..),
     Variable,
  )
 import Booster.Pattern.Base qualified as Pattern
@@ -96,7 +97,7 @@ respond stateVar =
         RpcTypes.Execute req -> withContext req._module $ \(def, mLlvmLibrary, mSMTOptions) -> do
             start <- liftIO $ getTime Monotonic
             -- internalise given constrained term
-            let internalised = runExcept $ internalisePattern DisallowAlias CheckSubsorts Nothing def req.state.term
+            let internalised = runExcept $ internalisePattern DisallowAlias CheckSubsorts FromConfig Nothing def req.state.term
 
             case internalised of
                 Left patternError -> do
@@ -166,7 +167,7 @@ respond stateVar =
         RpcTypes.Simplify req -> withContext req._module $ \(def, mLlvmLibrary, mSMTOptions) -> do
             start <- liftIO $ getTime Monotonic
             let internalised =
-                    runExcept $ internaliseTermOrPredicate DisallowAlias CheckSubsorts Nothing def req.state.term
+                    runExcept $ internaliseTermOrPredicate DisallowAlias CheckSubsorts FromConfig Nothing def req.state.term
             let mkEquationTraces
                     | doTracing =
                         Just
@@ -283,7 +284,7 @@ respond stateVar =
             (def, _, Just smtOptions) -> do
                 let internalised =
                         runExcept $
-                            internaliseTermOrPredicate DisallowAlias CheckSubsorts Nothing def req.state.term
+                            internaliseTermOrPredicate DisallowAlias CheckSubsorts FromConfig Nothing def req.state.term
                 case internalised of
                     Left patternErrors -> do
                         Log.logErrorNS "booster" $
