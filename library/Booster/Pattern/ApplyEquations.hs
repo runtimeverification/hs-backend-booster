@@ -49,6 +49,7 @@ import Data.Text (Text, pack)
 import Data.Text qualified as Text
 import Prettyprinter
 
+import Booster.Builtin as Builtin
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.LLVM
@@ -425,25 +426,37 @@ applyTerm direction pref trm = do
    top-level term, in priority order and per group.
 -}
 applyAtTop ::
+    forall io.
     MonadLoggerIO io =>
     EquationPreference ->
     Term ->
     EquationT io Term
 applyAtTop pref term = do
-    def <- (.definition) <$> getConfig
-    case pref of
-        PreferFunctions -> do
-            -- when applying equations, we want to catch DoesNotPreserveDefinedness/incosistentmatch/etc
-            -- to do with functions, so as not to abort the entire simplification run
-            fromFunctions <- applyEquations def.functionEquations handleFunctionEquation term
-            if fromFunctions == term
-                then applyEquations def.simplifications handleSimplificationEquation term
-                else pure fromFunctions
-        PreferSimplifications -> do
-            simplified <- applyEquations def.simplifications handleSimplificationEquation term
-            if simplified == term
-                then applyEquations def.functionEquations handleFunctionEquation term
-                else pure simplified
+    -- always try built-in (hooked) functions first, then equations
+    fromMaybeM tryEquations tryBuiltins
+  where
+    tryBuiltins :: EquationT io (Maybe Term)
+    tryBuiltins = do
+        case term of
+            SymbolApplication sym _sorts args
+                | Just hook <- flip Map.lookup Builtin.hooks =<< sym.attributes.hook ->
+                    either (throw . InternalError) pure $ runExcept $ hook args
+            _other -> pure Nothing
+
+    tryEquations :: EquationT io Term
+    tryEquations = do
+        def <- (.definition) <$> getConfig
+        case pref of
+            PreferFunctions -> do
+                fromFunctions <- applyEquations def.functionEquations handleFunctionEquation term
+                if fromFunctions == term
+                    then applyEquations def.simplifications handleSimplificationEquation term
+                    else pure fromFunctions
+            PreferSimplifications -> do
+                simplified <- applyEquations def.simplifications handleSimplificationEquation term
+                if simplified == term
+                    then applyEquations def.functionEquations handleFunctionEquation term
+                    else pure simplified
 
 data ApplyEquationResult
     = Success Term

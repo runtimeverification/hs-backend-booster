@@ -8,8 +8,7 @@ Built-in functions are looked up by their symbol attribute 'hook' from
 the definition's symbol map.
 -}
 module Booster.Builtin (
-    BuiltinFunction,
-    builtinMap,
+    hooks,
 ) where
 
 import Control.Monad
@@ -29,12 +28,8 @@ import Booster.Prettyprinter
 -- partial (returning a Maybe type)
 type BuiltinFunction = [Term] -> Except Text (Maybe Term)
 
-builtinMap :: Map SymbolName Symbol -> Map SymbolName BuiltinFunction
-builtinMap =
-    Map.mapMaybe (\sym -> flip Map.lookup builtins =<< sym.attributes.hook)
-
-builtins :: Map Text BuiltinFunction
-builtins =
+hooks :: Map Text BuiltinFunction
+hooks =
     Map.unions
         [ builtinsKEQUAL
         ]
