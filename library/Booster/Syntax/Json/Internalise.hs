@@ -256,9 +256,17 @@ internaliseTermRaw qq allowAlias checkSubsorts sortVars definition@KoreDefinitio
             when (not (coerce allowAlias) && coerce symbol.attributes.isMacroOrAlias) $
                 throwE $
                     MacroOrAliasSymbolNotAllowed name symPatt
+            when (length symbol.argSorts /= length args) $
+                throwE $
+                    IncorrectSymbolArity pat name (length symbol.argSorts) (length args)
+            args' <- mapM recursion args
+            forM_ (zip args $ zip symbol.argSorts $ map sortOfTerm args') $ \(t, (expected, got)) ->
+                when (expected /= got) $
+                    throwE $
+                        PatternSortError t $ IncorrectSort expected got
             Internal.SymbolApplication symbol
                 <$> mapM lookupInternalSort' appSorts
-                <*> mapM recursion args
+                <*> pure args'
         Syntax.KJString{value} ->
             pure $ Internal.DomainValue (Internal.SortApp "SortString" []) $ textToBS value
         Syntax.KJTop{} -> predicate
@@ -623,6 +631,7 @@ data PatternError
     | UnknownSymbol Syntax.Id Syntax.KorePattern
     | MacroOrAliasSymbolNotAllowed Syntax.Id Syntax.KorePattern
     | SubstitutionNotAllowed
+    | IncorrectSymbolArity Syntax.KorePattern Syntax.Id Int Int
     deriving stock (Eq, Show)
 
 {- | ToJson instance (user-facing):
@@ -655,6 +664,8 @@ instance ToJSON PatternError where
         MacroOrAliasSymbolNotAllowed sym p ->
             wrap ("Symbol '" <> Syntax.getId sym <> "' is a macro/alias") p
         SubstitutionNotAllowed -> "Substitution predicates are not allowed here"
+        IncorrectSymbolArity p s expected got ->
+            wrap ("Inconsistent pattern. Symbol '" <> Syntax.getId s <> "' expected " <> (pack $ show expected) <> " arguments but got " <> (pack $ show got)) p
       where
         wrap :: Text -> Syntax.KorePattern -> Value
         wrap msg p = object ["error" .= msg, "context" .= toJSON [p]]
@@ -665,6 +676,7 @@ data SortError
     | IncompatibleSorts [Syntax.Sort]
     | NotSubsort Internal.Sort Internal.Sort
     | GeneralError Text
+    | IncorrectSort Internal.Sort Internal.Sort
     deriving stock (Eq, Show)
 
 renderSortError :: SortError -> Text
@@ -682,6 +694,11 @@ renderSortError = \case
         prettyText source <> " is not a subsort of " <> prettyText target
     GeneralError msg ->
         msg
+    IncorrectSort expected got ->
+        "Incorrect sort: expected "
+            <> prettyText expected
+            <> " but got "
+            <> prettyText got
   where
     prettyText = pack . renderDefault . pretty
 
