@@ -266,7 +266,8 @@ internaliseTermRaw qq allowAlias checkSubsorts sortVars definition@KoreDefinitio
                 forM_ (zip args $ zip (map (substituteInSort sub) symbol.argSorts) $ map sortOfTerm args') $ \(t, (expected, got)) ->
                     unless (expected == got) $
                         throwE $
-                            PatternSortError t $ IncorrectSort expected got
+                            PatternSortError t $
+                                IncorrectSort expected got
             pure $ Internal.SymbolApplication symbol appSorts' args'
         Syntax.KJString{value} ->
             pure $ Internal.DomainValue (Internal.SortApp "SortString" []) $ textToBS value
@@ -667,7 +668,15 @@ instance ToJSON PatternError where
             wrap ("Symbol '" <> Syntax.getId sym <> "' is a macro/alias") p
         SubstitutionNotAllowed -> "Substitution predicates are not allowed here"
         IncorrectSymbolArity p s expected got ->
-            wrap ("Inconsistent pattern. Symbol '" <> Syntax.getId s <> "' expected " <> (pack $ show expected) <> " arguments but got " <> (pack $ show got)) p
+            wrap
+                ( "Inconsistent pattern. Symbol '"
+                    <> Syntax.getId s
+                    <> "' expected "
+                    <> (pack $ show expected)
+                    <> " arguments but got "
+                    <> (pack $ show got)
+                )
+                p
       where
         wrap :: Text -> Syntax.KorePattern -> Value
         wrap msg p = object ["error" .= msg, "context" .= toJSON [p]]
