@@ -304,7 +304,6 @@ internaliseTermRaw qq allowAlias checkSubsorts sortVars definition@KoreDefinitio
             recursion $ foldr1 (mkF symbol argSorts) argss
   where
     predicate = throwE $ TermExpected pat
-    -- substituteSortVars
 
     lookupInternalSort' sort =
         if coerce qq
