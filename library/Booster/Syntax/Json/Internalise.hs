@@ -65,7 +65,7 @@ import Booster.Definition.Attributes.Base qualified as Internal
 import Booster.Definition.Base (KoreDefinition (..), emptyKoreDefinition)
 import Booster.Pattern.Base qualified as Internal
 import Booster.Pattern.Bool qualified as Internal
-import Booster.Pattern.Util (freeVariables, sortOfTerm)
+import Booster.Pattern.Util (freeVariables, sortOfTerm, substituteInSort)
 import Booster.Prettyprinter (renderDefault)
 import Booster.Syntax.Json.Externalise (externaliseSort)
 import Booster.Syntax.ParsedKore.Parser (parsePattern)
@@ -256,17 +256,18 @@ internaliseTermRaw qq allowAlias checkSubsorts sortVars definition@KoreDefinitio
             when (not (coerce allowAlias) && coerce symbol.attributes.isMacroOrAlias) $
                 throwE $
                     MacroOrAliasSymbolNotAllowed name symPatt
-            when (length symbol.argSorts /= length args) $
+            unless (coerce qq || length symbol.argSorts == length args) $
                 throwE $
                     IncorrectSymbolArity pat name (length symbol.argSorts) (length args)
             args' <- mapM recursion args
-            forM_ (zip args $ zip symbol.argSorts $ map sortOfTerm args') $ \(t, (expected, got)) ->
-                when (expected /= got) $
-                    throwE $
-                        PatternSortError t $ IncorrectSort expected got
-            Internal.SymbolApplication symbol
-                <$> mapM lookupInternalSort' appSorts
-                <*> pure args'
+            appSorts' <- mapM lookupInternalSort' appSorts
+            let sub = Map.fromList $ zip symbol.sortVars appSorts'
+            unless (coerce qq) $
+                forM_ (zip args $ zip (map (substituteInSort sub) symbol.argSorts) $ map sortOfTerm args') $ \(t, (expected, got)) ->
+                    unless (expected == got) $
+                        throwE $
+                            PatternSortError t $ IncorrectSort expected got
+            pure $ Internal.SymbolApplication symbol appSorts' args'
         Syntax.KJString{value} ->
             pure $ Internal.DomainValue (Internal.SortApp "SortString" []) $ textToBS value
         Syntax.KJTop{} -> predicate
@@ -302,6 +303,7 @@ internaliseTermRaw qq allowAlias checkSubsorts sortVars definition@KoreDefinitio
             recursion $ foldr1 (mkF symbol argSorts) argss
   where
     predicate = throwE $ TermExpected pat
+    -- substituteSortVars
 
     lookupInternalSort' sort =
         if coerce qq
