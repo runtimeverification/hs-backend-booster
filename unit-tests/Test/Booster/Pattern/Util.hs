@@ -4,6 +4,7 @@ module Test.Booster.Pattern.Util (
 ) where
 
 import Data.Map qualified as Map
+import Data.Set qualified as Set
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -36,8 +37,16 @@ test_freshen :: TestTree
 test_freshen =
     testGroup
         "Variable renaming"
-        [ testCase "" $ incrementNameCounter "Var'Ques'X" @?= "Var'Ques'X0"
-        , testCase "" $ incrementNameCounter "Var'Ques'X0" @?= "Var'Ques'X1"
+        [ testGroup
+            "Name-embedded variable counter increment"
+            [ testCase "No counter gets 0 as counter" $ incrementNameCounter "Var'Ques'X" @?= "Var'Ques'X0"
+            , testCase "0 counter gets incremented" $ incrementNameCounter "Var'Ques'X0" @?= "Var'Ques'X1"
+            ]
+        , testGroup
+            "Variable name freshening by updating counter"
+            [ testCase "" $ freshenVar (Variable someSort "X") (Set.fromList []) @?= Variable someSort "X"
+            , testCase "" $ freshenVar (Variable someSort "X1") (Set.fromList [Variable someSort "X1"]) @?= Variable someSort "X2"
+            ]
         ]
 
 ----------------------------------------

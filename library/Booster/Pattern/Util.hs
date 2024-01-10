@@ -46,7 +46,6 @@ import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Debug.Trace qualified as Debug
 
 import Booster.Definition.Attributes.Base (
     Concreteness (..),
@@ -129,8 +128,7 @@ stripVarOriginPrefix name =
 
 freshenVar :: Variable -> Set Variable -> Variable
 freshenVar v@Variable{variableName = vn} vs
-    -- \| v `Set.member` vs = freshenVar v vs
-    | v `Set.member` vs = Debug.trace (show v) $ freshenVar v{variableName = incrementNameCounter vn} vs
+    | v `Set.member` vs = freshenVar v{variableName = incrementNameCounter vn} vs
     | otherwise = v
 
 incrementNameCounter :: VarName -> VarName
