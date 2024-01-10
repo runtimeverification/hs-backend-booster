@@ -45,7 +45,9 @@ test_freshen =
         , testGroup
             "Variable name freshening by updating counter"
             [ testCase "" $ freshenVar (Variable someSort "X") (Set.fromList []) @?= Variable someSort "X"
-            , testCase "" $ freshenVar (Variable someSort "X1") (Set.fromList [Variable someSort "X1"]) @?= Variable someSort "X2"
+            , testCase "" $
+                freshenVar (Variable someSort "X1") (Set.fromList [Variable someSort "X1"])
+                    @?= Variable someSort "X2"
             ]
         ]
 
