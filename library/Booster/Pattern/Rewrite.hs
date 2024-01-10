@@ -335,10 +335,11 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
 
     refreshExistentials subst =
         let freeVars = Set.unions . map freeVariables . Map.elems $ subst
-         in subst
-                `Map.union` Map.fromSet
+            refreshedVars =
+                Map.fromSet
                     (\v -> Var $ freshenVar v{variableName = stripVarOriginPrefix v.variableName} freeVars)
                     rule.existentials
+         in subst `Map.union` refreshedVars
 
     checkConstraint ::
         (Predicate -> a) ->

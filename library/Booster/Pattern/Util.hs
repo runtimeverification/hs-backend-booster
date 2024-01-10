@@ -30,6 +30,7 @@ module Booster.Pattern.Util (
     cellSymbolStats,
     cellVariableStats,
     stripVarOriginPrefix,
+    incrementNameCounter,
 ) where
 
 import Control.Applicative ((<|>))
@@ -37,7 +38,7 @@ import Data.Attoparsec.ByteString.Char8 qualified as A
 import Data.Bifunctor (bimap, first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
-import Data.Char (chr, isDigit, ord)
+import Data.Char (ord)
 import Data.Coerce (coerce)
 import Data.Functor.Foldable (Corecursive (embed), cata)
 import Data.Map (Map)
@@ -45,6 +46,7 @@ import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
+import Debug.Trace qualified as Debug
 
 import Booster.Definition.Attributes.Base (
     Concreteness (..),
@@ -127,14 +129,18 @@ stripVarOriginPrefix name =
 
 freshenVar :: Variable -> Set Variable -> Variable
 freshenVar v@Variable{variableName = vn} vs
-    | v `Set.member` vs = freshenVar v{variableName = incrementNameCounter vn} vs
+    -- \| v `Set.member` vs = freshenVar v vs
+    | v `Set.member` vs = Debug.trace (show v) $ freshenVar v{variableName = incrementNameCounter vn} vs
     | otherwise = v
-  where
-    incrementNameCounter :: VarName -> VarName
-    incrementNameCounter vname =
-        let (name, counter) = BS.spanEnd (isDigit . chr . fromIntegral) vname
-            newCounter = fromMaybe (0 :: Int) $ A.maybeResult $ A.parse A.decimal counter
-         in name <> (BS.pack . map (fromIntegral . ord) . show) newCounter
+
+incrementNameCounter :: VarName -> VarName
+incrementNameCounter vname =
+    let (name, counter) = BS.spanEnd A.isDigit_w8 vname
+        parsedCounter = A.parseOnly @Int A.decimal counter
+        newCounter = case parsedCounter of
+            Right ok -> ok + 1
+            Left _err -> 0
+     in name <> (BS.pack . map (fromIntegral . ord) . show) newCounter
 
 {- | Abstract a term into a variable, making sure the variable name is disjoint from the given set of variables.
      Return the resulting singleton substitution.

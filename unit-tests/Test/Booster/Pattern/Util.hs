@@ -1,5 +1,6 @@
 module Test.Booster.Pattern.Util (
     test_subst,
+    test_freshen,
 ) where
 
 import Data.Map qualified as Map
@@ -29,6 +30,14 @@ test_subst =
             (Map.fromList [(Variable someSort "X", app con1 [var "Y" someSort])])
             (AndTerm (app con1 [var "X" someSort]) (app con1 [var "Y" someSort]))
             (AndTerm (app con1 [app con1 [var "Y" someSort]]) (app con1 [var "Y" someSort]))
+        ]
+
+test_freshen :: TestTree
+test_freshen =
+    testGroup
+        "Variable renaming"
+        [ testCase "" $ incrementNameCounter "Var'Ques'X" @?= "Var'Ques'X0"
+        , testCase "" $ incrementNameCounter "Var'Ques'X0" @?= "Var'Ques'X1"
         ]
 
 ----------------------------------------
