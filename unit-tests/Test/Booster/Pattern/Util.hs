@@ -44,7 +44,8 @@ test_freshen =
             ]
         , testGroup
             "Variable name freshening by updating counter"
-            [ testCase "No renaming when there's nothing to rename" $ freshenVar (Variable someSort "X") (Set.fromList []) @?= Variable someSort "X"
+            [ testCase "No renaming when there's nothing to rename" $
+                freshenVar (Variable someSort "X") (Set.fromList []) @?= Variable someSort "X"
             , testCase "One variable gets renamed" $
                 freshenVar (Variable someSort "X1") (Set.fromList [Variable someSort "X1"])
                     @?= Variable someSort "X2"
