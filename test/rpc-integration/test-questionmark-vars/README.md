@@ -64,3 +64,31 @@ transition rules that unconditionally introduce a fresh variable in the configur
    <a-state> ?X           </a-state>
    <b-state> ?X0          </b-state>
 ```
+
+4) _two-ques-internal_
+
+   Both variables already have counters, and the first one is rewritten twice. The responses for `kore-rpc-booster` and `kore-rpc-dev` diverge, highlighting the difference in variable freshening mechanisms in Booster and Kore.
+
+   _Input:_
+
+```
+   <k> #setAStateSymbolic ~> #setAStateSymbolic </k>
+   <a-state> ?X0           </a-state>
+   <b-state> ?X1       </b-state>
+```
+
+   _Expected kore-rpc-booster:_
+
+```
+   <k> .K                 </k>
+   <a-state> ?X0           </a-state>
+   <b-state> ?X1          </b-state>
+```
+
+   _Expected kore-rpc-dev:_
+
+```
+   <k> .K                 </k>
+   <a-state> ?X2          </a-state>
+   <b-state> ?X1          </b-state>
+```
