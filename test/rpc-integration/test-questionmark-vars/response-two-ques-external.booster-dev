@@ -2,7 +2,7 @@
     "jsonrpc": "2.0",
     "id": 1,
     "result": {
-        "reason": "stuck",
+        "reason": "aborted",
         "depth": 1,
         "state": {
             "term": {
@@ -48,10 +48,13 @@
                             "sorts": [],
                             "args": [
                                 {
-                                    "tag": "App",
-                                    "name": "Lbl'Stop'State'Unds'QUESTIONMARK-VARS'Unds'State",
-                                    "sorts": [],
-                                    "args": []
+                                    "tag": "EVar",
+                                    "name": "Var'Ques'X0",
+                                    "sort": {
+                                        "tag": "SortApp",
+                                        "name": "SortState",
+                                        "args": []
+                                    }
                                 }
                             ]
                         },
@@ -72,6 +75,48 @@
                             ]
                         }
                     ]
+                }
+            },
+            "predicate": {
+                "format": "KORE",
+                "version": 1,
+                "term": {
+                    "tag": "Equals",
+                    "argSort": {
+                        "tag": "SortApp",
+                        "name": "SortBool",
+                        "args": []
+                    },
+                    "sort": {
+                        "tag": "SortApp",
+                        "name": "SortGeneratedTopCell",
+                        "args": []
+                    },
+                    "first": {
+                        "tag": "DV",
+                        "sort": {
+                            "tag": "SortApp",
+                            "name": "SortBool",
+                            "args": []
+                        },
+                        "value": "true"
+                    },
+                    "second": {
+                        "tag": "App",
+                        "name": "Lblcondition'LParUndsRParUnds'QUESTIONMARK-VARS'Unds'Bool'Unds'State",
+                        "sorts": [],
+                        "args": [
+                            {
+                                "tag": "EVar",
+                                "name": "Var'Ques'X0",
+                                "sort": {
+                                    "tag": "SortApp",
+                                    "name": "SortState",
+                                    "args": []
+                                }
+                            }
+                        ]
+                    }
                 }
             }
         }

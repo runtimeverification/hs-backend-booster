@@ -2,7 +2,7 @@
     "jsonrpc": "2.0",
     "id": 1,
     "result": {
-        "reason": "stuck",
+        "reason": "aborted",
         "depth": 2,
         "state": {
             "term": {
@@ -33,7 +33,7 @@
                             "args": [
                                 {
                                     "tag": "EVar",
-                                    "name": "Var'Ques'X2",
+                                    "name": "Var'Ques'X",
                                     "sort": {
                                         "tag": "SortApp",
                                         "name": "SortState",
@@ -49,7 +49,7 @@
                             "args": [
                                 {
                                     "tag": "EVar",
-                                    "name": "Var'Ques'X1",
+                                    "name": "Var'Ques'X0",
                                     "sort": {
                                         "tag": "SortApp",
                                         "name": "SortState",
@@ -154,7 +154,7 @@
                                 "args": [
                                     {
                                         "tag": "EVar",
-                                        "name": "Var'Ques'X2",
+                                        "name": "Var'Ques'X0",
                                         "sort": {
                                             "tag": "SortApp",
                                             "name": "SortState",
