@@ -320,26 +320,30 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
             Just False -> RewriteRuleAppT $ pure Trivial
             _other -> pure ()
 
-    let refreshedSubst = refreshExistentials subst
+    -- existential variables may be present in rule.rhs and rule.ensures,
+    -- need to strip prefixes and freshen their names with respect to variables already
+    -- present in the substitution
+    let varsFromSubst = Set.unions . map freeVariables . Map.elems $ subst
+        existentialSubst =
+            Map.fromSet
+                (\v -> Var $ freshenVar v{variableName = stripVarOriginPrefix v.variableName} varsFromSubst)
+                rule.existentials
+
+    -- modify the substitution to include the existentials
+    let substWithExistentials = subst `Map.union` existentialSubst
+
     let rewritten =
             Pattern
-                (substituteInTerm refreshedSubst rule.rhs)
+                (substituteInTerm substWithExistentials rule.rhs)
                 -- adding new constraints that have not been trivially `Top`
-                ( Set.fromList newConstraints
-                    <> Set.map (coerce . substituteInTerm refreshedSubst . coerce) pat.constraints
+                ( Set.map
+                    (coerce . substituteInTerm substWithExistentials . coerce)
+                    (pat.constraints <> Set.fromList newConstraints)
                 )
-                (map (coerce . substituteInTerm refreshedSubst . coerce) ceilConditions)
+                (map (coerce . substituteInTerm substWithExistentials . coerce) ceilConditions)
     return (rule, rewritten)
   where
     failRewrite = lift . throw
-
-    refreshExistentials subst =
-        let freeVars = Set.unions . map freeVariables . Map.elems $ subst
-            refreshedVars =
-                Map.fromSet
-                    (\v -> Var $ freshenVar v{variableName = stripVarOriginPrefix v.variableName} freeVars)
-                    rule.existentials
-         in subst `Map.union` refreshedVars
 
     checkConstraint ::
         (Predicate -> a) ->
