@@ -19,10 +19,12 @@ The client can then build a prover based on this API by chosing how to store and
 Once the server is started with the rules for a given semanics, the execute end-point expects a configuration composed of a `Term`, reperesenting the state of execution in a given semantics, along with boolean `Predicate`s/constraints imposed upon any symbolic parts of the state. Given this state, the server will apply semantic rules to the configuration, until either:
 
 * no more rules apply
-* a user specified break point is reached, based on a specific semantic rule
+* a user specified break point is reached, based on a specific semantic rule or specified depth
+* all applicable rules have a constraint/set of contraints which simplify to false/bottom
+* a branch occurs, i.e. more than one rule applies
 * the booster cannot decide if a rule should apply
 
-We will go into much more detail on how the execute endoint works and which situations it fails in. For a general overview of what happens when an execute request is received, see this diagram:
+We will go into much more detail on how the execute endpoint works and which situations it fails in. For a general overview of what happens when an execute request is received, see this diagram:
 
 
 ```
@@ -122,3 +124,83 @@ _Note: The old backend works with predicates at the ML level and may return some
 
 Currently, we assume that every configuration `P` received by the server is defined, i.e. all partial functions inside the configuration are defined for the given inputs and it is therefore not `#Bottom`/`_|_`. It is currently up to the client to ensure that this condition holds and can be checkced by sending a simplify request of `#Ceil(P)` to the old backend, which should return `#Top`, if `P` is indeed defined. Definedness is a very important invariant for the booster, which is carefully preserved throughout execution. This restriction of always preserving definedness is often the reason why the booster aborts. This happens when the booster cannot be sure if a rule/simplification preserves definedness and is therefore unable to proceed in applying said rule/ simplification, intead falling back to the old backend, which has much more powerful but slower mechanisms to deal with partiality.
 
+### Apply rule
+
+This step is at the core of the whole execute endpoint and is complex enough to warrant a separate diagram, describing what happens internally:
+
+```
+                                    Look up applicable rules for P
+
+                                                   │
+                                                   ▼
+
+                                             Try to select
+┌────────────────────────────────────────►  the next highest  ─────────────────────►   No other priority
+│                                            priority group                               groups exist
+│
+│      ┌───────────────────────────────────────┐   │                                             │  │
+│      │                                       │   │                                             │  │
+│      │         ┌────────────────────────┐    │   │                           All groups      ◄─┘  └─►   Otherwise
+│      │         │                        │    │   │                          were trivial
+│      │         │                        ▼    ▼   ▼
+│      │         │                                                                 │                          │
+│      │         │           ┌─────►   Select a rule and try to   ───┐             ▼                          ▼
+│      │         │           │           unify the LHS with P        │
+│      │         │           │                                       │      Return trivial               Return stuck
+│      │         │           │                │    │                 │
+│      │         │           │                │    │                 ▼
+│      │         │           │                │    │
+│      │         │           │                │    │       Unfication uncertain   ───────────────►  Abort rewriting
+│      │         │                            │    │
+│  ┌───┼─────────┼── Unification fails  ◄─────┘    │                                                    ▲   ▲
+│  │   │         │                                 │                                                    │   │
+│  │   │         │                                 ▼                                                    │   │
+│  │   │         │   ┌──────────────  Unification succeeds with a   ────►   Rule does not preserve  ────┘   │
+│  │   │         │   │                   matching substitution                   definedness                │
+│  │   │         │   │                                                                                      │
+│  │   │         │   │                           │  │                                                       │
+│  │   │         │   ▼                           │  │                                                       │
+│  │   │                             ┌───────────┘  └────────────────┐                                      │
+│  │   │  One of the requires        │                               │                                      │
+│  │   │    clauses is False         │                               │                                      │
+│  │   │                             ▼                               ▼                                      │
+│  │   │          │                                                                                         │
+│  │   │          │      All requires clauses of the        Indeterminate requires   ───────────────────────┘
+│  │   │          │         rule evaluate to True                clause found
+│  │   │          │
+│  │   │          │                          │
+│  │   │          │                          ▼
+│  │   │          │
+│  │   │          │                      Add ensures clauses to the
+│  │   │          │                ┌────     configuration and       ────┐
+│  │   │          │                │       check for consitency          │
+│  │   │          │                │                                     │
+│  │   │          │                ▼                                     ▼
+│  │   │          │
+│  │   │          │     Store Trivial result if    ──┬──  Store rewritten configuration
+│  │   │          │     new configuration is _|_     │              otherwise
+│  │   │          │                                  │
+│  │   │          │                    │             │                  │
+│  │   └──────────┼────────────────────┼─────────────┘                  │
+│  │              │                    │                                │
+│  │              │                    │                                │
+│  │              │                    │                                │
+│  │              │                    └─────────────────┬──────────────┘
+│  │              │                                      │
+│  │              └───────────────────────────────┐      │
+│  │                                              ▼      ▼
+│  │
+│  └───────────────────────────────►   No more rules in current   ────────────────────────────┐
+│                                           priority group                                    │
+│                                                                                             │
+│                                                 │    │                                      │
+│                                  ┌──────────────┘    └────────────┐                         │
+│                                  ▼                                ▼                         ▼
+│
+└───────────────────  No successfull rewrites                Single rewrite           Multiple branches
+
+                                                                    │                         │
+                                                                    ▼                         ▼
+
+                                                           Return rewritten          Return all branches
+```
