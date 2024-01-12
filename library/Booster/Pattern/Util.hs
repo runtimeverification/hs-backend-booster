@@ -138,7 +138,9 @@ incrementNameCounter vname =
         newCounter = case parsedCounter of
             Right ok -> ok + 1
             Left _err -> 0
-     in name <> (BS.pack . map (fromIntegral . ord) . show) newCounter
+        -- convert the incremented counter back into a bytestring
+        unparsedNewCounter = BS.pack . map (fromIntegral . ord) . show $ newCounter
+     in name <> unparsedNewCounter
 
 {- | Abstract a term into a variable, making sure the variable name is disjoint from the given set of variables.
      Return the resulting singleton substitution.
