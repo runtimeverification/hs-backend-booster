@@ -2,6 +2,7 @@ module SIMPLIFY
   imports INT
   imports BOOL
   imports ID-SYNTAX
+  imports K-EQUAL
 
   syntax Int ::= f ( Int ) [function, no-evaluators] // a non-concrete value
                | g ( Int ) [function, klabel("g"), symbol] // for simplification purposes
