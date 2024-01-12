@@ -102,7 +102,7 @@ instance Pretty EquationFailure where
                 "Recursion limit exceeded. The following terms were evaluated:"
                     : map pretty ts
         SideConditionFalse p ->
-            vsep $
+            vsep
                 [ "A side condition was found to be false during evaluation (pruning)"
                 , pretty p
                 ]
