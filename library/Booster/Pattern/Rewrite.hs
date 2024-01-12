@@ -339,7 +339,7 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
                 ( pat.constraints
                     <> (Set.fromList $ map (coerce . substituteInTerm existentialSubst . coerce) newConstraints)
                 )
-                (map (coerce . substituteInTerm substWithExistentials . coerce) ceilConditions)
+                ceilConditions
     return (rule, rewritten)
   where
     failRewrite = lift . throw
