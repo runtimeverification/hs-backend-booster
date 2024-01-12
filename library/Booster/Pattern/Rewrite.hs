@@ -335,10 +335,8 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     let rewritten =
             Pattern
                 (substituteInTerm substWithExistentials rule.rhs)
-                -- adding new constraints that have not been trivially `Top`
-                ( Set.map
-                    (coerce . substituteInTerm substWithExistentials . coerce)
-                    (pat.constraints <> Set.fromList newConstraints)
+                -- adding new constraints that have not been trivially `Top`, substituting the Ex# variables
+                ( pat.constraints <> (Set.fromList $ map (coerce . substituteInTerm existentialSubst . coerce) newConstraints)
                 )
                 (map (coerce . substituteInTerm substWithExistentials . coerce) ceilConditions)
     return (rule, rewritten)
