@@ -862,7 +862,7 @@ internaliseRewriteRule partialDefinition exs aliasName aliasArgs right axAttribu
             aliasArgs
     result <- expandAlias alias args
 
-    -- prefix all variables in lhs and rhs with "Rule#" to avoid
+    -- prefix all variables in lhs and rhs with "Rule#" and "Ex#" to avoid
     -- name clashes with patterns from the user
     -- filter out literal `Top` constraints
     lhs <-
