@@ -322,11 +322,13 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
 
     -- existential variables may be present in rule.rhs and rule.ensures,
     -- need to strip prefixes and freshen their names with respect to variables already
-    -- present in the substitution
-    let varsFromSubst = Set.unions . map freeVariables . Map.elems $ subst
+    -- present in the input pattern and in the unification substitution
+    let varsFromInput = freeVariables pat.term <> (Set.unions $ Set.map (freeVariables . coerce) pat.constraints)
+        varsFromSubst = Set.unions . map freeVariables . Map.elems $ subst
+        forbiddenVars = varsFromInput <> varsFromSubst
         existentialSubst =
             Map.fromSet
-                (\v -> Var $ freshenVar v{variableName = stripVarOriginPrefix v.variableName} varsFromSubst)
+                (\v -> Var $ freshenVar v{variableName = stripVarOriginPrefix v.variableName} forbiddenVars)
                 rule.existentials
 
     -- modify the substitution to include the existentials
