@@ -13,79 +13,38 @@ behaviour for recursive evaluation (when an evaluation or
 simplification has a requirement which must be simplified/evaluated
 before it is found to be true). See `simplify.k` for details.
 
+* Integer evaluation and simplification
 
-1) _no-simplification_
+  | Name                      | Input             | Expected output   | rules in `domains.md` which |
+  |-------------------------- | ----------------- | ----------------- |---------------------------- |
+  | _no-simplification_       | `123`             | `123`             | n/a                         |
+  | _plus-null-removed_       | `0 + f(34)`       | `f(34)`           | remove the zero addition    |
+  | _symbolic-first_          | `12 + f(34)`      | `f(34) + 12`      | move symbolic values left   |
+  | _symbolic-first-of-3_     | `12 + f(34) + 56` | `f(34) + 12 + 56` | move symbolic values left   |
+  | _evaluate-under-function_ | `f(12 + 0)`       | `f(12)`           | remove the zero addition    |
 
-      _Input:_
-   - `123`
+  - _with-logging_ is the same as _symbolic-first-of-3_ but with simplification logging enabled.
 
-   _Expected:_
-   - `123` (no rule applies)
 
-1) _plus-null-removed_
+* Recursive evaluation of equation constraints
 
-   _Input:_
-   - `0 + f(34)`
+  | Name                      | Input    | Expected output | because                               |
+  |-------------------------- | -------- | --------------- |-------------------------------------- |
+  | _evaluate-two-stage-fail_ | `g(2)`   | `g(2)`          | no evaluation rule applies            |
+  | _evaluate-two-stage_      | `g(1)`   | `1`             | applying rule `eval-g`                |
+  |                           |          |                 | after evaluating `p3(1)` to `true`    |
+  | _simplification-loop_     | `p1(42)` | `p1(42)`        | simplification attempt detects a loop |
+  |                           |          |                 | and returns the original              |
 
-   _Expected:_
-   - `f(34)` (`domains.md` rule to remove zero addition)
+  - **The _simplification_loop_ test loops forever in `kore-rpc-booster` and `kore-rpc-dev`.**
 
-1) _symbolic-first_
+* Tests for the `#if-#then-#else` hook
 
-   _Input:_
-   - `12 + f(34)`
-
-   _Expected:_
-   - `f(34) + 12` (symbolic value moved to the left)
-
-1) _symbolic-first-of-3_
-
-   _Input:_
-   - `12 + f(34) + 56`
-
-   _Expected:_
-   - `f(34) + 12 + 56` (symbolic value moved to the left)
-
-1) _with-logging_
-
-   Same as _symbolic-first-of-3_ but with simplification logging enabled
-
-   _Input:_
-   - `12 + f(34) + 56`
-
-   _Expected:_
-   - `f(34) + 12 + 56` (symbolic value moved to the left)
-
-1) _evaluate-under-function_
-
-   _Input:_
-   - `f(12 + 0)`
-
-   _Expected:_
-   - `f(12)` (removing the zero addition)
-
-1) _evaluate-two-stage-fail_
-
-   _Input:_
-   - `g(2)`
-
-   _Expected:_
-   - `g(2)` (stuck since no evaluation rule applies)
-
-1) _evaluate-two-stage_
-
-   _Input:_
-   - `g(1)`
-
-   _Expected:_
-   - `1` (applying rule `eval-g` after evaluating `p3(1)` to `true`)
-
-1) _simplification-loop_
-
-   _Input:_
-   - `p1(42)`
-
-   _Output:_
-   - `p1(42)` attempting to simplify in a loop, then returning the original)
-
-   This test loops forever in `kore-rpc-booster` and `kore-rpc-dev`.
+  | Name                         | Input (paraphrased)                    | Expected output |
+  |----------------------------- | -------------------------------------- | --------------- |
+  | _if-then-else-true_          | `#if true #then 1 #else 0 #fi`         |  `1`            |
+  | _if-then-else-false_         | `#if false #then 1 #else 0 #fi`        |  `0`            |
+  | _if-then-else-eval_          | `#if (false => X) #then 1 #else 0 #fi` |  `1`            |
+  | _if-then-else-indeterminate_ | `#if true #then 1 #else 0 #fi`         |  `1`            |
+  | _if-then-else-sort-error_    | `#if 42 #then 1 #else 0 #fi`           | _Error (sort)_  |
+  | _if-then-else-arity-error_   | `#if_#then_#else(true, 0)`             | _Error (arity)_ |
