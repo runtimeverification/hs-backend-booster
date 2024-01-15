@@ -30,6 +30,7 @@ import Control.Monad.Logger.CallStack (
     LogLevel (..),
     MonadLogger,
     MonadLoggerIO,
+    logInfoNS,
     logOther,
     logOtherNS,
  )
@@ -682,7 +683,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
             knownPredicates <- (.predicates) <$> lift getState
             let (knownTrue, toCheck) = partition (`Set.member` knownPredicates) required
             unless (null knownTrue) $
-                logOtherNS "booster" (LevelOther "Simplify") . renderText $
+                logInfoNS "booster" . renderText $
                     vsep ("Conditions known to be true: " : map pretty knownTrue)
 
             unclearConditions' <- catMaybes <$> mapM (checkConstraint ConditionFalse) toCheck
