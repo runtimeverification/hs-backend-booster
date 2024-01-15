@@ -703,15 +703,15 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     checkConstraint whenBottom (Predicate p) = do
         logOther (LevelOther "Simplify") $
             "Recursive simplification of predicate: " <> pack (renderDefault (pretty p))
-        let fallBackToP :: EquationFailure -> EquationT io Term
-            fallBackToP e = do
+        let fallBackToUnsimplified :: EquationFailure -> EquationT io Term
+            fallBackToUnsimplified e = do
                 logOther (LevelOther "Simplify") . pack . renderDefault $
                     "Aborting recursive simplification:" <> pretty e
                 pure p
         -- exceptions need to be handled differently in the recursion,
         -- falling back to the unsimplified constraint instead of aborting.
         simplified <-
-            lift $ simplifyConstraint' True p `catch_` fallBackToP
+            lift $ simplifyConstraint' True p `catch_` fallBackToUnsimplified
         case simplified of
             FalseBool -> throwE . whenBottom $ coerce p
             TrueBool -> pure Nothing
