@@ -5,7 +5,7 @@ SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
 export PYTEST_PARALLEL=8 
 
-BUG_REPORT_DIR=$($SCRIPT_DIR/performance-tests-kevm.sh --bug-report)
+BUG_REPORT_DIR=${BUG_REPORT_DIR:-$($SCRIPT_DIR/performance-tests-kevm.sh --bug-report)}
 
 echo "Bug reports saved at $BUG_REPORT_DIR"
 
