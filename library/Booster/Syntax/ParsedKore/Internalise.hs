@@ -804,10 +804,6 @@ internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
                     [ UndefinedSymbol s.name
                     | s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) rhs.term
                     ]
-        -- <> [ UndefinedSymbol s.name
-        --    | c <- Set.toList lhs.constraints
-        --    , s <- Util.filterTermSymbols (not . Util.isDefinedSymbol) $ coerce c
-        --    ]
         containsAcSymbols =
             Util.checkTermSymbols Util.checkSymbolIsAc lhs.term
         computedAttributes =
