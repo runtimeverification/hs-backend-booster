@@ -694,8 +694,8 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                 unclearConditions -> throwE $ IndeterminateCondition unclearConditions
   where
     -- Simplify given predicate in a nested EquationT execution.
-    -- Return Nothing immediately if it is Bottom, return (Just
-    -- Nothing) if it is Top, otherwise return (Just simplified).
+    -- Call 'whenBottom' if it is Bottom, return Nothing if it is Top,
+    -- otherwise return the simplified remaining predicate.
     checkConstraint ::
         (Predicate -> ApplyEquationResult) ->
         Predicate ->
