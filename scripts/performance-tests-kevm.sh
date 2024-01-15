@@ -54,14 +54,37 @@ fi
 
 git submodule update --init --recursive --depth 1 kevm-pyk/src/kevm_pyk/kproj/plugin
 
+BUG_REPORT=''
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --bug-report)
+      mkdir -p $SCRIPT_DIR/bug-reports/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME
+      BUG_REPORT="--bug-report --bug-report-dir $SCRIPT_DIR/bug-reports/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME"
+      shift # past argument
+      ;;
+    -*|--*)
+      echo "Unknown option $1"
+      exit 1
+      ;;
+    *)
+      shift # past argument
+      ;;
+  esac
+done
+
 
 feature_shell "make poetry && poetry run -C kevm-pyk -- kdist --verbose build evm-semantics.plugin evm-semantics.haskell --jobs 4"
 
+KDIST_DIR=$(feature_shell "poetry run -C kevm-pyk -- kdist which")
+
 mkdir -p $SCRIPT_DIR/logs
 
-feature_shell "make test-prove-pyk PYTEST_PARALLEL=$PYTEST_PARALLEL PYTEST_ARGS='--maxfail=0 --timeout 7200 -vv --use-booster' | tee $SCRIPT_DIR/logs/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME.log"
+feature_shell "make test-prove-pyk PYTEST_PARALLEL=$PYTEST_PARALLEL PYTEST_ARGS='--maxfail=0 --timeout 7200 -vv --use-booster $BUG_REPORT' | tee $SCRIPT_DIR/logs/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME.log"
 killall kore-rpc-booster || echo "No zombie processes found"
 
+
+if [ -z "$BUG_REPORT" ]; then
 if [ ! -e "$SCRIPT_DIR/logs/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT.log" ]; then
   master_shell "make test-prove-pyk PYTEST_PARALLEL=$PYTEST_PARALLEL PYTEST_ARGS='--maxfail=0 --timeout 7200 -vv --use-booster' | tee $SCRIPT_DIR/logs/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT.log"
   killall kore-rpc-booster || echo "No zombie processes found"
@@ -69,3 +92,7 @@ fi
 
 cd $SCRIPT_DIR
 python3 compare.py logs/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME.log logs/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT.log > logs/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT-$FEATURE_BRANCH_NAME-compare
+else
+  cp $KDIST_DIR/evm-semantics/haskell/llvm-library/interpreter.* $SCRIPT_DIR/bug-reports/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME/interpreter.dylib
+  echo $SCRIPT_DIR/bug-reports/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME
+fi
