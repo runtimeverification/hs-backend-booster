@@ -182,22 +182,6 @@ errorCases =
             [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con2{}( \dv{SomeSort{}}("thing") ) ), Thing:SortK{}) ) |]
                 `failsWith` NoRulesForTerm
                     [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con2{}( \dv{SomeSort{}}("thing") ) ), Thing:SortK{}) ) |]
-        , testCase "Index is None" $ do
-            let t =
-                    [trm|
-                        kCell{}(
-                            kseq{}(
-                                inj{SomeSort{}, SortKItem{}}(
-                                    \and{SomeSort{}}(
-                                        con1{}( \dv{SomeSort{}}("thing") ),
-                                        con2{}( \dv{SomeSort{}}("thing") )
-                                    )
-                                ),
-                                Thing:SortK{}
-                            )
-                        )
-                    |]
-            t `failsWith` TermIndexIsNone t
         ]
 rewriteSuccess =
     testCase "con1 app rewrites to f1 app" $
@@ -222,10 +206,28 @@ definednessUnclear =
                 [trm| kCell{}( kseq{}( inj{AnotherSort{}, SortKItem{}}( con4{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), ConfigVar:SortK{}) ) |]
         pcon4 `failsWith` DefinednessUnclear rule4 (Pattern_ pcon4) [UndefinedSymbol "f2"]
 rewriteStuck =
-    testCase "con3 app is stuck (no rules apply)" $ do
-        let con3App =
-                [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con3{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), ConfigVar:SortK{}) ) |]
-        getsStuck con3App
+    testGroup
+        "Stuck terms"
+        [ testCase "con3 app is stuck (no rules apply)" $ do
+            let con3App =
+                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con3{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), ConfigVar:SortK{}) ) |]
+            getsStuck con3App
+        , testCase "Index is None" $ do
+            getsStuck
+                [trm|
+                        kCell{}(
+                            kseq{}(
+                                inj{SomeSort{}, SortKItem{}}(
+                                    \and{SomeSort{}}(
+                                        con1{}( \dv{SomeSort{}}("thing") ),
+                                        con2{}( \dv{SomeSort{}}("thing") )
+                                    )
+                                ),
+                                Thing:SortK{}
+                            )
+                        )
+                    |]
+        ]
 rulePriority =
     testCase "con1 rewrites to a branch when higher priority does not apply" $
         [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("otherThing") ) ), ConfigVar:SortK{}) ) |]
@@ -318,6 +320,8 @@ canRewrite =
                 [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con3{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
                 [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con3{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
                 RewriteStuck
+        , testCase "Returns stuck when term index is None" $
+            getsStuck [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( \and{SomeSort{}}( con1{}( \dv{SomeSort{}}("thing") ), con2{}( \dv{SomeSort{}}("thing") ) ) ), C:SortK{} ) ) |]
         ]
 
 abortsOnErrors :: TestTree
@@ -326,12 +330,6 @@ abortsOnErrors =
         "Aborts rewrite when there is an error"
         [ testCase "when there are no rules at all" $
             let term = app con2 [d] in aborts (NoRulesForTerm term) term
-        , testCase "when the term index is None" $
-            let term =
-                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( \and{SomeSort{}}( con1{}( \dv{SomeSort{}}("thing") ), con2{}( \dv{SomeSort{}}("thing") ) ) ), C:SortK{} ) ) |]
-             in aborts
-                    (TermIndexIsNone term)
-                    term
         ]
 
 callsError :: TestTree

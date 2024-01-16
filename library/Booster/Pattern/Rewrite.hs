@@ -98,22 +98,23 @@ rewriteStep ::
     Pattern ->
     RewriteT io (RewriteFailed "Rewrite") (RewriteResult Pattern)
 rewriteStep cutLabels terminalLabels pat = do
-    let termIdx = kCellTermIndex pat.term
-    when (termIdx == None) $ throw (TermIndexIsNone pat.term)
     def <- getDefinition
-    let idxRules = fromMaybe Map.empty $ Map.lookup termIdx def.rewriteTheory
+    let termIdx = kCellTermIndex pat.term
+        idxRules = fromMaybe Map.empty $ Map.lookup termIdx def.rewriteTheory
         anyRules = fromMaybe Map.empty $ Map.lookup Anything def.rewriteTheory
         rules =
             map snd . Map.toAscList $
                 if termIdx == Anything
                     then idxRules
                     else Map.unionWith (<>) idxRules anyRules
+    case termIdx of
+        None -> pure (RewriteStuck pat)
+        _ -> do
+            when (null rules) $ throw (NoRulesForTerm pat.term)
 
-    when (null rules) $ throw (NoRulesForTerm pat.term)
-
-    -- process one priority group at a time (descending priority),
-    -- until a result is obtained or the entire rewrite fails.
-    processGroups pat rules
+            -- process one priority group at a time (descending priority),
+            -- until a result is obtained or the entire rewrite fails.
+            processGroups pat rules
   where
     processGroups ::
         MonadLoggerIO io =>
