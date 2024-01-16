@@ -15,7 +15,7 @@ MASTER_COMMIT_SHORT="$(git rev-parse --short origin/main)"
 FEATURE_BRANCH_NAME=${FEATURE_BRANCH_NAME:-"$(git rev-parse --abbrev-ref HEAD)"}
 FEATURE_BRANCH_NAME="${FEATURE_BRANCH_NAME//\//-}"
 
-PYTEST_PARALLEL=${PYTEST_PARALLEL:-2}
+PYTEST_PARALLEL=${PYTEST_PARALLEL:-3}
 
 if [[ $FEATURE_BRANCH_NAME == "master" ]]; then
   FEATURE_BRANCH_NAME="feature"
@@ -55,6 +55,7 @@ fi
 git submodule update --init --recursive --depth 1 kevm-pyk/src/kevm_pyk/kproj/plugin
 
 BUG_REPORT=''
+POSITIONAL_ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -68,15 +69,16 @@ while [[ $# -gt 0 ]]; do
       exit 1
       ;;
     *)
+      POSITIONAL_ARGS+=("$1") # save positional arg
       shift # past argument
       ;;
   esac
 done
 
+set -- "${POSITIONAL_ARGS[@]}" # restore positional parameters
 
 feature_shell "make poetry && poetry run -C kevm-pyk -- kdist --verbose build evm-semantics.plugin evm-semantics.haskell --jobs 4"
 
-KDIST_DIR=$(feature_shell "poetry run -C kevm-pyk -- kdist which")
 
 mkdir -p $SCRIPT_DIR/logs
 
@@ -92,7 +94,4 @@ fi
 
 cd $SCRIPT_DIR
 python3 compare.py logs/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME.log logs/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT.log > logs/kevm-$KEVM_VERSION-master-$MASTER_COMMIT_SHORT-$FEATURE_BRANCH_NAME-compare
-else
-  cp $KDIST_DIR/evm-semantics/haskell/llvm-library/interpreter.* $SCRIPT_DIR/bug-reports/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME/interpreter.dylib
-  echo $SCRIPT_DIR/bug-reports/kevm-$KEVM_VERSION-$FEATURE_BRANCH_NAME
 fi

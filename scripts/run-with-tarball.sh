@@ -1,4 +1,5 @@
 #! /usr/bin/env bash
+set -exo pipefail
 
 # Starts an rpc server and runs a tarball against it using rpc-client
 # Environment variables:
@@ -19,11 +20,34 @@ server=${SERVER:-$booster/.build/booster/bin/kore-rpc-booster}
 client=${CLIENT:-$booster/.build/booster/bin/kore-rpc-client}
 log_dir=${LOG_DIR:-.}
 
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+
+nix_shell() {
+  GC_DONT_GC=1 nix develop $SCRIPT_DIR/..#cabal --extra-experimental-features 'nix-command flakes' --command bash -c "$1"
+}
+
+if [ -z "$(which lsof)" ]; then
+LSOF=$(nix_shell "which lsof")
+else
+LSOF=$(which lsof)
+fi
+
+TEMPD=$(mktemp -d)
+# Exit if the temp directory wasn't created successfully.
+if [ ! -e "$TEMPD" ]; then
+    >&2 echo "Failed to create temp directory"
+    exit 1
+fi
+
+# Make sure the temp directory gets removed on script exit.
+trap "exit 1"           HUP INT PIPE QUIT TERM
+trap 'rm -rf "$TEMPD"'  EXIT
+
+
 if [ -z "$DEFINITION" ]; then
-    # unpack definition file from tarball, into tmp dir
-    mkdir -p tmp
-    tar xf $tarball -O definition.kore > tmp/definition.kore
-    kore=tmp/definition.kore
+    # unpack definition file from tarball, into $TEMPD dir
+    tar xf $tarball -O definition.kore > $TEMPD/definition.kore
+    kore=$TEMPD/definition.kore
 else
     kore=$DEFINITION
 fi
@@ -39,14 +63,13 @@ MODULE=$(grep -o -e "^module [A-Z0-9-]*" $kore | tail -1 | sed -e "s/module //")
 
 # build llvm backend unless provided
 if [ -z "${LLVM_LIB}" ]; then
-    mkdir -p tmp
-    tar xf $tarball -O llvm_definition/definition.kore > tmp/llvm-definition.kore
+    tar xf $tarball -O llvm_definition/definition.kore > $TEMPD/llvm-definition.kore
     if [ ! -d "${PLUGIN_DIR}" ]; then
         echo "Either LLVM_LIB or PLUGIN_DIR must be provided"
         exit 2
     fi
     #generate matching data
-    (cd tmp && mkdir -p dt && llvm-kompile-matching llvm-definition.kore qbaL ./dt 1/2)
+    (cd $TEMPD && mkdir -p dt && llvm-kompile-matching llvm-definition.kore qbaL ./dt 1/2)
     # find library dependencies and source files
     for lib in libff libcryptopp libsecp256k1; do
         LIBFILE=$(find ${PLUGIN_DIR} -name "${lib}.a" | head -1)
@@ -67,11 +90,11 @@ if [ -z "${LLVM_LIB}" ]; then
             LIBSUFFIX="dylib"
             ;;
     esac
-    llvm-kompile tmp/llvm-definition.kore tmp/dt c -- \
-             -fPIC -std=c++17 -o tmp/interpreter \
+    llvm-kompile $TEMPD/llvm-definition.kore $TEMPD/dt c -- \
+             -fPIC -std=c++17 -o $TEMPD/interpreter \
              $PLUGIN_LIBS $PLUGIN_INCLUDE $PLUGIN_CPP \
              -lcrypto -lssl $LPROCPS
-    lib=tmp/interpreter.$LIBSUFFIX
+    lib=$TEMPD/interpreter.$LIBSUFFIX
 else
     lib=$(realpath ${LLVM_LIB})
 fi
@@ -89,14 +112,14 @@ trap 'kill -2 ${server_pid}' ERR EXIT
 echo "Server PID ${server_pid}"
 
 i=15
-while ! lsof -a -p${server_pid} -sTCP:LISTEN -iTCP && [[ $i -ge 0 ]]; do
+while ! $LSOF -a -p${server_pid} -sTCP:LISTEN -iTCP && [[ $i -ge 0 ]]; do
     echo "Waiting for server ($i attempts left)"
     i=$((i-1))
     sleep 1
 done
 
 # find server port via lsof
-server_port=$(lsof -a -p${server_pid} -sTCP:LISTEN -iTCP | grep ${server_pid} | sed -e 's/.* TCP \*:\([0-9]*\).*$/\1/')
+server_port=$($LSOF -a -p${server_pid} -sTCP:LISTEN -iTCP | grep ${server_pid} | sed -e 's/.* TCP \*:\([0-9]*\).*$/\1/')
 echo "Server listening on port ${server_port}"
 
 
