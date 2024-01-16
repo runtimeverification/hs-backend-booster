@@ -109,8 +109,6 @@ rewriteStep cutLabels terminalLabels pat = do
                     then idxRules
                     else Map.unionWith (<>) idxRules anyRules
 
-    when (null rules) $ throw (NoRulesForTerm pat.term)
-
     -- process one priority group at a time (descending priority),
     -- until a result is obtained or the entire rewrite fails.
     processGroups pat rules

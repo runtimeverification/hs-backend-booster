@@ -50,7 +50,7 @@ test_performRewrite =
           canRewrite
         , abortsOnErrors
         , callsError
-        , abortsOnFailures
+        , getsStuckOnFailures
         , supportsDepthControl
         , supportsCutPoints
         , supportsTerminalRules
@@ -178,11 +178,7 @@ errorCases
 errorCases =
     testGroup
         "Simple error cases"
-        [ testCase "No rules" $
-            [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con2{}( \dv{SomeSort{}}("thing") ) ), Thing:SortK{}) ) |]
-                `failsWith` NoRulesForTerm
-                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con2{}( \dv{SomeSort{}}("thing") ) ), Thing:SortK{}) ) |]
-        , testCase "Index is None" $ do
+        [ testCase "Index is None" $ do
             let t =
                     [trm|
                         kCell{}(
@@ -222,10 +218,16 @@ definednessUnclear =
                 [trm| kCell{}( kseq{}( inj{AnotherSort{}, SortKItem{}}( con4{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), ConfigVar:SortK{}) ) |]
         pcon4 `failsWith` DefinednessUnclear rule4 (Pattern_ pcon4) [UndefinedSymbol "f2"]
 rewriteStuck =
-    testCase "con3 app is stuck (no rules apply)" $ do
-        let con3App =
-                [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con3{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), ConfigVar:SortK{}) ) |]
-        getsStuck con3App
+    testGroup
+        "Stuck states"
+        [ testCase "con3 app is stuck (no rules apply)" $ do
+            let con3App =
+                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con3{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), ConfigVar:SortK{}) ) |]
+            getsStuck con3App
+        , testCase "No rules for con2" $
+            getsStuck
+                [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con2{}( \dv{SomeSort{}}("thing") ) ), Thing:SortK{}) ) |]
+        ]
 rulePriority =
     testCase "con1 rewrites to a branch when higher priority does not apply" $
         [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("otherThing") ) ), ConfigVar:SortK{}) ) |]
@@ -285,7 +287,7 @@ canRewrite :: TestTree
 canRewrite =
     testGroup
         "Can rewrite"
-        [ testCase "Rewrites con1 once, then aborts" $
+        [ testCase "Rewrites con1 once, then gets stuck" $
             let startTerm =
                     [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
                 targetTerm =
@@ -294,7 +296,7 @@ canRewrite =
                     (Steps 1)
                     startTerm
                     targetTerm
-                    (RewriteAborted (NoRulesForTerm targetTerm))
+                    RewriteStuck
         , testCase "Rewrites con3 twice, branching on con1" $ do
             let branch1 =
                     ( "con1-f2"
@@ -318,15 +320,16 @@ canRewrite =
                 [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con3{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
                 [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con3{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
                 RewriteStuck
+        , testCase "when there are no rules at all" $
+            getsStuck $
+                app con2 [d]
         ]
 
 abortsOnErrors :: TestTree
 abortsOnErrors =
     testGroup
         "Aborts rewrite when there is an error"
-        [ testCase "when there are no rules at all" $
-            let term = app con2 [d] in aborts (NoRulesForTerm term) term
-        , testCase "when the term index is None" $
+        [ testCase "when the term index is None" $
             let term =
                     [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( \and{SomeSort{}}( con1{}( \dv{SomeSort{}}("thing") ), con2{}( \dv{SomeSort{}}("thing") ) ) ), C:SortK{} ) ) |]
              in aborts
@@ -346,16 +349,14 @@ callsError =
                 `catch` (\(_ :: ErrorCall) -> pure ())
         ]
 
-abortsOnFailures :: TestTree
-abortsOnFailures =
+getsStuckOnFailures :: TestTree
+getsStuckOnFailures =
     testGroup
-        "Aborts rewrite when the rewriter cannot handle it"
+        "Gets stuck when the rewriter cannot handle it"
         [ testCase "when unification is not a match" $
-            let term = [trm| con3{}(X:SomeSort{}, \dv{SomeSort{}}("thing")) |]
-             in aborts (NoRulesForTerm term) term
+            getsStuck [trm| con3{}(X:SomeSort{}, \dv{SomeSort{}}("thing")) |]
         , testCase "when definedness is unclear" $
-            let term = [trm| con4{}(\dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing")) |]
-             in aborts (NoRulesForTerm term) term
+            getsStuck [trm| con4{}(\dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing")) |]
         ]
 
 newtype MaxDepth = MaxDepth Natural
@@ -374,7 +375,7 @@ supportsDepthControl =
                     (Steps 1)
                     startTerm
                     targetTerm
-                    (RewriteAborted $ NoRulesForTerm targetTerm)
+                    RewriteStuck
         , testCase "stops execution after 1 step when maxDepth == 1" $
             rewritesToDepth
                 (MaxDepth 1)
@@ -440,7 +441,7 @@ supportsCutPoints =
                     (Steps 1)
                     startTerm
                     targetTerm
-                    (RewriteAborted (NoRulesForTerm targetTerm))
+                    RewriteStuck
         , testCase "prefers reporting branches to stopping at label in one branch" $ do
             let branch1 =
                     ( "con1-f2"
@@ -488,7 +489,7 @@ supportsTerminalRules =
                     (Steps 1)
                     startTerm
                     targetTerm
-                    (RewriteAborted (NoRulesForTerm targetTerm))
+                    RewriteStuck
         ]
   where
     rewritesToTerminal :: Text -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
