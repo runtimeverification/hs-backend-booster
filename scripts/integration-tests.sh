@@ -38,12 +38,19 @@ for dir in $(ls -d test-*); do
             SERVER=$BOOSTER_DEV ./runDirectoryTest.sh test-$name $@
             SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name $@
             ;;
-        "no-evaluator")
+        "questionmark-vars")
+            SERVER=$BOOSTER_DEV ./runDirectoryTest.sh test-$name $@
+            SERVER=$KORE_RPC_DEV ./runDirectoryTest.sh test-$name $@
+            ;;
+        "compute-ceil" | "no-evaluator")
+            SERVER=$BOOSTER_DEV ./runDirectoryTest.sh test-$name $@
+            ;;
+        "simplify")
             SERVER=$BOOSTER_DEV ./runDirectoryTest.sh test-$name $@
             ;;
         "foundry-bug-report")
             SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time $@
-            SERVER=$KORE_RPC_BOOSTER SERVER_OPTS="--interim-simplification 100" ./runDirectoryTest.sh test-$name --time $@
+            SERVER=$KORE_RPC_BOOSTER SERVER_OPTS="--interim-simplification 100" ./runDirectoryTest.sh test-$name $@
             ;;
         "imp")
             SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time $@
