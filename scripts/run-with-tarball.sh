@@ -37,14 +37,46 @@ fi
 # find out module name from definition file
 MODULE=$(grep -o -e "^module [A-Z0-9-]*" $kore | tail -1 | sed -e "s/module //")
 
-# hard-wire llvm backend, use surplus arguments from the command line as server options
-if [ -f ./${tarname}-interpreter.so ]; then
-    lib=./${tarname}-interpreter.so
+# build llvm backend unless provided
+if [ -z "${LLVM_LIB}" ]; then
+    mkdir -p tmp
+    tar xf $tarball -O llvm_definition/definition.kore > tmp/llvm-definition.kore
+    if [ ! -d "${PLUGIN_DIR}" ]; then
+        echo "Either LLVM_LIB or PLUGIN_DIR must be provided"
+        exit 2
+    fi
+    #generate matching data
+    (cd tmp && mkdir -p dt && llvm-kompile-matching llvm-definition.kore qbaL ./dt 1/2)
+    # find library dependencies and source files
+    for lib in libff libcryptopp libsecp256k1; do
+        LIBFILE=$(find ${PLUGIN_DIR} -name "${lib}.a" | head -1)
+        [ -z "$LIBFILE" ] && (echo "[Error] Unable to locate ${lib}.a"; exit 1)
+        PLUGIN_LIBS+="$LIBFILE "
+        PLUGIN_INCLUDE+="-I$(dirname $LIBFILE)/../include "
+    done
+    PLUGIN_CPP="${PLUGIN_DIR}/include/plugin-c/blake2.cpp ${PLUGIN_DIR}/include/plugin-c/crypto.cpp ${PLUGIN_DIR}/include/plugin-c/plugin_util.cpp"
+
+    # kompile llvm-definition to interpreter
+    case "$OSTYPE" in
+        linux*)
+            LPROCPS="-lprocps"
+            LIBSUFFIX="so"
+            ;;
+        *)
+            LPROCPS=""
+            LIBSUFFIX="dylib"
+            ;;
+    esac
+    llvm-kompile tmp/llvm-definition.kore tmp/dt c -- \
+             -fPIC -std=c++17 -o tmp/interpreter \
+             $PLUGIN_LIBS $PLUGIN_INCLUDE $PLUGIN_CPP \
+             -lcrypto -lssl $LPROCPS
+    lib=tmp/interpreter.$LIBSUFFIX
 else
     lib=$(realpath ${LLVM_LIB})
 fi
 if [ ! -f "$lib" ]; then
-    echo "A path to an LLVM backend library must be provided in LLVM_LIB"
+    echo "Problem with LLVM backend library at $lib"
     exit 2
 fi
 server_params="--llvm-backend-library $lib --server-port 0 $@"
