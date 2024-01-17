@@ -30,7 +30,7 @@ import Data.Foldable
 import Data.List (singleton)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
 import Data.Sequence (Seq)
 import Data.Text (Text, pack)
 import Data.Text qualified as Text
@@ -160,15 +160,22 @@ respond stateVar =
                                 throwE . AddModuleError $
                                     "Module introduces new symbols: " <> listNames newModule.symbols
 
-                            when
-                                ( nameAsId
-                                    && isJust (Map.lookup (getId $ newModule.name) state.definitions)
-                                    && isNothing (Map.lookup moduleHash state.definitions)
-                                )
-                                $
-                                -- if a module with the same name already exists, but it's contents are different to the current module, throw an error
-                                throwE . AddModuleError
-                                $ "Duplicate Module"
+                            when nameAsId $
+                                case (Map.lookup (getId $ newModule.name) state.definitions, Map.lookup moduleHash state.definitions) of
+                                    (Just{}, Nothing) ->
+                                        -- another module with the same name already exists
+                                        throwE . AddModuleError $ "Duplicate Module Name"
+                                    (Just nmMod, Just idMod)
+                                        | nmMod /= idMod ->
+                                            -- this module has previously been added and different
+                                            -- module with the same name also already exists
+                                            throwE . AddModuleError $ "Duplicate Module Name"
+                                        | otherwise ->
+                                            -- this module has previously been added with name-as-id: true
+                                            -- we can allow this, since the contents of the named module
+                                            -- are the same
+                                            pure ()
+                                    _ -> pure ()
                      in case runExcept
                             (checkModule >> addToDefinitions newModule{ParsedModule.name = Id moduleHash} state.definitions) of
                             Left err ->
