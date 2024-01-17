@@ -16,11 +16,9 @@ that the filtering is indeed _syntactic_.
 
 Each test will execute a single step (as per parameter file).
 
-| Name             | State | x   | Constraint      | with `booster-dev --no-smt` | Remark              |
-|------------------|-------|-----|-----------------|-----------------------------|---------------------|
-| `s1x-and-x-is-0` | `S1`  | `X` | `#Equals(X, 0)` | `(S2, 0)` with subst `X==0` | **failing**         |
-|------------------|-------|-----|-----------------|-----------------------------|---------------------|
-| `s2x-and-px`     | `S2`  | `X` | `p(X)`          | `(S3,X)` with `p(X)`        | relies on filtering |
-|------------------|-------|-----|-----------------|-----------------------------|---------------------|
-| `s1-X0`          | `S1`  | `0` | -               | `(S2, X)`                   | ==Int simplified    |
-|------------------|-------|-----|-----------------|-----------------------------|---------------------|
+| Name             | State | x   | Constraint      | with `booster-dev --no-smt` | Remark               |
+|------------------|-------|-----|-----------------|-----------------------------|----------------------|
+| `s2x-and-px`     | `S2`  | `X` | `p(X)`          | `(S3,X)` with `p(X)`        | relies on filtering  |
+| `s1x-and-x-is-0` | `S1`  | `X` | `#Equals(X, 0)` | `(S2, 0)` with subst `X==0` | substitution prior   |
+|                  |       |     |                 |                             | to processing        |
+| `s1-X0`          | `S1`  | `0` | -               | `(S2, X)`                   | ==Int simplification |
