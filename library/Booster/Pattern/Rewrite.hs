@@ -24,6 +24,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State.Strict (StateT (runStateT), get, modify)
 import Data.Hashable qualified as Hashable
+import Data.List qualified as List
 import Data.List.NonEmpty (NonEmpty (..), toList)
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
@@ -308,8 +309,7 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     -- check ensures constraints (new) from rhs: stop and return `Trivial` if
     -- any are false, remove all that are trivially true, return the rest
     let ruleEnsures =
-            concatMap (splitBoolPredicates . coerce . substituteInTerm subst . coerce) $
-                Set.toList rule.ensures
+            concatMap (splitBoolPredicates . coerce . substituteInTerm subst . coerce) rule.ensures
         trivialIfBottom = RewriteRuleAppT $ pure Trivial
     newConstraints <-
         catMaybes <$> mapM (checkConstraint id trivialIfBottom) ruleEnsures
@@ -323,7 +323,7 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     -- existential variables may be present in rule.rhs and rule.ensures,
     -- need to strip prefixes and freshen their names with respect to variables already
     -- present in the input pattern and in the unification substitution
-    let varsFromInput = freeVariables pat.term <> (Set.unions $ Set.map (freeVariables . coerce) pat.constraints)
+    let varsFromInput = freeVariables pat.term <> (Set.unions $ map (freeVariables . coerce) pat.constraints)
         varsFromSubst = Set.unions . map freeVariables . Map.elems $ subst
         forbiddenVars = varsFromInput <> varsFromSubst
         existentialSubst =
@@ -337,9 +337,10 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     let rewritten =
             Pattern
                 (substituteInTerm substWithExistentials rule.rhs)
-                -- adding new constraints that have not been trivially `Top`, substituting the Ex# variables
-                ( pat.constraints
-                    <> (Set.fromList $ map (coerce . substituteInTerm existentialSubst . coerce) newConstraints)
+                -- adding new constraints that have not been trivially `Top`, substituting the Ex# variables and de-duplicating
+                ( List.nub $
+                    pat.constraints
+                        <> map (coerce . substituteInTerm existentialSubst . coerce) newConstraints
                 )
                 ceilConditions
     return (rule, rewritten)

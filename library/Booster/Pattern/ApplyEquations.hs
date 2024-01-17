@@ -38,12 +38,11 @@ import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State
 import Data.Coerce (coerce)
 import Data.Foldable (toList, traverse_)
-import Data.List (elemIndex)
+import Data.List (elemIndex, nub)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust)
 import Data.Sequence (Seq (..))
-import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text, pack)
 import Data.Text qualified as Text
@@ -120,7 +119,7 @@ data EquationState = EquationState
     { termStack :: [Term]
     , recursionStack :: [Term]
     , changed :: Bool
-    , predicates :: Set Predicate
+    , predicates :: [Predicate]
     , trace :: Seq EquationTrace
     , cache :: SimplifierCache
     }
@@ -227,7 +226,7 @@ countSteps = length . (.termStack) <$> getState
 pushTerm :: MonadLoggerIO io => Term -> EquationT io ()
 pushTerm t = eqState . modify $ \s -> s{termStack = t : s.termStack}
 
-pushConstraints :: MonadLoggerIO io => Set Predicate -> EquationT io ()
+pushConstraints :: MonadLoggerIO io => [Predicate] -> EquationT io ()
 pushConstraints ps = eqState . modify $ \s -> s{predicates = s.predicates <> ps}
 
 setChanged, resetChanged :: MonadLoggerIO io => EquationT io ()
@@ -377,10 +376,10 @@ evaluatePattern' Pattern{term, constraints, ceilConditions} = do
     -- evaluate the given predicate assuming all others
     simplifyAssumedPredicate p = do
         allPs <- predicates <$> getState
-        let otherPs = Set.delete p allPs
+        let otherPs = filter (/= p) allPs
         eqState $ modify $ \s -> s{predicates = otherPs}
         newP <- simplifyConstraint' True $ coerce p
-        pushConstraints $ Set.singleton $ coerce newP
+        pushConstraints [coerce newP]
 
 ----------------------------------------
 
@@ -685,11 +684,11 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                     let ensured =
                             concatMap
                                 (splitBoolPredicates . substituteInPredicate subst)
-                                (Set.toList rule.ensures)
+                                (nub rule.ensures)
                     ensuredConditions <-
                         -- throws if an ensured condition found to be false
                         catMaybes <$> mapM (checkConstraint EnsuresFalse) ensured
-                    lift $ pushConstraints $ Set.fromList ensuredConditions
+                    lift $ pushConstraints ensuredConditions
                     pure $ substituteInTerm subst rule.rhs
                 unclearConditions -> throwE $ IndeterminateCondition unclearConditions
   where

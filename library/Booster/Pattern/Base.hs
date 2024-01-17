@@ -767,7 +767,7 @@ pattern KSeq sort a =
 -- | A term (configuration) constrained by a number of predicates.
 data Pattern = Pattern
     { term :: Term
-    , constraints :: !(Set Predicate)
+    , constraints :: ![Predicate]
     , ceilConditions :: ![Ceil]
     }
     deriving stock (Eq, Ord, Show, Generic, Data)
@@ -851,5 +851,5 @@ instance Pretty Pattern where
             , Pretty.indent 4 $ pretty patt.term
             , "Conditions:"
             ]
-                <> fmap (Pretty.indent 4 . pretty) (Set.toList patt.constraints)
+                <> fmap (Pretty.indent 4 . pretty) patt.constraints
                 <> fmap (Pretty.indent 4 . pretty) patt.ceilConditions

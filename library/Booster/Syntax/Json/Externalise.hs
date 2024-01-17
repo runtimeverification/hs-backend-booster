@@ -12,7 +12,6 @@ module Booster.Syntax.Json.Externalise (
 ) where
 
 import Data.Foldable ()
-import Data.Set qualified as Set
 import Data.Text.Encoding qualified as Text
 
 import Booster.Pattern.Base (externaliseKmapUnsafe)
@@ -44,7 +43,7 @@ externalisePattern Internal.Pattern{term = term, constraints, ceilConditions} su
                 else
                     Just $
                         multiAnd sort $
-                            map (externalisePredicate sort) (Set.toList constraints)
+                            map (externalisePredicate sort) constraints
                                 ++ map (externaliseCeil sort) ceilConditions
      in (externaliseTerm term, predicate, substitution)
   where

@@ -107,7 +107,7 @@ modifyVariables :: (Variable -> Variable) -> Pattern -> Pattern
 modifyVariables f p =
     Pattern
         { term = modifyVariablesInT f p.term
-        , constraints = Set.map (coerce $ modifyVariablesInT f) p.constraints
+        , constraints = map (coerce $ modifyVariablesInT f) p.constraints
         , ceilConditions = map (coerce $ modifyVariablesInT f) p.ceilConditions
         }
 

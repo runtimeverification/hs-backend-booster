@@ -56,7 +56,7 @@ instance Pretty ComputeCeilSummary where
                         then []
                         else
                             [ "requires"
-                            , Pretty.indent 2 . Pretty.vsep $ map pretty $ Set.toList rule.requires
+                            , Pretty.indent 2 . Pretty.vsep $ map pretty $ rule.requires
                             ]
                    )
                 <> [ Pretty.line
@@ -97,7 +97,7 @@ computeCeilRule mllvm def r@RewriteRule.RewriteRule{lhs, requires, rhs, attribut
     | otherwise = do
         (res, _, _) <- runEquationT False def mllvm Nothing mempty $ do
             lhsCeils <- Set.fromList <$> computeCeil lhs
-            requiresCeils <- Set.fromList <$> concatMapM (computeCeil . coerce) (Set.toList requires)
+            requiresCeils <- Set.fromList <$> concatMapM (computeCeil . coerce) requires
             let subtractLHSAndRequiresCeils = (Set.\\ (lhsCeils `Set.union` requiresCeils)) . Set.fromList
             rhsCeils <- simplifyCeils =<< (subtractLHSAndRequiresCeils <$> computeCeil rhs)
 

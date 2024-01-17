@@ -933,7 +933,7 @@ expandAlias alias currentArgs
                 Def.Pattern
                     { term = Util.substituteInTerm substitution term
                     , constraints =
-                        Set.fromList $ sub substitution <$> Set.toList constraints
+                        sub substitution <$> constraints
                     , ceilConditions =
                         sub substitution <$> ceilConditions
                     }
@@ -944,7 +944,7 @@ expandAlias alias currentArgs
     sub substitution = coerce . Util.substituteInTerm substitution . coerce
 
 removeTrueBools :: Def.Pattern -> Def.Pattern
-removeTrueBools p = p{Def.constraints = Set.filter (/= Def.Predicate Def.TrueBool) p.constraints}
+removeTrueBools p = p{Def.constraints = filter (/= Def.Predicate Def.TrueBool) p.constraints}
 
 {- | Internalises simplification rules, for term simplification
    (represented as a 'RewriteRule').
@@ -1078,7 +1078,7 @@ internaliseCeil partialDef left right sortVars attrs = do
                     NotSupported (head unsupported)
         pure $
             map (Util.modifyVariablesInT (Util.modifyVarName ("Eq#" <>)) . coerce) $
-                Set.toList constraints
+                constraints
 
 {- | Internalises a function rule from its components that were matched
   before.

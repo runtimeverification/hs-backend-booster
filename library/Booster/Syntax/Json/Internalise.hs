@@ -98,8 +98,8 @@ data InternalisedPredicate
     deriving stock (Eq, Show)
 
 data InternalisedPredicates = InternalisedPredicates
-    { boolPredicates :: Set Internal.Predicate
-    , ceilPredicates :: Set Internal.Ceil
+    { boolPredicates :: [Internal.Predicate]
+    , ceilPredicates :: [Internal.Ceil]
     , substitution :: Map Internal.Variable Internal.Term
     , unsupported :: [Syntax.KorePattern]
     }
@@ -108,8 +108,8 @@ data InternalisedPredicates = InternalisedPredicates
 instance Pretty InternalisedPredicates where
     pretty ps =
         Pretty.vsep $
-            ("Bool predicates: " : map pretty (Set.toList ps.boolPredicates))
-                <> ("Ceil predicates: " : map pretty (Set.toList ps.ceilPredicates))
+            ("Bool predicates: " : map pretty ps.boolPredicates)
+                <> ("Ceil predicates: " : map pretty ps.ceilPredicates)
                 <> ("Substitution: " : map pretty (Map.assocs ps.substitution))
                 <> ("Unsupported predicates: " : map (pretty . show) ps.unsupported)
 
@@ -147,7 +147,7 @@ internalisePattern allowAlias checkSubsorts sortVars definition p = do
         ( Internal.Pattern
             { term
             , constraints = internalPs.boolPredicates
-            , ceilConditions = Set.toList internalPs.ceilPredicates
+            , ceilConditions = internalPs.ceilPredicates
             }
         , internalPs.substitution
         , internalPs.unsupported
@@ -331,7 +331,7 @@ internaliseTerm ::
     Except PatternError Internal.Term
 internaliseTerm = internaliseTermRaw IsNotQQ
 
-{- | Internalises an And-ed set of predicates, classifying them into
+{- | Internalises an And-ed predicates, de-duplicating them and classifying them into
   BoolPred, CeilPred, SubstitutionPred, and UnsupportedPred.
   The substitution (as a whole) is analysed after internalisation, to
   ensure nothing is circular or ambiguous.
@@ -356,8 +356,8 @@ internalisePredicates allowAlias checkSubsorts sortVars definition ps = do
 
     pure
         InternalisedPredicates
-            { boolPredicates = Set.fromList $ [p | BoolPred p <- internalised] <> moreEquations
-            , ceilPredicates = Set.fromList $ [p | CeilPred p <- internalised]
+            { boolPredicates = nub $ [p | BoolPred p <- internalised] <> moreEquations
+            , ceilPredicates = nub $ [p | CeilPred p <- internalised]
             , substitution
             , unsupported = [p | UnsupportedPred p <- internalised]
             }

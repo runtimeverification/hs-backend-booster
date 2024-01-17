@@ -73,7 +73,6 @@ import Booster.Syntax.Json.Internalise (
 import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base
 import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinitions)
-import Data.Set qualified as Set
 import Kore.JsonRpc.Error qualified as RpcError
 import Kore.JsonRpc.Server
 import Kore.JsonRpc.Types qualified as RpcTypes
@@ -252,7 +251,7 @@ respond stateVar =
                             mLlvmLibrary
                             solver
                             mempty
-                            (Set.toList ps.boolPredicates)
+                            ps.boolPredicates
                             >>= \case
                                 (Right newPreds, traces, _) -> do
                                     let predicateSort =
@@ -260,7 +259,7 @@ respond stateVar =
                                                 sortOfJson req.state.term
                                         result =
                                             map (externalisePredicate predicateSort) newPreds
-                                                <> map (externaliseCeil predicateSort) (Set.toList ps.ceilPredicates)
+                                                <> map (externaliseCeil predicateSort) ps.ceilPredicates
                                                 <> map (uncurry $ externaliseSubstitution predicateSort) (Map.toList ps.substitution)
                                                 <> ps.unsupported
 
@@ -315,7 +314,7 @@ respond stateVar =
                                             "booster"
                                             (Log.LevelOther "ErrorDetails")
                                             (Text.unlines $ map prettyPattern unsupported)
-                                    pure (Set.toList pat.constraints, substitution)
+                                    pure (pat.constraints, substitution)
                                 Predicates ps -> do
                                     unless (null ps.ceilPredicates && null ps.unsupported) $ do
                                         Log.logWarnNS
@@ -327,10 +326,10 @@ respond stateVar =
                                             ( Text.unlines $
                                                 map
                                                     (renderText . ("#Ceil:" <>) . pretty)
-                                                    (Set.toList ps.ceilPredicates)
+                                                    ps.ceilPredicates
                                                     <> map prettyPattern ps.unsupported
                                             )
-                                    pure (Set.toList ps.boolPredicates, ps.substitution)
+                                    pure (ps.boolPredicates, ps.substitution)
 
                         smtResult <-
                             if null boolPs && Map.null suppliedSubst

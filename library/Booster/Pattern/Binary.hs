@@ -30,7 +30,6 @@ import Data.ByteString qualified as BS
 import Data.Int (Int16)
 import Data.List (intercalate)
 import Data.Map qualified as Map
-import Data.Set qualified as Set
 import Data.Word (Word64)
 import GHC.Word (Word8)
 import Prettyprinter (pretty)
@@ -423,7 +422,7 @@ decodePattern mDef = do
             preds <- forM preds' $ \case
                 BPredicate p -> pure p
                 _ -> fail "Expecting a predicate"
-            pure $ Pattern trm (Set.fromList preds) mempty
+            pure $ Pattern trm preds mempty
         _ -> fail "Expecting a term on the top of the stack"
 
 decodeSingleBlock :: Get Block

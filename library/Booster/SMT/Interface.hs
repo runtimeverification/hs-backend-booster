@@ -222,7 +222,7 @@ checkPredicates ::
     forall io.
     Log.MonadLoggerIO io =>
     SMT.SMTContext ->
-    Set Predicate ->
+    [Predicate] ->
     Map Variable Term ->
     Set Predicate ->
     io (Maybe Bool)
@@ -297,7 +297,7 @@ checkPredicates ctxt givenPs givenSubst psToCheck
         smtSubst <-
             mapM (\(v, t) -> Assert "Substitution" <$> mkSMTEquation v t) $ Map.assocs givenSubst
         smtPs <-
-            mapM (\(Predicate p) -> Assert (mkComment p) <$> SMT.translateTerm p) $ Set.toList givenPs
+            mapM (\(Predicate p) -> Assert (mkComment p) <$> SMT.translateTerm p) givenPs
         toCheck <-
             mapM (SMT.translateTerm . coerce) $ Set.toList psToCheck
         pure (smtSubst <> smtPs, toCheck)

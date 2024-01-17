@@ -34,7 +34,6 @@ import Booster.Definition.Base qualified as Internal
 import Booster.Prettyprinter
 import Booster.Syntax.Json.Internalise
 import Data.Map qualified as Map
-import Data.Set qualified as Set
 import Kore.JsonRpc.Types
 import Kore.Syntax.Json.Types hiding (Left, Right)
 import Prettyprinter qualified as Pretty
@@ -239,9 +238,9 @@ diffBy def pat1 pat2 =
         ( BS.pack . renderDefault . Pretty.vsep $
             concat
                 [ "Conditions:"
-                    : fmap (Pretty.indent 4 . pretty) (Set.toList ps.boolPredicates)
+                    : fmap (Pretty.indent 4 . pretty) ps.boolPredicates
                 , "Ceil conditions:"
-                    : map (Pretty.indent 4 . pretty) (Set.toList ps.ceilPredicates)
+                    : map (Pretty.indent 4 . pretty) ps.ceilPredicates
                 , "Substitutions:"
                     : fmap (Pretty.indent 4) (map (\(k, v) -> pretty k <+> "=" <+> pretty v) (Map.toList ps.substitution))
                 ]
