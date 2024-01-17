@@ -9,7 +9,6 @@ module Test.Booster.Syntax.Json.Internalise (
 import Control.Monad.Trans.Except
 import Data.Coerce
 import Data.Map qualified as Map
-import Data.Set qualified as Set
 import Data.Text (Text)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -53,7 +52,7 @@ testBasicPredicates =
 
     shouldBeBool name pat expected =
         testCase name $
-            Right (InternalisedPredicates (Set.singleton expected) mempty mempty [])
+            Right (InternalisedPredicates [expected] mempty mempty [])
                 @=? runExcept (internalise pat)
 
     expectUnsupported description pat expected =
@@ -124,8 +123,7 @@ testSubstitutions =
          in InternalisedPredicates mempty mempty expectedSubstitution mempty
 
     hasEquations pairs =
-        let expectedPreds =
-                Set.fromList [t ==. t' | (t, t') <- pairs]
+        let expectedPreds = [t ==. t' | (t, t') <- pairs]
          in InternalisedPredicates expectedPreds mempty mempty mempty
 
 -- basically a semigroup instance but in the general case the
