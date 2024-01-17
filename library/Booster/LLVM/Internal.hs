@@ -412,7 +412,7 @@ marshallSort = \case
                 forM_ args $ marshallSort >=> liftIO . kore.sort.addArgument sort
                 liftIO $ modifyIORef' kore.sort.cache $ HM.insert s sort
                 pure sort
-    SortVar varName -> Prelude.error $ "marshalling SortVar " <> show varName <> " unsupported"
+    SortVar varName -> error $ "marshalling SortVar " <> show varName <> " unsupported"
 
 marshallTerm :: Term -> LLVM KorePatternPtr
 marshallTerm t = do
@@ -430,7 +430,7 @@ marshallTerm t = do
             liftIO . kore.patt.addArgument trm =<< marshallTerm r
         DomainValue sort val ->
             marshallSort sort >>= liftIO . kore.patt.token.new val
-        Var varName -> Prelude.error $ "marshalling Var " <> show varName <> " unsupported"
+        Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"
         Injection source target trm -> do
             inj <- liftIO . kore.patt.fromSymbol =<< marshallSymbol injectionSymbol [source, target]
             marshallTerm trm >>= liftIO . kore.patt.addArgument inj
