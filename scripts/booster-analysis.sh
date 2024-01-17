@@ -3,11 +3,12 @@ set -euxo pipefail
 
 # Environment variables:
 #   LOG_DIR: path to bug report run logs, defaults to $BUG_REPORT_DIR-logs
+#   PARALLEL: number of bug reports to process in parallel, defaults to $(nproc)
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
 
-export PYTEST_PARALLEL=8 
+PARALLEL=${PARALLEL:-$(nproc)}
 
 BUG_REPORT_DIR=$1
 
@@ -42,7 +43,7 @@ run_tarball(){
 export -f run_tarball
 export SCRIPT_DIR
 
-find $BUG_REPORT_DIR -name \*tar -print0 | xargs -0 -t -I {} -P $(nproc) bash -c 'run_tarball "$@"' _ {}
+find $BUG_REPORT_DIR -name \*tar -print0 | xargs -0 -t -I {} -P $PARALLEL bash -c 'run_tarball "$@"' $(basename {}) {}
 
 # for tar in $(find $BUG_REPORT_DIR -name \*tar );
 # do 
