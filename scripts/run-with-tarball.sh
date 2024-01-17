@@ -4,7 +4,8 @@ set -exo pipefail
 # Starts an rpc server and runs a tarball against it using rpc-client
 # Environment variables:
 #   DEFINITION: kore file to load (optional, otherwise from tarball)
-#   LLVM_LIB: default llvm library to load (required)
+#   LLVM_LIB: default llvm library to load (provide this or PLUGIN_DIR)
+#   PLUGIN_DIR: dir for blockchain plugin (optional, to compile an LLVM library)
 #   BOOSTER: booster home directory (only relevant if not setting the following)
 #   SERVER: kore-rpc server path (default: from build dir in BOOSTER)
 #   CLIENT: rpc client path (default: from build dir in BOOSTER)
