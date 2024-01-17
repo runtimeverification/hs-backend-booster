@@ -320,23 +320,31 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
             Just False -> RewriteRuleAppT $ pure Trivial
             _other -> pure ()
 
+    -- existential variables may be present in rule.rhs and rule.ensures,
+    -- need to strip prefixes and freshen their names with respect to variables already
+    -- present in the input pattern and in the unification substitution
+    let varsFromInput = freeVariables pat.term <> (Set.unions $ Set.map (freeVariables . coerce) pat.constraints)
+        varsFromSubst = Set.unions . map freeVariables . Map.elems $ subst
+        forbiddenVars = varsFromInput <> varsFromSubst
+        existentialSubst =
+            Map.fromSet
+                (\v -> Var $ freshenVar v{variableName = stripMarker v.variableName} forbiddenVars)
+                rule.existentials
+
+    -- modify the substitution to include the existentials
+    let substWithExistentials = subst `Map.union` existentialSubst
+
     let rewritten =
             Pattern
-                (substituteInTerm (refreshExistentials subst) rule.rhs)
-                -- adding new constraints that have not been trivially `Top`
-                ( Set.fromList newConstraints
-                    <> Set.map (coerce . substituteInTerm subst . coerce) pat.constraints
+                (substituteInTerm substWithExistentials rule.rhs)
+                -- adding new constraints that have not been trivially `Top`, substituting the Ex# variables
+                ( pat.constraints
+                    <> (Set.fromList $ map (coerce . substituteInTerm existentialSubst . coerce) newConstraints)
                 )
                 ceilConditions
     return (rule, rewritten)
   where
     failRewrite = lift . throw
-
-    refreshExistentials subst
-        | Set.null (rule.existentials `Set.intersection` Map.keysSet subst) = subst
-        | otherwise =
-            let substVars = Map.keysSet subst
-             in subst `Map.union` Map.fromSet (\v -> Var $ freshenVar v substVars) rule.existentials
 
     checkConstraint ::
         (Predicate -> a) ->
@@ -608,6 +616,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
     logRewrite = logOther (LevelOther "Rewrite")
     logRewriteSuccess = logOther (LevelOther "RewriteSuccess")
     logSimplify = logOther (LevelOther "Simplify")
+    logAborts = logOther (LevelOther "Aborts")
 
     prettyText :: Pretty a => a -> Text
     prettyText = renderText . pretty
@@ -664,10 +673,14 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                     rewriteTrace $ RewriteSimplified traces (Just r)
                     pure $ Just p
                 Left r@(EquationLoop (t : ts)) -> do
-                    let termDiffs = zipWith (curry mkDiffTerms) (t : ts) ts
                     logError "Equation evaluation loop"
-                    logSimplify $
-                        "produced the evaluation loop: " <> Text.unlines (map (prettyText . fst) termDiffs)
+                    logOtherNS "booster" (LevelOther "ErrorDetails") $
+                        let termDiffs = zipWith (curry mkDiffTerms) (t : ts) ts
+                            l = length ts
+                         in "Evaluation loop of length "
+                                <> prettyText l
+                                <> ": \n"
+                                <> Text.unlines (map (prettyText . fst) termDiffs)
                     rewriteTrace $ RewriteSimplified traces (Just r)
                     pure $ Just p
                 Left other -> do
@@ -802,6 +815,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                                 withSimplified pat' "Retrying with simplified pattern" (doSteps True)
                         Left failure -> do
                             rewriteTrace $ RewriteStepFailed failure
+                            logAborts . renderText $ pretty failure
                             let msg = "Aborted after " <> showCounter counter
                             if wasSimplified
                                 then logRewrite msg >> pure (RewriteAborted failure pat')

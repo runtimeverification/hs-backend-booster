@@ -33,21 +33,19 @@ simplifyTerm api def trm sort = unsafePerformIO $ Internal.runLLVM api $ do
     Trace.traceIO $ Internal.LlvmVar (Internal.somePtr trmPtr) trm
     -- strip away the custom injection added by the LLVM backend
     Trace.timeIO "LLVM.simplifyTerm.decodeTerm" $ case runGet (decodeTerm def) (fromStrict binary) of
-        Injection newSort (SortApp "SortKItem" _) result
-            | newSort == sort ->
+        result
+            | sortOfTerm result == sort ->
                 pure result
-            | Set.member (sortName newSort) subsorts ->
+            | newSort@(SortApp name _) <- sortOfTerm result
+            , Set.member name subsorts ->
                 pure $ Injection newSort sort result
-        someTerm
-            | sortOfTerm someTerm == sort ->
-                pure someTerm
-        other -> do
-            liftIO . putStrLn $
-                "[Error] Unexpected sort after LLVM simplification: "
-                    <> show other
-                    <> " Expected sort "
-                    <> show sort
-            pure trm
+            | otherwise -> do
+                liftIO . putStrLn $
+                    "[Error] LLVM simplification returned sort  "
+                        <> show (sortOfTerm result)
+                        <> ". Expected sort "
+                        <> show sort
+                pure trm
   where
     sortName (SortApp name _) = name
     sortName (SortVar name) = name

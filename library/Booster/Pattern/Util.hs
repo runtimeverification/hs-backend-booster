@@ -3,7 +3,7 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Booster.Pattern.Util (
-    applySubst,
+    substituteInSort,
     sortOfTerm,
     sortOfPattern,
     substituteInTerm,
@@ -29,8 +29,14 @@ module Booster.Pattern.Util (
     abstractSymbolicConstructorArguments,
     cellSymbolStats,
     cellVariableStats,
+    stripMarker,
+    markAsExVar,
+    markAsRuleVar,
+    incrementNameCounter,
 ) where
 
+import Control.Applicative ((<|>))
+import Data.Attoparsec.ByteString.Char8 qualified as A
 import Data.Bifunctor (bimap, first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
@@ -58,7 +64,7 @@ import Booster.Pattern.Base
 sortOfTerm :: Term -> Sort
 sortOfTerm (AndTerm _ child) = sortOfTerm child
 sortOfTerm (SymbolApplication symbol sorts _) =
-    applySubst (Map.fromList $ zip symbol.sortVars sorts) symbol.resultSort
+    substituteInSort (Map.fromList $ zip symbol.sortVars sorts) symbol.resultSort
 sortOfTerm (DomainValue sort _) = sort
 sortOfTerm (Var Variable{variableSort}) = variableSort
 sortOfTerm (Injection _ sort _) = sort
@@ -66,11 +72,11 @@ sortOfTerm (KMap def _ _) = SortApp def.mapSortName []
 sortOfTerm (KList def _ _) = SortApp def.listSortName []
 sortOfTerm (KSet def _ _) = SortApp def.listSortName []
 
-applySubst :: Map VarName Sort -> Sort -> Sort
-applySubst subst var@(SortVar n) =
+substituteInSort :: Map VarName Sort -> Sort -> Sort
+substituteInSort subst var@(SortVar n) =
     fromMaybe var $ Map.lookup n subst
-applySubst subst (SortApp n args) =
-    SortApp n $ map (applySubst subst) args
+substituteInSort subst (SortApp n args) =
+    SortApp n $ map (substituteInSort subst) args
 
 sortOfPattern :: Pattern -> Sort
 sortOfPattern pat = sortOfTerm pat.term
@@ -113,10 +119,36 @@ modifyVariablesInT f = cata $ \case
 modifyVarName :: (VarName -> VarName) -> Variable -> Variable
 modifyVarName f v = v{variableName = f v.variableName}
 
+markAsRuleVar :: VarName -> VarName
+markAsRuleVar = ("Rule#" <>)
+
+markAsExVar :: VarName -> VarName
+markAsExVar = ("Ex#" <>)
+
+{- | Strip variable provenance prefixes introduced using "markAsRuleVar" and "markAsExVar"
+in "Syntax.ParsedKore.Internalize"
+-}
+stripMarker :: VarName -> VarName
+stripMarker name =
+    let noRule = BS.stripPrefix "Rule#" name
+        noEx = BS.stripPrefix "Ex#" name
+     in fromMaybe name $ noRule <|> noEx
+
 freshenVar :: Variable -> Set Variable -> Variable
 freshenVar v@Variable{variableName = vn} vs
-    | v `Set.member` vs = freshenVar v{variableName = vn <> "'"} vs
+    | v `Set.member` vs = freshenVar v{variableName = incrementNameCounter vn} vs
     | otherwise = v
+
+incrementNameCounter :: VarName -> VarName
+incrementNameCounter vname =
+    let (name, counter) = BS.spanEnd A.isDigit_w8 vname
+        parsedCounter = A.parseOnly @Int A.decimal counter
+        newCounter = case parsedCounter of
+            Right ok -> ok + 1
+            Left _err -> 0
+        -- convert the incremented counter back into a bytestring
+        unparsedNewCounter = BS.pack . map (fromIntegral . ord) . show $ newCounter
+     in name <> unparsedNewCounter
 
 {- | Abstract a term into a variable, making sure the variable name is disjoint from the given set of variables.
      Return the resulting singleton substitution.

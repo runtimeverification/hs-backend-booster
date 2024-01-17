@@ -1,5 +1,9 @@
 {-# LANGUAGE PatternSynonyms #-}
 
+{- |
+Copyright   : (c) Runtime Verification, 2023
+License     : BSD-3-Clause
+-}
 module Booster.Pattern.Binary (
     Version (..),
     Block (..),
@@ -13,12 +17,6 @@ module Booster.Pattern.Binary (
     decodeSingleBlock,
 ) where
 
-import Booster.Definition.Attributes.Base
-import Booster.Definition.Base
-import Booster.Pattern.Base
-import Booster.Pattern.Bool (pattern TrueBool)
-import Booster.Pattern.Util (sortOfTerm)
-import Booster.Prettyprinter (renderDefault)
 import Control.Monad (forM_, unless)
 import Control.Monad.Extra (forM)
 import Control.Monad.Trans.Class (MonadTrans (..))
@@ -37,6 +35,13 @@ import Data.Word (Word64)
 import GHC.Word (Word8)
 import Prettyprinter (pretty)
 import Text.Printf
+
+import Booster.Definition.Attributes.Base
+import Booster.Definition.Base
+import Booster.Pattern.Base
+import Booster.Pattern.Bool (pattern TrueBool)
+import Booster.Pattern.Util (sortOfTerm)
+import Booster.Prettyprinter (renderDefault)
 
 -- | tags indicating the next element in a block, see @'decodeBlock'@
 pattern
@@ -216,6 +221,7 @@ lookupKoreDefinitionSymbol name = DecodeM $ do
                         CannotBeEvaluated
                         Nothing
                         Nothing
+                        Nothing
                     )
         Just def -> Right $ Map.lookup name $ symbols def
 
@@ -287,6 +293,12 @@ decodeBlock mbSize = do
             False -> m >> whileNotEnded m
 
     mkSymbolApplication :: ByteString -> [Sort] -> [Block] -> DecodeM Block
+    -- automatically transform `rawTerm(inj{SortX, KItem}(X))` to X:SortX
+    -- see https://github.com/runtimeverification/llvm-backend/issues/916
+    mkSymbolApplication "rawTerm" [] [BTerm t]
+        | Injection sort SortKItem t' <- t
+        , sort == sortOfTerm t' =
+            pure $ BTerm t'
     mkSymbolApplication "\\and" _ [BTerm t1, BTerm t2] = pure $ BTerm $ AndTerm t1 t2
     mkSymbolApplication "\\and" _ bs =
         argError "AndTerm" [BTerm undefined, BTerm undefined] bs
