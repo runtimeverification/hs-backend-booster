@@ -30,7 +30,8 @@ import Control.Monad.Logger.CallStack (
     LogLevel (..),
     MonadLogger,
     MonadLoggerIO,
-    logOther, logWarn,
+    logOther,
+    logWarn,
  )
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
@@ -409,11 +410,11 @@ applyTerm direction pref trm = do
                 Nothing -> do
                     simplified <-
                         if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
-                            then
-                                -- LLVM simplification proceeds top-down and cuts the descent
-                                -- FIXME run this in IO
-                                simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t) >>= 
-                                    \case
+                            then -- LLVM simplification proceeds top-down and cuts the descent
+                            -- FIXME run this in IO
+
+                                simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
+                                    >>= \case
                                         Left (LLVM.LlvmError err) -> do
                                             logWarn $ decodeUtf8 err
                                             apply config t

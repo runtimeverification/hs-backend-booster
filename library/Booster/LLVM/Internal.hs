@@ -105,7 +105,6 @@ data KorePatternAPI = KorePatternAPI
 --     }
 newtype LlvmError = LlvmError ByteString
 
-
 data API = API
     { patt :: KorePatternAPI
     , symbol :: KoreSymbolAPI
@@ -320,12 +319,11 @@ mkAPI dlib = flip runReaderT dlib $ do
 
     let sort = KoreSortAPI{new = newSort, addArgument = addArgumentSort, dump = dumpSort, cache = sortCache}
 
-
     freeError <- {-# SCC "LLVM.error.free" #-} koreErrorFreeFunPtr
     newError <- {-# SCC "LLVM.error.new" #-} (>>= newForeignPtr freeError) <$> koreErrorNew
     isSuccess <- {-# SCC "LLVM.error.isSuccess" #-} (>=> pure . (== 1)) <$> koreErrorIsSuccess
     errorMessage <- {-# SCC "LLVM.error.message" #-} (>=> BS.packCString) <$> koreErrorMessage
-    
+
     initialize <- kllvmInit
     liftIO initialize
     collect <- kllvmFreeAllMemory
@@ -345,7 +343,7 @@ mkAPI dlib = flip runReaderT dlib $ do
                     withForeignPtr p $ \pPtr -> do
                         res <- simplifyBool' errPtr pPtr
                         success <- isSuccess errPtr
-                        if success 
+                        if success
                             then pure $ Right $ res == 1
                             else do
                                 Left . LlvmError <$> errorMessage errPtr
@@ -373,15 +371,14 @@ mkAPI dlib = flip runReaderT dlib $ do
                                             , ret = Nothing
                                             }
                                     success <- isSuccess errPtr
-                                    if success 
+                                    if success
                                         then do
                                             len <- fromIntegral <$> peek lenPtr
                                             cstr <- peek strPtr
                                             result <- BS.packCStringLen (cstr, len)
                                             Foreign.free cstr
                                             pure $ Right result
-                                        else
-                                            Left . LlvmError <$> errorMessage errPtr
+                                        else Left . LlvmError <$> errorMessage errPtr
 
     pure API{patt, symbol, sort, simplifyBool, simplify, collect}
   where

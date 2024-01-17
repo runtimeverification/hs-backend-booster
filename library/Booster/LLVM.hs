@@ -12,7 +12,7 @@ import Booster.Pattern.Base
 import Booster.Pattern.Binary
 import Booster.Pattern.Util
 import Booster.Trace qualified as Trace
-import qualified Data.ByteString.Char8 as BS
+import Data.ByteString.Char8 qualified as BS
 
 simplifyBool :: MonadIO io => Internal.API -> Term -> io (Either Internal.LlvmError Bool)
 simplifyBool api trm = liftIO $ Internal.runLLVM api $ do
@@ -23,7 +23,8 @@ simplifyBool api trm = liftIO $ Internal.runLLVM api $ do
 
     liftIO $ kore.simplifyBool trmPtr
 
-simplifyTerm :: MonadIO io => Internal.API -> KoreDefinition -> Term -> Sort -> io (Either Internal.LlvmError Term)
+simplifyTerm ::
+    MonadIO io => Internal.API -> KoreDefinition -> Term -> Sort -> io (Either Internal.LlvmError Term)
 simplifyTerm api def trm sort = liftIO $ Internal.runLLVM api $ do
     kore <- Internal.ask
     trmPtr <- Trace.timeIO "LLVM.simplifyTerm.marshallTerm" $ Internal.marshallTerm trm
@@ -43,11 +44,14 @@ simplifyTerm api def trm sort = liftIO $ Internal.runLLVM api $ do
                     , Set.member name subsorts ->
                         pure $ Right $ Injection newSort sort result
                     | otherwise -> do
-                        pure $ Left $ Internal.LlvmError $ BS.pack $
-                            "LLVM simplification returned sort  "
-                                <> show (sortOfTerm result)
-                                <> ". Expected sort "
-                                <> show sort
+                        pure $
+                            Left $
+                                Internal.LlvmError $
+                                    BS.pack $
+                                        "LLVM simplification returned sort  "
+                                            <> show (sortOfTerm result)
+                                            <> ". Expected sort "
+                                            <> show sort
   where
     sortName (SortApp name _) = name
     sortName (SortVar name) = name
