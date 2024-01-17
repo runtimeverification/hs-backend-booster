@@ -30,7 +30,7 @@ import Control.Monad.Logger.CallStack (
     LogLevel (..),
     MonadLogger,
     MonadLoggerIO,
-    logOther,
+    logOther, logWarn,
  )
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
@@ -61,6 +61,7 @@ import Booster.Pattern.Match
 import Booster.Pattern.Util
 import Booster.Prettyprinter (renderDefault, renderText)
 import Booster.SMT.Interface qualified as SMT
+import Data.Text.Encoding (decodeUtf8)
 
 newtype EquationT io a
     = EquationT (ReaderT EquationConfig (ExceptT EquationFailure (StateT EquationState io)) a)
@@ -408,14 +409,19 @@ applyTerm direction pref trm = do
                 Nothing -> do
                     simplified <-
                         if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
-                            then do
+                            then
                                 -- LLVM simplification proceeds top-down and cuts the descent
                                 -- FIXME run this in IO
-                                let result = simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
-                                when (result /= t) $ do
-                                    setChanged
-                                    traceRuleApplication t Nothing (Just "LLVM") Nothing $ Success result
-                                pure result
+                                simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t) >>= 
+                                    \case
+                                        Left (LLVM.LlvmError err) -> do
+                                            logWarn $ decodeUtf8 err
+                                            apply config t
+                                        Right result -> do
+                                            when (result /= t) $ do
+                                                setChanged
+                                                traceRuleApplication t Nothing (Just "LLVM") Nothing $ Success result
+                                            pure result
                             else -- use equations
                                 apply config t
                     toCache t simplified
@@ -810,10 +816,15 @@ simplifyConstraint' recurseIntoEvalBool = \case
             mbApi <- (.llvmApi) <$> getConfig
             case mbApi of
                 Just api ->
-                    pure $
-                        if simplifyBool api t
-                            then TrueBool
-                            else FalseBool
+                    simplifyBool api t >>= \case
+                        Left (LLVM.LlvmError err) -> do
+                            logWarn $ decodeUtf8 err
+                            if recurseIntoEvalBool then evalBool t else pure t
+                        Right res ->
+                            pure $
+                                if res
+                                    then TrueBool
+                                    else FalseBool
                 Nothing -> if recurseIntoEvalBool then evalBool t else pure t
         | otherwise ->
             if recurseIntoEvalBool then evalBool t else pure t
