@@ -281,7 +281,7 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     let prior = pat.constraints
         (knownTrue, toCheck) = partition (`Set.member` prior) ruleRequires
     unless (null knownTrue) $
-        logInfoNS "booster" . renderText $
+        logOtherNS "booster" (LevelOther "Simplify") . renderText $
             vsep ("Known true side conditions (won't check):" : map pretty knownTrue)
 
     unclearRequires <-
