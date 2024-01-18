@@ -575,8 +575,6 @@ prepareRequestData (Exec file) mbOptFile opts =
 prepareRequestData (Simpl file) mbOptFile opts =
     liftIO $ prepareOneTermRequest "simplify" file mbOptFile opts
 prepareRequestData (AddModule file) mbOptFile opts = do
-    unless (null opts) $
-        logWarn_ "Raw mode, ignoring given request options"
     moduleText <- liftIO $ Text.readFile file
     paramsFromFile <-
         liftIO $
