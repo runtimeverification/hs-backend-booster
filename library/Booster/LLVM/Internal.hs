@@ -103,7 +103,7 @@ data KorePatternAPI = KorePatternAPI
 --     , isSuccess :: KoreErrorPtr -> IO Bool
 --     , message :: KoreErrorPtr -> IO ByteString
 --     }
-newtype LlvmError = LlvmError ByteString
+newtype LlvmError = LlvmError ByteString deriving (Show, Eq)
 
 data API = API
     { patt :: KorePatternAPI

@@ -411,12 +411,11 @@ applyTerm direction pref trm = do
                     simplified <-
                         if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
                             then -- LLVM simplification proceeds top-down and cuts the descent
-                            -- FIXME run this in IO
-
                                 simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
                                     >>= \case
                                         Left (LLVM.LlvmError err) -> do
                                             logWarn $ decodeUtf8 err
+                                            -- fall back on equations
                                             apply config t
                                         Right result -> do
                                             when (result /= t) $ do
