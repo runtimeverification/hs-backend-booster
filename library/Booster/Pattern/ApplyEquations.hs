@@ -31,6 +31,7 @@ import Control.Monad.Logger.CallStack (
     MonadLogger,
     MonadLoggerIO,
     logOther,
+    logOtherNS,
  )
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
@@ -39,7 +40,7 @@ import Control.Monad.Trans.State
 import Data.ByteString.Char8 qualified as BS
 import Data.Coerce (coerce)
 import Data.Foldable (toList, traverse_)
-import Data.List (elemIndex)
+import Data.List (elemIndex, partition)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust)
@@ -687,7 +688,15 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                     concatMap
                         (splitBoolPredicates . coerce . substituteInTerm subst . coerce)
                         rule.requires
-            unclearConditions' <- catMaybes <$> mapM (checkConstraint ConditionFalse) required
+            -- If the required condition is _syntactically_ present in
+            -- the prior (known constraints), we don't check it.
+            knownPredicates <- (.predicates) <$> lift getState
+            let (knownTrue, toCheck) = partition (`Set.member` knownPredicates) required
+            unless (null knownTrue) $
+                logOtherNS "booster" (LevelOther "Simplify") . renderText $
+                    vsep ("Conditions known to be true: " : map pretty knownTrue)
+
+            unclearConditions' <- catMaybes <$> mapM (checkConstraint ConditionFalse) toCheck
 
             case unclearConditions' of
                 [] -> do
