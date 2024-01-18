@@ -411,6 +411,7 @@ applyTerm direction pref trm = do
                     simplified <-
                         if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
                             then -- LLVM simplification proceeds top-down and cuts the descent
+
                                 simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
                                     >>= \case
                                         Left (LLVM.LlvmError err) -> do
