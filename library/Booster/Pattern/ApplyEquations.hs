@@ -31,12 +31,12 @@ import Control.Monad.Logger.CallStack (
     MonadLogger,
     MonadLoggerIO,
     logOther,
-    logWarn,
  )
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State
+import Data.ByteString.Char8 qualified as BS
 import Data.Coerce (coerce)
 import Data.Foldable (toList, traverse_)
 import Data.List (elemIndex)
@@ -62,7 +62,6 @@ import Booster.Pattern.Match
 import Booster.Pattern.Util
 import Booster.Prettyprinter (renderDefault, renderText)
 import Booster.SMT.Interface qualified as SMT
-import Data.Text.Encoding (decodeUtf8)
 
 newtype EquationT io a
     = EquationT (ReaderT EquationConfig (ExceptT EquationFailure (StateT EquationState io)) a)
@@ -85,6 +84,7 @@ data EquationFailure
     | TooManyRecursions [Term]
     | SideConditionFalse Predicate
     | InternalError Text
+    | UndefinedTerm Term LLVM.LlvmError
     deriving stock (Eq, Show)
 
 instance Pretty EquationFailure where
@@ -107,6 +107,13 @@ instance Pretty EquationFailure where
             vsep
                 [ "A side condition was found to be false during evaluation (pruning)"
                 , pretty p
+                ]
+        UndefinedTerm t (LLVM.LlvmError err) ->
+            vsep
+                [ "Term"
+                , pretty t
+                , "is undefined: "
+                , pretty (BS.unpack err)
                 ]
         InternalError msg ->
             "Internal error during evaluation: " <> pretty msg
@@ -414,10 +421,7 @@ applyTerm direction pref trm = do
 
                                 simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
                                     >>= \case
-                                        Left (LLVM.LlvmError err) -> do
-                                            logWarn $ decodeUtf8 err
-                                            -- fall back on equations
-                                            apply config t
+                                        Left e -> throw $ UndefinedTerm t e
                                         Right result -> do
                                             when (result /= t) $ do
                                                 setChanged
@@ -710,15 +714,19 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     checkConstraint whenBottom (Predicate p) = do
         logOther (LevelOther "Simplify") $
             "Recursive simplification of predicate: " <> pack (renderDefault (pretty p))
-        let fallBackToUnsimplified :: EquationFailure -> EquationT io Term
-            fallBackToUnsimplified e = do
-                logOther (LevelOther "Simplify") . pack . renderDefault $
-                    "Aborting recursive simplification:" <> pretty e
-                pure p
+        let fallBackToUnsimplifiedOrBottom :: EquationFailure -> EquationT io Term
+            fallBackToUnsimplifiedOrBottom = \case
+                e@UndefinedTerm{} -> do
+                    logOther (LevelOther "Simplify") . pack . renderDefault $ pretty e
+                    pure FalseBool
+                e -> do
+                    logOther (LevelOther "Simplify") . pack . renderDefault $
+                        "Aborting recursive simplification:" <> pretty e
+                    pure p
         -- exceptions need to be handled differently in the recursion,
         -- falling back to the unsimplified constraint instead of aborting.
         simplified <-
-            lift $ simplifyConstraint' True p `catch_` fallBackToUnsimplified
+            lift $ simplifyConstraint' True p `catch_` fallBackToUnsimplifiedOrBottom
         case simplified of
             FalseBool -> throwE . whenBottom $ coerce p
             TrueBool -> pure Nothing
@@ -818,9 +826,8 @@ simplifyConstraint' recurseIntoEvalBool = \case
             case mbApi of
                 Just api ->
                     simplifyBool api t >>= \case
-                        Left (LLVM.LlvmError err) -> do
-                            logWarn $ decodeUtf8 err
-                            if recurseIntoEvalBool then evalBool t else pure t
+                        Left e ->
+                            throw $ UndefinedTerm t e
                         Right res ->
                             pure $
                                 if res
