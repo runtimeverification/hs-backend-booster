@@ -2,7 +2,7 @@
     "jsonrpc": "2.0",
     "id": 1,
     "result": {
-        "reason": "stuck",
+        "reason": "aborted",
         "depth": 1,
         "state": {
             "term": {
@@ -29,7 +29,7 @@
                                             "sorts": [
                                                 {
                                                     "tag": "SortApp",
-                                                    "name": "SortBaz",
+                                                    "name": "SortInt",
                                                     "args": []
                                                 },
                                                 {
@@ -40,29 +40,13 @@
                                             ],
                                             "args": [
                                                 {
-                                                    "tag": "App",
-                                                    "name": "LblBeep'LParUndsCommUndsRParUnds'EXISTENTIALS'Unds'Baz'Unds'Foo'Unds'Baz",
-                                                    "sorts": [],
-                                                    "args": [
-                                                        {
-                                                            "tag": "EVar",
-                                                            "name": "Ex#Var'Ques'Any",
-                                                            "sort": {
-                                                                "tag": "SortApp",
-                                                                "name": "SortFoo",
-                                                                "args": []
-                                                            }
-                                                        },
-                                                        {
-                                                            "tag": "EVar",
-                                                            "name": "Ex#Var'Ques'Other",
-                                                            "sort": {
-                                                                "tag": "SortApp",
-                                                                "name": "SortBaz",
-                                                                "args": []
-                                                            }
-                                                        }
-                                                    ]
+                                                    "tag": "DV",
+                                                    "sort": {
+                                                        "tag": "SortApp",
+                                                        "name": "SortInt",
+                                                        "args": []
+                                                    },
+                                                    "value": "2"
                                                 }
                                             ]
                                         },

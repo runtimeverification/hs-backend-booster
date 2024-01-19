@@ -24,6 +24,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State.Strict (StateT (runStateT), get, modify)
 import Data.Hashable qualified as Hashable
+import Data.List (partition)
 import Data.List.NonEmpty (NonEmpty (..), toList)
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
@@ -276,11 +277,17 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     let ruleRequires =
             concatMap (splitBoolPredicates . coerce . substituteInTerm subst . coerce) rule.requires
         notAppliedIfBottom = RewriteRuleAppT $ pure NotApplied
+    -- filter out any predicates known to be _syntactically_ present in the known prior
+    let prior = pat.constraints
+        (knownTrue, toCheck) = partition (`Set.member` prior) ruleRequires
+    unless (null knownTrue) $
+        logOtherNS "booster" (LevelOther "Simplify") . renderText $
+            vsep ("Known true side conditions (won't check):" : map pretty knownTrue)
+
     unclearRequires <-
-        catMaybes <$> mapM (checkConstraint id notAppliedIfBottom) ruleRequires
+        catMaybes <$> mapM (checkConstraint id notAppliedIfBottom) toCheck
 
     -- check unclear requires-clauses in the context of known constraints (prior)
-    let prior = pat.constraints
     mbSolver <- lift $ RewriteT $ (.smtSolver) <$> ask
 
     case mbSolver of
@@ -320,23 +327,31 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
             Just False -> RewriteRuleAppT $ pure Trivial
             _other -> pure ()
 
+    -- existential variables may be present in rule.rhs and rule.ensures,
+    -- need to strip prefixes and freshen their names with respect to variables already
+    -- present in the input pattern and in the unification substitution
+    let varsFromInput = freeVariables pat.term <> (Set.unions $ Set.map (freeVariables . coerce) pat.constraints)
+        varsFromSubst = Set.unions . map freeVariables . Map.elems $ subst
+        forbiddenVars = varsFromInput <> varsFromSubst
+        existentialSubst =
+            Map.fromSet
+                (\v -> Var $ freshenVar v{variableName = stripMarker v.variableName} forbiddenVars)
+                rule.existentials
+
+    -- modify the substitution to include the existentials
+    let substWithExistentials = subst `Map.union` existentialSubst
+
     let rewritten =
             Pattern
-                (substituteInTerm (refreshExistentials subst) rule.rhs)
-                -- adding new constraints that have not been trivially `Top`
-                ( Set.fromList newConstraints
-                    <> Set.map (coerce . substituteInTerm subst . coerce) pat.constraints
+                (substituteInTerm substWithExistentials rule.rhs)
+                -- adding new constraints that have not been trivially `Top`, substituting the Ex# variables
+                ( pat.constraints
+                    <> (Set.fromList $ map (coerce . substituteInTerm existentialSubst . coerce) newConstraints)
                 )
                 ceilConditions
     return (rule, rewritten)
   where
     failRewrite = lift . throw
-
-    refreshExistentials subst
-        | Set.null (rule.existentials `Set.intersection` Map.keysSet subst) = subst
-        | otherwise =
-            let substVars = Map.keysSet subst
-             in subst `Map.union` Map.fromSet (\v -> Var $ freshenVar v substVars) rule.existentials
 
     checkConstraint ::
         (Predicate -> a) ->
@@ -351,6 +366,7 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
             Right (Predicate FalseBool) -> onBottom
             Right (Predicate TrueBool) -> pure Nothing
             Right other -> pure $ Just $ onUnclear other
+            Left UndefinedTerm{} -> onBottom
             Left _ -> pure $ Just $ onUnclear p
 
 {- | Reason why a rewrite did not produce a result. Contains additional
@@ -646,6 +662,10 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                     pure $ Just newPattern
                 Left r@(SideConditionFalse _p) -> do
                     logSimplify "A side condition was found to be false, pruning"
+                    rewriteTrace $ RewriteSimplified traces (Just r)
+                    pure Nothing
+                Left r@UndefinedTerm{} -> do
+                    logSimplify "Term is undefined, pruning"
                     rewriteTrace $ RewriteSimplified traces (Just r)
                     pure Nothing
                 -- NB any errors here might be caused by simplifying one

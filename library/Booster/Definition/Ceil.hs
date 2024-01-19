@@ -108,7 +108,12 @@ computeCeilRule mllvm def r@RewriteRule.RewriteRule{lhs, requires, rhs, attribut
                         , ceils = requiresCeils <> rhsCeils
                         , newRule =
                             if null requiresCeils && null rhsCeils
-                                then Just r{RewriteRule.attributes = attributes{preserving = Flag True}}
+                                then
+                                    Just
+                                        r
+                                            { RewriteRule.attributes = attributes{preserving = Flag True}
+                                            , RewriteRule.computedAttributes = computedAttributes{notPreservesDefinednessReasons = []}
+                                            }
                                 else -- we could add a case when ceils are fully resolved into predicates, which we would then
                                 -- add to the requires clause of a rule
                                     Nothing
@@ -127,9 +132,12 @@ computeCeilRule mllvm def r@RewriteRule.RewriteRule{lhs, requires, rhs, attribut
 
     simplifyCeil api p@(Left (Predicate t@(Term TermAttributes{canBeEvaluated} _)))
         | isConcrete t && canBeEvaluated = do
-            if simplifyBool api t
-                then pure Nothing
-                else error "ceil simplified to bottom"
+            simplifyBool api t >>= \case
+                Left{} -> pure $ Just p
+                Right res ->
+                    if res
+                        then pure Nothing
+                        else error "ceil simplified to bottom"
         | otherwise = pure $ Just p
     simplifyCeil _ other = pure $ Just other
 

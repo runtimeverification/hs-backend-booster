@@ -22,7 +22,7 @@
                 "sorts": [
                   {
                     "tag": "SortApp",
-                    "name": "SortBaz",
+                    "name": "SortFoo",
                     "args": []
                   },
                   {
@@ -34,15 +34,17 @@
                 "args": [
                   {
                     "tag": "App",
-                    "name": "LblBaz'LParUndsRParUnds'EXISTENTIALS'Unds'Baz'Unds'Foo",
+                    "name": "Lblg'LParUndsRParUnds'COMPUTE-CEIL'Unds'Foo'Unds'Int",
                     "sorts": [],
                     "args": [
-
                       {
-                        "tag": "App",
-                        "name": "LblBar'LParRParUnds'EXISTENTIALS'Unds'Foo",
-                        "sorts": [],
-                        "args": []
+                        "tag": "DV",
+                        "sort": {
+                          "tag": "SortApp",
+                          "name": "SortInt",
+                          "args": []
+                        },
+                        "value": "12"
                       }
                     ]
                   }
