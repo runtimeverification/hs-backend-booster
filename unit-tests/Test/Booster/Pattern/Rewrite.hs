@@ -227,6 +227,9 @@ rewriteStuck =
         , testCase "No rules for con2" $
             getsStuck
                 [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con2{}( \dv{SomeSort{}}("thing") ) ), Thing:SortK{}) ) |]
+        , testCase "No rules for dotk()" $
+            getsStuck
+                [trm| kCell{}( kseq{}(dotk{}()) ) |]
         ]
 rulePriority =
     testCase "con1 rewrites to a branch when higher priority does not apply" $
