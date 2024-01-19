@@ -24,6 +24,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State.Strict (StateT (runStateT), get, modify)
 import Data.Hashable qualified as Hashable
+import Data.List (partition)
 import Data.List.NonEmpty (NonEmpty (..), toList)
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as Map
@@ -274,11 +275,17 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     let ruleRequires =
             concatMap (splitBoolPredicates . coerce . substituteInTerm subst . coerce) rule.requires
         notAppliedIfBottom = RewriteRuleAppT $ pure NotApplied
+    -- filter out any predicates known to be _syntactically_ present in the known prior
+    let prior = pat.constraints
+        (knownTrue, toCheck) = partition (`Set.member` prior) ruleRequires
+    unless (null knownTrue) $
+        logOtherNS "booster" (LevelOther "Simplify") . renderText $
+            vsep ("Known true side conditions (won't check):" : map pretty knownTrue)
+
     unclearRequires <-
-        catMaybes <$> mapM (checkConstraint id notAppliedIfBottom) ruleRequires
+        catMaybes <$> mapM (checkConstraint id notAppliedIfBottom) toCheck
 
     -- check unclear requires-clauses in the context of known constraints (prior)
-    let prior = pat.constraints
     mbSolver <- lift $ RewriteT $ (.smtSolver) <$> ask
 
     case mbSolver of
@@ -357,6 +364,7 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
             Right (Predicate FalseBool) -> onBottom
             Right (Predicate TrueBool) -> pure Nothing
             Right other -> pure $ Just $ onUnclear other
+            Left UndefinedTerm{} -> onBottom
             Left _ -> pure $ Just $ onUnclear p
 
 {- | Reason why a rewrite did not produce a result. Contains additional
@@ -652,6 +660,10 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                     pure $ Just newPattern
                 Left r@(SideConditionFalse _p) -> do
                     logSimplify "A side condition was found to be false, pruning"
+                    rewriteTrace $ RewriteSimplified traces (Just r)
+                    pure Nothing
+                Left r@UndefinedTerm{} -> do
+                    logSimplify "Term is undefined, pruning"
                     rewriteTrace $ RewriteSimplified traces (Just r)
                     pure Nothing
                 -- NB any errors here might be caused by simplifying one
