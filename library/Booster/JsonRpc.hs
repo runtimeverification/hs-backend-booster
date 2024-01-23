@@ -74,7 +74,7 @@ import Booster.Syntax.Json.Internalise (
 import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base hiding (ParsedModule)
 import Booster.Syntax.ParsedKore.Base qualified as ParsedModule (ParsedModule (..))
-import Booster.Syntax.ParsedKore.Internalise (DefinitionError (..), addToDefinitions)
+import Booster.Syntax.ParsedKore.Internalise (addToDefinitions)
 import Data.Aeson (ToJSON (toJSON))
 import Data.Set qualified as Set
 import Kore.JsonRpc.Error qualified as RpcError
