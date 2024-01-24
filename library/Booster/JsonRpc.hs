@@ -592,7 +592,6 @@ execResponse mbDuration req (d, traces, rr) originalSubstitution unsupported = c
          in case (timingLog, traceLogs) of
                 (Nothing, []) -> Nothing
                 (Nothing, xs@(_ : _)) -> Just xs
-                (Just t, []) -> Just [t]
                 (Just t, xs) -> Just (t : xs)
 
 toExecState :: Pattern -> Map Variable Term -> [Syntax.KorePattern] -> RpcTypes.ExecuteState
