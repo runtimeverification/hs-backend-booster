@@ -14,11 +14,14 @@ module Booster.VersionInfo (
 import Data.Aeson (
     FromJSON,
  )
+import Data.Time (getCurrentTime)
 import Development.GitRev qualified as GitRev
 import GHC.Generics qualified as GHC
 import Language.Haskell.TH (
     Exp,
     Q,
+    runIO,
+    stringE,
  )
 import Language.Haskell.TH.Syntax (
     Lift,
@@ -30,6 +33,7 @@ data VersionInfo = VersionInfo
     , gitCommitDate :: !String
     , gitBranch :: !(Maybe String)
     , gitDirty :: !Bool
+    , buildDate :: !String
     }
     deriving stock (GHC.Generic)
     deriving stock (Lift)
@@ -45,5 +49,6 @@ versionInfo =
             , gitCommitDate = $(GitRev.gitCommitDate)
             , gitBranch = Just $(GitRev.gitBranch)
             , gitDirty = $(GitRev.gitDirty)
+            , buildDate = $(stringE =<< runIO (show `fmap` Data.Time.getCurrentTime))
             }
         |]
