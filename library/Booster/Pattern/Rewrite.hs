@@ -284,15 +284,26 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
         logOtherNS "booster" (LevelOther "Simplify") . renderText $
             vsep ("Known true side conditions (won't check):" : map pretty knownTrue)
 
-    unclearRequires <-
-        catMaybes <$> mapM (checkConstraint id notAppliedIfBottom) toCheck
+    -- filter candidate definitional equalities form the requires clause
+    let (definitionalEqualities, otherConstraints) = deriveDefinitonalEqualities toCheck
+    -- unless (null definitionalEqualities) $ do
+    logOtherNS "booster" (LevelOther "Depth") . renderText $
+        vsep ("Found these definitional equalities in the requires clause:" : map pretty definitionalEqualities)
+    logOtherNS "booster" (LevelOther "Depth") . renderText $
+        vsep ("Other constrains are" : map pretty otherConstraints)
 
-    -- check unclear requires-clauses in the context of known constraints (prior)
+    unclearRequires <-
+        catMaybes <$> mapM (checkConstraint id notAppliedIfBottom) otherConstraints
+
+    logOtherNS "booster" (LevelOther "Depth") . renderText $
+        vsep ("These conditions are still unclear" : map pretty unclearRequires)
+
+    -- check unclear requires-clauses in the context of known constraints (prior) and derived definitional equalities (ASSUMING THESE)
     mbSolver <- lift $ RewriteT $ (.smtSolver) <$> ask
 
     case mbSolver of
         Just solver -> do
-            checkAllRequires <- lift $ SMT.checkPredicates solver prior mempty (Set.fromList unclearRequires)
+            checkAllRequires <- lift $ SMT.checkPredicates solver (prior <> Set.fromList definitionalEqualities) mempty (Set.fromList unclearRequires)
 
             case checkAllRequires of
                 Nothing ->

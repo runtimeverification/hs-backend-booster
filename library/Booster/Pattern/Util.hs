@@ -32,6 +32,7 @@ module Booster.Pattern.Util (
     stripMarker,
     markAsExVar,
     markAsRuleVar,
+    isRuleVar,
     incrementNameCounter,
 ) where
 
@@ -121,6 +122,9 @@ modifyVarName f v = v{variableName = f v.variableName}
 
 markAsRuleVar :: VarName -> VarName
 markAsRuleVar = ("Rule#" <>)
+
+isRuleVar :: Variable -> Bool
+isRuleVar v = BS.isPrefixOf "Rule#" v.variableName
 
 markAsExVar :: VarName -> VarName
 markAsExVar = ("Ex#" <>)
