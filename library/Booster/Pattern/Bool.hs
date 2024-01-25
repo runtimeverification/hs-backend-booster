@@ -131,7 +131,7 @@ pattern NEqualsInt a b =
                 []
                 [SortInt, SortInt]
                 SortBool
-                (HookedTotalFunctionWithSMT "BOOL.neq" "distinct")
+                (HookedTotalFunctionWithSMT "INT.ne" "distinct")
             )
         []
         [a, b]
