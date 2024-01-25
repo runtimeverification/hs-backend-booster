@@ -154,16 +154,7 @@ pattern SetIn a b =
                 []
                 [SortKItem, SortSet]
                 SortBool
-                ( SymbolAttributes
-                        TotalFunction
-                        IsNotIdem
-                        IsNotAssoc
-                        IsNotMacroOrAlias
-                        CanBeEvaluated
-                        Nothing
-                        Nothing
-                        Nothing
-                    )
+                (HookedTotalFunction "SET.in")
             )
         []
         [a, b]
