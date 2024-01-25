@@ -64,8 +64,8 @@ pattern TotalFunctionWithSMT hook =
         (Just (SMTHook (Atom (SMTId hook))))
         Nothing
 
-pattern HookedFunctionWithSMT :: Text -> ByteString -> SymbolAttributes
-pattern HookedFunctionWithSMT hook smt =
+pattern HookedTotalFunctionWithSMT :: Text -> ByteString -> SymbolAttributes
+pattern HookedTotalFunctionWithSMT hook smt =
     SymbolAttributes
         TotalFunction
         IsNotIdem
@@ -84,7 +84,7 @@ pattern AndBool l r =
                 []
                 [SortBool, SortBool]
                 SortBool
-                (HookedFunctionWithSMT "BOOL.and" "and")
+                (HookedTotalFunctionWithSMT "BOOL.and" "and")
             )
         []
         [l, r]
@@ -97,7 +97,7 @@ pattern NotBool t =
                 []
                 [SortBool]
                 SortBool
-                (HookedFunctionWithSMT "BOOL.not" "not")
+                (HookedTotalFunctionWithSMT "BOOL.not" "not")
             )
         []
         [t]
@@ -110,7 +110,7 @@ pattern EqualsInt a b =
                 []
                 [SortInt, SortInt]
                 SortBool
-                (HookedFunctionWithSMT "INT.eq" "=")
+                (HookedTotalFunctionWithSMT "INT.eq" "=")
             )
         []
         [a, b]
@@ -121,7 +121,7 @@ pattern EqualsBool a b =
                 []
                 [SortBool, SortBool]
                 SortBool
-                (HookedFunctionWithSMT "BOOL.eq" "=")
+                (HookedTotalFunctionWithSMT "BOOL.eq" "=")
             )
         []
         [a, b]
@@ -132,7 +132,7 @@ pattern NEqualsInt a b =
                 []
                 [SortInt, SortInt]
                 SortBool
-                (HookedFunctionWithSMT "BOOL.neq" "distinct")
+                (HookedTotalFunctionWithSMT "BOOL.neq" "distinct")
             )
         []
         [a, b]
@@ -143,7 +143,7 @@ pattern EqualsK a b =
                 []
                 [SortK, SortK]
                 SortBool
-                (HookedFunctionWithSMT "KEQUAL.eq" "=")
+                (HookedTotalFunctionWithSMT "KEQUAL.eq" "=")
             )
         []
         [a, b]
@@ -174,7 +174,7 @@ pattern NEqualsK a b =
                 []
                 [SortK, SortK]
                 SortBool
-                (HookedFunctionWithSMT "KEQUAL.ne" "distinct")
+                (HookedTotalFunctionWithSMT "KEQUAL.ne" "distinct")
             )
         []
         [a, b]
