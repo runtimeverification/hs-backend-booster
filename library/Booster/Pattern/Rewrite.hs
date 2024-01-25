@@ -288,7 +288,8 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     let (definitionalEqualities, otherConstraints) = deriveDefinitonalEqualities toCheck
     -- unless (null definitionalEqualities) $ do
     logOtherNS "booster" (LevelOther "Depth") . renderText $
-        vsep ("Found these definitional equalities in the requires clause:" : map pretty definitionalEqualities)
+        vsep
+            ("Found these definitional equalities in the requires clause:" : map pretty definitionalEqualities)
     logOtherNS "booster" (LevelOther "Depth") . renderText $
         vsep ("Other constrains are" : map pretty otherConstraints)
 
@@ -303,7 +304,13 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
 
     case mbSolver of
         Just solver -> do
-            checkAllRequires <- lift $ SMT.checkPredicates solver (prior <> Set.fromList definitionalEqualities) mempty (Set.fromList unclearRequires)
+            checkAllRequires <-
+                lift $
+                    SMT.checkPredicates
+                        solver
+                        (prior <> Set.fromList definitionalEqualities)
+                        mempty
+                        (Set.fromList unclearRequires)
 
             case checkAllRequires of
                 Nothing ->

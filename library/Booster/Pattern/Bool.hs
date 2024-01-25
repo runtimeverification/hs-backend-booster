@@ -270,7 +270,9 @@ deriveDefinitonalEqualities ps =
         (firstAssignments, otherAssignments) = List.partition ((`Set.member` uniqueLhsVars) . fst) substitutionItems
         definitonalEqualities = Map.fromList firstAssignments
         subsitutedOtherAssignments =
-            map (substituteInPredicate definitonalEqualities . coerce . (\(x, y) -> EqualsK (Var x) (coerce y))) otherAssignments
+            map
+                (substituteInPredicate definitonalEqualities . coerce . (\(x, y) -> EqualsK (Var x) (coerce y)))
+                otherAssignments
         substitutedNonEqualities = map (substituteInPredicate definitonalEqualities) nonEqualities
         defEqsAsPredicates = map (coerce . (\(x, y) -> EqualsK (Var x) (coerce y))) (Map.toList definitonalEqualities)
      in (defEqsAsPredicates, substitutedNonEqualities <> subsitutedOtherAssignments)
