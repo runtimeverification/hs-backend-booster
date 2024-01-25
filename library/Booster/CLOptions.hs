@@ -217,7 +217,6 @@ versionInfoStr =
         , "  revision:\t" <> gitHash <> if gitDirty then " (dirty)" else ""
         , "  branch:\t" <> fromMaybe "<unknown>" gitBranch
         , "  last commit:\t" <> gitCommitDate
-        , "  build time:\t" <> buildDate
         ]
   where
-    VersionInfo{gitHash, gitDirty, gitBranch, gitCommitDate, buildDate} = $versionInfo
+    VersionInfo{gitHash, gitDirty, gitBranch, gitCommitDate} = $versionInfo
