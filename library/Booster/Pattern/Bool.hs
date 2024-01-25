@@ -52,8 +52,8 @@ import Booster.Pattern.Base (
 import Booster.Pattern.Util (isConcrete)
 import Booster.SMT.Base (SExpr (Atom), SMTId (..))
 
-pattern TotalFunctionWithSMT :: ByteString -> SymbolAttributes
-pattern TotalFunctionWithSMT hook =
+pattern HookedTotalFunction :: Text -> SymbolAttributes
+pattern HookedTotalFunction hook =
     SymbolAttributes
         TotalFunction
         IsNotIdem
@@ -61,8 +61,8 @@ pattern TotalFunctionWithSMT hook =
         IsNotMacroOrAlias
         CanBeEvaluated
         Nothing
-        (Just (SMTHook (Atom (SMTId hook))))
         Nothing
+        (Just hook)
 
 pattern HookedTotalFunctionWithSMT :: Text -> ByteString -> SymbolAttributes
 pattern HookedTotalFunctionWithSMT hook smt =
