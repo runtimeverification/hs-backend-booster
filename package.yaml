@@ -97,6 +97,7 @@ library:
   - syb
   - template-haskell
   - text
+  - time
   - transformers
   - unix
   - unliftio
