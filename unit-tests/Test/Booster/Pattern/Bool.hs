@@ -117,6 +117,11 @@ testPatternSetIn =
 
 --------------------------------------------------------------------------------
 
+andBoolFromQQ :: Term -> Term -> Term
+andBoolFromQQ l r =
+    let parsedSymbol = [symb| hooked-symbol Lbl'Unds'andBool'Unds'{}(SortBool{}, SortBool{}) : SortBool{} [function{}(), hook{}("BOOL.and"), smt-hook{}("and"), total{}()] |]
+     in SymbolApplication parsedSymbol [] [l, r]
+
 test_conjunction_splitters :: TestTree
 test_conjunction_splitters =
     testGroup
@@ -129,7 +134,7 @@ testSplitAndBool =
         testCase
             "A concrete conjunct is split"
             ( splitAndBools
-                (Predicate (AndBool TrueBool TrueBool))
+                (Predicate (andBoolFromQQ TrueBool TrueBool))
                 @?= [Predicate TrueBool, Predicate TrueBool]
             )
             : commonTestCases splitAndBools
@@ -140,8 +145,8 @@ testSplitBoolPredicates =
         testCase
             "A concrete conjunct is left NOT split"
             ( splitBoolPredicates
-                (Predicate (AndBool TrueBool TrueBool))
-                @?= [Predicate (AndBool TrueBool TrueBool)]
+                (Predicate (andBoolFromQQ TrueBool TrueBool))
+                @?= [Predicate (andBoolFromQQ TrueBool TrueBool)]
             )
             : commonTestCases splitBoolPredicates
 
@@ -150,13 +155,13 @@ commonTestCases splitter =
     [ testCase
         "A partially symbolic conjunct is split"
         ( splitter
-            (Predicate (AndBool (Var (Variable boolSort "X")) TrueBool))
+            (Predicate (andBoolFromQQ (Var (Variable boolSort "X")) TrueBool))
             @?= [Predicate (Var (Variable boolSort "X")), Predicate TrueBool]
         )
     , testCase
         "A fully symbolic conjunct is split"
         ( splitter
-            (Predicate (AndBool (Var (Variable boolSort "X")) (Var (Variable boolSort "X"))))
+            (Predicate (andBoolFromQQ (Var (Variable boolSort "X")) (Var (Variable boolSort "X"))))
             @?= [Predicate (Var (Variable boolSort "X")), Predicate (Var (Variable boolSort "X"))]
         )
     ]
