@@ -119,7 +119,8 @@ testPatternSetIn =
 
 andBoolFromQQ :: Term -> Term -> Term
 andBoolFromQQ l r =
-    let parsedSymbol = [symb| hooked-symbol Lbl'Unds'andBool'Unds'{}(SortBool{}, SortBool{}) : SortBool{} [function{}(), hook{}("BOOL.and"), smt-hook{}("and"), total{}()] |]
+    let parsedSymbol =
+            [symb| hooked-symbol Lbl'Unds'andBool'Unds'{}(SortBool{}, SortBool{}) : SortBool{} [function{}(), hook{}("BOOL.and"), smt-hook{}("and"), total{}()] |]
      in SymbolApplication parsedSymbol [] [l, r]
 
 test_conjunction_splitters :: TestTree
