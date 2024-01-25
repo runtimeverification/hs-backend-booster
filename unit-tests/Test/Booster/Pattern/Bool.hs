@@ -5,8 +5,6 @@ Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
 module Test.Booster.Pattern.Bool (
-    test_splitAndBool,
-    test_splitBoolPredicates,
     test_patternSynonyms,
     test_conjunction_splitters,
 ) where
@@ -19,25 +17,6 @@ import Test.Booster.Fixture
 import Test.Tasty
 import Test.Tasty.HUnit
 
-test_splitAndBool :: [TestTree]
-test_splitAndBool =
-    testCase
-        "A concrete conjunct is split"
-        ( splitAndBools
-            (Predicate (AndBool TrueBool TrueBool))
-            @?= [Predicate TrueBool, Predicate TrueBool]
-        )
-        : commonTestCases splitAndBools
-
-test_splitBoolPredicates :: [TestTree]
-test_splitBoolPredicates =
-    testCase
-        "A concrete conjunct is left NOT split"
-        ( splitBoolPredicates
-            (Predicate (AndBool TrueBool TrueBool))
-            @?= [Predicate (AndBool TrueBool TrueBool)]
-        )
-        : commonTestCases splitBoolPredicates
 --------------------------------------------------------------------------------
 test_patternSynonyms :: TestTree
 test_patternSynonyms =
@@ -120,6 +99,33 @@ testPatternSetIn =
                 match@(SetIn _ _) -> match @?= appliedParsedSymbol
                 unexpected -> assertFailure ("pattern synonym matched unexpected symbol application: " <> show unexpected)
 
+--------------------------------------------------------------------------------
+
+test_conjunction_splitters :: TestTree
+test_conjunction_splitters =
+    testGroup "Conjunction splitting functions work as expected" [testSplitAndBool, testSplitBoolPredicates]
+
+testSplitAndBool :: TestTree
+testSplitAndBool =
+    testGroup "splitAndBool splits everything" $
+        testCase
+            "A concrete conjunct is split"
+            ( splitAndBools
+                (Predicate (AndBool TrueBool TrueBool))
+                @?= [Predicate TrueBool, Predicate TrueBool]
+            )
+            : commonTestCases splitAndBools
+
+testSplitBoolPredicates :: TestTree
+testSplitBoolPredicates =
+    testGroup "splitBoolPredicates leaves concrete conjunctions lumped together" $
+        testCase
+            "A concrete conjunct is left NOT split"
+            ( splitBoolPredicates
+                (Predicate (AndBool TrueBool TrueBool))
+                @?= [Predicate (AndBool TrueBool TrueBool)]
+            )
+            : commonTestCases splitBoolPredicates
 
 commonTestCases :: (Predicate -> [Predicate]) -> [TestTree]
 commonTestCases splitter =
