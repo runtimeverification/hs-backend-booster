@@ -84,7 +84,7 @@ pattern AndBool l r =
                 []
                 [SortBool, SortBool]
                 SortBool
-                (TotalFunctionWithSMT "and")
+                (HookedFunctionWithSMT "BOOL.and" "and")
             )
         []
         [l, r]
@@ -97,7 +97,7 @@ pattern NotBool t =
                 []
                 [SortBool]
                 SortBool
-                (TotalFunctionWithSMT "not")
+                (HookedFunctionWithSMT "BOOL.not" "not")
             )
         []
         [t]
@@ -110,7 +110,7 @@ pattern EqualsInt a b =
                 []
                 [SortInt, SortInt]
                 SortBool
-                (TotalFunctionWithSMT "=")
+                (HookedFunctionWithSMT "INT.eq" "=")
             )
         []
         [a, b]
@@ -121,7 +121,7 @@ pattern EqualsBool a b =
                 []
                 [SortBool, SortBool]
                 SortBool
-                (TotalFunctionWithSMT "=")
+                (HookedFunctionWithSMT "BOOL.eq" "=")
             )
         []
         [a, b]
@@ -132,7 +132,7 @@ pattern NEqualsInt a b =
                 []
                 [SortInt, SortInt]
                 SortBool
-                (TotalFunctionWithSMT "distinct")
+                (HookedFunctionWithSMT "BOOL.neq" "distinct")
             )
         []
         [a, b]
