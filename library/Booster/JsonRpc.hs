@@ -514,7 +514,7 @@ execStateToKoreJson RpcTypes.ExecuteState{term = t, substitution, predicate} =
 execResponse ::
     Maybe Double ->
     RpcTypes.ExecuteRequest ->
-    (Natural, Seq (RewriteTrace Pattern), RewriteResult Pattern) ->
+    (Natural, Seq (RewriteTrace ()), RewriteResult Pattern) ->
     Map Variable Term ->
     [Syntax.KorePattern] ->
     Either ErrorObj (RpcTypes.API 'RpcTypes.Res)
@@ -736,20 +736,20 @@ mkLogEquationTrace
 mkLogRewriteTrace ::
     (Bool, Bool) ->
     (Bool, Bool) ->
-    RewriteTrace Pattern ->
+    RewriteTrace () ->
     Maybe [LogEntry]
 mkLogRewriteTrace
     (logSuccessfulRewrites, logFailedRewrites)
     equationLogOpts@(logSuccessfulSimplifications, logFailedSimplifications) =
         \case
-            RewriteSingleStep _ uid _ res
+            RewriteSingleStep _ uid _ _res
                 | logSuccessfulRewrites ->
                     Just $
                         singleton $
                             Rewrite
                                 { result =
                                     Success
-                                        { rewrittenTerm = Just $ execStateToKoreJson $ toExecState res mempty mempty
+                                        { rewrittenTerm = Nothing
                                         , substitution = Nothing
                                         , ruleId = maybe "UNKNOWN" getUniqueId uid
                                         }

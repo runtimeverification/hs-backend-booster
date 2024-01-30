@@ -478,6 +478,19 @@ data RewriteTrace pat
     deriving stock (Eq, Show)
     deriving (Functor, Foldable, Traversable)
 
+{- | For the given rewrite trace, construct a new one,
+     removing the heavy-weight information (the states),
+     but keeping the meta-data (rule labels).
+-}
+forgetPatterns :: RewriteTrace Pattern -> RewriteTrace ()
+forgetPatterns = \case
+    RewriteSingleStep rule_label mUniqueId _preState _postState -> RewriteSingleStep rule_label mUniqueId () ()
+    RewriteBranchingStep _state branchMetadata -> RewriteBranchingStep () branchMetadata
+    RewriteStepFailed failureInfo -> RewriteStepFailed failureInfo
+    RewriteSimplified equationTraces mbEquationFailure ->
+        -- TODO: forget patterns in the equation traces too
+        RewriteSimplified equationTraces mbEquationFailure
+
 instance Pretty (RewriteTrace Pattern) where
     pretty = \case
         RewriteSingleStep lbl _uniqueId pat rewritten ->
@@ -614,7 +627,7 @@ performRewrite ::
     -- | terminal rule labels
     [Text] ->
     Pattern ->
-    io (Natural, Seq (RewriteTrace Pattern), RewriteResult Pattern)
+    io (Natural, Seq (RewriteTrace ()), RewriteResult Pattern)
 performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalLabels pat = do
     (rr, RewriteStepsState{counter, traces}) <-
         flip runStateT rewriteStart $ doSteps False pat
@@ -642,7 +655,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
             _other -> pure ()
         when doTracing $
             modify $
-                \rss@RewriteStepsState{traces} -> rss{traces = traces |> t}
+                \rss@RewriteStepsState{traces} -> rss{traces = traces |> forgetPatterns t}
     incrementCounter =
         modify $ \rss@RewriteStepsState{counter} -> rss{counter = counter + 1}
 
@@ -844,7 +857,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
 
 data RewriteStepsState = RewriteStepsState
     { counter :: !Natural
-    , traces :: !(Seq (RewriteTrace Pattern))
+    , traces :: !(Seq (RewriteTrace ()))
     , simplifierCache :: SimplifierCache
     , smtSolver :: Maybe SMT.SMTContext
     }
