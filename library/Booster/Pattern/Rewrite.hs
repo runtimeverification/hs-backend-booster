@@ -474,7 +474,7 @@ data RewriteTrace pat
     | -- | attempted rewrite failed
       RewriteStepFailed (RewriteFailed "Rewrite")
     | -- | Applied simplification to the pattern
-      RewriteSimplified [EquationTrace] (Maybe EquationFailure)
+      RewriteSimplified [EquationTrace Term] (Maybe EquationFailure)
     deriving stock (Eq, Show)
     deriving (Functor, Foldable, Traversable)
 

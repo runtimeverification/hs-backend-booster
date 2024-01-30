@@ -648,7 +648,7 @@ toExecState pat sub unsupported =
         | null unsupported = id
         | otherwise = maybe (Just allUnsupported) (Just . Syntax.KJAnd termSort . (: unsupported))
 
-mkLogEquationTrace :: (Bool, Bool) -> ApplyEquations.EquationTrace -> Maybe LogEntry
+mkLogEquationTrace :: (Bool, Bool) -> ApplyEquations.EquationTrace Term -> Maybe LogEntry
 mkLogEquationTrace
     (logSuccessfulSimplifications, logFailedSimplifications)
     ApplyEquations.EquationTrace{subjectTerm, ruleId = uid, result} =
