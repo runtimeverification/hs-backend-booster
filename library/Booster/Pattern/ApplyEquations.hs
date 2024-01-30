@@ -145,22 +145,33 @@ data EquationMetadata = EquationMetadata
     }
     deriving stock (Eq, Show)
 
-data EquationTrace term = EquationTrace
-    { subjectTerm :: term
-    , metadata :: EquationMetadata
-    , result :: ApplyEquationResult
-    }
+-- TODO: refactor ApplyEquationResult into EquationNonApplicableReason or something
+data EquationTrace term
+    = EquationApplied term EquationMetadata term
+    | EquationNotApplied term EquationMetadata ApplyEquationResult
     deriving stock (Eq, Show)
 
 {- | For the given equation trace, construct a new one,
      removing the heavy-weight information (the states),
      but keeping the meta-data (rule labels).
 -}
-eraseStates :: EquationTrace Term -> EquationTrace ()
-eraseStates t@EquationTrace{result} = t{subjectTerm = ()}
+
+-- eraseStates :: EquationTrace Term -> EquationTrace ()
+-- eraseStates t@EquationTrace{result} = t{subjectTerm = ()}
 
 instance Pretty (EquationTrace Term) where
-    pretty EquationTrace{subjectTerm, metadata, result} = case result of
+    pretty (EquationApplied subjectTerm metadata rewritten) =
+        vsep
+            [ "Simplifying term"
+            , prettyTerm
+            , "to"
+            , pretty rewritten
+            , "using " <> locationInfo
+            ]
+      where
+        locationInfo = pretty metadata.location <> " - " <> pretty metadata.label
+        prettyTerm = pretty subjectTerm
+    pretty (EquationNotApplied subjectTerm metadata result) = case result of
         Success rewritten ->
             vsep
                 [ "Simplifying term"
@@ -218,10 +229,10 @@ instance Pretty (EquationTrace Term) where
         prettyTerm = pretty subjectTerm
 
 isMatchFailure, isSuccess :: EquationTrace Term -> Bool
-isMatchFailure EquationTrace{result = FailedMatch{}} = True
-isMatchFailure EquationTrace{result = IndeterminateMatch{}} = True
+isMatchFailure (EquationNotApplied _ _ FailedMatch{}) = True
+isMatchFailure (EquationNotApplied _ _ IndeterminateMatch{}) = True
 isMatchFailure _ = False
-isSuccess EquationTrace{result = Success{}} = True
+isSuccess EquationApplied{} = True
 isSuccess _ = False
 
 startState :: Map Term Term -> EquationState
@@ -656,7 +667,10 @@ traceRuleApplication ::
     ApplyEquationResult ->
     EquationT io ()
 traceRuleApplication t loc lbl uid res = do
-    let newTraceItem = EquationTrace t (EquationMetadata loc lbl uid) res
+    let newTraceItem =
+            case res of
+                Success rewritten -> EquationApplied t (EquationMetadata loc lbl uid) rewritten
+                failure -> EquationNotApplied t (EquationMetadata loc lbl uid) failure
         prettyItem = pack . renderDefault . pretty $ newTraceItem
     logOther (LevelOther "Simplify") prettyItem
     case res of
