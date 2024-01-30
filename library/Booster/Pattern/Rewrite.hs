@@ -45,6 +45,7 @@ import Booster.Pattern.ApplyEquations (
     evaluatePattern,
     simplifyConstraint,
  )
+import Booster.Pattern.ApplyEquations qualified as ApplyEquations
 import Booster.Pattern.Base
 import Booster.Pattern.Bool
 import Booster.Pattern.Index (TermIndex (..), kCellTermIndex)
@@ -474,8 +475,11 @@ data RewriteTrace pat
     | -- | attempted rewrite failed
       RewriteStepFailed (RewriteFailed "Rewrite")
     | -- | Applied simplification to the pattern
-      RewriteSimplified [EquationTrace Term] (Maybe EquationFailure)
-    deriving stock (Eq, Show)
+      RewriteSimplified [EquationTrace (TracePayload pat)] (Maybe EquationFailure)
+
+type family TracePayload pat where
+    TracePayload Pattern = Term
+    TracePayload () = ()
 
 {- | For the given rewrite trace, construct a new one,
      removing the heavy-weight information (the states),
@@ -488,7 +492,7 @@ forgetPatterns = \case
     RewriteStepFailed failureInfo -> RewriteStepFailed failureInfo
     RewriteSimplified equationTraces mbEquationFailure ->
         -- TODO: forget patterns in the equation traces too
-        RewriteSimplified equationTraces mbEquationFailure
+        RewriteSimplified (map ApplyEquations.eraseStates equationTraces) mbEquationFailure
 
 instance Pretty (RewriteTrace Pattern) where
     pretty = \case
@@ -645,6 +649,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
 
     showCounter = (<> " steps.") . pack . show
 
+    rewriteTrace :: RewriteTrace Pattern -> StateT RewriteStepsState io ()
     rewriteTrace t = do
         let prettyT = pack $ renderDefault $ pretty t
         logRewrite prettyT

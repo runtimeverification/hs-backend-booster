@@ -330,7 +330,7 @@ respond stateVar =
                 mkSimplifyResponse state traceData =
                     RpcTypes.Simplify
                         RpcTypes.SimplifyResult{state, logs = mkTraces duration traceData}
-            pure $ second (uncurry mkSimplifyResponse) result
+            pure $ second (uncurry mkSimplifyResponse) (fmap (second (map ApplyEquations.eraseStates)) result)
         RpcTypes.GetModel req -> withContext req._module $ \case
             (_, _, Nothing) -> do
                 Log.logErrorNS "booster" "get-model request, not supported without SMT solver"
@@ -648,10 +648,10 @@ toExecState pat sub unsupported =
         | null unsupported = id
         | otherwise = maybe (Just allUnsupported) (Just . Syntax.KJAnd termSort . (: unsupported))
 
-mkLogEquationTrace :: (Bool, Bool) -> ApplyEquations.EquationTrace Term -> Maybe LogEntry
+mkLogEquationTrace :: (Bool, Bool) -> ApplyEquations.EquationTrace () -> Maybe LogEntry
 mkLogEquationTrace
     (logSuccessfulSimplifications, logFailedSimplifications) = \case
-        ApplyEquations.EquationApplied subjectTerm metadata rewritten ->
+        ApplyEquations.EquationApplied _subjectTerm metadata _rewritten ->
             if logSuccessfulSimplifications
                 then
                     Just $
@@ -661,19 +661,18 @@ mkLogEquationTrace
                             , origin
                             , result =
                                 Success
-                                    { rewrittenTerm =
-                                        Just $ execStateToKoreJson $ toExecState (Pattern.Pattern_ rewritten) mempty mempty
+                                    { rewrittenTerm = Nothing
                                     , substitution = Nothing
                                     , ruleId = fromMaybe "UNKNOWN" _ruleId
                                     }
                             }
                 else Nothing
           where
-            originalTerm = Just $ execStateToKoreJson $ toExecState (Pattern.Pattern_ subjectTerm) mempty mempty
+            originalTerm = Nothing
             originalTermIndex = Nothing
             origin = Booster
             _ruleId = fmap getUniqueId metadata.ruleId
-        ApplyEquations.EquationNotApplied subjectTerm metadata result ->
+        ApplyEquations.EquationNotApplied _subjectTerm metadata result ->
             case result of
                 ApplyEquations.Success rewrittenTrm
                     | logSuccessfulSimplifications ->
@@ -750,7 +749,7 @@ mkLogEquationTrace
                                 }
                 _ -> Nothing
           where
-            originalTerm = Just $ execStateToKoreJson $ toExecState (Pattern.Pattern_ subjectTerm) mempty mempty
+            originalTerm = Nothing
             originalTermIndex = Nothing
             origin = Booster
             _ruleId = fmap getUniqueId metadata.ruleId

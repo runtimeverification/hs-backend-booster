@@ -13,6 +13,7 @@ module Booster.Pattern.ApplyEquations (
     EquationPreference (..),
     EquationFailure (..),
     EquationTrace (..),
+    eraseStates,
     EquationMetadata (..),
     ApplyEquationResult (..),
     applyEquations,
@@ -155,9 +156,10 @@ data EquationTrace term
      removing the heavy-weight information (the states),
      but keeping the meta-data (rule labels).
 -}
-
--- eraseStates :: EquationTrace Term -> EquationTrace ()
--- eraseStates t@EquationTrace{result} = t{subjectTerm = ()}
+eraseStates :: EquationTrace Term -> EquationTrace ()
+eraseStates = \case
+    EquationApplied _ metadata _ -> EquationApplied () metadata ()
+    EquationNotApplied _ metadata failureInfo -> EquationNotApplied () metadata failureInfo
 
 instance Pretty (EquationTrace Term) where
     pretty (EquationApplied subjectTerm metadata rewritten) =
