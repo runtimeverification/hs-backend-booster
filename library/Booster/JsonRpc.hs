@@ -651,7 +651,7 @@ toExecState pat sub unsupported =
 mkLogEquationTrace :: (Bool, Bool) -> ApplyEquations.EquationTrace Term -> Maybe LogEntry
 mkLogEquationTrace
     (logSuccessfulSimplifications, logFailedSimplifications)
-    ApplyEquations.EquationTrace{subjectTerm, ruleId = uid, result} =
+    ApplyEquations.EquationTrace{subjectTerm, metadata, result} =
         case result of
             ApplyEquations.Success rewrittenTrm
                 | logSuccessfulSimplifications ->
@@ -731,7 +731,7 @@ mkLogEquationTrace
         originalTerm = Just $ execStateToKoreJson $ toExecState (Pattern.Pattern_ subjectTerm) mempty mempty
         originalTermIndex = Nothing
         origin = Booster
-        _ruleId = fmap getUniqueId uid
+        _ruleId = fmap getUniqueId metadata.ruleId
 
 mkLogRewriteTrace ::
     (Bool, Bool) ->

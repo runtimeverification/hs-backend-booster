@@ -13,6 +13,7 @@ module Booster.Pattern.ApplyEquations (
     EquationPreference (..),
     EquationFailure (..),
     EquationTrace (..),
+    EquationMetadata (..),
     ApplyEquationResult (..),
     applyEquations,
     handleSimplificationEquation,
@@ -137,17 +138,29 @@ data EquationState = EquationState
 
 type SimplifierCache = Map Term Term
 
-data EquationTrace term = EquationTrace
-    { subjectTerm :: term
-    , location :: Maybe Location
+data EquationMetadata = EquationMetadata
+    { location :: Maybe Location
     , label :: Maybe Label
     , ruleId :: Maybe UniqueId
+    }
+    deriving stock (Eq, Show)
+
+data EquationTrace term = EquationTrace
+    { subjectTerm :: term
+    , metadata :: EquationMetadata
     , result :: ApplyEquationResult
     }
     deriving stock (Eq, Show)
 
+{- | For the given equation trace, construct a new one,
+     removing the heavy-weight information (the states),
+     but keeping the meta-data (rule labels).
+-}
+eraseStates :: EquationTrace Term -> EquationTrace ()
+eraseStates t@EquationTrace{result} = t{subjectTerm = ()}
+
 instance Pretty (EquationTrace Term) where
-    pretty EquationTrace{subjectTerm, location, label, result} = case result of
+    pretty EquationTrace{subjectTerm, metadata, result} = case result of
         Success rewritten ->
             vsep
                 [ "Simplifying term"
@@ -201,7 +214,7 @@ instance Pretty (EquationTrace Term) where
                 , prettyTerm
                 ]
       where
-        locationInfo = pretty location <> " - " <> pretty label
+        locationInfo = pretty metadata.location <> " - " <> pretty metadata.label
         prettyTerm = pretty subjectTerm
 
 isMatchFailure, isSuccess :: EquationTrace Term -> Bool
@@ -643,7 +656,7 @@ traceRuleApplication ::
     ApplyEquationResult ->
     EquationT io ()
 traceRuleApplication t loc lbl uid res = do
-    let newTraceItem = EquationTrace t loc lbl uid res
+    let newTraceItem = EquationTrace t (EquationMetadata loc lbl uid) res
         prettyItem = pack . renderDefault . pretty $ newTraceItem
     logOther (LevelOther "Simplify") prettyItem
     case res of
