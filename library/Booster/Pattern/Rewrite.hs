@@ -476,7 +476,6 @@ data RewriteTrace pat
     | -- | Applied simplification to the pattern
       RewriteSimplified [EquationTrace Term] (Maybe EquationFailure)
     deriving stock (Eq, Show)
-    deriving (Functor, Foldable, Traversable)
 
 {- | For the given rewrite trace, construct a new one,
      removing the heavy-weight information (the states),
