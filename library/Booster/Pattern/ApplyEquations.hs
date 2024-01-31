@@ -124,8 +124,8 @@ data EquationConfig = EquationConfig
     , llvmApi :: Maybe LLVM.API
     , smtSolver :: Maybe SMT.SMTContext
     , doTracing :: Bool
-    , maxIterations :: Int
     , maxRecursion :: Int
+    , maxIterations :: Int
     }
 
 data EquationState = EquationState
