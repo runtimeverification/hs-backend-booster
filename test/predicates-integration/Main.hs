@@ -1,21 +1,75 @@
-{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 {- |
-Copyright   : (c) Runtime Verification, 2022
+Copyright   : (c) Runtime Verification, 2023
 License     : BSD-3-Clause
 -}
-module Test.Booster.Pattern.Bool (
-    test_patternSynonyms,
-    test_conjunction_splitters,
+module Main (
+    main,
 ) where
 
-import Booster.Pattern.Base
-import Booster.Pattern.Bool
-import Booster.Syntax.ParsedKore.Internalise (symb)
-import Data.ByteString (ByteString)
-import Test.Booster.Fixture
+import Control.Monad.Trans.Except (runExcept)
+import Data.ByteString.Char8 (ByteString)
+import Data.ByteString.Char8 qualified as BS
+import Data.Map qualified as Map
+import Data.Maybe (fromMaybe)
+import Data.Text.IO qualified as Text
+import System.FilePath
+import System.IO.Unsafe (unsafePerformIO)
+import System.Process
 import Test.Tasty
 import Test.Tasty.HUnit
+
+import Booster.Definition.Base
+import Booster.Pattern.Base
+import Booster.Pattern.Bool
+import Booster.Syntax.ParsedKore.Internalise (buildDefinitions)
+import Booster.Syntax.ParsedKore.Parser (parseDefinition)
+
+main :: IO ()
+main = do
+  runKompile
+  defaultMain tests
+
+tests :: TestTree
+tests = testGroup "Tests" [test_patternSynonyms, test_conjunction_splitters]
+
+definition, kompiledPath :: FilePath
+definition = "test/predicates-integration/definition/predicates.k"
+kompiledPath = "test/predicates-integration/definition/kompiled"
+
+------------------------------------------------------------
+
+runKompile :: IO ()
+runKompile = do
+    putStrLn "[Info] Compiling definition..."
+    callProcess
+        "kompile"
+        [ definition
+        , "--backend"
+        , "haskell"
+        , "--syntax-module"
+        , "PREDICATES"
+        , "-o"
+        , kompiledPath
+        ]
+
+------------------------------------------------------------
+-- lookup a symbol in the definition by its name, fail if not found
+unsafeLookupSymbol :: SymbolName -> Symbol
+unsafeLookupSymbol symbolName =
+    fromMaybe (error $ "missing symbol" <> BS.unpack symbolName) $
+        Map.lookup symbolName testDef.symbols
+
+-- definition from test/predicates-integration/predicates.k
+{-# NOINLINE testDef #-}
+testDef :: KoreDefinition
+testDef = unsafePerformIO $ do
+    defText <- Text.readFile (kompiledPath </> "definition.kore")
+    parsed <- either error pure $ parseDefinition definition defText
+    defMap <- either (error . show) pure $ runExcept $ buildDefinitions parsed
+    let def = fromMaybe (error "PREDICATES module not found") $ Map.lookup "PREDICATES" defMap
+    pure def
 
 --------------------------------------------------------------------------------
 test_patternSynonyms :: TestTree
@@ -29,14 +83,13 @@ test_patternSynonyms =
         , testPatternNEqualsInt
         , testPatternEqualsK
         , testPatternNEqualsK
-        , testPatternSetIn
         ]
 
 testPatternAndBool :: TestTree
 testPatternAndBool =
     testCase "_andBool_" $
         let parsedSymbol =
-                [symb| hooked-symbol Lbl'Unds'andBool'Unds'{}(SortBool{}, SortBool{}) : SortBool{} [function{}(), hook{}("BOOL.and"), smt-hook{}("and"), total{}()] |]
+                unsafeLookupSymbol "Lbl'Unds'andBool'Unds'"
             appliedParsedSymbol = SymbolApplication parsedSymbol [] [TrueBool, TrueBool]
          in case appliedParsedSymbol of
                 match@(AndBool _ _) -> match @?= appliedParsedSymbol
@@ -46,7 +99,7 @@ testPatternNotBool :: TestTree
 testPatternNotBool =
     testCase "notBool_" $
         let parsedSymbol =
-                [symb| hooked-symbol LblnotBool'Unds'{}(SortBool{}) : SortBool{} [function{}(), hook{}("BOOL.not"), smt-hook{}("not"),total{}()] |]
+                unsafeLookupSymbol "LblnotBool'Unds'"
             appliedParsedSymbol = SymbolApplication parsedSymbol [] [TrueBool]
          in case appliedParsedSymbol of
                 match@(NotBool _) -> match @?= appliedParsedSymbol
@@ -56,7 +109,7 @@ testPatternEqualsBool :: TestTree
 testPatternEqualsBool =
     testCase "_==Bool_" $
         let parsedSymbol =
-                [symb| hooked-symbol Lbl'UndsEqlsEqls'Bool'Unds'{}(SortBool{}, SortBool{}) : SortBool{} [function{}(), hook{}("BOOL.eq"), smt-hook{}("="), total{}()] |]
+                unsafeLookupSymbol "Lbl'UndsEqlsEqls'Bool'Unds'"
             appliedParsedSymbol = SymbolApplication parsedSymbol [] [TrueBool, TrueBool]
          in case appliedParsedSymbol of
                 match@(EqualsBool _ _) -> match @?= appliedParsedSymbol
@@ -66,7 +119,7 @@ testPatternEqualsInt :: TestTree
 testPatternEqualsInt =
     testCase "_==Int_" $
         let parsedSymbol =
-                [symb| hooked-symbol Lbl'UndsEqlsEqls'Int'Unds'{}(SortInt{}, SortInt{}) : SortBool{} [function{}(), hook{}("INT.eq"), smt-hook{}("="), total{}()] |]
+                unsafeLookupSymbol "Lbl'UndsEqlsEqls'Int'Unds'"
             appliedParsedSymbol = SymbolApplication parsedSymbol [] [dvInt "1", dvInt "1"]
          in case appliedParsedSymbol of
                 match@(EqualsInt _ _) -> match @?= appliedParsedSymbol
@@ -76,7 +129,7 @@ testPatternNEqualsInt :: TestTree
 testPatternNEqualsInt =
     testCase "_=/=Int_" $
         let parsedSymbol =
-                [symb| hooked-symbol Lbl'UndsEqlsSlshEqls'Int'Unds'{}(SortInt{}, SortInt{}) : SortBool{} [function{}(), hook{}("INT.ne"), smt-hook{}("distinct"), total{}()] |]
+                unsafeLookupSymbol "Lbl'UndsEqlsSlshEqls'Int'Unds'"
             appliedParsedSymbol = SymbolApplication parsedSymbol [] [dvInt "1", dvInt "1"]
          in case SymbolApplication parsedSymbol [] [dvInt "1", dvInt "1"] of
                 match@(NEqualsInt _ _) -> match @?= appliedParsedSymbol
@@ -89,7 +142,7 @@ testPatternEqualsK :: TestTree
 testPatternEqualsK =
     testCase "_==K_" $
         let parsedSymbol =
-                [symb| hooked-symbol Lbl'UndsEqlsEqls'K'Unds'{}(SortK{}, SortK{}) : SortBool{} [function{}(), hook{}("KEQUAL.eq"), smt-hook{}("="), total{}()] |]
+                unsafeLookupSymbol "Lbl'UndsEqlsEqls'K'Unds'"
             appliedParsedSymbol = SymbolApplication parsedSymbol [] [dvInt "1", dvInt "1"]
          in case appliedParsedSymbol of
                 match@(EqualsK _ _) -> match @?= appliedParsedSymbol
@@ -99,29 +152,13 @@ testPatternNEqualsK :: TestTree
 testPatternNEqualsK =
     testCase "_=/=K_" $
         let parsedSymbol =
-                [symb| hooked-symbol Lbl'UndsEqlsSlshEqls'K'Unds'{}(SortK{}, SortK{}) : SortBool{} [function{}(), hook{}("KEQUAL.ne"), smt-hook{}("distinct"), total{}()] |]
+                unsafeLookupSymbol "Lbl'UndsEqlsSlshEqls'K'Unds'"
             appliedParsedSymbol = SymbolApplication parsedSymbol [] [dvInt "1", dvInt "1"]
          in case appliedParsedSymbol of
                 match@(NEqualsK _ _) -> match @?= appliedParsedSymbol
                 unexpected -> assertFailure ("pattern synonym matched unexpected symbol application: " <> show unexpected)
 
-testPatternSetIn :: TestTree
-testPatternSetIn =
-    testCase "_Set:in_" $
-        let parsedSymbol =
-                [symb| hooked-symbol LblSet'Coln'in{}(SortKItem{}, SortSet{}) : SortBool{} [function{}(), hook{}("SET.in"), total{}()] |]
-            appliedParsedSymbol = SymbolApplication parsedSymbol [] [dvInt "1", dvInt "1"] -- these arguments do not make sense here, but that's not what we are testing for
-         in case appliedParsedSymbol of
-                match@(SetIn _ _) -> match @?= appliedParsedSymbol
-                unexpected -> assertFailure ("pattern synonym matched unexpected symbol application: " <> show unexpected)
-
 --------------------------------------------------------------------------------
-
-andBoolFromQQ :: Term -> Term -> Term
-andBoolFromQQ l r =
-    let parsedSymbol =
-            [symb| hooked-symbol Lbl'Unds'andBool'Unds'{}(SortBool{}, SortBool{}) : SortBool{} [function{}(), hook{}("BOOL.and"), smt-hook{}("and"), total{}()] |]
-     in SymbolApplication parsedSymbol [] [l, r]
 
 test_conjunction_splitters :: TestTree
 test_conjunction_splitters =
@@ -129,13 +166,19 @@ test_conjunction_splitters =
         "Conjunction splitting functions work as expected"
         [testSplitAndBool, testSplitBoolPredicates]
 
+parsedAndBool :: Term -> Term -> Term
+parsedAndBool l r =
+    let parsedSymbol =
+            unsafeLookupSymbol "Lbl'Unds'andBool'Unds'"
+     in SymbolApplication parsedSymbol [] [l, r]
+
 testSplitAndBool :: TestTree
 testSplitAndBool =
     testGroup "splitAndBool splits everything" $
         testCase
             "A concrete conjunct is split"
             ( splitAndBools
-                (Predicate (andBoolFromQQ TrueBool TrueBool))
+                (Predicate (parsedAndBool TrueBool TrueBool))
                 @?= [Predicate TrueBool, Predicate TrueBool]
             )
             : commonTestCases splitAndBools
@@ -146,8 +189,8 @@ testSplitBoolPredicates =
         testCase
             "A concrete conjunct is left NOT split"
             ( splitBoolPredicates
-                (Predicate (andBoolFromQQ TrueBool TrueBool))
-                @?= [Predicate (andBoolFromQQ TrueBool TrueBool)]
+                (Predicate (parsedAndBool TrueBool TrueBool))
+                @?= [Predicate (parsedAndBool TrueBool TrueBool)]
             )
             : commonTestCases splitBoolPredicates
 
@@ -156,13 +199,15 @@ commonTestCases splitter =
     [ testCase
         "A partially symbolic conjunct is split"
         ( splitter
-            (Predicate (andBoolFromQQ (Var (Variable boolSort "X")) TrueBool))
+            (Predicate (parsedAndBool (Var (Variable boolSort "X")) TrueBool))
             @?= [Predicate (Var (Variable boolSort "X")), Predicate TrueBool]
         )
     , testCase
         "A fully symbolic conjunct is split"
         ( splitter
-            (Predicate (andBoolFromQQ (Var (Variable boolSort "X")) (Var (Variable boolSort "X"))))
+            (Predicate (parsedAndBool (Var (Variable boolSort "X")) (Var (Variable boolSort "X"))))
             @?= [Predicate (Var (Variable boolSort "X")), Predicate (Var (Variable boolSort "X"))]
         )
     ]
+  where
+    boolSort = SortApp "SortBool" []
