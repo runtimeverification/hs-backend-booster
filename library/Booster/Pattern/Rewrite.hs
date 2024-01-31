@@ -52,6 +52,7 @@ import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
 import Booster.SMT.Interface qualified as SMT
+import Booster.Util (Flag (..))
 import Data.Coerce (coerce)
 
 newtype RewriteT io err a = RewriteT
@@ -62,11 +63,11 @@ data RewriteConfig = RewriteConfig
     { definition :: KoreDefinition
     , llvmApi :: Maybe LLVM.API
     , smtSolver :: Maybe SMT.SMTContext
-    , doTracing :: Bool
+    , doTracing :: Flag "CollectRewriteTraces"
     }
 
 runRewriteT ::
-    Bool ->
+    Flag "CollectRewriteTraces" ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Maybe SMT.SMTContext ->
@@ -361,7 +362,7 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     checkConstraint onUnclear onBottom p = do
         RewriteConfig{definition, llvmApi, smtSolver, doTracing} <- lift $ RewriteT ask
         (simplified, _traces, _cache) <-
-            simplifyConstraint doTracing definition llvmApi smtSolver mempty p
+            simplifyConstraint (coerce doTracing) definition llvmApi smtSolver mempty p
         case simplified of
             Right (Predicate FalseBool) -> onBottom
             Right (Predicate TrueBool) -> pure Nothing
@@ -602,8 +603,7 @@ showPattern title pat = hang 4 $ vsep [title, pretty pat.term]
 performRewrite ::
     forall io.
     MonadLoggerIO io =>
-    -- | whether to accumulate rewrite traces
-    Bool ->
+    Flag "CollectRewriteTraces" ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Maybe SMT.SMTContext ->
@@ -640,7 +640,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
             RewriteSingleStep{} -> logRewriteSuccess prettyT
             RewriteBranchingStep{} -> logRewriteSuccess prettyT
             _other -> pure ()
-        when doTracing $
+        when (coerce doTracing) $
             modify $
                 \rss@RewriteStepsState{traces} -> rss{traces = traces |> t}
     incrementCounter =
@@ -653,7 +653,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
         st <- get
         let cache = st.simplifierCache
             smt = st.smtSolver
-        evaluatePattern doTracing def mLlvmLibrary smt cache p >>= \(res, traces, newCache) -> do
+        evaluatePattern (coerce doTracing) def mLlvmLibrary smt cache p >>= \(res, traces, newCache) -> do
             updateCache newCache
             logTraces traces
             case res of

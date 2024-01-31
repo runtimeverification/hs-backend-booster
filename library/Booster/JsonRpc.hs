@@ -25,6 +25,7 @@ import Control.Monad.Logger.CallStack qualified as Log
 import Control.Monad.Trans.Except (catchE, except, runExcept, runExceptT, throwE, withExceptT)
 import Crypto.Hash (SHA256 (..), hashWith)
 import Data.Bifunctor (second)
+import Data.Coerce (coerce)
 import Data.Conduit.Network (serverSettings)
 import Data.Foldable
 import Data.List (singleton)
@@ -75,6 +76,7 @@ import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base hiding (ParsedModule)
 import Booster.Syntax.ParsedKore.Base qualified as ParsedModule (ParsedModule (..))
 import Booster.Syntax.ParsedKore.Internalise (addToDefinitions)
+import Booster.Util (Flag (..))
 import Data.Aeson (ToJSON (toJSON))
 import Data.Set qualified as Set
 import Kore.JsonRpc.Error qualified as RpcError
@@ -135,7 +137,7 @@ respond stateVar =
                                 }
 
                     solver <- traverse (SMT.initSolver def) mSMTOptions
-                    result <- performRewrite doTracing def mLlvmLibrary solver mbDepth cutPoints terminals substPat
+                    result <- performRewrite (coerce doTracing) def mLlvmLibrary solver mbDepth cutPoints terminals substPat
                     whenJust solver SMT.closeSolver
                     stop <- liftIO $ getTime Monotonic
                     let duration =
@@ -268,7 +270,7 @@ respond stateVar =
                                 , constraints = Set.map (substituteInPredicate substitution) pat.constraints
                                 , ceilConditions = pat.ceilConditions
                                 }
-                    ApplyEquations.evaluatePattern doTracing def mLlvmLibrary solver mempty substPat >>= \case
+                    ApplyEquations.evaluatePattern (coerce doTracing) def mLlvmLibrary solver mempty substPat >>= \case
                         (Right newPattern, patternTraces, _) -> do
                             let (term, mbPredicate, mbSubstitution) = externalisePattern newPattern substitution
                                 tSort = externaliseSort (sortOfPattern newPattern)
@@ -302,7 +304,7 @@ respond stateVar =
                         Log.logOtherNS "booster" (Log.LevelOther "Simplify") $ renderText (pretty ps)
                         let predicates = map (substituteInPredicate ps.substitution) $ Set.toList ps.boolPredicates
                         ApplyEquations.simplifyConstraints
-                            doTracing
+                            (coerce doTracing)
                             def
                             mLlvmLibrary
                             solver

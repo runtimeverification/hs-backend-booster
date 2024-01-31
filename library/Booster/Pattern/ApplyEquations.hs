@@ -63,6 +63,7 @@ import Booster.Pattern.Match
 import Booster.Pattern.Util
 import Booster.Prettyprinter (renderDefault, renderText)
 import Booster.SMT.Interface qualified as SMT
+import Booster.Util (Flag (..))
 
 newtype EquationT io a
     = EquationT (ReaderT EquationConfig (ExceptT EquationFailure (StateT EquationState io)) a)
@@ -123,7 +124,7 @@ data EquationConfig = EquationConfig
     { definition :: KoreDefinition
     , llvmApi :: Maybe LLVM.API
     , smtSolver :: Maybe SMT.SMTContext
-    , doTracing :: Bool
+    , doTracing :: Flag "CollectEquationTraces"
     , maxRecursion :: Int
     , maxIterations :: Int
     }
@@ -282,7 +283,7 @@ data EquationPreference = PreferFunctions | PreferSimplifications
 
 runEquationT ::
     MonadLoggerIO io =>
-    Bool ->
+    Flag "CollectEquationTraces" ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Maybe SMT.SMTContext ->
@@ -345,7 +346,7 @@ iterateEquations direction preference startTerm = do
 -- | Evaluate and simplify a term.
 evaluateTerm ::
     MonadLoggerIO io =>
-    Bool ->
+    Flag "CollectEquationTraces" ->
     Direction ->
     KoreDefinition ->
     Maybe LLVM.API ->
@@ -369,7 +370,7 @@ evaluateTerm' direction = iterateEquations direction PreferFunctions
 -}
 evaluatePattern ::
     MonadLoggerIO io =>
-    Bool ->
+    Flag "CollectEquationTraces" ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Maybe SMT.SMTContext ->
@@ -660,7 +661,7 @@ traceRuleApplication t loc lbl uid res = do
         Success{} -> logOther (LevelOther "SimplifySuccess") prettyItem
         _ -> pure ()
     config <- getConfig
-    when config.doTracing $
+    when (coerce config.doTracing) $
         eqState . modify $
             \s -> s{trace = s.trace :|> newTraceItem}
 
@@ -809,7 +810,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
 -}
 simplifyConstraint ::
     MonadLoggerIO io =>
-    Bool ->
+    Flag "CollectEquationTraces" ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Maybe SMT.SMTContext ->
@@ -821,7 +822,7 @@ simplifyConstraint doTracing def mbApi mbSMT cache (Predicate p) =
 
 simplifyConstraints ::
     MonadLoggerIO io =>
-    Bool ->
+    Flag "CollectEquationTraces" ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Maybe SMT.SMTContext ->
