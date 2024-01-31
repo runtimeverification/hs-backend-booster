@@ -485,13 +485,12 @@ type family TracePayload pat where
      removing the heavy-weight information (the states),
      but keeping the meta-data (rule labels).
 -}
-forgetPatterns :: RewriteTrace Pattern -> RewriteTrace ()
-forgetPatterns = \case
+eraseStates :: RewriteTrace Pattern -> RewriteTrace ()
+eraseStates = \case
     RewriteSingleStep rule_label mUniqueId _preState _postState -> RewriteSingleStep rule_label mUniqueId () ()
     RewriteBranchingStep _state branchMetadata -> RewriteBranchingStep () branchMetadata
     RewriteStepFailed failureInfo -> RewriteStepFailed failureInfo
     RewriteSimplified equationTraces mbEquationFailure ->
-        -- TODO: forget patterns in the equation traces too
         RewriteSimplified (map ApplyEquations.eraseStates equationTraces) mbEquationFailure
 
 instance Pretty (RewriteTrace Pattern) where
@@ -659,7 +658,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
             _other -> pure ()
         when doTracing $
             modify $
-                \rss@RewriteStepsState{traces} -> rss{traces = traces |> forgetPatterns t}
+                \rss@RewriteStepsState{traces} -> rss{traces = traces |> eraseStates t}
     incrementCounter =
         modify $ \rss@RewriteStepsState{counter} -> rss{counter = counter + 1}
 
