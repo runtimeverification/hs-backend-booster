@@ -28,8 +28,8 @@ import Booster.Syntax.ParsedKore.Parser (parseDefinition)
 
 main :: IO ()
 main = do
-  runKompile
-  defaultMain tests
+    runKompile
+    defaultMain tests
 
 tests :: TestTree
 tests = testGroup "Tests" [test_patternSynonyms, test_conjunction_splitters]
