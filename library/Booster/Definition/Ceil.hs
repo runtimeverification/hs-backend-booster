@@ -17,6 +17,7 @@ import Booster.LLVM (simplifyBool)
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.Bool
 import Booster.Pattern.Util (isConcrete, sortOfTerm)
+import Booster.Util (Flag (..))
 import Control.DeepSeq (NFData)
 import Control.Monad (foldM)
 import Control.Monad.Extra (concatMapM)

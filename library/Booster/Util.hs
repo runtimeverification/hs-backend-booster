@@ -1,12 +1,26 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveLift #-}
+{-# LANGUAGE PolyKinds #-}
+
 module Booster.Util (
     decodeLabel,
     decodeLabel',
+    Flag (..),
 ) where
 
+import Control.DeepSeq (NFData (..))
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as BS
+import Data.Data (Data)
 import Data.Either (fromRight)
+import Data.Hashable (Hashable)
 import Data.Map qualified as Map
+import GHC.Generics (Generic)
+import Language.Haskell.TH.Syntax (Lift)
+
+newtype Flag (name :: k) = Flag Bool
+    deriving stock (Eq, Ord, Show, Generic, Data, Lift)
+    deriving anyclass (NFData, Hashable)
 
 -- | Un-escapes special characters in symbol names
 decodeLabel :: ByteString -> Either String ByteString
