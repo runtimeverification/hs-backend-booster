@@ -181,9 +181,7 @@ instance HasAttributes ParsedSymbol where
                         pure Nothing
             hook = do
                 hooked <- attributes .:? "hook"
-                case hooked of
-                    Just h -> pure . Just . encodeUtf8 $ h
-                    Nothing -> pure Nothing
+                pure (encodeUtf8 <$> hooked)
 
         SymbolAttributes
             <$> symbolType
