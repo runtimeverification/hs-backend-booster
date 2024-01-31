@@ -452,7 +452,7 @@ applyTerm direction pref trm = do
                                         Right result -> do
                                             when (result /= t) $ do
                                                 setChanged
-                                                traceRuleApplication t Nothing (Just "LLVM") Nothing $ Success result
+                                                emitEquationTrace t Nothing (Just "LLVM") Nothing $ Success result
                                             pure result
                             else -- use equations
                                 apply config t
@@ -461,7 +461,7 @@ applyTerm direction pref trm = do
                 Just cached -> do
                     when (t /= cached) $ do
                         setChanged
-                        traceRuleApplication t Nothing (Just "Cache") Nothing $ Success cached
+                        emitEquationTrace t Nothing (Just "Cache") Nothing $ Success cached
                     pure cached
 
     -- Bottom-up evaluation traverses AST nodes in post-order but finds work top-down
@@ -657,10 +657,14 @@ applyEquations theory handler term = do
         pure term -- nothing to do, term stays the same
     processEquations (eq : rest) = do
         res <- applyEquation term eq
-        traceRuleApplication term eq.attributes.location eq.attributes.ruleLabel eq.attributes.uniqueId res
+        emitEquationTrace term eq.attributes.location eq.attributes.ruleLabel eq.attributes.uniqueId res
         handler (\t -> setChanged >> pure t) (processEquations rest) (pure term) res
 
-traceRuleApplication ::
+{- | Trace application or failure to apply an equation
+     * log into stderr
+     * accumulate the trace into the state
+-}
+emitEquationTrace ::
     MonadLoggerIO io =>
     Term ->
     Maybe Location ->
@@ -668,7 +672,7 @@ traceRuleApplication ::
     Maybe UniqueId ->
     ApplyEquationResult ->
     EquationT io ()
-traceRuleApplication t loc lbl uid res = do
+emitEquationTrace t loc lbl uid res = do
     let newTraceItem =
             case res of
                 Success rewritten -> EquationApplied t (EquationMetadata loc lbl uid) rewritten

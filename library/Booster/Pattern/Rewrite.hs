@@ -648,8 +648,8 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
 
     showCounter = (<> " steps.") . pack . show
 
-    rewriteTrace :: RewriteTrace Pattern -> StateT RewriteStepsState io ()
-    rewriteTrace t = do
+    emitRewriteTrace :: RewriteTrace Pattern -> StateT RewriteStepsState io ()
+    emitRewriteTrace t = do
         let prettyT = pack $ renderDefault $ pretty t
         logRewrite prettyT
         case t of
@@ -674,15 +674,15 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
             logTraces traces
             case res of
                 Right newPattern -> do
-                    rewriteTrace $ RewriteSimplified traces Nothing
+                    emitRewriteTrace $ RewriteSimplified traces Nothing
                     pure $ Just newPattern
                 Left r@(SideConditionFalse _p) -> do
                     logSimplify "A side condition was found to be false, pruning"
-                    rewriteTrace $ RewriteSimplified traces (Just r)
+                    emitRewriteTrace $ RewriteSimplified traces (Just r)
                     pure Nothing
                 Left r@UndefinedTerm{} -> do
                     logSimplify "Term is undefined, pruning"
-                    rewriteTrace $ RewriteSimplified traces (Just r)
+                    emitRewriteTrace $ RewriteSimplified traces (Just r)
                     pure Nothing
                 -- NB any errors here might be caused by simplifying one
                 -- of the constraints, so we cannot use partial results
@@ -698,7 +698,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                             ]
                         )
                     -- could output term before and after at debug or custom log level
-                    rewriteTrace $ RewriteSimplified traces (Just r)
+                    emitRewriteTrace $ RewriteSimplified traces (Just r)
                     pure $ Just p
                 Left r@(EquationLoop (t : ts)) -> do
                     logError "Equation evaluation loop"
@@ -709,11 +709,11 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                                 <> prettyText l
                                 <> ": \n"
                                 <> Text.unlines (map (prettyText . fst) termDiffs)
-                    rewriteTrace $ RewriteSimplified traces (Just r)
+                    emitRewriteTrace $ RewriteSimplified traces (Just r)
                     pure $ Just p
                 Left other -> do
                     logError . pack $ "Simplification error during rewrite: " <> show other
-                    rewriteTrace $ RewriteSimplified traces (Just other)
+                    emitRewriteTrace $ RewriteSimplified traces (Just other)
                     pure $ Just p
 
     -- Results may change when simplification prunes a false side
@@ -778,12 +778,12 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                     >>= \case
                         Right (RewriteFinished mlbl uniqueId single, cache) -> do
                             whenJust mlbl $ \lbl ->
-                                rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
+                                emitRewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
                             updateCache cache
                             incrementCounter
                             doSteps False single
                         Right (terminal@(RewriteTerminal lbl uniqueId single), _cache) -> do
-                            rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
+                            emitRewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
                             logRewrite $
                                 "Terminal rule after " <> showCounter (counter + 1)
                             incrementCounter
@@ -802,11 +802,11 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                                 RewriteFinished mlbl uniqueId single -> do
                                     logRewrite "All but one branch pruned, continuing"
                                     whenJust mlbl $ \lbl ->
-                                        rewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
+                                        emitRewriteTrace $ RewriteSingleStep lbl uniqueId pat' single
                                     incrementCounter
                                     doSteps False single
                                 RewriteBranch pat'' branches -> do
-                                    rewriteTrace $ RewriteBranchingStep pat'' $ fmap (\(lbl, uid, _) -> (lbl, uid)) branches
+                                    emitRewriteTrace $ RewriteBranchingStep pat'' $ fmap (\(lbl, uid, _) -> (lbl, uid)) branches
                                     pure simplified
                                 _other -> error "simplifyResult: Unexpected return value"
                         Right (cutPoint@(RewriteCutPoint lbl _ _ _), _) -> do
@@ -823,7 +823,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                         Right (stuck@RewriteStuck{}, cache) -> do
                             logRewrite $ "Stopped after " <> showCounter counter
                             updateCache cache
-                            rewriteTrace $ RewriteStepFailed $ NoApplicableRules pat'
+                            emitRewriteTrace $ RewriteStepFailed $ NoApplicableRules pat'
                             if wasSimplified
                                 then pure stuck
                                 else withSimplified pat' "Retrying with simplified pattern" (doSteps True)
@@ -837,12 +837,12 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
                         -- unsimplified, simplify and retry rewriting once
                         Left failure@RuleApplicationUnclear{}
                             | not wasSimplified -> do
-                                rewriteTrace $ RewriteStepFailed failure
+                                emitRewriteTrace $ RewriteStepFailed failure
                                 -- simplify remainders, substitute and rerun.
                                 -- If failed, do the pattern-wide simplfication and rerun again
                                 withSimplified pat' "Retrying with simplified pattern" (doSteps True)
                         Left failure -> do
-                            rewriteTrace $ RewriteStepFailed failure
+                            emitRewriteTrace $ RewriteStepFailed failure
                             logAborts . renderText $ pretty failure
                             let msg = "Aborted after " <> showCounter counter
                             if wasSimplified
