@@ -6,6 +6,7 @@ module Booster.Util (
     decodeLabel,
     decodeLabel',
     Flag (..),
+    Bound (..),
 ) where
 
 import Control.DeepSeq (NFData (..))
@@ -20,6 +21,11 @@ import Language.Haskell.TH.Syntax (Lift)
 
 newtype Flag (name :: k) = Flag Bool
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
+    deriving anyclass (NFData, Hashable)
+
+newtype Bound (name :: k) = Bound Int
+    deriving stock (Eq, Ord, Show, Generic, Data, Lift)
+    deriving newtype (Num)
     deriving anyclass (NFData, Hashable)
 
 -- | Un-escapes special characters in symbol names

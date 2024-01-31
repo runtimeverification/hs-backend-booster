@@ -63,7 +63,7 @@ import Booster.Pattern.Match
 import Booster.Pattern.Util
 import Booster.Prettyprinter (renderDefault, renderText)
 import Booster.SMT.Interface qualified as SMT
-import Booster.Util (Flag (..))
+import Booster.Util (Bound (..), Flag (..))
 
 newtype EquationT io a
     = EquationT (ReaderT EquationConfig (ExceptT EquationFailure (StateT EquationState io)) a)
@@ -125,8 +125,8 @@ data EquationConfig = EquationConfig
     , llvmApi :: Maybe LLVM.API
     , smtSolver :: Maybe SMT.SMTContext
     , doTracing :: Flag "CollectEquationTraces"
-    , maxRecursion :: Int
-    , maxIterations :: Int
+    , maxRecursion :: Bound "Recursion"
+    , maxIterations :: Bound "Iterations"
     }
 
 data EquationState = EquationState
@@ -250,11 +250,11 @@ resetChanged = eqState . modify $ \s -> s{changed = False}
 getChanged :: MonadLoggerIO io => EquationT io Bool
 getChanged = eqState $ gets (.changed)
 
-pushRecursion :: MonadLoggerIO io => Term -> EquationT io Int
+pushRecursion :: MonadLoggerIO io => Term -> EquationT io (Bound "Recursion")
 pushRecursion t = eqState $ do
     stk <- gets (.recursionStack)
     modify $ \s -> s{recursionStack = t : stk}
-    pure (1 + length stk)
+    pure (coerce $ 1 + length stk)
 
 popRecursion :: MonadLoggerIO io => EquationT io ()
 popRecursion = do
@@ -329,7 +329,7 @@ iterateEquations direction preference startTerm = do
         | otherwise = do
             config <- getConfig
             currentCount <- countSteps
-            when (currentCount > config.maxIterations) $
+            when (coerce currentCount > config.maxIterations) $
                 throw $
                     TooManyIterations currentCount startTerm currentTerm
             pushTerm currentTerm
