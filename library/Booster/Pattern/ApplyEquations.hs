@@ -124,6 +124,8 @@ data EquationConfig = EquationConfig
     , llvmApi :: Maybe LLVM.API
     , smtSolver :: Maybe SMT.SMTContext
     , doTracing :: Bool
+    , maxIterations :: Int
+    , maxRecursion :: Int
     }
 
 data EquationState = EquationState
@@ -291,34 +293,42 @@ runEquationT doTracing definition llvmApi smtSolver sCache (EquationT m) = do
     (res, endState) <-
         flip runStateT (startState sCache) $
             runExceptT $
-                runReaderT m EquationConfig{definition, llvmApi, smtSolver, doTracing}
+                runReaderT
+                    m
+                    EquationConfig
+                        { definition
+                        , llvmApi
+                        , smtSolver
+                        , doTracing
+                        , maxIterations = 100
+                        , maxRecursion = 5
+                        }
     pure (res, toList endState.trace, endState.cache)
 
 iterateEquations ::
     MonadLoggerIO io =>
-    Int ->
-    Int ->
     Direction ->
     EquationPreference ->
     Term ->
     EquationT io Term
-iterateEquations maxRecursion maxIterations direction preference startTerm = do
+iterateEquations direction preference startTerm = do
     logOther (LevelOther "Simplify") $ "Evaluating " <> renderText (pretty startTerm)
     result <- pushRecursion startTerm >>= checkCounter >> go startTerm <* popRecursion
     logOther (LevelOther "Simplify") $ "Result: " <> renderText (pretty result)
     pure result
   where
-    checkCounter counter
-        | counter > maxRecursion =
+    checkCounter counter = do
+        config <- getConfig
+        when (counter > config.maxRecursion) $
             throw . TooManyRecursions . (.recursionStack) =<< getState
-        | otherwise = pure ()
 
     go :: MonadLoggerIO io => Term -> EquationT io Term
     go currentTerm
         | (getAttributes currentTerm).isEvaluated = pure currentTerm
         | otherwise = do
+            config <- getConfig
             currentCount <- countSteps
-            when (currentCount > maxIterations) $
+            when (currentCount > config.maxIterations) $
                 throw $
                     TooManyIterations currentCount startTerm currentTerm
             pushTerm currentTerm
@@ -352,7 +362,7 @@ evaluateTerm' ::
     Direction ->
     Term ->
     EquationT io Term
-evaluateTerm' direction = iterateEquations 5 100 direction PreferFunctions
+evaluateTerm' direction = iterateEquations direction PreferFunctions
 
 {- | Simplify a Pattern, processing its constraints independently.
      Returns either the first failure or the new pattern if no failure was encountered
@@ -850,6 +860,6 @@ simplifyConstraint' recurseIntoEvalBool = \case
     evalBool t = do
         prior <- getState -- save prior state so we can revert
         eqState $ put prior{termStack = [], changed = False}
-        result <- iterateEquations 5 100 BottomUp PreferFunctions t
+        result <- iterateEquations BottomUp PreferFunctions t
         eqState $ put prior
         pure result
