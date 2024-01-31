@@ -137,7 +137,8 @@ respond stateVar =
                                 }
 
                     solver <- traverse (SMT.initSolver def) mSMTOptions
-                    result <- performRewrite (coerce doTracing) def mLlvmLibrary solver mbDepth cutPoints terminals substPat
+                    result <-
+                        performRewrite (coerce doTracing) def mLlvmLibrary solver mbDepth cutPoints terminals substPat
                     whenJust solver SMT.closeSolver
                     stop <- liftIO $ getTime Monotonic
                     let duration =
