@@ -5,9 +5,9 @@
 module Booster.Util (
     decodeLabel,
     decodeLabel',
-    shortenText,
     Flag (..),
     Bound (..),
+    constructorName,
 ) where
 
 import Control.DeepSeq (NFData (..))
@@ -17,8 +17,6 @@ import Data.Data (Data)
 import Data.Either (fromRight)
 import Data.Hashable (Hashable)
 import Data.Map qualified as Map
-import Data.Text (Text)
-import Data.Text qualified as Text
 import GHC.Generics (Generic)
 import Language.Haskell.TH.Syntax (Lift)
 
@@ -31,9 +29,8 @@ newtype Bound (name :: k) = Bound Int
     deriving newtype (Num)
     deriving anyclass (NFData, Hashable)
 
-shortenText :: Int -> Text -> Text
-shortenText cutoff msg =
-    if Text.length msg < cutoff then msg else Text.take cutoff msg <> "...truncated"
+constructorName :: Data a => a -> String
+constructorName x = showConstr (toConstr x)
 
 -- | Un-escapes special characters in symbol names
 decodeLabel :: ByteString -> Either String ByteString
