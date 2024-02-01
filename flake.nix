@@ -2,7 +2,7 @@
   description = "hs-backend-booster";
 
   inputs = {
-    haskell-backend.url = "github:runtimeverification/haskell-backend/ca05f14b7957fec9f2a5ab3444cae01c5a76f12f";
+    haskell-backend.url = "github:runtimeverification/haskell-backend/3779155b609ae78c928d7b47c541b9b6ca969181";
     stacklock2nix.follows = "haskell-backend/stacklock2nix";
     nixpkgs.follows = "haskell-backend/nixpkgs";
   };
@@ -124,7 +124,7 @@
         (nixpkgsFor system).booster-backend.devShell.overrideAttrs (old: {
           shellHook = ''
             ${old.shellHook}
-            hpack && cd dev-tools && hpack
+            hpack && hpack dev-tools
           '';
         }));
     };
