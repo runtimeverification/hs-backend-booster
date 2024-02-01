@@ -12,6 +12,7 @@ module Test.Booster.Pattern.Rewrite (
 import Control.Exception (ErrorCall, catch)
 import Control.Monad.Logger.CallStack
 import Data.Bifunctor (second)
+import Data.Coerce (coerce)
 import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -28,6 +29,7 @@ import Booster.Pattern.Index (TermIndex (..))
 import Booster.Pattern.Rewrite
 import Booster.Syntax.Json.Internalise (trm)
 import Booster.Syntax.ParsedKore.Internalise (symb)
+import Booster.Util (Flag (..))
 import Test.Booster.Fixture hiding (inj)
 
 test_rewriteStep :: TestTree
@@ -243,7 +245,7 @@ runWith :: Term -> Either (RewriteFailed "Rewrite") (RewriteResult Pattern)
 runWith t =
     second fst $
         unsafePerformIO
-            (runNoLoggingT $ runRewriteT False def Nothing Nothing mempty (rewriteStep [] [] $ Pattern_ t))
+            (runNoLoggingT $ runRewriteT (coerce False) def Nothing Nothing mempty (rewriteStep [] [] $ Pattern_ t))
 
 rewritesTo :: Term -> (Text, Term) -> IO ()
 t1 `rewritesTo` (lbl, t2) =
@@ -269,7 +271,7 @@ failsWith t err =
 runRewrite :: Term -> IO (Natural, RewriteResult Term)
 runRewrite t = do
     (counter, _, res) <-
-        runNoLoggingT $ performRewrite False def Nothing Nothing Nothing [] [] $ Pattern_ t
+        runNoLoggingT $ performRewrite (coerce False) def Nothing Nothing Nothing [] [] $ Pattern_ t
     pure (counter, fmap (.term) res)
 
 aborts :: RewriteFailed "Rewrite" -> Term -> IO ()
@@ -412,7 +414,7 @@ supportsDepthControl =
     rewritesToDepth :: MaxDepth -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
     rewritesToDepth (MaxDepth depth) (Steps n) t t' f = do
         (counter, _, res) <-
-            runNoLoggingT $ performRewrite False def Nothing Nothing (Just depth) [] [] $ Pattern_ t
+            runNoLoggingT $ performRewrite (coerce False) def Nothing Nothing (Just depth) [] [] $ Pattern_ t
         (counter, fmap (.term) res) @?= (n, f t')
 
 supportsCutPoints :: TestTree
@@ -464,7 +466,7 @@ supportsCutPoints =
     rewritesToCutPoint :: Text -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
     rewritesToCutPoint lbl (Steps n) t t' f = do
         (counter, _, res) <-
-            runNoLoggingT $ performRewrite False def Nothing Nothing Nothing [lbl] [] $ Pattern_ t
+            runNoLoggingT $ performRewrite (coerce False) def Nothing Nothing Nothing [lbl] [] $ Pattern_ t
         (counter, fmap (.term) res) @?= (n, f t')
 
 supportsTerminalRules :: TestTree
@@ -495,5 +497,5 @@ supportsTerminalRules =
     rewritesToTerminal lbl (Steps n) t t' f = do
         (counter, _, res) <-
             runNoLoggingT $ do
-                performRewrite False def Nothing Nothing Nothing [] [lbl] $ Pattern_ t
+                performRewrite (coerce False) def Nothing Nothing Nothing [] [lbl] $ Pattern_ t
         (counter, fmap (.term) res) @?= (n, f t')
