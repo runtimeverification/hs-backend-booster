@@ -173,7 +173,10 @@ main = do
 
                 let globalMaxIteratios = 500
                 writeGlobalMaxIterations globalMaxIteratios
-                runLoggingT (Logger.logInfoNS "proxy" ("GlobalMaxIterations is set to " <> (Text.pack $ show globalMaxIteratios))) monadLogger
+                runLoggingT
+                    ( Logger.logInfoNS "proxy" ("GlobalMaxIterations is set to " <> (Text.pack $ show globalMaxIteratios))
+                    )
+                    monadLogger
 
                 runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
