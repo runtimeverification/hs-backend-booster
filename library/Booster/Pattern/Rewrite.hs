@@ -257,9 +257,15 @@ applyRule ::
 applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     def <- lift getDefinition
     -- unify terms
+    -- FIXME more granular level
+    logOtherNS "booster" (LevelOther "Rewrite") . renderOneLineText $
+        "Attempting rule " <> ruleLabelOrLoc rule
     let unified = unifyTerms def rule.lhs pat.term
     subst <- case unified of
-        UnificationFailed _reason ->
+        UnificationFailed reason -> do
+            -- FIXME more granular level
+            logOtherNS "booster" (LevelOther "Rewrite") . renderOneLineText $
+                "Failed because of " <> pretty reason
             fail "Unification failed"
         UnificationSortError sortError ->
             failRewrite $ RewriteSortError rule pat.term sortError
@@ -288,7 +294,9 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     -- in isolation). Stop if false, abort rewrite if indeterminate.
     let ruleRequires =
             concatMap (splitBoolPredicates . coerce . substituteInTerm subst . coerce) rule.requires
-        notAppliedIfBottom = RewriteRuleAppT $ pure NotApplied
+        notAppliedIfBottom = RewriteRuleAppT $ do
+                logOtherNS "booster" (LevelOther "Rewrite") "False side condition"
+                pure NotApplied
     -- filter out any predicates known to be _syntactically_ present in the known prior
     let prior = pat.constraints
         (knownTrue, toCheck) = partition (`Set.member` prior) ruleRequires
@@ -336,7 +344,9 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     -- check all new constraints together with the known side constraints
     whenJust mbSolver $ \solver ->
         (lift $ SMT.checkPredicates solver prior mempty (Set.fromList newConstraints)) >>= \case
-            Just False -> RewriteRuleAppT $ pure Trivial
+            Just False -> RewriteRuleAppT $ do
+                logOtherNS "booster" (LevelOther "Rewrite") "Trivial"
+                pure Trivial
             _other -> pure ()
 
     -- existential variables may be present in rule.rhs and rule.ensures,
