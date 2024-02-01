@@ -2,12 +2,14 @@
 
 module Booster.CLOptions (
     CLOptions (..),
+    EquationOptions (..),
     clOptionsParser,
     adjustLogLevels,
     versionInfoParser,
 ) where
 
 import Booster.Trace (CustomUserEventType)
+import Booster.Util (Bound (..))
 import Booster.VersionInfo (VersionInfo (..), versionInfo)
 import Control.Monad.Logger (LogLevel (..))
 import Data.ByteString.Char8 qualified as BS (pack)
@@ -28,6 +30,7 @@ data CLOptions = CLOptions
     , port :: Int
     , logLevels :: [LogLevel]
     , smtOptions :: Maybe SMTOptions
+    , equationOptions :: EquationOptions
     , -- developer options below
       eventlogEnabledUserEvents :: [CustomUserEventType]
     , hijackEventlogFile :: Maybe FilePath
@@ -75,6 +78,7 @@ clOptionsParser =
                 )
             )
         <*> parseSMTOptions
+        <*> parseEquationOptions
         -- developer options below
         <*> many
             ( option
@@ -200,6 +204,42 @@ parseSMTOptions =
 
     readTactic =
         either (readerError . ("Invalid s-expression. " <>)) pure . SMT.parseSExpr . BS.pack =<< str
+
+data EquationOptions = EquationOptions
+    { maxIterations :: Bound "Iterations"
+    , maxRecursion :: Bound "Recursion"
+    }
+    deriving stock (Show)
+
+parseEquationOptions :: Parser EquationOptions
+parseEquationOptions =
+    (\x y -> EquationOptions (Bound x) (Bound y))
+        <$> option
+            nonnegativeInt
+            ( metavar "ITERATION_LIMIT"
+                <> long "equation-max-iterations"
+                <> help "Number of iterations the equational rules will be attempted for"
+                <> value defaultMaxIterations
+                <> showDefault
+            )
+        <*> option
+            nonnegativeInt
+            ( metavar "RECURSION_LIMIT"
+                <> long "equation-max-recursion"
+                <> help "Depth of recursion for equational rules evaluation"
+                <> value defaultMaxRecursion
+                <> showDefault
+            )
+  where
+    defaultMaxIterations = 100
+    defaultMaxRecursion = 5
+
+    nonnegativeInt :: ReadM Int
+    nonnegativeInt =
+        auto >>= \case
+            i
+                | i < 0 -> readerError "must be a non-negative integer."
+                | otherwise -> pure i
 
 versionInfoParser :: Parser (a -> a)
 versionInfoParser =

@@ -21,6 +21,7 @@ import Booster.JsonRpc (runServer)
 import Booster.LLVM.Internal (mkAPI, withDLib)
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
+import Booster.UnsafeGlobalState
 
 main :: IO ()
 main = do
@@ -32,6 +33,7 @@ main = do
             , logLevels
             , llvmLibraryFile
             , smtOptions
+            , equationOptions
             , eventlogEnabledUserEvents
             , hijackEventlogFile
             } = options
@@ -59,6 +61,10 @@ main = do
         when (isNothing $ Map.lookup mainModuleName definitionMap) $
             error $
                 "Module " <> unpack mainModuleName <> " does not exist in the given definition."
+
+        writeGlobalMaxIterations equationOptions.maxIterations
+        writeGlobalMaxRecursion equationOptions.maxRecursion
+
         putStrLn "Starting RPC server"
         runServer port definitionMap mainModuleName mLlvmLibrary smtOptions (adjustLogLevels logLevels)
   where
