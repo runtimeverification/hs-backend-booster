@@ -67,6 +67,9 @@ data RewriteConfig = RewriteConfig
     , doTracing :: Flag "CollectRewriteTraces"
     }
 
+castDoTracingFlag :: Flag "CollectRewriteTraces" -> Flag "CollectEquationTraces"
+castDoTracingFlag = coerce
+
 runRewriteT ::
     Flag "CollectRewriteTraces" ->
     KoreDefinition ->
@@ -363,7 +366,7 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     checkConstraint onUnclear onBottom p = do
         RewriteConfig{definition, llvmApi, smtSolver, doTracing} <- lift $ RewriteT ask
         (simplified, _traces, _cache) <-
-            simplifyConstraint (coerce doTracing) definition llvmApi smtSolver mempty p
+            simplifyConstraint (castDoTracingFlag doTracing) definition llvmApi smtSolver mempty p
         case simplified of
             Right (Predicate FalseBool) -> onBottom
             Right (Predicate TrueBool) -> pure Nothing
@@ -669,7 +672,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
         st <- get
         let cache = st.simplifierCache
             smt = st.smtSolver
-        evaluatePattern (coerce doTracing) def mLlvmLibrary smt cache p >>= \(res, traces, newCache) -> do
+        evaluatePattern (castDoTracingFlag doTracing) def mLlvmLibrary smt cache p >>= \(res, traces, newCache) -> do
             updateCache newCache
             logTraces traces
             case res of
