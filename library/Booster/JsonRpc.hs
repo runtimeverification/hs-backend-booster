@@ -120,14 +120,15 @@ respond stateVar =
                         terminals = fromMaybe [] req.terminalRules
                         mbDepth = fmap RpcTypes.getNat req.maxDepth
                         doTracing =
-                            any
-                                (fromMaybe False)
-                                [ req.logSuccessfulRewrites
-                                , req.logFailedRewrites
-                                , req.logSuccessfulSimplifications
-                                , req.logFailedSimplifications
-                                , req.logFallbacks
-                                ]
+                            Flag $
+                                any
+                                    (fromMaybe False)
+                                    [ req.logSuccessfulRewrites
+                                    , req.logFailedRewrites
+                                    , req.logSuccessfulSimplifications
+                                    , req.logFailedSimplifications
+                                    , req.logFallbacks
+                                    ]
                     -- apply the given substitution before doing anything else
                     let substPat =
                             Pattern
@@ -138,7 +139,7 @@ respond stateVar =
 
                     solver <- traverse (SMT.initSolver def) mSMTOptions
                     result <-
-                        performRewrite (coerce doTracing) def mLlvmLibrary solver mbDepth cutPoints terminals substPat
+                        performRewrite doTracing def mLlvmLibrary solver mbDepth cutPoints terminals substPat
                     whenJust solver SMT.closeSolver
                     stop <- liftIO $ getTime Monotonic
                     let duration =
@@ -218,7 +219,7 @@ respond stateVar =
             let internalised =
                     runExcept $ internaliseTermOrPredicate DisallowAlias CheckSubsorts Nothing def req.state.term
             let mkEquationTraces
-                    | doTracing =
+                    | coerce doTracing =
                         Just
                             . mapMaybe
                                 ( mkLogEquationTrace
@@ -236,11 +237,12 @@ respond stateVar =
                     | otherwise =
                         mkEquationTraces traceData
                 doTracing =
-                    any
-                        (fromMaybe False)
-                        [ req.logSuccessfulSimplifications
-                        , req.logFailedSimplifications
-                        ]
+                    Flag $
+                        any
+                            (fromMaybe False)
+                            [ req.logSuccessfulSimplifications
+                            , req.logFailedSimplifications
+                            ]
 
             solver <- traverse (SMT.initSolver def) mSMTOptions
 
@@ -271,7 +273,7 @@ respond stateVar =
                                 , constraints = Set.map (substituteInPredicate substitution) pat.constraints
                                 , ceilConditions = pat.ceilConditions
                                 }
-                    ApplyEquations.evaluatePattern (coerce doTracing) def mLlvmLibrary solver mempty substPat >>= \case
+                    ApplyEquations.evaluatePattern doTracing def mLlvmLibrary solver mempty substPat >>= \case
                         (Right newPattern, patternTraces, _) -> do
                             let (term, mbPredicate, mbSubstitution) = externalisePattern newPattern substitution
                                 tSort = externaliseSort (sortOfPattern newPattern)
@@ -305,7 +307,7 @@ respond stateVar =
                         Log.logOtherNS "booster" (Log.LevelOther "Simplify") $ renderText (pretty ps)
                         let predicates = map (substituteInPredicate ps.substitution) $ Set.toList ps.boolPredicates
                         ApplyEquations.simplifyConstraints
-                            (coerce doTracing)
+                            doTracing
                             def
                             mLlvmLibrary
                             solver
