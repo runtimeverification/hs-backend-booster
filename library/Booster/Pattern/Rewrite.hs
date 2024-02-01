@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -11,6 +12,8 @@ module Booster.Pattern.Rewrite (
     RewriteFailed (..),
     RewriteResult (..),
     RewriteTrace (..),
+    pattern CollectRewriteTraces,
+    pattern NoCollectRewriteTraces,
     runRewriteT,
 ) where
 
@@ -69,6 +72,12 @@ data RewriteConfig = RewriteConfig
 
 castDoTracingFlag :: Flag "CollectRewriteTraces" -> Flag "CollectEquationTraces"
 castDoTracingFlag = coerce
+
+pattern CollectRewriteTraces :: Flag "CollectRewriteTraces"
+pattern CollectRewriteTraces = Flag True
+
+pattern NoCollectRewriteTraces :: Flag "CollectRewriteTraces"
+pattern NoCollectRewriteTraces = Flag False
 
 runRewriteT ::
     Flag "CollectRewriteTraces" ->

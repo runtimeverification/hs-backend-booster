@@ -16,7 +16,6 @@ module Test.Booster.Pattern.ApplyEquations (
 ) where
 
 import Control.Monad.Logger (runNoLoggingT)
-import Data.Coerce (coerce)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
@@ -102,7 +101,7 @@ test_evaluateFunction =
         unsafePerformIO
             . runNoLoggingT
             . (fst3 <$>)
-            . evaluateTerm (coerce False) direction funDef Nothing Nothing
+            . evaluateTerm NoCollectEquationTraces direction funDef Nothing Nothing
 
     isTooManyIterations (Left (TooManyIterations _n _ _)) = pure ()
     isTooManyIterations (Left err) = assertFailure $ "Unexpected error " <> show err
@@ -133,7 +132,7 @@ test_simplify =
         unsafePerformIO
             . runNoLoggingT
             . (fst3 <$>)
-            . evaluateTerm (coerce False) direction simplDef Nothing Nothing
+            . evaluateTerm NoCollectEquationTraces direction simplDef Nothing Nothing
     a = var "A" someSort
 
 test_simplifyPattern :: TestTree
@@ -163,7 +162,7 @@ test_simplifyPattern =
         unsafePerformIO
             . runNoLoggingT
             . (fst3 <$>)
-            . evaluatePattern (coerce False) simplDef Nothing Nothing mempty
+            . evaluatePattern NoCollectEquationTraces simplDef Nothing Nothing mempty
     a = var "A" someSort
 
 test_simplifyConstraint :: TestTree
@@ -233,7 +232,7 @@ test_simplifyConstraint =
         unsafePerformIO
             . runNoLoggingT
             . (fst3 <$>)
-            . simplifyConstraint (coerce False) testDefinition Nothing Nothing mempty
+            . simplifyConstraint NoCollectEquationTraces testDefinition Nothing Nothing mempty
 
 test_errors :: TestTree
 test_errors =
@@ -246,7 +245,7 @@ test_errors =
                 loopTerms =
                     [f $ app con1 [a], f $ app con2 [a], f $ app con3 [a, a], f $ app con1 [a]]
             isLoop loopTerms . unsafePerformIO . runNoLoggingT $
-                fst3 <$> evaluateTerm (coerce False) TopDown loopDef Nothing Nothing subj
+                fst3 <$> evaluateTerm NoCollectEquationTraces TopDown loopDef Nothing Nothing subj
         ]
   where
     isLoop ts (Left (EquationLoop ts')) = ts @?= ts'

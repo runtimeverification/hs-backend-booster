@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -15,6 +16,8 @@ module Booster.Pattern.ApplyEquations (
     EquationPreference (..),
     EquationFailure (..),
     EquationTrace (..),
+    pattern CollectEquationTraces,
+    pattern NoCollectEquationTraces,
     eraseStates,
     EquationMetadata (..),
     ApplyEquationResult (..),
@@ -135,6 +138,12 @@ data EquationConfig = EquationConfig
     , maxRecursion :: Bound "Recursion"
     , maxIterations :: Bound "Iterations"
     }
+
+pattern CollectEquationTraces :: Flag "CollectEquationTraces"
+pattern CollectEquationTraces = Flag True
+
+pattern NoCollectEquationTraces :: Flag "CollectEquationTraces"
+pattern NoCollectEquationTraces = Flag False
 
 data EquationState = EquationState
     { termStack :: [Term]
