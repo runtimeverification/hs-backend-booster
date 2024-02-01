@@ -1,12 +1,19 @@
 module Booster.Util (
     decodeLabel,
     decodeLabel',
+    shortenText,
 ) where
 
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as BS
 import Data.Either (fromRight)
 import Data.Map qualified as Map
+import Data.Text (Text)
+import Data.Text qualified as Text
+
+shortenText :: Int -> Text -> Text
+shortenText cutoff msg =
+    if Text.length msg < cutoff then msg else Text.take cutoff msg <> "...truncated"
 
 -- | Un-escapes special characters in symbol names
 decodeLabel :: ByteString -> Either String ByteString
