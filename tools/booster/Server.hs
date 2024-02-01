@@ -96,6 +96,7 @@ main = do
                     , llvmLibraryFile
                     , logLevels
                     , smtOptions
+                    , equationOptions
                     , eventlogEnabledUserEvents
                     }
             , proxyOptions =
@@ -171,12 +172,8 @@ main = do
                                 }
                 statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
 
-                let globalMaxIteratios = 500
-                writeGlobalMaxIterations globalMaxIteratios
-                runLoggingT
-                    ( Logger.logInfoNS "proxy" ("GlobalMaxIterations is set to " <> (Text.pack $ show globalMaxIteratios))
-                    )
-                    monadLogger
+                writeGlobalMaxIterations equationOptions.maxIterations
+                writeGlobalMaxRecursion equationOptions.maxRecursion
 
                 runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
