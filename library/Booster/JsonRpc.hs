@@ -76,7 +76,7 @@ import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base hiding (ParsedModule)
 import Booster.Syntax.ParsedKore.Base qualified as ParsedModule (ParsedModule (..))
 import Booster.Syntax.ParsedKore.Internalise (addToDefinitions)
-import Booster.Util (Flag (..))
+import Booster.Util (Flag (..), shortenText)
 import Data.Aeson (ToJSON (toJSON))
 import Data.Set qualified as Set
 import Kore.JsonRpc.Error qualified as RpcError
@@ -285,7 +285,7 @@ respond stateVar =
                         (Left (ApplyEquations.EquationLoop terms), _traces, _) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
                         (Left other, _traces, _) ->
-                            pure . Left . RpcError.backendError RpcError.Aborted $ show other -- FIXME
+                            pure . Left . RpcError.backendError RpcError.Aborted $ (shortenText 32 . Text.pack . show $ other) -- FIXME
                             -- predicate only
                 Right (Predicates ps)
                     | null ps.boolPredicates && null ps.ceilPredicates && null ps.substitution && null ps.unsupported ->
