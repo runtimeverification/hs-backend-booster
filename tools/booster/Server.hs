@@ -50,6 +50,7 @@ import Booster.SMT.Base qualified as SMT (SExpr (..), SMTId (..))
 import Booster.SMT.Interface (SMTOptions (..))
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
+import Booster.UnsafeGlobalState
 import Data.Limit (Limit (..))
 import GlobalMain qualified
 import Kore.Attribute.Symbol (StepperAttributes)
@@ -169,6 +170,10 @@ main = do
                                 , mSMTOptions = if boosterSMT then smtOptions else Nothing
                                 }
                 statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
+
+                let globalMaxIteratios = 500
+                writeGlobalMaxIterations globalMaxIteratios
+                runLoggingT (Logger.logInfoNS "proxy" ("GlobalMaxIterations is set to " <> (Text.pack $ show globalMaxIteratios))) monadLogger
 
                 runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
@@ -354,8 +359,9 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
     smtConfig :: KoreSMT.Config
     smtConfig =
         KoreSMT.defaultConfig
-            { KoreSMT.executable = KoreSMT.defaultConfig.executable -- hack to shut up GHC field warning
-            , KoreSMT.timeOut = timeOut
+            { KoreSMT.executable = KoreSMT.defaultConfig.executable
+            , -- hack to shut up GHC field warning
+              KoreSMT.timeOut = timeOut
             , KoreSMT.retryLimit = retryLimit
             , KoreSMT.tactic = tactic
             }

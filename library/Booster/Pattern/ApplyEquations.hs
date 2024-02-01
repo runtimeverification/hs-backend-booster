@@ -63,6 +63,7 @@ import Booster.Pattern.Match
 import Booster.Pattern.Util
 import Booster.Prettyprinter (renderDefault, renderText)
 import Booster.SMT.Interface qualified as SMT
+import Booster.UnsafeGlobalState qualified as UnsafeGlobalState
 import Booster.Util (Bound (..), Flag (..))
 
 newtype EquationT io a
@@ -301,8 +302,8 @@ runEquationT doTracing definition llvmApi smtSolver sCache (EquationT m) = do
                         , llvmApi
                         , smtSolver
                         , doTracing
-                        , maxIterations = 100
-                        , maxRecursion = 5
+                        , maxIterations = UnsafeGlobalState.unsafeReadGlobalMaxIterations
+                        , maxRecursion = UnsafeGlobalState.unsafeReadGlobalMaxRecursion
                         }
     pure (res, toList endState.trace, endState.cache)
 
