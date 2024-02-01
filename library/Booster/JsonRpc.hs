@@ -497,8 +497,8 @@ data ServerState = ServerState
     }
 
 execStateToKoreJson :: RpcTypes.ExecuteState -> KoreJson.KoreJson
-execStateToKoreJson RpcTypes.ExecuteState{term = t, substitution, predicate} =
-    let subAndPred = catMaybes [KoreJson.term <$> substitution, KoreJson.term <$> predicate]
+execStateToKoreJson RpcTypes.ExecuteState{term = t, predicate} =
+    let subAndPred = catMaybes [KoreJson.term <$> predicate]
         innerSorts = mapMaybe sortOfJson $ KoreJson.term t : subAndPred
         topLevelSort = case innerSorts of
             [] -> KoreJson.SortApp (KoreJson.Id "SortGeneratedTopCell") []
@@ -638,10 +638,12 @@ toExecState pat sub unsupported =
     RpcTypes.ExecuteState
         { term = addHeader t
         , predicate = addHeader <$> addUnsupported p
-        , substitution = addHeader <$> s
+        , ruleSubstitution = Nothing
+        , rulePredicate = Nothing
+        , ruleId = Nothing
         }
   where
-    (t, p, s) = externalisePattern pat sub
+    (t, p, _s) = externalisePattern pat sub
     termSort = externaliseSort $ sortOfPattern pat
     allUnsupported = Syntax.KJAnd termSort unsupported
     addUnsupported
