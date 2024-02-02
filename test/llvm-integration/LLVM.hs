@@ -30,14 +30,15 @@ import Hedgehog.Gen qualified as Gen
 import Hedgehog.Internal.Property (Property (..))
 import Hedgehog.Range qualified as Range
 import System.FilePath
+import System.Info (os)
 import System.Process
 import Test.Hspec
 import Test.Hspec.Hedgehog
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
-import Booster.LLVM as LLVM
-import Booster.LLVM.Internal as Internal
+import Booster.LLVM qualified as LLVM
+import Booster.LLVM.Internal qualified as Internal
 import Booster.Pattern.Base
 import Booster.Syntax.Json.Externalise (externaliseTerm)
 import Booster.Syntax.Json.Internalise (pattern AllowAlias, pattern IgnoreSubsorts)
@@ -45,7 +46,6 @@ import Booster.Syntax.Json.Internalise qualified as Syntax
 import Booster.Syntax.ParsedKore.Internalise (buildDefinitions, symb)
 import Booster.Syntax.ParsedKore.Parser (parseDefinition)
 import Kore.Syntax.Json.Types qualified as Syntax
-import System.Info (os)
 
 -- A prerequisite for all tests in this suite is that a fixed K
 -- definition was compiled in LLVM 'c' mode to produce a dynamic
@@ -64,12 +64,12 @@ llvmSpec =
     beforeAll_ runKompile $ do
         describe "Load an LLVM simplification library" $ do
             it "fails to load a non-existing library" $
-                withDLib "does/not/exist.dl" mkAPI
+                Internal.withDLib "does/not/exist.dl" Internal.mkAPI
                     `shouldThrow` \IOError{ioe_description = msg} ->
                         "does/not/exist" `isInfixOf` msg
             it ("loads a valid library from " <> dlPath) $ do
-                withDLib dlPath $ \dl -> do
-                    api <- mkAPI dl
+                Internal.withDLib dlPath $ \dl -> do
+                    api <- Internal.mkAPI dl
                     let testString = "testing, one, two, three"
                     s <- api.patt.string.new testString
                     api.patt.dump s `shouldReturn` show testString
@@ -101,7 +101,7 @@ llvmSpec =
 boolsRemainProp
     , compareNumbersProp
     , simplifyComparisonProp ::
-        Internal.API -> Property
+        LLVM.API -> Property
 boolsRemainProp api = property $ do
     b <- forAll Gen.bool
     res <- LLVM.simplifyBool api (boolTerm b)
@@ -120,7 +120,7 @@ simplifyComparisonProp api = property $ do
 anInt64 :: PropertyT IO Int64
 anInt64 = forAll $ Gen.integral (Range.constantBounded :: Range Int64)
 
-byteArrayProp :: Internal.API -> Property
+byteArrayProp :: LLVM.API -> Property
 byteArrayProp api = property $ do
     i <- forAll $ Gen.int (Range.linear 0 1024)
     let ba = BS.pack $ take i $ cycle ['\255', '\254' .. '\0']
@@ -133,7 +133,7 @@ byteArrayProp api = property $ do
 -- Round-trip test passing syntactic strings through the simplifier
 -- and back. latin-1 characters should be left as they are (treated as
 -- bytes internally). UTF-8 code points beyond latin-1 are forbidden.
-latin1Prop :: Internal.API -> Property
+latin1Prop :: LLVM.API -> Property
 latin1Prop api = property $ do
     txt <- forAll $ Gen.text (Range.linear 0 123) Gen.latin1
     let stringDV = fromSyntacticString txt
@@ -157,7 +157,7 @@ latin1Prop api = property $ do
                 | otherwise -> error $ "Unexpected sort " <> show s
             otherTerm -> error $ "Unexpected term " <> show otherTerm
 
-mapKItemInjProp :: Internal.API -> Property
+mapKItemInjProp :: LLVM.API -> Property
 mapKItemInjProp api = property $ do
     let k = wrapIntTerm 1
     let v = wrapIntTerm 2
@@ -209,8 +209,8 @@ runKompile = do
         , kompiledPath
         ]
 
-loadAPI :: IO API
-loadAPI = withDLib dlPath mkAPI
+loadAPI :: IO LLVM.API
+loadAPI = Internal.withDLib dlPath Internal.mkAPI
 
 ------------------------------------------------------------
 -- term construction
