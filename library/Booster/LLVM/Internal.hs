@@ -24,7 +24,7 @@ module Booster.LLVM.Internal (
     LlvmError (..),
 ) where
 
-import Control.Concurrent.MVar (MVar, withMVar, newMVar)
+import Control.Concurrent.MVar (MVar, newMVar, withMVar)
 import Control.Monad (foldM, forM_, void, (>=>))
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.IO.Class (MonadIO (..))
