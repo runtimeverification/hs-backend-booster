@@ -13,7 +13,7 @@ module Booster.Util (
 import Control.DeepSeq (NFData (..))
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as BS
-import Data.Data (Data)
+import Data.Data
 import Data.Either (fromRight)
 import Data.Hashable (Hashable)
 import Data.Map qualified as Map
