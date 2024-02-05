@@ -20,6 +20,7 @@ import Options.Applicative
 import Text.Casing (fromHumps, fromKebab, toKebab, toPascal)
 import Text.Read (readMaybe)
 
+import Booster.GlobalState (EquationOptions (..))
 import Booster.SMT.Interface (SMTOptions (..), defaultSMTOptions)
 import Booster.SMT.LowLevelCodec qualified as SMT (parseSExpr)
 
@@ -204,12 +205,6 @@ parseSMTOptions =
 
     readTactic =
         either (readerError . ("Invalid s-expression. " <>)) pure . SMT.parseSExpr . BS.pack =<< str
-
-data EquationOptions = EquationOptions
-    { maxIterations :: Bound "Iterations"
-    , maxRecursion :: Bound "Recursion"
-    }
-    deriving stock (Show)
 
 parseEquationOptions :: Parser EquationOptions
 parseEquationOptions =

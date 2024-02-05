@@ -50,7 +50,7 @@ import Booster.SMT.Base qualified as SMT (SExpr (..), SMTId (..))
 import Booster.SMT.Interface (SMTOptions (..))
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
-import Booster.UnsafeGlobalState
+import Booster.GlobalState
 import Data.Limit (Limit (..))
 import GlobalMain qualified
 import Kore.Attribute.Symbol (StepperAttributes)
@@ -172,8 +172,7 @@ main = do
                                 }
                 statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
 
-                writeGlobalMaxIterations equationOptions.maxIterations
-                writeGlobalMaxRecursion equationOptions.maxRecursion
+                writeGlobalEquationOptions equationOptions
 
                 runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 

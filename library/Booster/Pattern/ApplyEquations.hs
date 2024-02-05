@@ -60,6 +60,7 @@ import Prettyprinter
 import Booster.Builtin as Builtin
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
+import Booster.GlobalState qualified as GlobalState
 import Booster.LLVM
 import Booster.LLVM.Internal qualified as LLVM
 import Booster.Pattern.Base
@@ -69,7 +70,6 @@ import Booster.Pattern.Match
 import Booster.Pattern.Util
 import Booster.Prettyprinter (renderDefault, renderText)
 import Booster.SMT.Interface qualified as SMT
-import Booster.UnsafeGlobalState qualified as UnsafeGlobalState
 import Booster.Util (Bound (..), Flag (..))
 
 newtype EquationT io a
@@ -322,6 +322,7 @@ runEquationT ::
     EquationT io a ->
     io (Either EquationFailure a, [EquationTrace Term], SimplifierCache)
 runEquationT doTracing definition llvmApi smtSolver sCache (EquationT m) = do
+    globalEquationOptions <- liftIO GlobalState.readGlobalEquationOptions
     (res, endState) <-
         flip runStateT (startState sCache) $
             runExceptT $
@@ -332,8 +333,8 @@ runEquationT doTracing definition llvmApi smtSolver sCache (EquationT m) = do
                         , llvmApi
                         , smtSolver
                         , doTracing
-                        , maxIterations = UnsafeGlobalState.unsafeReadGlobalMaxIterations
-                        , maxRecursion = UnsafeGlobalState.unsafeReadGlobalMaxRecursion
+                        , maxIterations = globalEquationOptions.maxIterations
+                        , maxRecursion = globalEquationOptions.maxRecursion
                         }
     pure (res, toList endState.trace, endState.cache)
 
