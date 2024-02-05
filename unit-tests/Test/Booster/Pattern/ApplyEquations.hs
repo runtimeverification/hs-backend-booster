@@ -99,7 +99,10 @@ test_evaluateFunction =
         ]
   where
     eval direction =
-        unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm (coerce False) direction funDef Nothing Nothing
+        unsafePerformIO
+            . runNoLoggingT
+            . (fst3 <$>)
+            . evaluateTerm (coerce False) direction funDef Nothing Nothing
 
     isTooManyIterations (Left (TooManyIterations _n _ _)) = pure ()
     isTooManyIterations (Left err) = assertFailure $ "Unexpected error " <> show err
@@ -127,7 +130,10 @@ test_simplify =
         ]
   where
     simpl direction =
-        unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluateTerm (coerce False) direction simplDef Nothing Nothing
+        unsafePerformIO
+            . runNoLoggingT
+            . (fst3 <$>)
+            . evaluateTerm (coerce False) direction simplDef Nothing Nothing
     a = var "A" someSort
 
 test_simplifyPattern :: TestTree
@@ -154,7 +160,10 @@ test_simplifyPattern =
         ]
   where
     simpl =
-        unsafePerformIO . runNoLoggingT . (fst3 <$>) . evaluatePattern (coerce False) simplDef Nothing Nothing mempty
+        unsafePerformIO
+            . runNoLoggingT
+            . (fst3 <$>)
+            . evaluatePattern (coerce False) simplDef Nothing Nothing mempty
     a = var "A" someSort
 
 test_simplifyConstraint :: TestTree

@@ -245,7 +245,9 @@ runWith :: Term -> Either (RewriteFailed "Rewrite") (RewriteResult Pattern)
 runWith t =
     second fst $
         unsafePerformIO
-            (runNoLoggingT $ runRewriteT (coerce False) def Nothing Nothing mempty (rewriteStep [] [] $ Pattern_ t))
+            ( runNoLoggingT $
+                runRewriteT (coerce False) def Nothing Nothing mempty (rewriteStep [] [] $ Pattern_ t)
+            )
 
 rewritesTo :: Term -> (Text, Term) -> IO ()
 t1 `rewritesTo` (lbl, t2) =
