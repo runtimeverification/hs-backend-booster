@@ -415,7 +415,9 @@ supportsDepthControl =
     rewritesToDepth :: MaxDepth -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
     rewritesToDepth (MaxDepth depth) (Steps n) t t' f = do
         (counter, _, res) <-
-            runNoLoggingT $ performRewrite NoCollectRewriteTraces def Nothing Nothing (Just depth) [] [] $ Pattern_ t
+            runNoLoggingT $
+                performRewrite NoCollectRewriteTraces def Nothing Nothing (Just depth) [] [] $
+                    Pattern_ t
         (counter, fmap (.term) res) @?= (n, f t')
 
 supportsCutPoints :: TestTree
@@ -467,7 +469,9 @@ supportsCutPoints =
     rewritesToCutPoint :: Text -> Steps -> Term -> t -> (t -> RewriteResult Term) -> IO ()
     rewritesToCutPoint lbl (Steps n) t t' f = do
         (counter, _, res) <-
-            runNoLoggingT $ performRewrite NoCollectRewriteTraces def Nothing Nothing Nothing [lbl] [] $ Pattern_ t
+            runNoLoggingT $
+                performRewrite NoCollectRewriteTraces def Nothing Nothing Nothing [lbl] [] $
+                    Pattern_ t
         (counter, fmap (.term) res) @?= (n, f t')
 
 supportsTerminalRules :: TestTree
