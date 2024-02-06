@@ -64,8 +64,7 @@ import Booster.Builtin as Builtin
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
 import Booster.GlobalState qualified as GlobalState
-import Booster.LLVM
-import Booster.LLVM.Internal qualified as LLVM
+import Booster.LLVM qualified as LLVM
 import Booster.Pattern.Base
 import Booster.Pattern.Bool
 import Booster.Pattern.Index
@@ -472,7 +471,7 @@ applyTerm direction pref trm = do
                         if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
                             then -- LLVM simplification proceeds top-down and cuts the descent
 
-                                simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
+                                LLVM.simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
                                     >>= \case
                                         Left e -> throw $ UndefinedTerm t e
                                         Right result -> do
@@ -893,7 +892,7 @@ simplifyConstraint' recurseIntoEvalBool = \case
             mbApi <- (.llvmApi) <$> getConfig
             case mbApi of
                 Just api ->
-                    simplifyBool api t >>= \case
+                    LLVM.simplifyBool api t >>= \case
                         Left e ->
                             throw $ UndefinedTerm t e
                         Right res ->
