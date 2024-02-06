@@ -195,9 +195,20 @@ The diagram below shows the process of applying a single rewrite rule to the cur
                       rewrite                                        rewrite
 ```
 
-### Simplification / function evaluation
+### Equation application: `[simplification]` and `[function]` rules
 
-As mentioned in the previous section, the simplification code path is used at two different points of the execution, as well as being exported as a separate `simplify` JSON RPC endpoint. The simplification procedure underpinning all of these use-cases is largely the same and comprises of two main simplifiers, the concrete and symbolic one. Concrete function evaluation is handled by the LLVM backend and thus requires the semantics to be written in such a way, so as to be able to build both the kore definition used by the haskell backend, as well as the LLVM kore definition. The booster relies on the LLVM version of a semantics, compiled as a dynamic library, which is loaded when the server starts. During simplification, the term is traversed bottom up and any concrete sub-terms are sent to he LLVM backend to be evaluated.
+The "apply equations" code path is responsible for:
+* evaluation of functions, i.e. rules with the `function` attribute,
+* application of simplification rules, i.e. rules with the `simplification` attribute.
+
+From the backend's point of view, these rules are very similar. Equations are applied in the following situations:
+
+* the `"simplify"` JSON RPC endpoint --- works for both patterns (aka `CTerm`s) and standalone terms/predicates,
+* the evaluation of functions and application of simplification rules to the configuration and predicates during rewriting.
+
+The simplification procedure comprises two main simplifiers: the concrete and symbolic one.
+
+Concrete function evaluation is handled by the LLVM backend and thus requires the semantics to be written in such a way, so as to be able to build both the `definition.kore` used by the Haskell backends, as well as the `definition.kore` for the LLVM backend. The booster relies on the LLVM version of a semantics, compiled as a dynamic library, which is loaded when the server starts. During simplification, the term is traversed bottom up and any concrete sub-terms are sent to he LLVM backend to be evaluated.
 
 The symbolic parts of a term are handled directly by the booster, which uses matching instead of unification to see whether an equation's RHS matches the current term. Similarly to rewrite rules, function rules may also have side conditions. As a result, the simplifier may have to recurse into evaluating whether the side-condition of a function/simplification rule evaluates to true/false before successfully rewriting the term. At the moment, the evaluation strategy and recursion limits for various stages of execution are hard-coded in the booster, as it is not clear if/when different recursion depth limits or top down vs bottom up simplification strategies might yield better results for different semantics.
 
