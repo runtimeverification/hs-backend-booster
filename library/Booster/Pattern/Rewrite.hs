@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -11,6 +12,8 @@ module Booster.Pattern.Rewrite (
     RewriteFailed (..),
     RewriteResult (..),
     RewriteTrace (..),
+    pattern CollectRewriteTraces,
+    pattern NoCollectRewriteTraces,
     runRewriteT,
 ) where
 
@@ -37,7 +40,7 @@ import Prettyprinter
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
-import Booster.LLVM.Internal qualified as LLVM
+import Booster.LLVM as LLVM (API)
 import Booster.Pattern.ApplyEquations (
     EquationFailure (..),
     EquationTrace,
@@ -53,7 +56,7 @@ import Booster.Pattern.Unify
 import Booster.Pattern.Util
 import Booster.Prettyprinter
 import Booster.SMT.Interface qualified as SMT
-import Booster.Util (constructorName)
+import Booster.Util (Flag (..), constructorName)
 import Data.Coerce (coerce)
 
 newtype RewriteT io err a = RewriteT
@@ -64,11 +67,20 @@ data RewriteConfig = RewriteConfig
     { definition :: KoreDefinition
     , llvmApi :: Maybe LLVM.API
     , smtSolver :: Maybe SMT.SMTContext
-    , doTracing :: Bool
+    , doTracing :: Flag "CollectRewriteTraces"
     }
 
+castDoTracingFlag :: Flag "CollectRewriteTraces" -> Flag "CollectEquationTraces"
+castDoTracingFlag = coerce
+
+pattern CollectRewriteTraces :: Flag "CollectRewriteTraces"
+pattern CollectRewriteTraces = Flag True
+
+pattern NoCollectRewriteTraces :: Flag "CollectRewriteTraces"
+pattern NoCollectRewriteTraces = Flag False
+
 runRewriteT ::
-    Bool ->
+    Flag "CollectRewriteTraces" ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Maybe SMT.SMTContext ->
@@ -361,7 +373,7 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     checkConstraint onUnclear onBottom p = do
         RewriteConfig{definition, llvmApi, smtSolver, doTracing} <- lift $ RewriteT ask
         (simplified, _traces, _cache) <-
-            simplifyConstraint doTracing definition llvmApi smtSolver mempty p
+            simplifyConstraint (castDoTracingFlag doTracing) definition llvmApi smtSolver mempty p
         case simplified of
             Right (Predicate FalseBool) -> onBottom
             Right (Predicate TrueBool) -> pure Nothing
@@ -616,8 +628,7 @@ showPattern title pat = hang 4 $ vsep [title, pretty pat.term]
 performRewrite ::
     forall io.
     MonadLoggerIO io =>
-    -- | whether to accumulate rewrite traces
-    Bool ->
+    Flag "CollectRewriteTraces" ->
     KoreDefinition ->
     Maybe LLVM.API ->
     Maybe SMT.SMTContext ->
@@ -655,7 +666,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
             RewriteSingleStep{} -> logRewriteSuccess prettyT
             RewriteBranchingStep{} -> logRewriteSuccess prettyT
             _other -> pure ()
-        when doTracing $
+        when (coerce doTracing) $
             modify $
                 \rss@RewriteStepsState{traces} -> rss{traces = traces |> eraseStates t}
     incrementCounter =
@@ -668,7 +679,7 @@ performRewrite doTracing def mLlvmLibrary mSolver mbMaxDepth cutLabels terminalL
         st <- get
         let cache = st.simplifierCache
             smt = st.smtSolver
-        evaluatePattern doTracing def mLlvmLibrary smt cache p >>= \(res, traces, newCache) -> do
+        evaluatePattern (castDoTracingFlag doTracing) def mLlvmLibrary smt cache p >>= \(res, traces, newCache) -> do
             updateCache newCache
             logTraces traces
             case res of
