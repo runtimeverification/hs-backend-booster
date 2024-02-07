@@ -212,6 +212,30 @@ Concrete function evaluation is handled by the LLVM backend and thus requires th
 
 The symbolic parts of a term are handled directly by the booster, which uses matching instead of unification to see whether an equation's RHS matches the current term. Similarly to rewrite rules, function rules may also have side conditions. As a result, the simplifier may have to recurse into evaluating whether the side-condition of a function/simplification rule evaluates to true/false before successfully rewriting the term. At the moment, the evaluation strategy and recursion limits for various stages of execution are hard-coded in the booster, as it is not clear if/when different recursion depth limits or top down vs bottom up simplification strategies might yield better results for different semantics.
 
+Equations are applied for a fixed amount of iterations. During a single iteration, the term will be traversed once and only one equation will be applied at each node of the term. The process will be stopped if it exceed the maximum allowed amount of iterations. Traversing bottim-up vs top-down is very important when applying equations to symbols: it's usually best to simplify an function without descending into the arguments (top-down).
+
+If a term has already been evaluated, no equations will be attempted.
+
+About `applyAtTop`. The basic block of simplification is the routine that applies a single equation.
+
+#### Applying a single equation
+
+First the routine checks that the rule does not have any existential (aka `?`) variables. This precondition is ensured when internalising the definition as well.
+
+Applying the equation is cancelled if it does not preserve. Currently the rule either has to have a source attribute or the Ceil analysis mush have added one.
+
+Applying the equation is cancelled the teem is marked as concrete but has variables.
+
+The term is matched with the left-hand side of the equation, with three possible outcomes:
+* match failed --- equation is not applicable, abort applying it
+* match indeterminate --- equation may or may not be applicable, abort applying it
+* successful match with a substitution
+
+If the subject term matches the equation's LHS, we get a substitution from equational variables to the subterms of the subject term.
+**TODO: clarify the substitution validity condition**.
+
+
+
 ### SMT constraint checking
 
 As previously mentioned, when the booster cannot rewrite the value of a rule's "requires" clause to be true or false, it falls back to calling the SMT solver for said constraint. This SMT procedure encodes a limited subset of kore constructs directly into equivalent SMT functions (mostly arithmetic operations) and encodes everything else as uninterpreted SMT functions. Given the set of predicates `K` that hold in the current configuration and unknown "requires" condition `P` the SMT procedure checks whether `K => P` or `K => !P` (or neither of those implications holds).
