@@ -26,6 +26,7 @@ module Booster.LLVM.Internal (
 
 import Control.Concurrent.MVar (MVar, newMVar, withMVar)
 import Control.Monad (foldM, forM_, void, (>=>))
+import Control.Monad.Extra (whenM)
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT))
@@ -48,6 +49,7 @@ import Foreign.Marshal (alloca)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
 import Prettyprinter (Pretty (..))
+import System.IO (hPutStrLn, stderr)
 import System.Posix.DynamicLinker qualified as Linker
 
 import Booster.LLVM.TH (dynamicBindings)
@@ -385,6 +387,11 @@ mkAPI dlib = flip runReaderT dlib $ do
                                             Foreign.free cstr
                                             pure $ Right result
                                         else Left . LlvmError <$> errorMessage errPtr
+
+    mutableBytesEnabled <- kllvmMutableBytesEnabled
+    liftIO $
+        whenM ((/= 0) <$> mutableBytesEnabled) $
+            hPutStrLn stderr "[Warn] Using an LLVM backend compiled with --llvm-mutable-bytes (unsound byte array semantics)"
 
     mutex <- liftIO $ newMVar ()
     pure API{patt, symbol, sort, simplifyBool, simplify, collect, mutex}
