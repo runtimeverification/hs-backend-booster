@@ -110,7 +110,7 @@ evalEqualsK l@DomainValue{} r@DomainValue{} =
 evalEqualsK l r =
     if l == r
         then pure TrueBool
-        else fail "cannot evaluate" -- i.e., result is Nothing
+        else pure $ EqualsK (KSeq (sortOfTerm l) l) (KSeq (sortOfTerm r) r)
 
 -- check for simple (parameter-less) sorts
 shouldHaveSort :: Term -> SortName -> Except Text ()
