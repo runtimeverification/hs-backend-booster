@@ -793,7 +793,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
         -- exceptions need to be handled differently in the recursion,
         -- falling back to the unsimplified constraint instead of aborting.
         simplified <-
-            lift $ simplifyConstraint' True p `catch_` fallBackToUnsimplifiedOrBottom
+            lift $ simplifyConstraint' False p `catch_` fallBackToUnsimplifiedOrBottom
         case simplified of
             FalseBool -> throwE . whenBottom $ coerce p
             TrueBool -> pure Nothing
