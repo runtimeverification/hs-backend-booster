@@ -19,7 +19,7 @@ import Data.Int (Int64)
 import Data.List (isInfixOf)
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe, fromJust)
+import Data.Maybe (fromJust, fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -77,7 +77,6 @@ llvmSpec =
                         api.patt.dump s `shouldReturn` show testString
                     Nothing -> error "API should not be empty"
 
-
         aroundAll loadAPI . modifyMaxSuccess (* 20) $ do
             describe "LLVM boolean simplification" $ do
                 it "should leave literal booleans as they are" $
@@ -98,10 +97,10 @@ llvmSpec =
             describe "special map tests" $
                 it "should correct sort injections in non KItem maps" $
                     hedgehog . propertyTest . mapKItemInjProp
+  where
+    loadAPI :: (Internal.API -> IO a) -> IO a
+    loadAPI cb = Internal.withMaybeLlvmLib (Just dlPath) $ cb . fromJust
 
-    where
-        loadAPI :: (Internal.API -> IO a) -> IO a
-        loadAPI cb = Internal.withMaybeLlvmLib (Just dlPath) $ cb . fromJust
 --------------------------------------------------
 -- individual hedgehog property tests and helpers
 

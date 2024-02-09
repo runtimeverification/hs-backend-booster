@@ -188,6 +188,8 @@ instance CustomUserEvent LlvmVar where
 
 {- | Uses dlopen to load a .so/.dylib C library at runtime. For doucmentation of flags such as `RTL_LAZY`, consult e.g.
      https://man7.org/linux/man-pages/man3/dlopen.3.html
+     In order to support concurrent use of the library, each call creates a temporary copy of the shared library and loads
+     this copy into memory. This may become an issue if too many clients connect to the server (the server creates one copy per RPC session)
 -}
 withMaybeLlvmLib :: MonadUnliftIO m => Maybe FilePath -> (Maybe API -> m a) -> m a
 withMaybeLlvmLib Nothing cb = cb Nothing
