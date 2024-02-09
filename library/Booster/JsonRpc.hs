@@ -486,7 +486,6 @@ runServer port definitions defaultMain mLlvmLibraryPath mSMTOptions (logLevel, c
                 (\mLlvmApi _ -> respond mLlvmApi stateVar)
                 [RpcError.handleErrorCall, RpcError.handleSomeException]
                 (LLVM.withMaybeLlvmLib mLlvmLibraryPath)
-
   where
     levelFilter _source lvl =
         lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError

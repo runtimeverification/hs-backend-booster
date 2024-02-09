@@ -60,11 +60,11 @@ import Booster.Prettyprinter qualified as KPretty
 import Booster.Trace
 import Booster.Trace qualified as Trace
 import Conduit (MonadUnliftIO)
-import qualified UnliftIO.Exception
-import System.IO.Temp (createTempDirectory, getCanonicalTemporaryDirectory)
-import System.FilePath ((</>), takeFileName, dropFileName)
-import System.Directory.Extra (copyFile, removeDirectoryRecursive)
 import Data.Maybe (fromJust)
+import System.Directory.Extra (copyFile, removeDirectoryRecursive)
+import System.FilePath (dropFileName, takeFileName, (</>))
+import System.IO.Temp (createTempDirectory, getCanonicalTemporaryDirectory)
+import UnliftIO.Exception qualified
 
 data KorePattern
 data KoreSort
@@ -124,8 +124,8 @@ data API = API
     , simplifyBool :: KorePatternPtr -> IO (Either LlvmError Bool)
     , simplify :: KorePatternPtr -> KoreSortPtr -> IO (Either LlvmError ByteString)
     , collect :: IO ()
-    -- , mutex :: MVar ()
-    , handle :: Linker.DL
+    , -- , mutex :: MVar ()
+      handle :: Linker.DL
     }
 
 newtype LLVM a = LLVM (ReaderT API IO a)
@@ -194,20 +194,21 @@ withMaybeLlvmLib Nothing cb = cb Nothing
 withMaybeLlvmLib (Just file) cb = do
     tmpDir <- liftIO getCanonicalTemporaryDirectory
     UnliftIO.Exception.bracket
-        (do
-
+        ( do
             tempDir <- liftIO (createTempDirectory tmpDir "llvm_lib")
             let file' = tempDir </> takeFileName file
             liftIO $ copyFile file file'
             pure file'
         )
-        (liftIO . ignoringIOErrors . removeDirectoryRecursive . dropFileName) $ \file' ->
-        UnliftIO.Exception.bracket (liftIO $ Linker.dlopen file' [Linker.RTLD_LAZY] >>= fmap Just . mkAPI) (liftIO . Linker.dlclose . handle . fromJust) cb
-
-    where
-        ignoringIOErrors :: IO () -> IO ()
-        ignoringIOErrors ioe = ioe `catch` (\(_ :: IOError) -> return ())
-
+        (liftIO . ignoringIOErrors . removeDirectoryRecursive . dropFileName)
+        $ \file' ->
+            UnliftIO.Exception.bracket
+                (liftIO $ Linker.dlopen file' [Linker.RTLD_LAZY] >>= fmap Just . mkAPI)
+                (liftIO . Linker.dlclose . handle . fromJust)
+                cb
+  where
+    ignoringIOErrors :: IO () -> IO ()
+    ignoringIOErrors ioe = ioe `catch` (\(_ :: IOError) -> return ())
 
 runLLVM :: API -> LLVM a -> IO a
 runLLVM api (LLVM m) = runReaderT m api
