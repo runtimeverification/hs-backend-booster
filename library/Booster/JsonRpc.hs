@@ -644,6 +644,9 @@ toExecState pat sub unsupported =
         { term = addHeader t
         , predicate = addHeader <$> addUnsupported p
         , substitution = addHeader <$> s
+        , ruleSubstitution = Nothing
+        , rulePredicate = Nothing
+        , ruleId = Nothing
         }
   where
     (t, p, s) = externalisePattern pat sub
@@ -788,7 +791,6 @@ mkLogRewriteTrace
                         singleton $
                             Rewrite
                                 { result = case reason of
-                                    NoRulesForTerm{} -> Failure{reason = "No rules found", _ruleId = Nothing}
                                     NoApplicableRules{} -> Failure{reason = "No applicable rules found", _ruleId = Nothing}
                                     TermIndexIsNone{} -> Failure{reason = "Term index is None for term", _ruleId = Nothing}
                                     RuleApplicationUnclear r _ _ ->
