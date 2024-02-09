@@ -46,7 +46,7 @@ import Booster.CLOptions
 import Booster.Definition.Ceil (computeCeilsDefinition)
 import Booster.GlobalState
 import Booster.JsonRpc qualified as Booster
-import Booster.LLVM.Internal (mkAPI, withDLib)
+import Booster.LLVM qualified as LLVM
 import Booster.SMT.Base qualified as SMT (SExpr (..), SMTId (..))
 import Booster.SMT.Interface (SMTOptions (..))
 import Booster.Syntax.ParsedKore (loadDefinition)
@@ -61,7 +61,7 @@ import Kore.JsonRpc (ServerState (..))
 import Kore.JsonRpc qualified as Kore
 import Kore.JsonRpc.Error hiding (Aborted)
 import Kore.JsonRpc.Server
-import Kore.JsonRpc.Types (API, HaltReason (..), ReqOrRes (Req, Res))
+import Kore.JsonRpc.Types (HaltReason (..))
 import Kore.JsonRpc.Types.Depth (Depth (..))
 import Kore.Log (
     ExeName (..),
@@ -129,7 +129,7 @@ main = do
 
         monadLogger <- askLoggerIO
 
-        liftIO $ void $ withBugReport (ExeName "kore-rpc-booster") BugReportOnError $ \reportDirectory -> withMDLib llvmLibraryFile $ \mdl -> do
+        liftIO $ void $ withBugReport (ExeName "kore-rpc-booster") BugReportOnError $ \reportDirectory -> do
             let coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
                 koreLogOptions =
                     (defaultKoreLogOptions (ExeName "") startTime)
@@ -143,9 +143,8 @@ main = do
                 srvSettings = serverSettings port "*"
 
             withLogger reportDirectory koreLogOptions $ \actualLogAction -> do
-                mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
                 definitions <-
-                    liftIO $
+                    liftIO $ LLVM.withMaybeLlvmLib llvmLibraryFile $ \mLlvmLibrary ->
                         loadDefinition definitionFile
                             >>= mapM (mapM ((fst <$>) . runNoLoggingT . computeCeilsDefinition mLlvmLibrary))
                             >>= evaluate . force . either (error . show) id
@@ -167,7 +166,6 @@ main = do
                             Booster.ServerState
                                 { definitions
                                 , defaultMain = mainModuleName
-                                , mLlvmLibrary
                                 , mSMTOptions = if boosterSMT then smtOptions else Nothing
                                 }
                 statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
@@ -176,9 +174,8 @@ main = do
 
                 runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
 
-                let koreRespond, boosterRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
-                    koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
-                    boosterRespond = Booster.respond boosterState
+                let koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
+                    boosterRespond mapi = Booster.respond mapi boosterState
 
                     proxyConfig =
                         ProxyConfig
@@ -191,22 +188,20 @@ main = do
                     server =
                         jsonRpcServer
                             srvSettings
-                            (const $ Proxy.respondEither proxyConfig boosterRespond koreRespond)
+                            (\mapi _ -> Proxy.respondEither proxyConfig (boosterRespond mapi) koreRespond)
                             [Kore.handleDecidePredicateUnknown, handleErrorCall, handleSomeException]
+                            (LLVM.withMaybeLlvmLib llvmLibraryFile)
                     interruptHandler _ = do
                         when (logLevel >= LevelInfo) $
                             hPutStrLn stderr "[Info#proxy] Server shutting down"
                         whenJust statsVar Stats.showStats
                         exitSuccess
-                handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger
+                handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger >> exitSuccess
   where
     clParser =
         info
             (clProxyOptionsParser <**> versionInfoParser <**> helper)
             parserInfoModifiers
-
-    withMDLib Nothing f = f Nothing
-    withMDLib (Just fp) f = withDLib fp $ \dl -> f (Just dl)
 
     isInterrupt :: AsyncException -> Maybe ()
     isInterrupt UserInterrupt = Just ()

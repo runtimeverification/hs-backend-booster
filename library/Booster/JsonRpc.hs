@@ -44,7 +44,7 @@ import System.Clock (Clock (Monotonic), diffTimeSpec, getTime, toNanoSecs)
 import Booster.Definition.Attributes.Base (getUniqueId, uniqueId)
 import Booster.Definition.Base (KoreDefinition (..))
 import Booster.Definition.Base qualified as Definition (RewriteRule (..))
-import Booster.LLVM as LLVM (API)
+import Booster.LLVM qualified as LLVM
 import Booster.Pattern.ApplyEquations qualified as ApplyEquations
 import Booster.Pattern.Base (
     Pattern (..),
@@ -90,15 +90,16 @@ import Kore.Syntax.Json.Types qualified as Syntax
 respond ::
     forall m.
     MonadLoggerIO m =>
+    Maybe LLVM.API ->
     MVar ServerState ->
     Respond (RpcTypes.API 'RpcTypes.Req) m (RpcTypes.API 'RpcTypes.Res)
-respond stateVar =
+respond mLlvmLibrary stateVar =
     \case
         RpcTypes.Execute req
             | isJust req.stepTimeout -> pure $ Left $ RpcError.unsupportedOption ("step-timeout" :: String)
             | isJust req.movingAverageStepTimeout ->
                 pure $ Left $ RpcError.unsupportedOption ("moving-average-step-timeout" :: String)
-        RpcTypes.Execute req -> withContext req._module $ \(def, mLlvmLibrary, mSMTOptions) -> do
+        RpcTypes.Execute req -> withContext req._module $ \(def, mSMTOptions) -> do
             start <- liftIO $ getTime Monotonic
             -- internalise given constrained term
             let internalised = runExcept $ internalisePattern DisallowAlias CheckSubsorts Nothing def req.state.term
@@ -214,7 +215,7 @@ respond stateVar =
                 Log.logInfo $
                     "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
                 pure $ RpcTypes.AddModule $ RpcTypes.AddModuleResult moduleHash
-        RpcTypes.Simplify req -> withContext req._module $ \(def, mLlvmLibrary, mSMTOptions) -> do
+        RpcTypes.Simplify req -> withContext req._module $ \(def, mSMTOptions) -> do
             start <- liftIO $ getTime Monotonic
             let internalised =
                     runExcept $ internaliseTermOrPredicate DisallowAlias CheckSubsorts Nothing def req.state.term
@@ -337,10 +338,10 @@ respond stateVar =
                         RpcTypes.SimplifyResult{state, logs = mkTraces duration traceData}
             pure $ second (uncurry mkSimplifyResponse) (fmap (second (map ApplyEquations.eraseStates)) result)
         RpcTypes.GetModel req -> withContext req._module $ \case
-            (_, _, Nothing) -> do
+            (_, Nothing) -> do
                 Log.logErrorNS "booster" "get-model request, not supported without SMT solver"
                 pure $ Left RpcError.notImplemented
-            (def, _, Just smtOptions) -> do
+            (def, Just smtOptions) -> do
                 let internalised =
                         runExcept $
                             internaliseTermOrPredicate DisallowAlias CheckSubsorts Nothing def req.state.term
@@ -457,7 +458,7 @@ respond stateVar =
   where
     withContext ::
         Maybe Text ->
-        ( (KoreDefinition, Maybe LLVM.API, Maybe SMT.SMTOptions) ->
+        ( (KoreDefinition, Maybe SMT.SMTOptions) ->
           m (Either ErrorObj (RpcTypes.API 'RpcTypes.Res))
         ) ->
         m (Either ErrorObj (RpcTypes.API 'RpcTypes.Res))
@@ -466,24 +467,26 @@ respond stateVar =
         let mainName = fromMaybe state.defaultMain mbMainModule
         case Map.lookup mainName state.definitions of
             Nothing -> pure $ Left $ RpcError.backendError RpcError.CouldNotFindModule mainName
-            Just d -> action (d, state.mLlvmLibrary, state.mSMTOptions)
+            Just d -> action (d, state.mSMTOptions)
 
 runServer ::
     Int ->
     Map Text KoreDefinition ->
     Text ->
-    Maybe LLVM.API ->
+    Maybe FilePath ->
     Maybe SMT.SMTOptions ->
     (LogLevel, [LogLevel]) ->
     IO ()
-runServer port definitions defaultMain mLlvmLibrary mSMTOptions (logLevel, customLevels) =
+runServer port definitions defaultMain mLlvmLibraryPath mSMTOptions (logLevel, customLevels) =
     do
-        stateVar <- newMVar ServerState{definitions, defaultMain, mLlvmLibrary, mSMTOptions}
+        stateVar <- newMVar ServerState{definitions, defaultMain, mSMTOptions}
         Log.runStderrLoggingT . Log.filterLogger levelFilter $
             jsonRpcServer
                 srvSettings
-                (const $ respond stateVar)
+                (\mLlvmApi _ -> respond mLlvmApi stateVar)
                 [RpcError.handleErrorCall, RpcError.handleSomeException]
+                (LLVM.withMaybeLlvmLib mLlvmLibraryPath)
+
   where
     levelFilter _source lvl =
         lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
@@ -495,8 +498,6 @@ data ServerState = ServerState
     -- ^ definitions for each loaded module as main module
     , defaultMain :: Text
     -- ^ default main module (initially from command line, could be changed later)
-    , mLlvmLibrary :: Maybe LLVM.API
-    -- ^ optional LLVM simplification library
     , mSMTOptions :: Maybe SMT.SMTOptions
     -- ^ (optional) SMT solver options
     }

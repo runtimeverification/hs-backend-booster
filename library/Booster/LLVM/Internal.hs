@@ -7,7 +7,7 @@ module Booster.LLVM.Internal (
     API (..),
     KorePatternAPI (..),
     runLLVM,
-    withDLib,
+    withMaybeLlvmLib,
     mkAPI,
     ask,
     marshallTerm,
@@ -24,7 +24,6 @@ module Booster.LLVM.Internal (
     LlvmError (..),
 ) where
 
-import Control.Concurrent.MVar (MVar, newMVar, withMVar)
 import Control.Exception (IOException)
 import Control.Monad (foldM, forM_, void, (>=>))
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, catch)
@@ -60,6 +59,12 @@ import Booster.Pattern.Util (sortOfTerm)
 import Booster.Prettyprinter qualified as KPretty
 import Booster.Trace
 import Booster.Trace qualified as Trace
+import Conduit (MonadUnliftIO)
+import qualified UnliftIO.Exception
+import System.IO.Temp (createTempDirectory, getCanonicalTemporaryDirectory)
+import System.FilePath ((</>), takeFileName, dropFileName)
+import System.Directory.Extra (copyFile, removeDirectoryRecursive)
+import Data.Maybe (fromJust)
 
 data KorePattern
 data KoreSort
@@ -119,7 +124,8 @@ data API = API
     , simplifyBool :: KorePatternPtr -> IO (Either LlvmError Bool)
     , simplify :: KorePatternPtr -> KoreSortPtr -> IO (Either LlvmError ByteString)
     , collect :: IO ()
-    , mutex :: MVar ()
+    -- , mutex :: MVar ()
+    , handle :: Linker.DL
     }
 
 newtype LLVM a = LLVM (ReaderT API IO a)
@@ -183,12 +189,28 @@ instance CustomUserEvent LlvmVar where
 {- | Uses dlopen to load a .so/.dylib C library at runtime. For doucmentation of flags such as `RTL_LAZY`, consult e.g.
      https://man7.org/linux/man-pages/man3/dlopen.3.html
 -}
-withDLib :: FilePath -> (Linker.DL -> IO a) -> IO a
-withDLib dlib = Linker.withDL dlib [Linker.RTLD_LAZY]
+withMaybeLlvmLib :: MonadUnliftIO m => Maybe FilePath -> (Maybe API -> m a) -> m a
+withMaybeLlvmLib Nothing cb = cb Nothing
+withMaybeLlvmLib (Just file) cb = do
+    tmpDir <- liftIO getCanonicalTemporaryDirectory
+    UnliftIO.Exception.bracket
+        (do
+
+            tempDir <- liftIO (createTempDirectory tmpDir "llvm_lib")
+            let file' = tempDir </> takeFileName file
+            liftIO $ copyFile file file'
+            pure file'
+        )
+        (liftIO . ignoringIOErrors . removeDirectoryRecursive . dropFileName) $ \file' ->
+        UnliftIO.Exception.bracket (liftIO $ Linker.dlopen file' [Linker.RTLD_LAZY] >>= fmap Just . mkAPI) (liftIO . Linker.dlclose . handle . fromJust) cb
+
+    where
+        ignoringIOErrors :: IO () -> IO ()
+        ignoringIOErrors ioe = ioe `catch` (\(_ :: IOError) -> return ())
+
 
 runLLVM :: API -> LLVM a -> IO a
-runLLVM api (LLVM m) =
-    withMVar api.mutex $ const $ runReaderT m api
+runLLVM api (LLVM m) = runReaderT m api
 
 mkAPI :: Linker.DL -> IO API
 mkAPI dlib = flip runReaderT dlib $ do
@@ -397,8 +419,8 @@ mkAPI dlib = flip runReaderT dlib $ do
                 stderr
                 "[Warn] Using an LLVM backend compiled with --llvm-mutable-bytes (unsound byte array semantics)"
 
-    mutex <- liftIO $ newMVar ()
-    pure API{patt, symbol, sort, simplifyBool, simplify, collect, mutex}
+    -- mutex <- liftIO $ newMVar ()
+    pure API{patt, symbol, sort, simplifyBool, simplify, collect, handle = dlib}
   where
     traceCall call args retTy retPtr = do
         Trace.traceIO $ LlvmCall{ret = Just (retTy, somePtr retPtr), call, args}

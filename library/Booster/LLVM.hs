@@ -3,6 +3,7 @@ module Booster.LLVM (
     simplifyTerm,
     Internal.API,
     Internal.LlvmError (..),
+    Internal.withMaybeLlvmLib,
 ) where
 
 import Control.Monad.IO.Class (MonadIO (..))

@@ -96,6 +96,7 @@ library:
   - stm-conduit
   - syb
   - template-haskell
+  - temporary
   - text
   - transformers
   - unix
