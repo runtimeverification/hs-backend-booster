@@ -16,7 +16,6 @@ import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
 import Data.Char (toLower)
 import Data.Int (Int64)
-import Data.List (isInfixOf)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromJust, fromMaybe)
@@ -34,8 +33,6 @@ import System.Info (os)
 import System.Process
 import Test.Hspec
 import Test.Hspec.Hedgehog
-import Test.Tasty
-import Test.Tasty.Hspec
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
@@ -59,7 +56,7 @@ kompiledPath = "test/llvm-integration/definition/llvm-kompiled"
 dlPath = kompiledPath </> "interpreter" <.> (if os == "darwin" then ".dylib" else ".so")
 
 main :: IO ()
-main = defaultMain =<< testSpec "LLVM simplification" llvmSpec
+main = hspec llvmSpec
 
 llvmSpec :: Spec
 llvmSpec =
