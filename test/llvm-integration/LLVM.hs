@@ -19,7 +19,7 @@ import Data.Int (Int64)
 import Data.List (isInfixOf)
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -66,17 +66,19 @@ llvmSpec =
     beforeAll_ runKompile $ do
         describe "Load an LLVM simplification library" $ do
             it "fails to load a non-existing library" $
-                Internal.withDLib "does/not/exist.dl" Internal.mkAPI
+                (Internal.withMaybeLlvmLib (Just "does/not/exist.dl") $ \_ -> pure ())
                     `shouldThrow` \IOError{ioe_description = msg} ->
-                        "does/not/exist" `isInfixOf` msg
-            it ("loads a valid library from " <> dlPath) $ do
-                Internal.withDLib dlPath $ \dl -> do
-                    api <- Internal.mkAPI dl
-                    let testString = "testing, one, two, three"
-                    s <- api.patt.string.new testString
-                    api.patt.dump s `shouldReturn` show testString
+                        msg == "No such file or directory"
+            it ("loads a valid library from " <> dlPath) $
+                Internal.withMaybeLlvmLib (Just dlPath) $ \case
+                    Just api -> do
+                        let testString = "testing, one, two, three"
+                        s <- api.patt.string.new testString
+                        api.patt.dump s `shouldReturn` show testString
+                    Nothing -> error "API should not be empty"
 
-        beforeAll loadAPI . modifyMaxSuccess (* 20) $ do
+
+        aroundAll loadAPI . modifyMaxSuccess (* 20) $ do
             describe "LLVM boolean simplification" $ do
                 it "should leave literal booleans as they are" $
                     propertyTest . boolsRemainProp
@@ -97,6 +99,9 @@ llvmSpec =
                 it "should correct sort injections in non KItem maps" $
                     hedgehog . propertyTest . mapKItemInjProp
 
+    where
+        loadAPI :: (Internal.API -> IO a) -> IO a
+        loadAPI cb = Internal.withMaybeLlvmLib (Just dlPath) $ cb . fromJust
 --------------------------------------------------
 -- individual hedgehog property tests and helpers
 
@@ -210,9 +215,6 @@ runKompile = do
         , "-o"
         , kompiledPath
         ]
-
-loadAPI :: IO LLVM.API
-loadAPI = Internal.withDLib dlPath Internal.mkAPI
 
 ------------------------------------------------------------
 -- term construction
