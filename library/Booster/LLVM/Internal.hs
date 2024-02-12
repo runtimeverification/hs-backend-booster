@@ -60,12 +60,12 @@ import Booster.Prettyprinter qualified as KPretty
 import Booster.Trace
 import Booster.Trace qualified as Trace
 import Conduit (MonadUnliftIO)
+import Control.Concurrent (MVar, newMVar, withMVar)
 import Data.Maybe (fromJust)
 import System.Directory.Extra (copyFile, removeDirectoryRecursive)
 import System.FilePath (dropFileName, takeFileName, (</>))
 import System.IO.Temp (createTempDirectory, getCanonicalTemporaryDirectory)
 import UnliftIO.Exception qualified
-import Control.Concurrent (withMVar, MVar, newMVar)
 
 data KorePattern
 data KoreSort
@@ -216,7 +216,7 @@ withMaybeLlvmLib (Just file) cb = do
 runLLVM :: API -> LLVM a -> IO a
 runLLVM api (LLVM m) =
     withMVar api.mutex $ const $ runReaderT m api
-    
+
 mkAPI :: Linker.DL -> IO API
 mkAPI dlib = flip runReaderT dlib $ do
     freePattern <- {-# SCC "LLVM.pattern.free" #-} korePatternFreeFunPtr
