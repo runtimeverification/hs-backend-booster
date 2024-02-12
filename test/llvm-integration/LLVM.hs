@@ -33,6 +33,8 @@ import System.Info (os)
 import System.Process
 import Test.Hspec
 import Test.Hspec.Hedgehog
+import Test.Tasty
+import Test.Tasty.Hspec
 
 import Booster.Definition.Attributes.Base
 import Booster.Definition.Base
@@ -56,7 +58,7 @@ kompiledPath = "test/llvm-integration/definition/llvm-kompiled"
 dlPath = kompiledPath </> "interpreter" <.> (if os == "darwin" then ".dylib" else ".so")
 
 main :: IO ()
-main = hspec llvmSpec
+main = defaultMain =<< testSpec "LLVM simplification" llvmSpec
 
 llvmSpec :: Spec
 llvmSpec =
