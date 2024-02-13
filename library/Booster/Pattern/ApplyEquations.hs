@@ -909,5 +909,7 @@ simplifyConstraint' recurseIntoEvalBool = \case
         prior <- getState -- save prior state so we can revert
         eqState $ put prior{termStack = [], changed = False}
         result <- iterateEquations BottomUp PreferFunctions t
-        eqState $ put prior
+        -- keep traces from the final state of recursive equation application
+        tracesFromRecursion <- (.trace) <$> getState
+        eqState $ put prior{trace = tracesFromRecursion}
         pure result
