@@ -279,7 +279,9 @@ match1
             currentSubst <- gets mSubstitution
             let patternKeyVals = map (first (substituteInTerm currentSubst)) patKeyVals
 
-            -- FIXME add two DuplicateKey checks here
+            -- check for duplicate keys
+            checkDuplicateKeys (KMap patDef patternKeyVals patRest)
+            checkDuplicateKeys t2
 
             let patMap = Map.fromList patternKeyVals
                 subjMap = Map.fromList subjKeyVals
@@ -327,11 +329,9 @@ match1
                     -- Special case: attempt a match if pattern and subject assocs
                     -- are singleton and there is no opaque subject rest
                     | Nothing <- subjRest
-                    , Map.size patExtra == 1
-                    , Map.size subjExtra == 1 -> do
-                        let (pKey, pVal) : _ = Map.assocs patExtra
-                            (sKey, sVal) : _ = Map.assocs subjExtra
-                            opaque = case patRest of
+                    , [(pKey, pVal)] <- Map.assocs patExtra
+                    , [(sKey, sVal)] <- Map.assocs subjExtra -> do
+                        let opaque = case patRest of
                                 Nothing -> []
                                 Just rest -> [(rest, emptyMap)]
                         enqueueProblems . Seq.fromList $ (pKey, sKey) : (pVal, sVal) : opaque
@@ -343,9 +343,13 @@ match1
       where
         emptyMap = KMap patDef [] Nothing
 
-        -- checkDuplicateKeys :: Ord a => Set a -> _
-        checkDuplicateKeys keySet
-            | otherwise = pure ()
+        checkDuplicateKeys m@(KMap _ assocs _) =
+            let duplicates =
+                    Map.filter (> (1 :: Int)) $ foldr (flip (Map.insertWith (+)) 1 . fst) mempty assocs
+             in case Map.assocs duplicates of
+                    [] -> pure ()
+                    (k, _) : _ -> failWith $ DuplicateKeys k m
+        checkDuplicateKeys _ = pure ()
 
 --- not matching map patterns with anything else
 match1
