@@ -60,7 +60,7 @@ import Booster.Prettyprinter qualified as KPretty
 import Booster.Trace
 import Booster.Trace qualified as Trace
 import Conduit (MonadUnliftIO)
-import Control.Concurrent (MVar, newMVar, withMVar)
+import Control.Concurrent (MVar, newMVar)
 import Data.Maybe (fromJust)
 import System.Directory.Extra (copyFile, removeDirectoryRecursive)
 import System.FilePath (dropFileName, takeFileName, (</>))
@@ -206,7 +206,7 @@ withMaybeLlvmLib (Just file) cb = do
         (liftIO . ignoringIOErrors . removeDirectoryRecursive . dropFileName)
         $ \file' ->
             UnliftIO.Exception.bracket
-                (liftIO $ Linker.dlopen file' [Linker.RTLD_LAZY] >>= fmap Just . mkAPI)
+                (liftIO $ Linker.dlopen file' [Linker.RTLD_NOW, Linker.RTLD_LOCAL] >>= fmap Just . mkAPI)
                 (liftIO . Linker.dlclose . handle . fromJust)
                 cb
   where
@@ -215,7 +215,8 @@ withMaybeLlvmLib (Just file) cb = do
 
 runLLVM :: API -> LLVM a -> IO a
 runLLVM api (LLVM m) =
-    withMVar api.mutex $ const $ runReaderT m api
+    -- withMVar api.mutex $ const $ 
+    runReaderT m api
 
 mkAPI :: Linker.DL -> IO API
 mkAPI dlib = flip runReaderT dlib $ do
