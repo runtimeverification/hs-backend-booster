@@ -671,7 +671,7 @@ mkLogEquationTrace
                                 Success
                                     { rewrittenTerm = Nothing
                                     , substitution = Nothing
-                                    , ruleId = fromMaybe "UNKNOWN" _ruleId
+                                    , ruleId = fromMaybe (fromMaybe "UNKNOWN" _ruleLabel) _ruleId
                                     }
                             }
                 else Nothing
@@ -680,6 +680,7 @@ mkLogEquationTrace
             originalTermIndex = Nothing
             origin = Booster
             _ruleId = fmap getUniqueId metadata.ruleId
+            _ruleLabel = metadata.label
         ApplyEquations.EquationNotApplied _subjectTerm metadata result ->
             case result of
                 ApplyEquations.Success rewrittenTrm
