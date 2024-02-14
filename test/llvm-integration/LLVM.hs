@@ -76,7 +76,7 @@ llvmSpec =
                         api.patt.dump s `shouldReturn` show testString
                     Nothing -> error "API should not be empty"
 
-        aroundAll loadAPI . modifyMaxSuccess (* 20) $ do
+        around loadAPI . modifyMaxSuccess (* 20) $ do
             describe "LLVM boolean simplification" $ do
                 it "should leave literal booleans as they are" $
                     propertyTest . boolsRemainProp
