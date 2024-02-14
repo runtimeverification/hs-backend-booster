@@ -972,20 +972,24 @@ internaliseSimpleEquation partialDef precond left right sortVars attrs
         let
             -- checking the lhs term, too, as a safe approximation
             -- (rhs may _introduce_ undefined, lhs may _hide_ it)
-            undefinedSymbols =
+            _undefinedSymbols =
                 nub . concatMap (Util.filterTermSymbols (not . Util.isDefinedSymbol)) $
                     [lhs.term, rhs.term]
             computedAttributes =
                 ComputedAxiomAttributes
                     { containsAcSymbols =
                         any (Util.checkTermSymbols Util.checkSymbolIsAc) [lhs.term, rhs.term]
-                    , notPreservesDefinednessReasons =
-                        if coerce attrs.preserving
-                            then []
-                            else map (UndefinedSymbol . (.name)) undefinedSymbols
+                    , -- , notPreservesDefinednessReasons =
+                      --     if coerce attrs.preserving
+                      --         then []
+                      --         else map (UndefinedSymbol . (.name)) undefinedSymbols
+                      notPreservesDefinednessReasons = []
                     }
             attributes =
-                attrs{concreteness = Util.modifyVarNameConcreteness ("Eq#" <>) attrs.concreteness}
+                attrs
+                    { concreteness = Util.modifyVarNameConcreteness ("Eq#" <>) attrs.concreteness
+                    , preserving = Flag True
+                    }
         pure $
             SimplificationAxiom
                 RewriteRule
