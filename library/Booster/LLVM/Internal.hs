@@ -215,7 +215,7 @@ withMaybeLlvmLib (Just file) cb = do
 
 runLLVM :: API -> LLVM a -> IO a
 runLLVM api (LLVM m) =
-    -- withMVar api.mutex $ const $ 
+    -- withMVar api.mutex $ const $
     runReaderT m api
 
 mkAPI :: Linker.DL -> IO API
