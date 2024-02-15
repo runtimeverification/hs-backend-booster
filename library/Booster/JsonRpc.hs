@@ -179,7 +179,6 @@ respond stateVar =
                             "Module introduces new symbols: " <> listNames newModule.symbols
                         )
 
-
                 -- check if we already received a module with this name
                 when nameAsId $
                     case Map.lookup (getId $ newModule.name) state.addedModules of
@@ -478,7 +477,8 @@ runServer ::
     IO ()
 runServer port definitions defaultMain mLlvmLibrary mSMTOptions (logLevel, customLevels) =
     do
-        stateVar <- newMVar ServerState{definitions, defaultMain, mLlvmLibrary, mSMTOptions, addedModules = mempty}
+        stateVar <-
+            newMVar ServerState{definitions, defaultMain, mLlvmLibrary, mSMTOptions, addedModules = mempty}
         Log.runStderrLoggingT . Log.filterLogger levelFilter $
             jsonRpcServer
                 srvSettings
