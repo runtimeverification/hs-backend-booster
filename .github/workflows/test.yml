@@ -137,7 +137,7 @@ jobs:
 
       - name: 'Install Nix'
         if: ${{ matrix.os == 'macos-12' }}
-        uses: cachix/install-nix-action@v22
+        uses: cachix/install-nix-action@v25
         with:
           install_url: https://releases.nixos.org/nix/nix-2.13.3/install
           extra_nix_config: |
@@ -147,7 +147,7 @@ jobs:
 
       - name: 'Install Cachix'
         if: ${{ matrix.os == 'macos-12' }}
-        uses: cachix/cachix-action@v12
+        uses: cachix/cachix-action@v14
         with:
           name: k-framework
           authToken: '${{ secrets.CACHIX_PUBLIC_TOKEN }}'
