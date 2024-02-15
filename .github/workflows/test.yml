@@ -25,13 +25,13 @@ jobs:
     steps:
 
       - name: 'Checkout Code'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           # Check out pull request HEAD instead of merge commit.
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: 'Cache Stack root'
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: stack-cache
           key: stack-2-${{ runner.os }}-ghc-${{ env.ghc_version }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('stack.yaml.lock') }}
@@ -65,7 +65,7 @@ jobs:
     steps:
 
       - name: 'Checkout Code'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ secrets.JENKINS_GITHUB_PAT }}
@@ -131,7 +131,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: 'Check out code'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -166,7 +166,7 @@ jobs:
           nix-store --query --requisites --include-outputs ${drv} | cachix push k-framework
 
       - name: 'Cache Cabal package database and store'
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             cabal-cache/packages
