@@ -75,7 +75,7 @@ mapLookupOrDefaultHook args
             Nothing -- key could be in unevaluated or opaque part
                 | Just _ <- mbRest ->
                     pure Nothing -- have opaque part, no result
-                | any ((\(Term a _) -> a.isConstructorLike) . fst) pairs ->
+                | any ((\(Term a _) -> not a.isConstructorLike) . fst) pairs ->
                     pure Nothing -- have unevaluated keys, no result
                 | otherwise -> -- certain that the key is not in the map
                     pure $ Just defaultValue
