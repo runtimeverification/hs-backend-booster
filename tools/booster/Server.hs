@@ -47,6 +47,7 @@ import Booster.Definition.Ceil (computeCeilsDefinition)
 import Booster.GlobalState
 import Booster.JsonRpc qualified as Booster
 import Booster.LLVM.Internal (mkAPI, withDLib)
+import Booster.Prettyprinter (renderText)
 import Booster.SMT.Base qualified as SMT (SExpr (..), SMTId (..))
 import Booster.SMT.Interface (SMTOptions (..))
 import Booster.Syntax.ParsedKore (loadDefinition)
@@ -78,12 +79,11 @@ import Kore.Log.Registry qualified as Log
 import Kore.Rewrite.SMT.Lemma (declareSMTLemmas)
 import Kore.Syntax.Definition (ModuleName (ModuleName), SentenceAxiom)
 import Options.SMT as KoreSMT (KoreSolverOptions (..), Solver (..))
+import Prettyprinter (pretty)
 import Proxy (KoreServer (..), ProxyConfig (..))
 import Proxy qualified
 import SMT qualified as KoreSMT
 import Stats qualified
-import Booster.Prettyprinter (renderText)
-import Prettyprinter (pretty)
 
 main :: IO ()
 main = do
