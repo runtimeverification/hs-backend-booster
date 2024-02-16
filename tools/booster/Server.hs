@@ -82,6 +82,8 @@ import Proxy (KoreServer (..), ProxyConfig (..))
 import Proxy qualified
 import SMT qualified as KoreSMT
 import Stats qualified
+import Booster.Prettyprinter (renderText)
+import Prettyprinter (pretty)
 
 main :: IO ()
 main = do
@@ -144,16 +146,21 @@ main = do
 
             withLogger reportDirectory koreLogOptions $ \actualLogAction -> do
                 mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
-                definitions <-
+                definitionsWithCeilSummaries <-
                     liftIO $
                         loadDefinition definitionFile
-                            >>= mapM (mapM ((fst <$>) . runNoLoggingT . computeCeilsDefinition mLlvmLibrary))
+                            >>= mapM (mapM (runNoLoggingT . computeCeilsDefinition mLlvmLibrary))
                             >>= evaluate . force . either (error . show) id
-                unless (isJust $ Map.lookup mainModuleName definitions) $ do
+                unless (isJust $ Map.lookup mainModuleName definitionsWithCeilSummaries) $ do
                     flip runLoggingT monadLogger $
                         Logger.logErrorNS "proxy" $
                             "Main module " <> mainModuleName <> " not found in " <> Text.pack definitionFile
                     liftIO exitFailure
+
+                flip runLoggingT monadLogger $
+                    forM_ (Map.elems definitionsWithCeilSummaries) $ \(_, summaries) ->
+                        forM_ summaries $ \summary ->
+                            Logger.logOtherNS "booster" (Logger.LevelOther "Ceil") $ renderText (pretty summary)
 
                 mvarLogAction <- newMVar actualLogAction
                 let logAction = swappableLogger mvarLogAction
@@ -165,7 +172,7 @@ main = do
                     liftIO $
                         newMVar
                             Booster.ServerState
-                                { definitions
+                                { definitions = Map.map fst definitionsWithCeilSummaries
                                 , defaultMain = mainModuleName
                                 , mLlvmLibrary
                                 , mSMTOptions = if boosterSMT then smtOptions else Nothing
