@@ -2,7 +2,6 @@
 
 The booster backend is a re-write of the symbolic rewrite engine for K, also written in Haskell. The aims of this project are to build a symbolic execution engine which is faster and more easy to understand and debug than the current backend. To accomplish these goals, several trade-offs and restrictions were introduced into the design of the booster and in it's current state, the booster is not (yet) able to execute all the programs the old backend can. As a result, the booster backend falls back to the original backend, when it cannot proceed. This document serves as a high level overview of the architecture and the procedures inside the booster and should help the writer of a semantics in K, optimise their rules to take full advantage of the booster and the speedup and better explainability it offers.
 
-
 ## Booster architecture
 
 The booster backend has been built from the ground up to be modular and tries to keep clear distinctions between various phases of symbolic execution. Unlike the old backend, which was originally built as a full CLI reachability prover, the booster backend is instead a JSON RPC server, which only exposes the basic building blocks of a symbolic execution engine via its API and leaves higher level functionality to the client. What this means is that the booster server is (mostly) stateless and only contains three main operations, namely:
@@ -99,12 +98,12 @@ For an overview of what happens when an execute request is received, see the dia
 
 ### Internalisation from Kore JSON
 
-When the execute endpoint receives a KoreJSON term (which is a JSON representation of a KORE term; see https://github.com/runtimeverification/haskell-backend/blob/master/docs/kore-syntax.md), we first try to internalise it into the internal `Term` type, together with a set of `Predicate`s. `Term` represents the configuration while each `Predicate` is a boolean constraint on some symbolic  part of the configuration (e.g. `X >Int 2` for some symbolic variable `X`). 
+When the execute endpoint receives a KoreJSON term (which is a JSON representation of a KORE term; see https://github.com/runtimeverification/haskell-backend/blob/master/docs/kore-syntax.md), we first try to internalise it into the internal `Term` type, together with a set of `Predicate`s. `Term` represents the configuration while each `Predicate` is a boolean constraint on some symbolic  part of the configuration (e.g. `X >Int 2` for some symbolic variable `X`).
 
 There are a few things to note in this step. Unlike the original backend, which is (roughly) an implementation of matching logic that KORE is based on (but does not strictly adhere to), the booster backend takes a simpler and more pragmatic approach to representing program configurations/predicates. As stated, the booster makes a strict distinction between the configuration state (i.e. data) and the boolean predicates/conditions over this state. As a result, the state is represented by the following simplified subset of KORE:
 
 ```haskell
-data Term = 
+data Term =
     SymbolApplication Symbol [Sort] [Term]
   | DomainValue Sort String
   | Var Variable
@@ -119,7 +118,7 @@ Boolean predicates of the configuration have the type `Predicate` and are simply
 { true #Equal 1 >Int 0 }
 ```
 
-whereas we simply store them as `1 >Int 0` in the booster (see [here](https://github.com/runtimeverification/hs-backend-booster/blob/bdc5d37d111d909302c31a725d938ae7ceb32fb2/library/Booster/Syntax/Json/Internalise.hs#L411-L535) for details of internalising predicates in the booster). 
+whereas we simply store them as `1 >Int 0` in the booster (see [here](https://github.com/runtimeverification/hs-backend-booster/blob/bdc5d37d111d909302c31a725d938ae7ceb32fb2/library/Booster/Syntax/Json/Internalise.hs#L411-L535) for details of internalising predicates in the booster).
 
 _Note: The old backend works with predicates at the ML level and may return something which is a valid predicate, but the booster doesn't currently recognise. If this happens, the booster will emit a warning and treat the given predicate as an opaque term it isn't able to manipulate. This might cause issues later, if said predicate is needed to simplify some part of the configuration or prune a branch._
 
@@ -129,7 +128,30 @@ Currently, we assume that every configuration `P` received by the server is defi
 
 ### Rewriting
 
-This step is at the core of the whole execute endpoint and is complex enough to warrant a separate diagram, describing what happens internally:
+The rule application procedure tries applying rewrite rules, grouped by priorities. If one or more rules from the current priority group apply, the rewritten configuration(s) get(s) returned. Otherwise, lower priority rules are tried until potentially all groups have been tried. If no rules applied, a stuck result is returned.
+
+The process of applying a single rule involves several stages:
+* unification of the current configuration with the rule's left-hand side (LHS)
+* checking the rule's "requires" clause
+* checking the rule's "ensures" clause
+
+We will now describe these stages in more detail.
+
+#### Rule unification
+
+First, the unification procedure tries to match the LHS of a rewrite rule with the configuration. The unification procedure is more limited than in the old backend and a common source of failed unification is AC unification (maps, including cell maps, and sets). Specifically, the booster can currently only perform unification of a small subset of restricted cases for maps, namely unifying concrete keys in the rule with concrete keys in the configuration. In practice, this covers a good portion of rewrite rules encountered in the real world. If unification fails with a complicated AC problem, it currently falls back onto the old backend.
+
+If unification succeeds, the resulting substitution is checked to be a "matching" substitution, i.e. the variables of the substitution map are precisely only those that appear in the LHS of the rule. This substitution is then applied to the rule's RHS, which becomes the new configuration. Before a successful rewrite can be returned, the "requires" clause of the rule have to be discharged.
+
+#### Checking "requires"
+
+When evaluating the "requires" clause, the booster makes a heuristic assumption that the clause usually is a conjunction of mostly-independent conditions. If that holds, and some of the conjuncts are fully concrete, we get to evaluate them with the LLVM backend, which is much faster. We therefore call the simplifier on each of the conjuncts. If any of the conjuncts cannot be simplified to `True`/`False`, the booster proceeds to collect all such unclear predicates and uses an SMT solver to try to either derive a contradiction, in which case the rule application fails, or otherwise derive `True`. If the result is unclear again, the booster falls back onto the old backend.
+
+#### Checking "ensures"
+
+If the requires clause has been successfully discharged, the booster proceeds to check the ensures clause in the same manner, i.e. individually, in case any evaluate to `False`. If any are unclear, the booster then calls the SMT solver again with the full set of current configuration constraints, also adding the new ensures clauses. If this new set of constraints is `False`/`_|_`, then the whole configuration is `_|_` and the booster records this rewrite as being trivial.
+
+The diagram below shows the process of applying a single rewrite rule to the current configuration `P`:
 
 ```
                                       Select a rule and try to
@@ -173,23 +195,50 @@ This step is at the core of the whole execute endpoint and is complex enough to 
                       rewrite                                        rewrite
 ```
 
-The rule application procedure tries applying rules, grouped by priorities. If one or more rules from the current priority group apply, the rewritten configuration(s) get(s) returned. Otherwise, lower priority rules are tried until potentially all groups have been tried. If no rules applied, a stuck result is returned. 
+### Equation application: `[simplification]` and `[function]` rules
 
-The process of applying a single rule involves several stages. First, the unification procedure tries to match the LHS of a rewrite rule with the configuration. The unification procedure is more limited than in the old backend and a common source of failed unification is AC unification. Specifically, the booster can currently only perform unification of a small subset of restricted cases for maps, namely unifying concrete keys in the rule with concrete keys in the configuration. In practice, this covers a good portion of rewrite rules encountered in the real world. If unification fails with a complicated AC problem, it currently falls back onto the old backend.
+The "apply equations" code path is responsible for:
+* evaluation of functions, i.e. rules with the `function` attribute,
+* application of simplification rules, i.e. rules with the `simplification` attribute.
 
-If unification succeeds, the resulting substitution is checked to be a "matching" substitution, i.e. the variables of the substitution map are precisely only those that appear in the LHS of the rule. This substitution is then applied to the rule's RHS, which becomes the new configuration. Before a successful rewrite can be returned, the "requires" clauses/predicates of the rule have to be discharged. This means that all the predicates of the rule have to evaluate to true if the rule application is to be successful, or at least one evaluates to False if the rule does not apply. Predicate simplification proceeds in much the same way as the already mentioned configuration wide simplification step. However instead of applying function and simplification rules to the configuration, we instead call the simplifier on each of the *requires* clauses of the rule. If any of the predicates cannot be simplified to true/false, the booster proceeds to collect all such unknown predicates and uses an SMT solver to try to either derive a contradiction from the set of unknown predicates, in which case the rule application fails, or otherwise derive true. If the result is unknown again, the booster falls back onto the old backend.
+From the backend's point of view, these rules are very similar. Equations are applied in the following situations:
 
-If all the requires clauses have been successfully proven, the booster proceeds to check all the ensures clauses individually, in case any evaluate to false. It then calls the SMT solver again with the full set of current configuration constraints, also adding the new ensures clauses. If this new set of constraints is false/`_|_`, then the whole configuration is `_|_` and the booster records this rewrite as being trivial.
+* the `"simplify"` JSON RPC endpoint --- works for both patterns (aka `CTerm`s) and standalone terms/predicates,
+* the evaluation of functions and application of simplification rules to the configuration and predicates during rewriting.
 
-### Simplification / function evaluation
+The simplification procedure comprises two main simplifiers: the concrete and symbolic one.
 
-As mentioned in the previous section, the simplification code path is used at two different points of the execution, as well as being exported as a separate `simplify` JSON RPC endpoint. The simplification procedure underpinning all of these use-cases is largely the same and comprises of two main simplifiers, the concrete and symbolic one. Concrete function evaluation is handled by the LLVM backend and thus requires the semantics to be written in such a way, so as to be able to build both the kore definition used by the haskell backend, as well as the LLVM kore definition. The booster relies on the LLVM version of a semantics, compiled as a dynamic library, which is loaded when the server starts. During simplification, the term is traversed bottom up and any concrete sub-terms are sent to he LLVM backend to be evaluated.
+Concrete function evaluation is handled by the LLVM backend and thus requires the semantics to be written in such a way, so as to be able to build both the `definition.kore` used by the Haskell backends, as well as the `definition.kore` for the LLVM backend. The booster relies on the LLVM version of a semantics, compiled as a dynamic library, which is loaded when the server starts. During simplification, the term is traversed bottom up and any concrete sub-terms are sent to he LLVM backend to be evaluated.
 
 The symbolic parts of a term are handled directly by the booster, which uses matching instead of unification to see whether an equation's RHS matches the current term. Similarly to rewrite rules, function rules may also have side conditions. As a result, the simplifier may have to recurse into evaluating whether the side-condition of a function/simplification rule evaluates to true/false before successfully rewriting the term. At the moment, the evaluation strategy and recursion limits for various stages of execution are hard-coded in the booster, as it is not clear if/when different recursion depth limits or top down vs bottom up simplification strategies might yield better results for different semantics.
 
+Equations are applied for a fixed amount of iterations. During a single iteration, the term will be traversed once and only one equation will be applied at each node of the term. The process will be stopped if it exceed the maximum allowed amount of iterations. Traversing bottim-up vs top-down is very important when applying equations to symbols: it's usually best to simplify an function without descending into the arguments (top-down).
+
+If a term has already been evaluated, no equations will be attempted.
+
+About `applyAtTop`. The basic block of simplification is the routine that applies a single equation.
+
+#### Applying a single equation
+
+First the routine checks that the rule does not have any existential (aka `?`) variables. This precondition is ensured when internalising the definition as well.
+
+Applying the equation is cancelled if it does not preserve. Currently the rule either has to have a source attribute or the Ceil analysis mush have added one.
+
+Applying the equation is cancelled the teem is marked as concrete but has variables.
+
+The term is matched with the left-hand side of the equation, with three possible outcomes:
+* match failed --- equation is not applicable, abort applying it
+* match indeterminate --- equation may or may not be applicable, abort applying it
+* successful match with a substitution
+
+If the subject term matches the equation's LHS, we get a substitution from equational variables to the subterms of the subject term.
+**TODO: clarify the substitution validity condition**.
+
+
+
 ### SMT constraint checking
 
-As previously mentioned, when the booster cannot rewrite the value of a rule's "requires" clause to be true or false, it falls back to calling the SMT solver for said constraint. This SMT procedure encodes a limited subset of kore constructs directly into equivalent SMT functions (mostly arithmetic operations) and encodes everything else as uninterpreted SMT functions. Given the set of predicates `K` that hold in the current configuration and unknown "requires" condition `P` the SMT procedure checks whether `K => P` or `K => !P` (or neither of those implications holds). 
+As previously mentioned, when the booster cannot rewrite the value of a rule's "requires" clause to be true or false, it falls back to calling the SMT solver for said constraint. This SMT procedure encodes a limited subset of kore constructs directly into equivalent SMT functions (mostly arithmetic operations) and encodes everything else as uninterpreted SMT functions. Given the set of predicates `K` that hold in the current configuration and unknown "requires" condition `P` the SMT procedure checks whether `K => P` or `K => !P` (or neither of those implications holds).
 
 There is important caveat/limitation and a potential source of unsoundness stemming from the use of the SMT solver in both the booster and the old backend. When we translate certain functions, such as the `mod` or `/` function, in kore, these are partial functions undefined when the second argument is 0. However, Z3 (the SMT solver we use) does not understand partial function and instead treats all functions as total. This can lead to subtle and hard to find bugs (see https://github.com/runtimeverification/haskell-backend/issues/3603) and needs to be addressed in the future.
 
