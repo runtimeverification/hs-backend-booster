@@ -151,7 +151,6 @@ data EquationState = EquationState
     , recursionStack :: [Term]
     , changed :: Bool
     , predicates :: Set Predicate
-    , trace :: Seq (EquationTrace Term)
     , cache :: SimplifierCache
     }
 
@@ -253,7 +252,6 @@ startState cache =
         , recursionStack = []
         , changed = False
         , predicates = mempty
-        , trace = mempty
         , cache
         }
 
@@ -321,7 +319,7 @@ runEquationT ::
     Maybe SMT.SMTContext ->
     SimplifierCache ->
     EquationT io a ->
-    io (Either EquationFailure a, [EquationTrace Term], SimplifierCache)
+    io (Either EquationFailure a, SimplifierCache)
 runEquationT doTracing definition llvmApi smtSolver sCache (EquationT m) = do
     globalEquationOptions <- liftIO GlobalState.readGlobalEquationOptions
     (res, endState) <-
@@ -337,7 +335,7 @@ runEquationT doTracing definition llvmApi smtSolver sCache (EquationT m) = do
                         , maxIterations = globalEquationOptions.maxIterations
                         , maxRecursion = globalEquationOptions.maxRecursion
                         }
-    pure (res, toList endState.trace, endState.cache)
+    pure (res, endState.cache)
 
 iterateEquations ::
     MonadLoggerIO io =>
@@ -385,7 +383,7 @@ evaluateTerm ::
     Maybe LLVM.API ->
     Maybe SMT.SMTContext ->
     Term ->
-    io (Either EquationFailure Term, [EquationTrace Term], SimplifierCache)
+    io (Either EquationFailure Term, SimplifierCache)
 evaluateTerm doTracing direction def llvmApi smtSolver =
     runEquationT doTracing def llvmApi smtSolver mempty
         . evaluateTerm' direction
@@ -409,7 +407,7 @@ evaluatePattern ::
     Maybe SMT.SMTContext ->
     SimplifierCache ->
     Pattern ->
-    io (Either EquationFailure Pattern, [EquationTrace Term], SimplifierCache)
+    io (Either EquationFailure Pattern, SimplifierCache)
 evaluatePattern doTracing def mLlvmLibrary smtSolver cache =
     runEquationT doTracing def mLlvmLibrary smtSolver cache . evaluatePattern'
 
@@ -704,10 +702,12 @@ emitEquationTrace t loc lbl uid res = do
     case res of
         Success{} -> logOther (LevelOther "SimplifySuccess") prettyItem
         _ -> pure ()
-    config <- getConfig
-    when (coerce config.doTracing) $
-        eqState . modify $
-            \s -> s{trace = s.trace :|> newTraceItem}
+
+-- config <- getConfig
+
+-- when (coerce config.doTracing) $
+--     eqState . modify $
+--         \s -> s{trace = s.trace :|> newTraceItem}
 
 applyEquation ::
     forall io tag.
@@ -860,7 +860,7 @@ simplifyConstraint ::
     Maybe SMT.SMTContext ->
     SimplifierCache ->
     Predicate ->
-    io (Either EquationFailure Predicate, [EquationTrace Term], SimplifierCache)
+    io (Either EquationFailure Predicate, SimplifierCache)
 simplifyConstraint doTracing def mbApi mbSMT cache (Predicate p) =
     runEquationT doTracing def mbApi mbSMT cache $ (coerce <$>) . simplifyConstraint' True $ p
 
@@ -872,7 +872,7 @@ simplifyConstraints ::
     Maybe SMT.SMTContext ->
     SimplifierCache ->
     [Predicate] ->
-    io (Either EquationFailure [Predicate], [EquationTrace Term], SimplifierCache)
+    io (Either EquationFailure [Predicate], SimplifierCache)
 simplifyConstraints doTracing def mbApi mbSMT cache ps =
     runEquationT doTracing def mbApi mbSMT cache $
         concatMap splitAndBools
