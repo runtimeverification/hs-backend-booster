@@ -21,6 +21,7 @@ module Booster.Pattern.ApplyEquations (
     eraseStates,
     EquationMetadata (..),
     ApplyEquationResult (..),
+    ApplyEquationFailure (..),
     applyEquations,
     handleSimplificationEquation,
     isMatchFailure,
@@ -163,10 +164,9 @@ data EquationMetadata = EquationMetadata
     }
     deriving stock (Eq, Show)
 
--- TODO: refactor ApplyEquationResult into EquationNonApplicableReason or something
 data EquationTrace term
     = EquationApplied term EquationMetadata term
-    | EquationNotApplied term EquationMetadata ApplyEquationResult
+    | EquationNotApplied term EquationMetadata ApplyEquationFailure
     deriving stock (Eq, Show)
 
 {- | For the given equation trace, construct a new one,
@@ -191,14 +191,6 @@ instance Pretty (EquationTrace Term) where
         locationInfo = pretty metadata.location <> " - " <> pretty metadata.label
         prettyTerm = pretty subjectTerm
     pretty (EquationNotApplied subjectTerm metadata result) = case result of
-        Success rewritten ->
-            vsep
-                [ "Simplifying term"
-                , prettyTerm
-                , "to"
-                , pretty rewritten
-                , "using " <> locationInfo
-                ]
         FailedMatch reason ->
             vsep ["Term did not match rule " <> locationInfo, prettyTerm, pretty reason]
         IndeterminateMatch ->
@@ -603,7 +595,11 @@ applyAtTop pref term = do
 
 data ApplyEquationResult
     = Success Term
-    | FailedMatch MatchFailReason
+    | Failure ApplyEquationFailure
+    deriving stock (Eq, Show)
+
+data ApplyEquationFailure
+    = FailedMatch MatchFailReason
     | IndeterminateMatch
     | IndeterminateCondition [Predicate]
     | ConditionFalse Predicate
@@ -625,24 +621,24 @@ type ResultHandler io =
 handleFunctionEquation :: MonadLoggerIO io => ResultHandler io
 handleFunctionEquation success continue abort = \case
     Success rewritten -> success rewritten
-    FailedMatch _ -> continue
-    IndeterminateMatch -> abort
-    IndeterminateCondition{} -> abort
-    ConditionFalse _ -> continue
-    EnsuresFalse p -> throw $ SideConditionFalse p
-    RuleNotPreservingDefinedness -> abort
-    MatchConstraintViolated{} -> continue
+    Failure (FailedMatch _) -> continue
+    Failure IndeterminateMatch -> abort
+    Failure (IndeterminateCondition{}) -> abort
+    Failure (ConditionFalse _) -> continue
+    Failure (EnsuresFalse p) -> throw $ SideConditionFalse p
+    Failure RuleNotPreservingDefinedness -> abort
+    Failure (MatchConstraintViolated{}) -> continue
 
 handleSimplificationEquation :: MonadLoggerIO io => ResultHandler io
 handleSimplificationEquation success continue _abort = \case
     Success rewritten -> success rewritten
-    FailedMatch _ -> continue
-    IndeterminateMatch -> continue
-    IndeterminateCondition{} -> continue
-    ConditionFalse _ -> continue
-    EnsuresFalse p -> throw $ SideConditionFalse p
-    RuleNotPreservingDefinedness -> continue
-    MatchConstraintViolated{} -> continue
+    Failure (FailedMatch _) -> continue
+    Failure IndeterminateMatch -> continue
+    Failure (IndeterminateCondition{}) -> continue
+    Failure (ConditionFalse _) -> continue
+    Failure (EnsuresFalse p) -> throw $ SideConditionFalse p
+    Failure RuleNotPreservingDefinedness -> continue
+    Failure (MatchConstraintViolated{}) -> continue
 
 applyEquations ::
     forall io tag.
@@ -702,7 +698,7 @@ emitEquationTrace t loc lbl uid res = do
     let newTraceItem =
             case res of
                 Success rewritten -> EquationApplied t (EquationMetadata loc lbl uid) rewritten
-                failure -> EquationNotApplied t (EquationMetadata loc lbl uid) failure
+                Failure failure -> EquationNotApplied t (EquationMetadata loc lbl uid) failure
         prettyItem = pack . renderDefault . pretty $ newTraceItem
     logOther (LevelOther "Simplify") prettyItem
     case res of
@@ -726,15 +722,15 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
             "Equation with existentials: " <> Text.pack (show rule)
     -- immediately cancel if not preserving definedness
     unless (null rule.computedAttributes.notPreservesDefinednessReasons) $
-        throwE RuleNotPreservingDefinedness
+        throwE (Failure RuleNotPreservingDefinedness)
     -- immediately cancel if rule has concrete() flag and term has variables
     when (allMustBeConcrete rule.attributes.concreteness && not (Set.null (freeVariables term))) $
-        throwE (MatchConstraintViolated Concrete "* (term has variables)")
+        throwE (Failure $ MatchConstraintViolated Concrete "* (term has variables)")
     -- match lhs
     koreDef <- (.definition) <$> lift getConfig
     case matchTerm koreDef rule.lhs term of
-        MatchFailed failReason -> throwE $ FailedMatch failReason
-        MatchIndeterminate _pat _subj -> throwE IndeterminateMatch
+        MatchFailed failReason -> throwE $ Failure $ FailedMatch failReason
+        MatchIndeterminate _pat _subj -> throwE $ Failure IndeterminateMatch
         MatchSuccess subst -> do
             -- cancel if condition
             -- forall (v, t) : subst. concrete(v) -> isConstructorLike(t) /\
@@ -755,7 +751,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                 logOtherNS "booster" (LevelOther "Simplify") . renderText $
                     vsep ("Conditions known to be true: " : map pretty knownTrue)
 
-            unclearConditions' <- catMaybes <$> mapM (checkConstraint ConditionFalse) toCheck
+            unclearConditions' <- catMaybes <$> mapM (checkConstraint (Failure . ConditionFalse)) toCheck
 
             case unclearConditions' of
                 [] -> do
@@ -767,10 +763,10 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                                 (Set.toList rule.ensures)
                     ensuredConditions <-
                         -- throws if an ensured condition found to be false
-                        catMaybes <$> mapM (checkConstraint EnsuresFalse) ensured
+                        catMaybes <$> mapM (checkConstraint (Failure . EnsuresFalse)) ensured
                     lift $ pushConstraints $ Set.fromList ensuredConditions
                     pure $ substituteInTerm subst rule.rhs
-                unclearConditions -> throwE $ IndeterminateCondition unclearConditions
+                unclearConditions -> throwE $ Failure $ IndeterminateCondition unclearConditions
   where
     -- Simplify given predicate in a nested EquationT execution.
     -- Call 'whenBottom' if it is Bottom, return Nothing if it is Top,
@@ -824,7 +820,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
         Term ->
         ExceptT ApplyEquationResult (EquationT io) ()
     mkCheck (varName, _) constrained (Term attributes _)
-        | not test = throwE $ MatchConstraintViolated constrained varName
+        | not test = throwE $ Failure $ MatchConstraintViolated constrained varName
         | otherwise = pure ()
       where
         test = case constrained of
