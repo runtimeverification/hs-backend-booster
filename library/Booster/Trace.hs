@@ -1,11 +1,12 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-partial-fields #-}
 
 module Booster.Trace (module Booster.Trace) where
 
-import Control.Monad (when)
+import Control.Monad (unless, when)
 import Control.Monad.Catch (MonadMask, bracket_)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Binary (Binary (get, put), Get, Put, Word32, get)
@@ -28,9 +29,10 @@ type family Sum a :: Type where
     Sum '[] = ()
     Sum (a ': as) = Either a (Sum as)
 
-data CustomUserEventType = Timing | LlvmCalls deriving (Show, Enum, Read, Bounded)
+data CustomUserEventType = Timing | LlvmCalls | SimplificationTraces deriving (Show, Enum, Read, Bounded)
 
 class CustomUserEvent e where
+    encodeUserEventJson :: e -> ByteString
     encodeUserEvent :: e -> Put
     decodeUserEvent :: Get e
     userEventTag :: proxy e -> ByteString

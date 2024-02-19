@@ -45,6 +45,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State
+import Data.Aeson (encode)
 import Data.ByteString.Char8 qualified as BS
 import Data.Coerce (coerce)
 import Data.Data (Data)
@@ -74,7 +75,9 @@ import Booster.Pattern.Match
 import Booster.Pattern.Util
 import Booster.Prettyprinter (renderDefault, renderText)
 import Booster.SMT.Interface qualified as SMT
+import Booster.Trace as Trace
 import Booster.Util (Bound (..), Flag (..))
+import Kore.JsonRpc.Types.Log qualified as KoreRpcLog
 
 newtype EquationT io a
     = EquationT (ReaderT EquationConfig (ExceptT EquationFailure (StateT EquationState io)) a)
@@ -244,6 +247,51 @@ isMatchFailure (EquationNotApplied _ _ IndeterminateMatch{}) = True
 isMatchFailure _ = False
 isSuccess EquationApplied{} = True
 isSuccess _ = False
+
+equationTraceToLogEntry :: EquationTrace Term -> KoreRpcLog.LogEntry
+equationTraceToLogEntry = \case
+    EquationApplied _subjectTerm metadata _rewritten ->
+        KoreRpcLog.Simplification
+            { originalTerm
+            , originalTermIndex
+            , origin
+            , result =
+                KoreRpcLog.Success Nothing Nothing (fromMaybe "UNKNOWN" _ruleId)
+            }
+      where
+        originalTerm = Nothing
+        originalTermIndex = Nothing
+        origin = KoreRpcLog.Booster
+        _ruleId = fmap getUniqueId metadata.ruleId
+    EquationNotApplied _subjectTerm metadata failure ->
+        KoreRpcLog.Simplification
+            { originalTerm
+            , originalTermIndex
+            , origin
+            , result = KoreRpcLog.Failure (failureDescription failure) _ruleId
+            }
+      where
+        originalTerm = Nothing
+        originalTermIndex = Nothing
+        origin = KoreRpcLog.Booster
+        _ruleId = fmap getUniqueId metadata.ruleId
+
+        failureDescription :: ApplyEquationFailure -> Text.Text
+        failureDescription = \case
+            FailedMatch{} -> "Failed match"
+            IndeterminateMatch -> "IndeterminateMatch"
+            IndeterminateCondition{} -> "IndeterminateCondition"
+            ConditionFalse{} -> "ConditionFalse"
+            EnsuresFalse{} -> "EnsuresFalse"
+            RuleNotPreservingDefinedness -> "RuleNotPreservingDefinedness"
+            MatchConstraintViolated{} -> "MatchConstraintViolated"
+
+instance CustomUserEvent (EquationTrace Term) where
+    encodeUserEventJson = BS.toStrict . encode . equationTraceToLogEntry
+    encodeUserEvent = error "not implemented"
+    decodeUserEvent = error "not implemented"
+    userEventTag _ = "SimplificationTrace "
+    eventType _ = SimplificationTraces
 
 startState :: Map Term Term -> EquationState
 startState cache =
@@ -699,6 +747,7 @@ emitEquationTrace t loc lbl uid res = do
                 Failure failure -> EquationNotApplied t (EquationMetadata loc lbl uid) failure
         prettyItem = pack . renderDefault . pretty $ newTraceItem
     logOther (LevelOther "Simplify") prettyItem
+    Trace.traceIO newTraceItem
     case res of
         Success{} -> logOther (LevelOther "SimplifySuccess") prettyItem
         _ -> pure ()
