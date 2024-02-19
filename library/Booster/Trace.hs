@@ -22,6 +22,7 @@ import Data.Proxy (Proxy (..))
 import Debug.Trace.Binary (traceBinaryEvent, traceBinaryEventIO)
 import Debug.Trace.Flags
 import GHC.IO (unsafePerformIO)
+import System.IO (Handle)
 
 type family Sum a :: Type where
     Sum '[] = ()
@@ -55,7 +56,7 @@ enabledCustomUserEventTypes :: IORef Word32
 {-# NOINLINE enabledCustomUserEventTypes #-}
 enabledCustomUserEventTypes = unsafePerformIO $ newIORef 0
 
-enabledHijackEventlogFile :: IORef (Maybe FilePath)
+enabledHijackEventlogFile :: IORef (Maybe Handle)
 {-# NOINLINE enabledHijackEventlogFile #-}
 enabledHijackEventlogFile = unsafePerformIO $ newIORef Nothing
 
@@ -63,15 +64,15 @@ enableCustomUserEvent :: Enum a => a -> IO ()
 enableCustomUserEvent a =
     modifyIORef enabledCustomUserEventTypes (.|. (bit $ fromEnum a))
 
-enableHijackEventlogFile :: FilePath -> IO ()
-enableHijackEventlogFile fpath = writeIORef enabledHijackEventlogFile (Just fpath)
+enableHijackEventlogFile :: Handle -> IO ()
+enableHijackEventlogFile fhandle = writeIORef enabledHijackEventlogFile (Just fhandle)
 
 customUserEventEnabled :: Enum a => a -> Bool
 customUserEventEnabled a =
     unsafePerformIO $
         flip testBit (fromEnum a) <$> readIORef enabledCustomUserEventTypes
 
-hijackEventlogFileEnabled :: Maybe FilePath
+hijackEventlogFileEnabled :: Maybe Handle
 {-# NOINLINE hijackEventlogFileEnabled #-}
 hijackEventlogFileEnabled =
     unsafePerformIO $ readIORef enabledHijackEventlogFile
@@ -106,9 +107,11 @@ traceIO e
                 let message = BL.toStrict $ runPut $ encodeCustomUserEvent e
                 when (BS.length message > 2 ^ (16 :: Int)) $ error "eventlog message too long"
                 liftIO $ traceBinaryEventIO message
-            Just fname -> do
-                let message = "\n" <> encodeUserEventJson e
-                liftIO $ BS.appendFile fname message
+            Just fhandle -> do
+                let message = encodeUserEventJson e
+                liftIO $ do
+                    BS.hPut fhandle message
+                    BS.hPut fhandle "\n"
     | otherwise = pure ()
 
 trace :: forall e a. CustomUserEvent e => e -> a -> a

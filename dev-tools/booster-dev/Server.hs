@@ -13,6 +13,7 @@ import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Text (unpack)
 import Options.Applicative
 import System.Directory (removeFile)
+import System.IO (IOMode (..), withFile)
 import System.IO.Error (isDoesNotExistError)
 
 import Booster.CLOptions
@@ -41,18 +42,13 @@ main = do
     forM_ eventlogEnabledUserEvents $ \t -> do
         putStrLn $ "Tracing " <> show t
         enableCustomUserEvent t
-    when (isJust hijackEventlogFile) $ do
-        let fname = fromJust hijackEventlogFile
-        putStrLn $
-            "Hijacking eventlog into file " <> show fname
-        removeFileIfExists fname
-        enableHijackEventlogFile fname
     putStrLn $
         "Loading definition from "
             <> definitionFile
             <> ", main module "
             <> show mainModuleName
-    withLlvmLib llvmLibraryFile $ \mLlvmLibrary -> do
+
+    withEventlogFile hijackEventlogFile $ withLlvmLib llvmLibraryFile $ \mLlvmLibrary -> do
         definitionMap <-
             loadDefinition definitionFile
                 >>= mapM (mapM ((fst <$>) . runNoLoggingT . computeCeilsDefinition mLlvmLibrary))
@@ -72,6 +68,16 @@ main = do
         Just fp -> withDLib fp $ \dl -> do
             api <- mkAPI dl
             m $ Just api
+
+    withEventlogFile mFile doStuff = case mFile of
+        Nothing -> doStuff
+        Just fname -> do
+            putStrLn $
+                "Hijacking eventlog into file " <> show fname
+            removeFileIfExists fname
+            withFile fname AppendMode $ \handle -> do
+                enableHijackEventlogFile handle
+                doStuff
 
     clParser =
         info
