@@ -100,13 +100,15 @@ encodeCustomUserEvent e = do
 
 traceIO :: forall m e. MonadIO m => CustomUserEvent e => e -> m ()
 traceIO e
-    | isJust hijackEventlogFileEnabled = do
-        let fname = fromJust hijackEventlogFileEnabled
-        liftIO $ BS.appendFile fname (prettyPrintUserEvent e)
     | userTracingEnabled && customUserEventEnabled (eventType (undefined :: proxy e)) = do
-        let message = BL.toStrict $ runPut $ encodeCustomUserEvent e
-        when (BS.length message > 2 ^ (16 :: Int)) $ error "eventlog message too long"
-        liftIO $ traceBinaryEventIO message
+        case hijackEventlogFileEnabled of
+            Nothing -> do
+                let message = BL.toStrict $ runPut $ encodeCustomUserEvent e
+                when (BS.length message > 2 ^ (16 :: Int)) $ error "eventlog message too long"
+                liftIO $ traceBinaryEventIO message
+            Just fname -> do
+                let message = "\n" <> encodeUserEventJson e
+                liftIO $ BS.appendFile fname message
     | otherwise = pure ()
 
 trace :: forall e a. CustomUserEvent e => e -> a -> a
