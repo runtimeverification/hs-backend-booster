@@ -35,7 +35,6 @@ class CustomUserEvent e where
     decodeUserEvent :: Get e
     userEventTag :: proxy e -> ByteString
     eventType :: proxy e -> CustomUserEventType
-    prettyPrintUserEvent :: e -> ByteString
 
 class DecodeUserEvents es where
     decodeUserEvents' :: ByteString -> Get (Sum es)
@@ -84,7 +83,6 @@ instance CustomUserEvent Start where
     decodeUserEvent = Start <$> get
     userEventTag _ = "START"
     eventType _ = Timing
-    prettyPrintUserEvent (Start ident) = "START " <> ident
 newtype Stop = Stop ByteString
 
 instance CustomUserEvent Stop where
@@ -92,7 +90,6 @@ instance CustomUserEvent Stop where
     decodeUserEvent = Stop <$> get
     userEventTag _ = "STOP "
     eventType _ = Timing
-    prettyPrintUserEvent (Stop ident) = "STOP " <> ident
 
 encodeCustomUserEvent :: forall e. CustomUserEvent e => e -> Put
 encodeCustomUserEvent e = do

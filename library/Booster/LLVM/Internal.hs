@@ -150,27 +150,6 @@ instance CustomUserEvent LlvmCall where
     userEventTag _ = "LLVM "
     eventType _ = LlvmCalls
 
-    prettyPrintUserEvent (LlvmCall{ret, call, args}) =
-        let prettyRet = case ret of
-                Just (ty, SomePtr ptr) -> byteString ty <> lazyByteString " v" <> byteString ptr <> lazyByteString " = "
-                _ -> ""
-
-            prettyArgs =
-                charUtf8 '('
-                    <> mconcat
-                        ( List.intersperse (charUtf8 ',') $
-                            map
-                                ( \case
-                                    LlvmCallArgByteString str -> charUtf8 '"' <> byteString str <> charUtf8 '"'
-                                    LlvmCallArgWord int -> word64Dec (fromIntegral int)
-                                    LlvmCallArgPtr (SomePtr ptr) -> charUtf8 'v' <> byteString ptr
-                                )
-                                args
-                        )
-                    <> charUtf8 ')'
-            call_str = prettyRet <> byteString "api." <> byteString call <> prettyArgs
-         in BL.toStrict . toLazyByteString $ call_str <> lazyByteString ";\n"
-
 data LlvmVar = LlvmVar SomePtr Term
 
 instance CustomUserEvent LlvmVar where
@@ -178,7 +157,6 @@ instance CustomUserEvent LlvmVar where
     decodeUserEvent = LlvmVar <$> get <*> decodeTerm' Nothing
     userEventTag _ = "LLVMV"
     eventType _ = LlvmCalls
-    prettyPrintUserEvent (LlvmVar (SomePtr ptr) trm) = "/* " <> ptr <> " |-> " <> BS.pack (KPretty.renderDefault $ pretty trm) <> " */\n"
 
 {- | Uses dlopen to load a .so/.dylib C library at runtime. For doucmentation of flags such as `RTL_LAZY`, consult e.g.
      https://man7.org/linux/man-pages/man3/dlopen.3.html
