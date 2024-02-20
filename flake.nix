@@ -58,7 +58,7 @@
                     substituteInPlace library/Booster/VersionInfo.hs \
                       --replace '$(GitRev.gitHash)' '"${self.rev or "dirty"}"'
                   '';
-                  buildTarget = "kore-rpc-booster";
+                  # buildTarget = "kore-rpc-booster";
                 });
               json-rpc = dontCheck hprev.json-rpc;
               kore = (dontCheck hprev.kore).override {
@@ -73,8 +73,6 @@
           # Additional packages that should be available for development.
           additionalDevShellNativeBuildInputs = stacklockHaskellPkgSet:
             with ghcVersion final; [
-              cabal-install
-              fourmolu
               cabal-install
               fourmolu
               hlint
@@ -101,10 +99,20 @@
             booster-backend.pkgSet.hs-backend-booster;
         in {
           kore-rpc-booster = withZ3 pkgs hs-backend-booster "kore-rpc-booster";
+          kore-rpc-client = withZ3 pkgs hs-backend-booster "kore-rpc-client";
         });
 
       devShells = perSystem (system: {
-        # Separate cabal shell just for CI
+        # Separate fourmolu and cabal shells just for CI
+        style = with nixpkgsCleanFor system;
+          mkShell {
+            nativeBuildInputs = [
+              (haskell.lib.justStaticExecutables
+                (ghcVersion pkgs).fourmolu)
+              (haskell.lib.justStaticExecutables
+                (ghcVersion pkgs).hlint)
+            ];
+          };
         cabal = let pkgs = nixpkgsFor system;
         in pkgs.booster-backend.pkgSet.shellFor {
           packages = pkgs.booster-backend.localPkgsSelector;
