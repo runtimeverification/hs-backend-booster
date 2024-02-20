@@ -128,6 +128,7 @@ allowedLogLevels =
     , ("RewriteKore", "Log all rewriting in kore-rpc fall-backs")
     , ("RewriteSuccess", "Log successful rewrites (booster and kore-rpc)")
     , ("Simplify", "Log all simplification/evaluation in booster")
+    , ("SimplifyJson", "Log simplification/evaluation in booster as JSON")
     , ("SimplifyKore", "Log all simplification in kore-rpc")
     , ("SimplifySuccess", "Log successful simplifications (booster and kore-rpc)")
     , ("Depth", "Log the current depth of the state")

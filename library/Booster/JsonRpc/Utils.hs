@@ -276,7 +276,9 @@ handleOutput ::
     Log.LogStr ->
     IO ()
 handleOutput levelToHandle loc src level msg =
-    let bytes = Log.fromLogStr $ Log.defaultLogStr loc src level msg
+    let bytes = case level of
+            Log.LevelOther "SimplifyJson" -> Log.fromLogStr msg
+            _ -> Log.fromLogStr $ Log.defaultLogStr loc src level msg
      in BS8.hPutStrLn (levelToHandle level) bytes
 
 -- | Run a logging computation, redirecting various levels to the handles specified by the first arguments

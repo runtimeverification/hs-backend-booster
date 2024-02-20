@@ -46,6 +46,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State
 import Data.Aeson (encode)
+import Data.Aeson.Text (encodeToLazyText)
 import Data.ByteString.Char8 qualified as BS
 import Data.Coerce (coerce)
 import Data.Data (Data)
@@ -61,6 +62,7 @@ import Data.Set qualified as Set
 import Data.Text (Text, pack)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
+import Data.Text.Lazy qualified as Text (toStrict)
 import Prettyprinter
 
 import Booster.Builtin as Builtin
@@ -747,7 +749,7 @@ emitEquationTrace t loc lbl uid res = do
                 Failure failure -> EquationNotApplied t (EquationMetadata loc lbl uid) failure
         prettyItem = pack . renderDefault . pretty $ newTraceItem
     logOther (LevelOther "Simplify") prettyItem
-    Trace.traceIO newTraceItem
+    logOther (LevelOther "SimplifyJson") (Text.toStrict . encodeToLazyText $ equationTraceToLogEntry newTraceItem)
     case res of
         Success{} -> logOther (LevelOther "SimplifySuccess") prettyItem
         _ -> pure ()
