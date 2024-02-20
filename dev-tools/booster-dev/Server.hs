@@ -15,7 +15,7 @@ import Control.Monad.Logger.CallStack (LogLevel (LevelError))
 import Data.Conduit.Network (serverSettings)
 import Data.Map (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromJust, isJust, isNothing)
+import Data.Maybe (isNothing)
 import Data.Text (Text, unpack)
 import Options.Applicative
 import System.Directory (removeFile)
@@ -86,7 +86,7 @@ main = do
             putStrLn $
                 "Hijacking eventlog into file " <> show fname
             removeFileIfExists fname
-            withFile fname AppendMode $ \handle -> do
+            IO.withFile fname IO.WriteMode $ \handle -> do
                 enableHijackEventlogFile handle
                 doStuff
 
