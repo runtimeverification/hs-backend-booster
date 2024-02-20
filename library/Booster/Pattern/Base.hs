@@ -136,7 +136,6 @@ data TermAttributes = TermAttributes
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 
-
 instance Semigroup TermAttributes where
     a1 <> a2 =
         TermAttributes
