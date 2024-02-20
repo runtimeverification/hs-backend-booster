@@ -2,38 +2,44 @@
   "nodes": {
     "haskell-backend": {
       "inputs": {
-        "nixpkgs": "nixpkgs",
+        "nixpkgs": [
+          "haskell-backend",
+          "rv-utils",
+          "nixpkgs"
+        ],
+        "rv-utils": "rv-utils",
         "stacklock2nix": "stacklock2nix",
         "z3": "z3"
       },
       "locked": {
-        "lastModified": 1707309769,
-        "narHash": "sha256-EvjsNsNXHuA79X3nVTfyBMsbh/m/LYrHyrKrDL/N9Vc=",
+        "lastModified": 1708434537,
+        "narHash": "sha256-JpNl2MjOgUdNQx3WPC1so3EGX8/TzjExE6SuPsSM93Y=",
         "owner": "runtimeverification",
         "repo": "haskell-backend",
-        "rev": "7e2b8b363bff6f6a2391191fe5e04d9337ace11b",
+        "rev": "ca93b3f948780d2ef90fe56b0bbfe8075e14dfcd",
         "type": "github"
       },
       "original": {
         "owner": "runtimeverification",
         "repo": "haskell-backend",
-        "rev": "7e2b8b363bff6f6a2391191fe5e04d9337ace11b",
+        "rev": "ca93b3f948780d2ef90fe56b0bbfe8075e14dfcd",
         "type": "github"
       }
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1696983906,
-        "narHash": "sha256-L7GyeErguS7Pg4h8nK0wGlcUTbfUMDu+HMf1UcyP72k=",
-        "owner": "NixOS",
+        "lastModified": 1707163378,
+        "narHash": "sha256-oz+BzUDwtyircjjxv9aPYOS5gobxLCjD2il+gb/bCRo=",
+        "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "bd1cde45c77891214131cbbea5b1203e485a9d51",
+        "rev": "e2ffefe304d941bb98989847944f3b58e0adcdd5",
         "type": "github"
       },
       "original": {
-        "id": "nixpkgs",
-        "ref": "nixos-23.05",
-        "type": "indirect"
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "e2ffefe304d941bb98989847944f3b58e0adcdd5",
+        "type": "github"
       }
     },
     "root": {
@@ -47,6 +53,24 @@
           "haskell-backend",
           "stacklock2nix"
         ]
+      }
+    },
+    "rv-utils": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1707492220,
+        "narHash": "sha256-KRndaUPzUumDlNcKF7KzA8F/EZKLYCvurh7Z13sw2PI=",
+        "owner": "runtimeverification",
+        "repo": "rv-nix-tools",
+        "rev": "abf86805a623948c941e603e2fc4c26a06ea6eb6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "runtimeverification",
+        "repo": "rv-nix-tools",
+        "type": "github"
       }
     },
     "stacklock2nix": {
