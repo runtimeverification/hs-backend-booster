@@ -15,11 +15,10 @@ import Control.Monad.Logger.CallStack (LogLevel (LevelError))
 import Data.Conduit.Network (serverSettings)
 import Data.Map (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (isNothing)
+import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Text (Text, unpack)
 import Options.Applicative
 import System.Directory (removeFile)
-import System.IO (IOMode (..), withFile)
 import System.IO qualified as IO
 import System.IO.Error (isDoesNotExistError)
 
