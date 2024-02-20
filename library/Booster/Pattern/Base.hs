@@ -1,9 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE TemplateHaskellQuotes #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022

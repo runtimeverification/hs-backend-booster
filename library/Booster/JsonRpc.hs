@@ -182,15 +182,15 @@ respond stateVar =
                         )
 
                 when nameAsId $
-                    case (Map.lookup (getId $ newModule.name) state.definitions, Map.lookup moduleHash state.definitions) of
+                    case (Map.lookup (getId newModule.name) state.definitions, Map.lookup moduleHash state.definitions) of
                         (Just{}, Nothing) ->
                             -- another module with the same name already exists
-                            throwE (RpcError.DuplicateModuleName, toJSON $ getId $ newModule.name)
+                            throwE (RpcError.DuplicateModuleName, toJSON $ getId newModule.name)
                         (Just nmMod, Just idMod)
                             | nmMod /= idMod ->
                                 -- this module has previously been added and different
                                 -- module with the same name also already exists
-                                throwE (RpcError.DuplicateModuleName, toJSON $ getId $ newModule.name)
+                                throwE (RpcError.DuplicateModuleName, toJSON $ getId newModule.name)
                             | otherwise ->
                                 -- this module has previously been added with name-as-id: true
                                 -- we can allow this, since the contents of the named module
@@ -210,7 +210,7 @@ respond stateVar =
                         state
                             { definitions =
                                 if nameAsId
-                                    then Map.insert (getId $ newModule.name) (newDefinitions Map.! moduleHash) newDefinitions
+                                    then Map.insert (getId newModule.name) (newDefinitions Map.! moduleHash) newDefinitions
                                     else newDefinitions
                             }
                 Log.logInfo $
