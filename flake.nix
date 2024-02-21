@@ -116,7 +116,7 @@
           packages = pkgs.booster-backend.localPkgsSelector;
           nativeBuildInputs = [
             pkgs.diffutils
-            pkgs.haskell.packages.ghc928.cabal-install
+            (ghcVersion pkgs).cabal-install
             pkgs.hpack
             pkgs.jq
             pkgs.nix

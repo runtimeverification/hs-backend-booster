@@ -13,7 +13,7 @@ concurrency:
 
 env:
   ghc_version: '9.6.4'
-  hpack_version: '0.34.2'
+  hpack_version: '0.35.2'
 
 jobs:
 
