@@ -198,6 +198,7 @@ main = do
                                 , defaultMain = mainModuleName
                                 , mLlvmLibrary
                                 , mSMTOptions = if boosterSMT then smtOptions else Nothing
+                                , addedModules = mempty
                                 }
                 statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
 
