@@ -9,24 +9,22 @@ License     : BSD-3-Clause
 module Booster.JsonRpc (
     ServerState (..),
     respond,
-    runServer,
     RpcTypes.rpcJsonConfig,
     execStateToKoreJson,
     toExecState,
 ) where
 
 import Control.Applicative ((<|>))
-import Control.Concurrent (MVar, newMVar, putMVar, readMVar, takeMVar)
+import Control.Concurrent (MVar, putMVar, readMVar, takeMVar)
 import Control.Monad
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class
-import Control.Monad.Logger.CallStack (LogLevel (LevelError), MonadLoggerIO)
+import Control.Monad.Logger.CallStack (MonadLoggerIO)
 import Control.Monad.Logger.CallStack qualified as Log
 import Control.Monad.Trans.Except (catchE, except, runExcept, runExceptT, throwE, withExceptT)
 import Crypto.Hash (SHA256 (..), hashWith)
 import Data.Bifunctor (second)
 import Data.Coerce (coerce)
-import Data.Conduit.Network (serverSettings)
 import Data.Foldable
 import Data.List (singleton)
 import Data.Map.Strict (Map)
@@ -40,12 +38,10 @@ import GHC.Records
 import Numeric.Natural
 import Prettyprinter (pretty)
 import System.Clock (Clock (Monotonic), diffTimeSpec, getTime, toNanoSecs)
-import System.IO qualified as IO
 
 import Booster.Definition.Attributes.Base (getUniqueId, uniqueId)
 import Booster.Definition.Base (KoreDefinition (..))
 import Booster.Definition.Base qualified as Definition (RewriteRule (..))
-import Booster.JsonRpc.Utils (runHandleLoggingT)
 import Booster.LLVM as LLVM (API)
 import Booster.Pattern.ApplyEquations qualified as ApplyEquations
 import Booster.Pattern.Base (
@@ -181,22 +177,18 @@ respond stateVar =
                             "Module introduces new symbols: " <> listNames newModule.symbols
                         )
 
+                -- check if we already received a module with this name
                 when nameAsId $
-                    case (Map.lookup (getId $ newModule.name) state.definitions, Map.lookup moduleHash state.definitions) of
-                        (Just{}, Nothing) ->
-                            -- another module with the same name already exists
-                            throwE (RpcError.DuplicateModuleName, toJSON $ getId $ newModule.name)
-                        (Just nmMod, Just idMod)
-                            | nmMod /= idMod ->
-                                -- this module has previously been added and different
-                                -- module with the same name also already exists
-                                throwE (RpcError.DuplicateModuleName, toJSON $ getId $ newModule.name)
-                            | otherwise ->
-                                -- this module has previously been added with name-as-id: true
-                                -- we can allow this, since the contents of the named module
-                                -- are the same
-                                pure ()
+                    case Map.lookup (getId $ newModule.name) state.addedModules of
+                        -- if a different module was already added, throw error
+                        Just m | _module /= m -> throwE (RpcError.DuplicateModuleName, toJSON $ getId $ newModule.name)
                         _ -> pure ()
+
+                -- Check for a corner case when we send module M1 with the name "m<hash of M2>"" and name-as-id: true
+                -- followed by adding M2. Should not happen in practice...
+                case Map.lookup moduleHash state.addedModules of
+                    Just m | _module /= m -> throwE (RpcError.DuplicateModuleName, toJSON moduleHash)
+                    _ -> pure ()
 
                 newDefinitions <-
                     withExceptT ((RpcError.InvalidModule,) . toJSON) $
@@ -212,6 +204,9 @@ respond stateVar =
                                 if nameAsId
                                     then Map.insert (getId $ newModule.name) (newDefinitions Map.! moduleHash) newDefinitions
                                     else newDefinitions
+                            , addedModules =
+                                (if nameAsId then Map.insert (getId $ newModule.name) _module else id) $
+                                    Map.insert moduleHash _module state.addedModules
                             }
                 Log.logInfo $
                     "Added a new module. Now in scope: " <> Text.intercalate ", " (Map.keys newDefinitions)
@@ -470,31 +465,6 @@ respond stateVar =
             Nothing -> pure $ Left $ RpcError.backendError RpcError.CouldNotFindModule mainName
             Just d -> action (d, state.mLlvmLibrary, state.mSMTOptions)
 
-runServer ::
-    Int ->
-    Map Text KoreDefinition ->
-    Text ->
-    Maybe LLVM.API ->
-    Maybe SMT.SMTOptions ->
-    (LogLevel, [LogLevel]) ->
-    IO ()
-runServer port definitions defaultMain mLlvmLibrary mSMTOptions (logLevel, customLevels) =
-    do
-        let logLevelToHandle = \case
-                _ -> IO.stderr
-
-        stateVar <- newMVar ServerState{definitions, defaultMain, mLlvmLibrary, mSMTOptions}
-        runHandleLoggingT logLevelToHandle . Log.filterLogger levelFilter $
-            jsonRpcServer
-                srvSettings
-                (const $ respond stateVar)
-                [RpcError.handleErrorCall, RpcError.handleSomeException]
-  where
-    levelFilter _source lvl =
-        lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
-
-    srvSettings = serverSettings port "*"
-
 data ServerState = ServerState
     { definitions :: Map Text KoreDefinition
     -- ^ definitions for each loaded module as main module
@@ -504,6 +474,8 @@ data ServerState = ServerState
     -- ^ optional LLVM simplification library
     , mSMTOptions :: Maybe SMT.SMTOptions
     -- ^ (optional) SMT solver options
+    , addedModules :: Map Text Text
+    -- ^ map of raw modules added via add-module
     }
 
 execStateToKoreJson :: RpcTypes.ExecuteState -> KoreJson.KoreJson
