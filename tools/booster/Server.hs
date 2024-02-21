@@ -40,7 +40,7 @@ import System.Clock (
     getTime,
  )
 import System.Exit
-import System.IO (hPutStrLn, stderr)
+import System.IO qualified as IO
 
 import Booster.CLOptions
 import Booster.Definition.Attributes.Base (ComputedAxiomAttributes (notPreservesDefinednessReasons))
@@ -48,6 +48,7 @@ import Booster.Definition.Base (HasSourceRef (sourceRef), RewriteRule (computedA
 import Booster.Definition.Ceil (ComputeCeilSummary (..), computeCeilsDefinition)
 import Booster.GlobalState
 import Booster.JsonRpc qualified as Booster
+import Booster.JsonRpc.Utils qualified as Booster
 import Booster.LLVM.Internal (mkAPI, withDLib)
 import Booster.Prettyprinter (renderText)
 import Booster.SMT.Base qualified as SMT (SExpr (..), SMTId (..))
@@ -120,7 +121,10 @@ main = do
             Set.unions $ mapMaybe (`Map.lookup` koreExtraLogs) customLevels
         koreSolverOptions = translateSMTOpts smtOptions
 
-    Logger.runStderrLoggingT $ Logger.filterLogger levelFilter $ do
+    let logLevelToHandle = \case
+            _ -> IO.stderr
+
+    Booster.runHandleLoggingT logLevelToHandle . Logger.filterLogger levelFilter $ do
         liftIO $ forM_ eventlogEnabledUserEvents $ \t -> do
             putStrLn $ "Tracing " <> show t
             enableCustomUserEvent t
@@ -220,7 +224,7 @@ main = do
                             [Kore.handleDecidePredicateUnknown, handleErrorCall, handleSomeException]
                     interruptHandler _ = do
                         when (logLevel >= LevelInfo) $
-                            hPutStrLn stderr "[Info#proxy] Server shutting down"
+                            IO.hPutStrLn IO.stderr "[Info#proxy] Server shutting down"
                         whenJust statsVar Stats.showStats
                         exitSuccess
                 handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger
