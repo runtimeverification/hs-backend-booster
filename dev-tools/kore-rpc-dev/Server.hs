@@ -271,7 +271,6 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
                         { serializedModules = Map.singleton (ModuleName mainModuleName) sd
                         , receivedModules = mempty
                         , loadedDefinition
-                        , receivedModules = mempty
                         }
 
         pure $
