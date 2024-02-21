@@ -4,7 +4,7 @@ License     : BSD-3-Clause
 -}
 module Main (main) where
 
-import Booster.JsonRpc.Utils (runHandleLoggingT)
+import Booster.Util (runHandleLoggingT)
 import Control.Concurrent (newMVar)
 import Control.DeepSeq (force)
 import Control.Exception (catch, evaluate, throwIO)
