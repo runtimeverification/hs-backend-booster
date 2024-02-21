@@ -116,7 +116,15 @@ runServer port definitions defaultMain mLlvmLibrary mSMTOptions (logLevel, custo
         let logLevelToHandle = \case
                 _ -> IO.stderr
 
-        stateVar <- newMVar ServerState{definitions, defaultMain, mLlvmLibrary, mSMTOptions}
+        stateVar <-
+            newMVar
+                ServerState
+                    { definitions
+                    , defaultMain
+                    , mLlvmLibrary
+                    , mSMTOptions
+                    , addedModules = mempty
+                    }
         runHandleLoggingT logLevelToHandle . Log.filterLogger levelFilter $
             jsonRpcServer
                 srvSettings
