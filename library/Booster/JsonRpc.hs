@@ -191,7 +191,7 @@ respond stateVar =
                 -- Check for a corner case when we send module M1 with the name "m<hash of M2>"" and name-as-id: true
                 -- followed by adding M2. Should not happen in practice...
                 case Map.lookup moduleHash state.addedModules of
-                    Just m | _module /= m -> throwE (RpcError.DuplicateModuleName, toJSON $ getId $ newModule.name)
+                    Just m | _module /= m -> throwE (RpcError.DuplicateModuleName, toJSON moduleHash)
                     _ -> pure ()
 
                 newDefinitions <-
