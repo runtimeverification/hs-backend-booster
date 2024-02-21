@@ -40,10 +40,12 @@ import GHC.Records
 import Numeric.Natural
 import Prettyprinter (pretty)
 import System.Clock (Clock (Monotonic), diffTimeSpec, getTime, toNanoSecs)
+import System.IO qualified as IO
 
 import Booster.Definition.Attributes.Base (getUniqueId, uniqueId)
 import Booster.Definition.Base (KoreDefinition (..))
 import Booster.Definition.Base qualified as Definition (RewriteRule (..))
+import Booster.JsonRpc.Utils (runHandleLoggingT)
 import Booster.LLVM as LLVM (API)
 import Booster.Pattern.ApplyEquations qualified as ApplyEquations
 import Booster.Pattern.Base (
@@ -477,9 +479,19 @@ runServer ::
     IO ()
 runServer port definitions defaultMain mLlvmLibrary mSMTOptions (logLevel, customLevels) =
     do
+        let logLevelToHandle = \case
+                _ -> IO.stderr
+
         stateVar <-
-            newMVar ServerState{definitions, defaultMain, mLlvmLibrary, mSMTOptions, addedModules = mempty}
-        Log.runStderrLoggingT . Log.filterLogger levelFilter $
+            newMVar
+                ServerState
+                    { definitions
+                    , defaultMain
+                    , mLlvmLibrary
+                    , mSMTOptions
+                    , addedModules = mempty
+                    }
+        runHandleLoggingT logLevelToHandle . Log.filterLogger levelFilter $
             jsonRpcServer
                 srvSettings
                 (const $ respond stateVar)
@@ -684,22 +696,7 @@ mkLogEquationTrace
             _ruleId = fmap getUniqueId metadata.ruleId
         ApplyEquations.EquationNotApplied _subjectTerm metadata result ->
             case result of
-                ApplyEquations.Success rewrittenTrm
-                    | logSuccessfulSimplifications ->
-                        Just $
-                            Simplification
-                                { originalTerm
-                                , originalTermIndex
-                                , origin
-                                , result =
-                                    Success
-                                        { rewrittenTerm =
-                                            Just $ execStateToKoreJson $ toExecState (Pattern.Pattern_ rewrittenTrm) mempty mempty
-                                        , substitution = Nothing
-                                        , ruleId = fromMaybe "UNKNOWN" _ruleId
-                                        }
-                                }
-                ApplyEquations.FailedMatch _failReason
+                ApplyEquations.FailedMatch{}
                     | logFailedSimplifications ->
                         Just $
                             Simplification
@@ -717,7 +714,7 @@ mkLogEquationTrace
                                 , origin
                                 , result = Failure{reason = "Indeterminate match", _ruleId}
                                 }
-                ApplyEquations.IndeterminateCondition _failedConditions
+                ApplyEquations.IndeterminateCondition{}
                     | logFailedSimplifications ->
                         Just $
                             Simplification
