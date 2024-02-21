@@ -47,7 +47,6 @@
               crypton-x509 = dontCheck hprev.crypton-x509;
               decision-diagrams = dontCheck hprev.decision-diagrams;
               fgl = dontCheck hprev.fgl;
-              # haskeline = dontCheck hprev.haskeline;
               graphviz = dontCheck hprev.graphviz;
               smtlib-backends-process = dontCheck hprev.smtlib-backends-process;
               hs-backend-booster = overrideCabal hprev.hs-backend-booster
