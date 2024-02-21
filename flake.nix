@@ -57,7 +57,6 @@
                     substituteInPlace library/Booster/VersionInfo.hs \
                       --replace '$(GitRev.gitHash)' '"${self.rev or "dirty"}"'
                   '';
-                  # buildTarget = "kore-rpc-booster";
                 });
               json-rpc = dontCheck hprev.json-rpc;
               kore = (dontCheck hprev.kore).override {
@@ -102,7 +101,7 @@
         });
 
       devShells = perSystem (system: {
-        # Separate fourmolu and cabal shells just for CI
+        # Separate fourmolu+hlint and cabal shells just for CI
         style = with nixpkgsCleanFor system;
           mkShell {
             nativeBuildInputs = [
