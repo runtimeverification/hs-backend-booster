@@ -191,6 +191,7 @@ main = do
                             , boosterState
                             , fallbackReasons
                             , simplifyAtEnd
+                            , customLogLevels = customLevels
                             }
                     server =
                         jsonRpcServer
