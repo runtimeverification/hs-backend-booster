@@ -167,10 +167,10 @@ mergeDefs k1 k2
     | otherwise =
         fmap Imported $
             KoreDefinition k2.attributes
-                <$> mergeDisjoint modules k1 k2
-                <*> mergeDisjoint sorts k1 k2
-                <*> mergeDisjoint symbols k1 k2
-                <*> mergeDisjoint aliases k1 k2
+                <$> mergeDisjoint Def.modules k1 k2
+                <*> mergeDisjoint Def.sorts k1 k2
+                <*> mergeDisjoint Def.symbols k1 k2
+                <*> mergeDisjoint Def.aliases k1 k2
                 <*> pure (mergeTheories rewriteTheory k1 k2)
                 <*> pure (mergeTheories functionEquations k1 k2)
                 <*> pure (mergeTheories simplifications k1 k2)
@@ -668,6 +668,7 @@ classifyAxiom parsedAx@ParsedAxiom{axiom, sortVars, attributes} =
             | hasAttribute "comm" -> pure Nothing -- could check symbol axiom.first.name
             | hasAttribute "idem" -> pure Nothing -- could check axiom.first.name
             | hasAttribute "unit" -> pure Nothing -- could check axiom.first.name and the unit symbol in axiom.first.args
+            | hasAttribute "symbol-overload" -> pure Nothing
             | hasAttribute "overload" -> pure Nothing
             | hasAttribute "simplification" -- special case of injection simplification
             , Syntax.KJApp{name = sym1} <- axiom.first
@@ -1294,7 +1295,7 @@ instance Pretty DefinitionError where
         ParseError msg ->
             "Parse error: " <> pretty msg
         NoSuchModule name ->
-            pretty $ name <> ": No such module"
+            pretty $ "Module " <> name <> " not found."
         DuplicateModule name ->
             pretty $ name <> ": Duplicate module"
         DuplicateSorts sorts ->

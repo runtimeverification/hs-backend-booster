@@ -4,7 +4,7 @@ License     : BSD-3-Clause
 -}
 module Main (main) where
 
-import Booster.JsonRpc.Utils (runHandleLoggingT)
+import Booster.Util (runHandleLoggingT)
 import Control.Concurrent (newMVar)
 import Control.DeepSeq (force)
 import Control.Exception (catch, evaluate, throwIO)
@@ -15,7 +15,7 @@ import Control.Monad.Logger.CallStack (LogLevel (LevelError))
 import Data.Conduit.Network (serverSettings)
 import Data.Map (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (isNothing)
+import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Text (Text, unpack)
 import Options.Applicative
 import System.Directory (removeFile)
@@ -121,7 +121,15 @@ runServer port definitions defaultMain mLlvmLibrary mSMTOptions (logLevel, custo
         let logLevelToHandle = \case
                 _ -> IO.stderr
 
-        stateVar <- newMVar ServerState{definitions, defaultMain, mLlvmLibrary, mSMTOptions}
+        stateVar <-
+            newMVar
+                ServerState
+                    { definitions
+                    , defaultMain
+                    , mLlvmLibrary
+                    , mSMTOptions
+                    , addedModules = mempty
+                    }
         runHandleLoggingT logLevelToHandle . Log.filterLogger levelFilter $
             jsonRpcServer
                 srvSettings

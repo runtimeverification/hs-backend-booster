@@ -13,7 +13,6 @@ module Booster.JsonRpc.Utils (
     rpcTypeOf,
     typeString,
     diffBy,
-    runHandleLoggingT,
 ) where
 
 import Control.Applicative ((<|>))
@@ -264,23 +263,3 @@ diffBy def pat1 pat2 =
             renderBS
             . runExcept
             . internaliseTermOrPredicate DisallowAlias IgnoreSubsorts Nothing def
-
--------------------------------------------------------------------
--- logging helpers, adapted from monad-logger-aeson
-
-handleOutput ::
-    (Log.LogLevel -> IO.Handle) ->
-    Log.Loc ->
-    Log.LogSource ->
-    Log.LogLevel ->
-    Log.LogStr ->
-    IO ()
-handleOutput levelToHandle loc src level msg =
-    let bytes = case level of
-            Log.LevelOther "SimplifyJson" -> Log.fromLogStr msg
-            _ -> Log.fromLogStr $ Log.defaultLogStr loc src level msg
-     in BS8.hPutStrLn (levelToHandle level) bytes
-
--- | Run a logging computation, redirecting various levels to the handles specified by the first arguments
-runHandleLoggingT :: (Log.LogLevel -> IO.Handle) -> Log.LoggingT m a -> m a
-runHandleLoggingT = flip Log.runLoggingT . handleOutput

@@ -754,34 +754,28 @@ emitEquationTrace t loc lbl uid res = do
         Success{} -> logOther (LevelOther "SimplifySuccess") prettyItem
         _ -> pure ()
 
--- config <- getConfig
-
--- when (coerce config.doTracing) $
---     eqState . modify $
---         \s -> s{trace = s.trace :|> newTraceItem}
-
 applyEquation ::
     forall io tag.
     MonadLoggerIO io =>
     Term ->
     RewriteRule tag ->
     EquationT io ApplyEquationResult
-applyEquation term rule = fmap (either id Success) $ runExceptT $ do
+applyEquation term rule = fmap (either Failure Success) $ runExceptT $ do
     -- ensured by internalisation: no existentials in equations
     unless (null rule.existentials) $
         lift . throw . InternalError $
             "Equation with existentials: " <> Text.pack (show rule)
     -- immediately cancel if not preserving definedness
     unless (null rule.computedAttributes.notPreservesDefinednessReasons) $
-        throwE (Failure RuleNotPreservingDefinedness)
+        throwE RuleNotPreservingDefinedness
     -- immediately cancel if rule has concrete() flag and term has variables
     when (allMustBeConcrete rule.attributes.concreteness && not (Set.null (freeVariables term))) $
-        throwE (Failure $ MatchConstraintViolated Concrete "* (term has variables)")
+        throwE (MatchConstraintViolated Concrete "* (term has variables)")
     -- match lhs
     koreDef <- (.definition) <$> lift getConfig
     case matchTerm koreDef rule.lhs term of
-        MatchFailed failReason -> throwE $ Failure $ FailedMatch failReason
-        MatchIndeterminate _pat _subj -> throwE $ Failure IndeterminateMatch
+        MatchFailed failReason -> throwE $ FailedMatch failReason
+        MatchIndeterminate _pat _subj -> throwE IndeterminateMatch
         MatchSuccess subst -> do
             -- cancel if condition
             -- forall (v, t) : subst. concrete(v) -> isConstructorLike(t) /\
@@ -802,7 +796,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                 logOtherNS "booster" (LevelOther "Simplify") . renderText $
                     vsep ("Conditions known to be true: " : map pretty knownTrue)
 
-            unclearConditions' <- catMaybes <$> mapM (checkConstraint (Failure . ConditionFalse)) toCheck
+            unclearConditions' <- catMaybes <$> mapM (checkConstraint ConditionFalse) toCheck
 
             case unclearConditions' of
                 [] -> do
@@ -814,18 +808,18 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
                                 (Set.toList rule.ensures)
                     ensuredConditions <-
                         -- throws if an ensured condition found to be false
-                        catMaybes <$> mapM (checkConstraint (Failure . EnsuresFalse)) ensured
+                        catMaybes <$> mapM (checkConstraint EnsuresFalse) ensured
                     lift $ pushConstraints $ Set.fromList ensuredConditions
                     pure $ substituteInTerm subst rule.rhs
-                unclearConditions -> throwE $ Failure $ IndeterminateCondition unclearConditions
+                unclearConditions -> throwE $ IndeterminateCondition unclearConditions
   where
     -- Simplify given predicate in a nested EquationT execution.
     -- Call 'whenBottom' if it is Bottom, return Nothing if it is Top,
     -- otherwise return the simplified remaining predicate.
     checkConstraint ::
-        (Predicate -> ApplyEquationResult) ->
+        (Predicate -> ApplyEquationFailure) ->
         Predicate ->
-        ExceptT ApplyEquationResult (EquationT io) (Maybe Predicate)
+        ExceptT ApplyEquationFailure (EquationT io) (Maybe Predicate)
     checkConstraint whenBottom (Predicate p) = do
         logOther (LevelOther "Simplify") $
             "Recursive simplification of predicate: " <> pack (renderDefault (pretty p))
@@ -853,7 +847,7 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     checkConcreteness ::
         Concreteness ->
         Map Variable Term ->
-        ExceptT ApplyEquationResult (EquationT io) ()
+        ExceptT ApplyEquationFailure (EquationT io) ()
     checkConcreteness Unconstrained _ = pure ()
     checkConcreteness (AllConstrained constrained) subst =
         mapM_ (\(var, t) -> mkCheck (toPair var) constrained t) $ Map.assocs subst
@@ -869,9 +863,9 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
         (VarName, SortName) ->
         Constrained ->
         Term ->
-        ExceptT ApplyEquationResult (EquationT io) ()
+        ExceptT ApplyEquationFailure (EquationT io) ()
     mkCheck (varName, _) constrained (Term attributes _)
-        | not test = throwE $ Failure $ MatchConstraintViolated constrained varName
+        | not test = throwE $ MatchConstraintViolated constrained varName
         | otherwise = pure ()
       where
         test = case constrained of
@@ -881,8 +875,8 @@ applyEquation term rule = fmap (either id Success) $ runExceptT $ do
     verifyVar ::
         Map Variable Term ->
         (VarName, SortName) ->
-        (Term -> ExceptT ApplyEquationResult (EquationT io) ()) ->
-        ExceptT ApplyEquationResult (EquationT io) ()
+        (Term -> ExceptT ApplyEquationFailure (EquationT io) ()) ->
+        ExceptT ApplyEquationFailure (EquationT io) ()
     verifyVar subst (variableName, sortName) check =
         maybe
             ( lift . throw . InternalError . Text.pack $

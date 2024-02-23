@@ -52,6 +52,7 @@ import Booster.SMT.Base qualified as SMT (SExpr (..), SMTId (..))
 import Booster.SMT.Interface (SMTOptions (..))
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
+import Booster.Util qualified as Booster
 import Data.Limit (Limit (..))
 import GlobalMain qualified
 import Kore.Attribute.Symbol (StepperAttributes)
@@ -173,6 +174,7 @@ main = do
                                 , defaultMain = mainModuleName
                                 , mLlvmLibrary
                                 , mSMTOptions = if boosterSMT then smtOptions else Nothing
+                                , addedModules = mempty
                                 }
                 statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
 
@@ -348,6 +350,7 @@ mkKoreServer loggerEnv@Log.LoggerEnv{logAction} CLOptions{definitionFile, mainMo
                 MVar.newMVar
                     Kore.ServerState
                         { serializedModules = Map.singleton (ModuleName mainModuleName) sd
+                        , receivedModules = mempty
                         , loadedDefinition
                         }
 
