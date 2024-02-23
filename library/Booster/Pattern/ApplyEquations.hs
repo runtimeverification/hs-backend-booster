@@ -749,7 +749,9 @@ emitEquationTrace t loc lbl uid res = do
                 Failure failure -> EquationNotApplied t (EquationMetadata loc lbl uid) failure
         prettyItem = pack . renderDefault . pretty $ newTraceItem
     logOther (LevelOther "Simplify") prettyItem
-    logOther (LevelOther "SimplifyJson") (Text.toStrict . encodeToLazyText $ equationTraceToLogEntry newTraceItem)
+    logOther
+        (LevelOther "SimplifyJson")
+        (Text.toStrict . encodeToLazyText $ equationTraceToLogEntry newTraceItem)
     case res of
         Success{} -> logOther (LevelOther "SimplifySuccess") prettyItem
         _ -> pure ()

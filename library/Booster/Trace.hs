@@ -29,7 +29,8 @@ type family Sum a :: Type where
     Sum '[] = ()
     Sum (a ': as) = Either a (Sum as)
 
-data CustomUserEventType = Timing | LlvmCalls | SimplificationTraces deriving (Show, Enum, Read, Bounded)
+data CustomUserEventType = Timing | LlvmCalls | SimplificationTraces
+    deriving (Show, Enum, Read, Bounded)
 
 class CustomUserEvent e where
     encodeUserEventJson :: e -> ByteString
