@@ -4,6 +4,7 @@ License     : BSD-3-Clause
 -}
 module Booster.SMT.Interface (
     SMTContext, -- re-export
+    SMTError (..),
     SMTOptions (..),
     defaultSMTOptions,
     initSolver,
@@ -12,6 +13,7 @@ module Booster.SMT.Interface (
     checkPredicates,
 ) where
 
+import Control.Exception (Exception, throw)
 import Control.Monad
 import Control.Monad.Logger qualified as Log
 import Control.Monad.Trans.Class
@@ -24,7 +26,7 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Data.Text as Text (Text, pack, unpack, unwords)
+import Data.Text as Text (Text, pack, unlines, unwords)
 import Prettyprinter (Pretty, pretty, vsep)
 
 import Booster.Definition.Base
@@ -50,6 +52,17 @@ data SMTOptions = SMTOptions
     }
     deriving (Eq, Show)
 
+newtype SMTError = SMTError Text
+    deriving (Eq, Show)
+
+instance Exception SMTError
+
+throwSMT :: Text -> a
+throwSMT = throw . SMTError
+
+throwSMT' :: String -> a
+throwSMT' = throwSMT . pack
+
 defaultSMTOptions :: SMTOptions
 defaultSMTOptions =
     SMTOptions
@@ -68,7 +81,7 @@ initSolver def smtOptions = do
     case prelude of
         Left err -> do
             logSMT $ "Error translating definition to SMT: " <> err
-            error $ "Unable to translate elements of the definition to SMT: " <> Text.unpack err
+            throwSMT $ "Unable to translate elements of the definition to SMT: " <> err
         Right{} -> pure ()
     check <-
         runSMT ctxt $
@@ -78,7 +91,7 @@ initSolver def smtOptions = do
         other -> do
             logSMT $ "Initial SMT definition check returned " <> pack (show other)
             closeContext ctxt
-            error $
+            throwSMT' $
                 "Aborting due to potentially-inconsistent SMT setup: Initial check returned " <> show other
 
 closeSolver :: Log.MonadLoggerIO io => SMT.SMTContext -> io ()
@@ -124,13 +137,14 @@ getModelFor ctxt ps subst
                 Set.unions $
                     Map.keysSet subst : map ((.variables) . getAttributes . coerce) ps
         when (isLeft translated) $
-            error . Text.unpack $
-                fromLeft' translated
+            throwSMT (fromLeft' translated)
         let (smtAsserts, transState) = fromRight' translated
             freeVarsMap =
                 Map.filterWithKey
                     (const . (`Set.member` Set.map Var freeVars))
                     transState.mappings
+            getVar (Var v) = v
+            getVar other = throwSMT' $ "Solver returned non-var in translation state: " <> show other
             freeVarsToSExprs = Map.mapKeys getVar $ Map.map Atom freeVarsMap
 
         runCmd_ SMT.Push -- assuming the prelude has been run already,
@@ -151,7 +165,7 @@ getModelFor ctxt ps subst
         case satResponse of
             Error msg -> do
                 runCmd_ SMT.Pop
-                error $ "SMT Error: " <> BS.unpack msg
+                throwSMT' $ BS.unpack msg
             Unsat -> do
                 runCmd_ SMT.Pop
                 pure $ Left Unsat
@@ -160,10 +174,10 @@ getModelFor ctxt ps subst
                 pure $ Left Unknown
             Values{} -> do
                 runCmd_ SMT.Pop
-                error $ "Unexpected SMT response " <> show satResponse
+                throwSMT' $ "Unexpected SMT response " <> show satResponse
             Success -> do
                 runCmd_ SMT.Pop
-                error $ "Unexpected SMT response " <> show satResponse
+                throwSMT' $ "Unexpected SMT response " <> show satResponse
             Sat -> do
                 response <-
                     if Map.null freeVarsToSExprs
@@ -172,7 +186,7 @@ getModelFor ctxt ps subst
                 runCmd_ SMT.Pop
                 case response of
                     Error msg ->
-                        error $ "SMT Error: " <> BS.unpack msg
+                        throwSMT' $ BS.unpack msg
                     Values pairs ->
                         let (errors, values) =
                                 Map.partition isLeft
@@ -181,15 +195,12 @@ getModelFor ctxt ps subst
                          in if null errors
                                 then pure $ Right $ Map.map fromRight' values
                                 else
-                                    error . unlines $
+                                    throwSMT . Text.unlines $
                                         ( "SMT errors while converting results: "
-                                            : map (Text.unpack . fromLeft') (Map.elems errors)
+                                            : map fromLeft' (Map.elems errors)
                                         )
                     other ->
-                        error $ "Unexpected SMT response to GetValue: " <> show other
-  where
-    getVar (Var v) = v
-    getVar _ = error "not a var"
+                        throwSMT' $ "Unexpected SMT response to GetValue: " <> show other
 
 mkComment :: Pretty a => a -> BS.ByteString
 mkComment = BS.pack . Pretty.renderDefault . pretty
