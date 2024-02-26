@@ -174,10 +174,10 @@ getModelFor ctxt ps subst
                 pure $ Left Unknown
             Values{} -> do
                 runCmd_ SMT.Pop
-                throwSMT' $ "Unexpected SMT response " <> show satResponse
+                throwSMT' $ "Unexpected SMT response to CheckSat: " <> show satResponse
             Success -> do
                 runCmd_ SMT.Pop
-                throwSMT' $ "Unexpected SMT response " <> show satResponse
+                throwSMT' $ "Unexpected SMT response to CheckSat: " <> show satResponse
             Sat -> do
                 response <-
                     if Map.null freeVarsToSExprs
@@ -292,10 +292,13 @@ checkPredicates ctxt givenPs givenSubst psToCheck
                 <> pack (show (positive, negative))
 
         case (positive, negative) of
-            (Unsat, Unsat) -> fail "should have been caught above"
-            (_, Unsat) -> pure True
-            (Unsat, _) -> pure False
-            _anythingElse_ -> fail "Both Sat, Unknown results, or error"
+            (Unsat, Unsat) -> throwSMT "Inconsistent ground truth: should have been caught above"
+            (Sat, Sat) -> fail "Implication not determined"
+            (Sat, Unsat) -> pure True
+            (Unsat, Sat) -> pure False
+            (Unknown, _) -> throwSMT "Unknwon result while checking a condition"
+            (_, Unknown) -> throwSMT "Unknwon result while checking a condition"
+            other -> throwSMT' $ "Unexpected result while checking a condition: " <> show other
   where
     smtRun_ :: SMTEncode c => c -> MaybeT (SMT io) ()
     smtRun_ = lift . SMT.runCmd_
