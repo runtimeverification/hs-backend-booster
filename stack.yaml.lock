@@ -12,6 +12,13 @@ packages:
   original:
     hackage: decision-diagrams-0.2.0.0
 - completed:
+    hackage: hashable-1.4.2.0@sha256:585792335d5541dba78fa8dfcb291a89cd5812a281825ff7a44afa296ab5d58a,4520
+    pantry-tree:
+      sha256: 792a6cab3f15c5db29d759c8ca735d0be5f4c94f363329652f8b9780009d0829
+      size: 1248
+  original:
+    hackage: hashable-1.4.2.0
+- completed:
     hackage: smtlib-backends-0.3@sha256:a947aead99f6a314833bddca9b502d5faea8d3bd2fc76ffb53c34d5c5b7557bc,1211
     pantry-tree:
       sha256: 97b88a647ac996808a93b2eab62e9e8574d9b9a451ee37a9103e209b63be012d
