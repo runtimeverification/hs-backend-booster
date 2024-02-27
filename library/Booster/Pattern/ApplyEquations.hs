@@ -367,11 +367,34 @@ iterateEquations direction preference startTerm = do
                     TooManyIterations currentCount startTerm currentTerm
             pushTerm currentTerm
             -- evaluate functions and simplify (recursively at each level)
-            newTerm <- applyTerm direction preference currentTerm
+            preLLVMTerm <- applyTerm direction preference currentTerm
+            preLLVMFlag <- getChanged
+            newTerm <-
+                -- if nothing changes using internal functionality, or
+                -- otherwise every 10th iteration, use LLVM library
+                if preLLVMFlag && currentCount `mod` 10 /= 0
+                    then pure preLLVMTerm
+                    else llvmSimplify preLLVMTerm
             changeFlag <- getChanged
             if changeFlag
                 then checkForLoop newTerm >> resetChanged >> go newTerm
                 else pure currentTerm
+
+llvmSimplify :: forall io. MonadLoggerIO io => Term -> EquationT io Term
+llvmSimplify t = do
+    config <- getConfig
+    maybe (pure t) (flip llvmEval t) config.llvmApi
+
+llvmEval :: MonadLoggerIO io => LLVM.API -> Term -> EquationT io Term
+llvmEval api t = eval t
+  where
+    eval t@(Term attributes _)
+        | attributes.isEvaluated = pure t
+        | otherwise =
+            fromCache t >>= \case
+              Just t' -> pure t'
+              Nothing -> pure t -- FIXME
+
 
 ----------------------------------------
 -- Interface functions
@@ -461,7 +484,9 @@ applyTerm direction pref trm = do
             fromCache t >>= \case
                 Nothing -> do
                     simplified <-
-                        if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
+                        if isConcrete t
+                            && isJust config.llvmApi
+                            && attributes.canBeEvaluated
                             then -- LLVM simplification proceeds top-down and cuts the descent
 
                                 LLVM.simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
@@ -474,7 +499,7 @@ applyTerm direction pref trm = do
                                             pure result
                             else -- use equations
                                 apply config t
-                    toCache t simplified
+                    when (t /= simplified) $ toCache t simplified -- FIXME!
                     pure simplified
                 Just cached -> do
                     when (t /= cached) $ do
