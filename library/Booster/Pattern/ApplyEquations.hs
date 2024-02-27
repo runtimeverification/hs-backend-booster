@@ -52,7 +52,7 @@ import Data.Foldable (toList, traverse_)
 import Data.List (partition)
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust)
+import Data.Maybe (catMaybes, fromJust, fromMaybe)
 import Data.Sequence (Seq (..), pattern (:<|))
 import Data.Sequence qualified as Seq
 import Data.Set (Set)
@@ -366,12 +366,77 @@ iterateEquations direction preference startTerm = do
                 throw $
                     TooManyIterations currentCount startTerm currentTerm
             pushTerm currentTerm
+            -- simplify the term using the LLVM backend first
+            llvmResult <- llvmSimplify currentTerm
+            -- NB llvmSimplify is idempotent. No need to iterate if
+            -- the equation evaluation does not change the term any more.
+            resetChanged
             -- evaluate functions and simplify (recursively at each level)
-            newTerm <- applyTerm direction preference currentTerm
+            newTerm <- applyTerm direction preference llvmResult
             changeFlag <- getChanged
             if changeFlag
                 then checkForLoop newTerm >> resetChanged >> go newTerm
                 else pure currentTerm
+
+llvmSimplify :: forall io. MonadLoggerIO io => Term -> EquationT io Term
+llvmSimplify t = do
+    config <- getConfig
+    case config.llvmApi of
+        Nothing -> pure t
+        Just api -> do
+            logOtherNS "booster" (LevelOther "Simplify") "Calling LLVM simplification"
+            llvmEval config.definition api t
+
+llvmEval :: MonadLoggerIO io => KoreDefinition -> LLVM.API -> Term -> EquationT io Term
+llvmEval definition api = eval
+  where
+    eval t@(Term attributes _)
+        | attributes.isEvaluated = pure t
+        | isConcrete t && attributes.canBeEvaluated = do
+            LLVM.simplifyTerm api definition t (sortOfTerm t)
+                >>= \case
+                    Left e -> throw $ UndefinedTerm t e
+                    Right result -> do
+                        when (result /= t) $ do
+                            setChanged
+                            emitEquationTrace t Nothing (Just "LLVM") Nothing $ Success result
+                        toCache t result
+                        pure result
+        | otherwise = do
+            result <- descend t
+            toCache t result
+            pure result
+    descend = \case
+        dv@DomainValue{} -> pure dv
+        v@Var{} -> pure v
+        Injection src trg t ->
+            Injection src trg <$> eval t -- no injection simplification
+        AndTerm arg1 arg2 ->
+            AndTerm -- no \and simplification
+                <$> eval arg1
+                <*> eval arg2
+        SymbolApplication sym sorts args ->
+            SymbolApplication sym sorts <$> mapM eval args
+        KMap def keyVals rest ->
+            KMap def
+                <$> mapM (\(k, v) -> (,) <$> eval k <*> eval v) keyVals
+                <*> maybe (pure Nothing) ((Just <$>) . eval) rest
+        KList def heads rest ->
+            KList def
+                <$> mapM eval heads
+                <*> maybe
+                    (pure Nothing)
+                    ( (Just <$>)
+                        . \(mid, tails) ->
+                            (,)
+                                <$> eval mid
+                                <*> mapM eval tails
+                    )
+                    rest
+        KSet def keyVals rest ->
+            KSet def
+                <$> mapM eval keyVals
+                <*> maybe (pure Nothing) ((Just <$>) . eval) rest
 
 ----------------------------------------
 -- Interface functions
@@ -460,20 +525,7 @@ applyTerm direction pref trm = do
         | otherwise =
             fromCache t >>= \case
                 Nothing -> do
-                    simplified <-
-                        if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
-                            then -- LLVM simplification proceeds top-down and cuts the descent
-
-                                LLVM.simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
-                                    >>= \case
-                                        Left e -> throw $ UndefinedTerm t e
-                                        Right result -> do
-                                            when (result /= t) $ do
-                                                setChanged
-                                                emitEquationTrace t Nothing (Just "LLVM") Nothing $ Success result
-                                            pure result
-                            else -- use equations
-                                apply config t
+                    simplified <- apply config t
                     toCache t simplified
                     pure simplified
                 Just cached -> do
