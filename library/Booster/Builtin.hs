@@ -13,12 +13,13 @@ module Booster.Builtin (
 
 import Control.Monad
 import Control.Monad.Trans.Except
-import Data.ByteString.Char8 (ByteString)
+import Data.ByteString.Char8 (ByteString, pack, unpack)
 import Data.List (partition)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
 import Prettyprinter (pretty, vsep)
+import Text.Read (readMaybe)
 
 import Booster.Pattern.Base
 import Booster.Pattern.Bool
@@ -34,11 +35,44 @@ hooks =
     Map.unions
         [ builtinsKEQUAL
         , builtinsMAP
+        , builtinsBOOL
+        , builtinsINT
         ]
 
 ------------------------------------------------------------
+-- Helpers
+
 (~~>) :: ByteString -> BuiltinFunction -> (ByteString, BuiltinFunction)
 (~~>) = (,)
+
+-- check for simple (parameter-less) sorts
+shouldHaveSort :: Term -> SortName -> Except Text ()
+t `shouldHaveSort` s
+    | sortOfTerm t == SortApp s [] =
+        pure ()
+    | otherwise =
+        throwE . renderText . vsep $
+            [ pretty $ "Argument term has unexpected sort (expected " <> show s <> "):"
+            , pretty t
+            ]
+
+boolTerm :: Bool -> Term
+boolTerm True = TrueBool
+boolTerm False = FalseBool
+
+readBoolTerm :: Term -> Maybe Bool
+readBoolTerm TrueBool = Just True
+readBoolTerm FalseBool = Just False
+readBoolTerm _other = Nothing
+
+intTerm :: Integer -> Term
+intTerm = DomainValue SortInt . pack . show
+
+readIntTerm :: Term -> Maybe Integer
+readIntTerm (DomainValue SortInt val) = readMaybe (unpack val)
+readIntTerm _other = Nothing
+-- FIXME better have an actual BuiltinInt type (hooked sort) to avoid reading again and again
+
 
 ------------------------------------------------------------
 -- MAP hooks
@@ -184,13 +218,115 @@ evalEqualsK l r =
         then pure TrueBool
         else fail "cannot evaluate" -- i.e., result is Nothing
 
--- check for simple (parameter-less) sorts
-shouldHaveSort :: Term -> SortName -> Except Text ()
-t `shouldHaveSort` s
-    | sortOfTerm t == SortApp s [] =
-        pure ()
-    | otherwise =
-        throwE . renderText . vsep $
-            [ pretty $ "Argument term has unexpected sort (expected " <> show s <> "):"
-            , pretty t
+------------------------------------------------------------
+-- BOOL hooks
+
+builtinsBOOL :: Map ByteString BuiltinFunction
+builtinsBOOL =
+    Map.mapKeys ("BOOL." <>) $
+        Map.fromList
+            [ "or" ~~> orHook
+            , "and" ~~> andHook
+            , "xor" ~~> boolOperator (/=)
+            , "eq" ~~> boolOperator (==)
+            , "ne" ~~> boolOperator (/=)
+            , "not" ~~> notHook
+            , "implies" ~~> impliesHook
             ]
+
+-- shortcut evaluations for or and and
+orHook :: BuiltinFunction
+orHook args
+    | length args /= 2 =
+        throwE . renderText $ "BOOL.or: wrong arity " <> pretty (length args)
+    | [TrueBool, _] <- args = pure $ Just TrueBool
+    | [_, TrueBool] <- args = pure $ Just TrueBool
+    | [FalseBool, FalseBool] <- args = pure $ Just FalseBool
+    | otherwise = pure Nothing -- arguments not determined
+
+andHook :: BuiltinFunction
+andHook args
+    | length args /= 2 =
+        throwE . renderText $ "BOOL.and: wrong arity " <> pretty (length args)
+    | [FalseBool, _] <- args = pure $ Just FalseBool
+    | [_, FalseBool] <- args = pure $ Just FalseBool
+    | [TrueBool, TrueBool] <- args = pure $ Just TrueBool
+    | otherwise = pure Nothing -- arguments not determined
+
+notHook :: BuiltinFunction
+notHook [arg]
+    | Just b <- readBoolTerm arg = pure . Just . boolTerm $ not b
+    | otherwise = pure Nothing
+notHook args =
+    throwE . renderText $ "BOOL.not: wrong arity " <> pretty (length args)
+
+impliesHook :: BuiltinFunction
+impliesHook args
+    | length args /= 2 =
+        throwE . renderText $ "BOOL.implies: wrong arity " <> pretty (length args)
+    | [FalseBool, _] <- args = pure $ Just TrueBool
+    | [TrueBool, FalseBool] <- args = pure $ Just FalseBool
+    | [TrueBool, TrueBool] <- args = pure $ Just TrueBool
+    | otherwise = pure Nothing -- arguments not determined
+
+boolOperator :: (Bool -> Bool -> Bool) -> BuiltinFunction
+boolOperator f args
+    | length args /= 2 =
+        throwE . renderText $ "BOOL.<operator>: wrong arity " <> pretty (length args)
+    | [Just arg1, Just arg2] <- map readBoolTerm args =
+        pure . Just . boolTerm $ f arg1 arg2
+    | otherwise = pure Nothing -- arguments not determined
+
+------------------------------------------------------------
+-- INT hooks
+
+builtinsINT :: Map ByteString BuiltinFunction
+builtinsINT =
+    Map.mapKeys ("INT." <>) $
+        Map.fromList
+            [ "gt" ~~> compareInt (>)
+            , "ge" ~~> compareInt (>=)
+            , "eq" ~~> compareInt (==)
+            , "le" ~~> compareInt (<)
+            , "lt" ~~> compareInt (<=)
+            , "ne" ~~> compareInt (/=)
+            -- arithmetic
+            , "add" ~~> intOperator (+)
+            , "sub" ~~> intOperator (-)
+            , "mul" ~~> intOperator (*)
+            , "abs" ~~> intModifier abs
+            -- tdiv, tmod (truncating toward zero), ediv, emod (euclidian)
+            -- bitwise operations
+            -- and, or, xor, not, shl, shr
+            -- exponentiation
+            -- pow, powmod, log2 (truncating)
+            ]
+
+compareInt :: (Integer -> Integer -> Bool) -> BuiltinFunction
+compareInt f args
+    | length args /= 2 =
+        throwE . renderText $ "INT.<comparison>: wrong arity " <> pretty (length args)
+    | [arg1, arg2] <- args
+    , Just i1 <- readIntTerm arg1
+    , Just i2 <- readIntTerm arg2 =
+        pure . Just . boolTerm $ f i1 i2
+    | otherwise = pure Nothing
+
+intOperator :: (Integer -> Integer -> Integer) -> BuiltinFunction
+intOperator f args
+    | length args /= 2 =
+        throwE . renderText $ "INT.<operator>: wrong arity " <> pretty (length args)
+    | [arg1, arg2] <- args
+    , Just i1 <- readIntTerm arg1
+    , Just i2 <- readIntTerm arg2 =
+        pure . Just . intTerm $ f i1 i2
+    | otherwise = pure Nothing
+
+intModifier :: (Integer -> Integer) -> BuiltinFunction
+intModifier f args
+    | length args /= 1 =
+        throwE . renderText $ "INT.<operator>: wrong arity " <> pretty (length args)
+    | [arg] <- args
+    , Just i <- readIntTerm arg =
+        pure . Just . intTerm $ f i
+    | otherwise = pure Nothing
