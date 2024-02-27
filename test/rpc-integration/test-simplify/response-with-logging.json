@@ -43,29 +43,13 @@
                                 ]
                             },
                             {
-                                "tag": "App",
-                                "name": "Lbl'UndsPlus'Int'Unds'",
-                                "sorts": [],
-                                "args": [
-                                    {
-                                        "tag": "DV",
-                                        "sort": {
-                                            "tag": "SortApp",
-                                            "name": "SortInt",
-                                            "args": []
-                                        },
-                                        "value": "12"
-                                    },
-                                    {
-                                        "tag": "DV",
-                                        "sort": {
-                                            "tag": "SortApp",
-                                            "name": "SortInt",
-                                            "args": []
-                                        },
-                                        "value": "56"
-                                    }
-                                ]
+                                "tag": "DV",
+                                "sort": {
+                                    "tag": "SortApp",
+                                    "name": "SortInt",
+                                    "args": []
+                                },
+                                "value": "68"
                             }
                         ]
                     }
@@ -194,7 +178,7 @@
                 "origin": "booster",
                 "result": {
                     "tag": "failure",
-                    "reason": "Failed match",
+                    "reason": "Indeterminate match",
                     "rule-id": "905f980f1bfa6646fa489ee8f1a217ce3516cb046d9bdb2c71aeac8af25bff94"
                 }
             },
@@ -203,7 +187,7 @@
                 "origin": "booster",
                 "result": {
                     "tag": "failure",
-                    "reason": "Failed match",
+                    "reason": "Indeterminate match",
                     "rule-id": "a05a3720b49f61f248c0054620ef36c21bfc387bc87ccadff8b25a64b516abaa"
                 }
             },
@@ -221,7 +205,7 @@
                 "origin": "booster",
                 "result": {
                     "tag": "failure",
-                    "reason": "Indeterminate match",
+                    "reason": "Failed match",
                     "rule-id": "aabd26e6a15f1496fc7553673d4106436d66316bc405364e4e45307483e4abba"
                 }
             },
@@ -230,7 +214,7 @@
                 "origin": "booster",
                 "result": {
                     "tag": "failure",
-                    "reason": "Symbolic/concrete constraint violated for variable: Eq#VarB",
+                    "reason": "Failed match",
                     "rule-id": "7308565e50371e986b204a58ec60ca02ff2d988d32b932c40b04f3aeee3bd97c"
                 }
             },
@@ -239,7 +223,7 @@
                 "origin": "booster",
                 "result": {
                     "tag": "failure",
-                    "reason": "Symbolic/concrete constraint violated for variable: Eq#VarC",
+                    "reason": "Failed match",
                     "rule-id": "c1ab8935c1473aad2156d430c77351ca90186ddcabc44e7f88b0d40d019eff6c"
                 }
             },
@@ -248,7 +232,7 @@
                 "origin": "booster",
                 "result": {
                     "tag": "failure",
-                    "reason": "Indeterminate match",
+                    "reason": "Failed match",
                     "rule-id": "935f82fd8fdd7b6117b1e5133b5e9d7eb694bc4b7bca25656b679697465e9392"
                 }
             },
@@ -275,7 +259,7 @@
                 "origin": "booster",
                 "result": {
                     "tag": "failure",
-                    "reason": "Symbolic/concrete constraint violated for variable: Eq#VarI",
+                    "reason": "Symbolic/concrete constraint violated for variable: Eq#VarB",
                     "rule-id": "2e6bd1d3ddd7c597337b36e863b9ba7467879e84d355c4249c7ac49a7bc6994a"
                 }
             }
