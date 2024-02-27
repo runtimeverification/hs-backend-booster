@@ -12,4 +12,6 @@ if [ $REV != $OLD_REV ]; then
   sed -i -r "/haskell-backend.git/{n;s/tag:.*$/tag: $REV/}" cabal.project
   # Update the stack.yaml.lock file by running a stack command that accesses dependencies
   stack --system-ghc ls dependencies --test > /dev/null
+  # freeze cabal dependencies
+  $(dirname $0)/freeze-cabal-to-stack-resolver.sh
 fi
