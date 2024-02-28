@@ -10,8 +10,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ghc_version: "9.2.8"
-  stack_version: "2.9.3"
+  ghc_version: '9.6.4'
+  stack_version: "2.15.1"
 
 jobs:
 
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: 'Check out code, set up Git'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.JENKINS_GITHUB_PAT }}
           submodules: recursive
@@ -75,7 +75,7 @@ jobs:
           if ${changed}; then
             cabal update
             scripts/update-haskell-backend.sh ${haskell_backend_version}
-            git add flake.lock stack.yaml stack.yaml.lock cabal.project cabal.project.freeze
+            git add flake.lock stack.yaml stack.yaml.lock cabal.project # cabal.project.freeze
             git commit -m "update haskell-backend to version ${haskell_backend_version}"
             git push
           fi
