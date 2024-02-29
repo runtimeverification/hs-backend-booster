@@ -30,6 +30,7 @@ data CLOptions = CLOptions
     , llvmLibraryFile :: Maybe FilePath
     , port :: Int
     , logLevels :: [LogLevel]
+    , logFile :: Maybe FilePath
     , smtOptions :: Maybe SMTOptions
     , equationOptions :: EquationOptions
     , -- developer options below
@@ -76,6 +77,14 @@ clOptionsParser =
                           \or a custom level: "
                             <> intercalate ", " (map fst allowedLogLevels)
                         )
+                )
+            )
+        <*> optional
+            ( strOption
+                ( metavar "LOG_FILE"
+                    <> long "log-file"
+                    <> help
+                        "Log file to write the logs to"
                 )
             )
         <*> parseSMTOptions
