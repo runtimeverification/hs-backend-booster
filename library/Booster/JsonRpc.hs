@@ -475,7 +475,7 @@ handleSmtError = JsonRpcHandler $ \case
 
         let bool = externaliseSort Pattern.SortBool -- predicates are terms of sort Bool
             externalise = Syntax.KJAnd bool . map (externalisePredicate bool) . Set.toList
-            allPreds = Syntax.KJAnd bool [externalise premises, externalise preds]
+            allPreds = addHeader $ Syntax.KJAnd bool [externalise premises, externalise preds]
         pure $ RpcError.backendError RpcError.SmtSolverError $ toJSON allPreds
   where
     runtimeError prefix err = do
