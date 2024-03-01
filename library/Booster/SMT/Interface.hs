@@ -84,8 +84,9 @@ defaultSMTOptions =
 initSolver :: Log.MonadLoggerIO io => KoreDefinition -> SMTOptions -> io SMT.SMTContext
 initSolver def smtOptions = do
     ctxt <- mkContext smtOptions.transcript
+    -- set timeout value before doing anything with the solver
+    runSMT ctxt $ runCmd_ $ SetTimeout smtOptions.timeout
     logSMT "Checking definition prelude"
-    -- FIXME set timeout value before doing anything with the solver
     let prelude = smtDeclarations def
     case prelude of
         Left err -> do
