@@ -375,8 +375,8 @@ iterateEquations direction preference startTerm = do
                 if preLLVMFlag && currentCount `mod` 10 /= 1
                     then pure preLLVMTerm
                     else do
-                            Log.logOtherNS "booster" (Log.LevelOther "Simplify") $
-                                "Calling LLVM at iteration " <> pack (show currentcount)
+                            logOtherNS "booster" (LevelOther "Simplify") $
+                                "Calling LLVM at iteration " <> pack (show currentCount)
                             llvmSimplify preLLVMTerm
             changeFlag <- getChanged
             if changeFlag
@@ -402,12 +402,12 @@ llvmEval definition api = eval
                     Right result -> do
                         when (result /= t) $ do
                             setChanged
-                            toCache t result
                             emitEquationTrace t Nothing (Just "LLVM") Nothing $ Success result
+                        toCache t result
                         pure result
         | otherwise = do
             result <- descend t
-            when (result /= t) $ toCache t result
+            toCache t result
             pure result
     descend = \case
         dv@DomainValue{} -> pure dv
@@ -529,7 +529,7 @@ applyTerm direction pref trm = do
             fromCache t >>= \case
                 Nothing -> do
                     simplified <- apply config t
-                    when (t /= simplified) $ toCache t simplified
+                    toCache t simplified
                     pure simplified
                 Just cached -> do
                     when (t /= cached) $ do
