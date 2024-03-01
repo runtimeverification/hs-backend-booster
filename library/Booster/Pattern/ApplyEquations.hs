@@ -372,7 +372,7 @@ iterateEquations direction preference startTerm = do
             newTerm <-
                 -- if nothing changes using internal functionality, or
                 -- otherwise every 10th iteration, use LLVM library
-                if preLLVMFlag && currentCount `mod` 10 /= 0
+                if preLLVMFlag && currentCount `mod` 10 /= 1
                     then pure preLLVMTerm
                     else do
                             Log.logOtherNS "booster" (Log.LevelOther "Simplify") $
