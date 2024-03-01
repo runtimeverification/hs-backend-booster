@@ -467,9 +467,21 @@ respond stateVar =
             Just d -> action (d, state.mLlvmLibrary, state.mSMTOptions)
 
 handleSmtError :: JsonRpcHandler
-handleSmtError = JsonRpcHandler $ \(SMT.SMTError err) -> do
-    Log.logErrorNS "booster" $ "SMT solver error: " <> err
-    pure $ RpcError.backendError RpcError.SmtSolverError $ toJSON err
+handleSmtError = JsonRpcHandler $ \case
+    SMT.GeneralSMTError err -> runtimeError "problem" err
+    SMT.SMTTranslationError err -> runtimeError "translation" err
+    SMT.SMTSolverUnknown premises preds -> do
+        Log.logErrorNS "booster" $ "SMT returned unknown: " <> "FIXME"
+
+        let bool = externaliseSort Pattern.SortBool -- predicates are terms of sort Bool
+            externalise = Syntax.KJAnd bool . map (externalisePredicate bool) . Set.toList
+            allPreds = Syntax.KJAnd bool [externalise premises, externalise preds]
+        pure $ RpcError.backendError RpcError.SmtSolverError $ toJSON allPreds
+  where
+    runtimeError prefix err = do
+        let msg = "SMT " <> prefix <> ": " <> err
+        Log.logErrorNS "booster" msg
+        pure $ RpcError.runtimeError msg
 
 data ServerState = ServerState
     { definitions :: Map Text KoreDefinition

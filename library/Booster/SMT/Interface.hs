@@ -52,16 +52,25 @@ data SMTOptions = SMTOptions
     }
     deriving (Eq, Show)
 
-newtype SMTError = SMTError Text
+data SMTError
+    = GeneralSMTError Text
+    | SMTTranslationError Text
+    | SMTSolverUnknown (Set Predicate) (Set Predicate)
     deriving (Eq, Show)
 
 instance Exception SMTError
 
 throwSMT :: Text -> a
-throwSMT = throw . SMTError
+throwSMT = throw . GeneralSMTError
 
 throwSMT' :: String -> a
 throwSMT' = throwSMT . pack
+
+throwUnknown :: Set Predicate -> Set Predicate -> a
+throwUnknown premises preds = throw $ SMTSolverUnknown premises preds
+
+smtTranslateError :: Text -> a
+smtTranslateError = throw . SMTTranslationError
 
 defaultSMTOptions :: SMTOptions
 defaultSMTOptions =
@@ -137,14 +146,14 @@ getModelFor ctxt ps subst
                 Set.unions $
                     Map.keysSet subst : map ((.variables) . getAttributes . coerce) ps
         when (isLeft translated) $
-            throwSMT (fromLeft' translated)
+            smtTranslateError (fromLeft' translated)
         let (smtAsserts, transState) = fromRight' translated
             freeVarsMap =
                 Map.filterWithKey
                     (const . (`Set.member` Set.map Var freeVars))
                     transState.mappings
             getVar (Var v) = v
-            getVar other = throwSMT' $ "Solver returned non-var in translation state: " <> show other
+            getVar other = smtTranslateError . pack $ "Solver returned non-var in translation state: " <> show other
             freeVarsToSExprs = Map.mapKeys getVar $ Map.map Atom freeVarsMap
 
         runCmd_ SMT.Push -- assuming the prelude has been run already,
@@ -296,8 +305,8 @@ checkPredicates ctxt givenPs givenSubst psToCheck
             (Sat, Sat) -> fail "Implication not determined"
             (Sat, Unsat) -> pure True
             (Unsat, Sat) -> pure False
-            (Unknown, _) -> throwSMT "Unknwon result while checking a condition"
-            (_, Unknown) -> throwSMT "Unknwon result while checking a condition"
+            (Unknown, _) -> throwUnknown givenPs psToCheck
+            (_, Unknown) -> throwUnknown givenPs psToCheck
             other -> throwSMT' $ "Unexpected result while checking a condition: " <> show other
   where
     smtRun_ :: SMTEncode c => c -> MaybeT (SMT io) ()
