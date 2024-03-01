@@ -374,7 +374,10 @@ iterateEquations direction preference startTerm = do
                 -- otherwise every 10th iteration, use LLVM library
                 if preLLVMFlag && currentCount `mod` 10 /= 0
                     then pure preLLVMTerm
-                    else llvmSimplify preLLVMTerm
+                    else do
+                            Log.logOtherNS "booster" (Log.LevelOther "Simplify") $
+                                "Calling LLVM at iteration " <> pack (show currentcount)
+                            llvmSimplify preLLVMTerm
             changeFlag <- getChanged
             if changeFlag
                 then checkForLoop newTerm >> resetChanged >> go newTerm
