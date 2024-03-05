@@ -16,19 +16,16 @@ module Booster.JsonRpc.Utils (
 ) where
 
 import Control.Applicative ((<|>))
-import Control.Monad.Logger.CallStack qualified as Log
 import Control.Monad.Trans.Except
 import Data.Aeson as Json
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.Aeson.Types (parseMaybe)
-import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy.Char8 qualified as BS
 import Data.Maybe (fromMaybe)
 import Network.JSONRPC
 import Prettyprinter
 import System.Exit (ExitCode (..))
 import System.FilePath
-import System.IO qualified as IO
 import System.IO.Extra (withTempDir)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readProcessWithExitCode)
