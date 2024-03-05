@@ -33,15 +33,12 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT))
 import Control.Monad.Trans.Reader qualified as Reader
 import Data.Binary (Binary, get, put)
-import Data.ByteString.Builder
 import Data.ByteString.Char8 (ByteString, pack)
 import Data.ByteString.Char8 qualified as BS
-import Data.ByteString.Lazy qualified as BL
 import Data.Data (Data)
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
-import Data.List qualified as List (intersperse)
 import Foreign (ForeignPtr, finalizeForeignPtr, newForeignPtr, withForeignPtr)
 import Foreign qualified
 import Foreign.C qualified as C
@@ -49,7 +46,6 @@ import Foreign.C.Types (CSize (..))
 import Foreign.Marshal (alloca)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
-import Prettyprinter (Pretty (..))
 import System.IO (hPutStrLn, stderr)
 import System.Posix.DynamicLinker qualified as Linker
 
@@ -57,7 +53,6 @@ import Booster.LLVM.TH (dynamicBindings)
 import Booster.Pattern.Base
 import Booster.Pattern.Binary hiding (Block)
 import Booster.Pattern.Util (sortOfTerm)
-import Booster.Prettyprinter qualified as KPretty
 import Booster.Trace
 import Booster.Trace qualified as Trace
 

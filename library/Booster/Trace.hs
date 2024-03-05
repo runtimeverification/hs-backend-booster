@@ -18,7 +18,6 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BL
 import Data.IORef
 import Data.Kind (Type)
-import Data.Maybe (fromJust, isJust)
 import Data.Proxy (Proxy (..))
 import Debug.Trace.Binary (traceBinaryEvent, traceBinaryEventIO)
 import Debug.Trace.Flags
