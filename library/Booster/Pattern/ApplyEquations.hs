@@ -32,7 +32,7 @@ module Booster.Pattern.ApplyEquations (
 ) where
 
 import Control.Monad
-import Control.Monad.Extra
+import Control.Monad.Extra (fromMaybeM, whenJust)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger.CallStack (
     LogLevel (..),
@@ -45,7 +45,6 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State
-import Data.Aeson (encode)
 import Data.Aeson.Text (encodeToLazyText)
 import Data.ByteString.Char8 qualified as BS
 import Data.Coerce (coerce)
@@ -289,7 +288,6 @@ equationTraceToLogEntry = \case
             MatchConstraintViolated{} -> "MatchConstraintViolated"
 
 instance CustomUserEvent (EquationTrace Term) where
-    encodeUserEventJson = BS.toStrict . encode . equationTraceToLogEntry
     encodeUserEvent = error "not implemented"
     decodeUserEvent = error "not implemented"
     userEventTag _ = "SimplificationTrace "

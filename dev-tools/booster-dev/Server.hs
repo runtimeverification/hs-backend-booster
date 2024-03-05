@@ -56,7 +56,7 @@ main = do
             <> ", main module "
             <> show mainModuleName
 
-    withEventlogFile hijackEventlogFile $ withLlvmLib llvmLibraryFile $ \mLlvmLibrary -> do
+    withLlvmLib llvmLibraryFile $ \mLlvmLibrary -> do
         definitionMap <-
             loadDefinition definitionFile
                 >>= mapM (mapM ((fst <$>) . runNoLoggingT . computeCeilsDefinition mLlvmLibrary))
@@ -76,16 +76,6 @@ main = do
         Just fp -> withDLib fp $ \dl -> do
             api <- mkAPI dl
             m $ Just api
-
-    withEventlogFile mFile doStuff = case mFile of
-        Nothing -> doStuff
-        Just fname -> do
-            putStrLn $
-                "Hijacking eventlog into file " <> show fname
-            removeFileIfExists fname
-            IO.withFile fname IO.WriteMode $ \handle -> do
-                enableHijackEventlogFile handle
-                doStuff
 
     clParser =
         info

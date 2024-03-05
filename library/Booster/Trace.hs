@@ -6,7 +6,7 @@
 
 module Booster.Trace (module Booster.Trace) where
 
-import Control.Monad (unless, when)
+import Control.Monad (when)
 import Control.Monad.Catch (MonadMask, bracket_)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Binary (Binary (get, put), Get, Put, Word32, get)
@@ -32,7 +32,6 @@ data CustomUserEventType = Timing | LlvmCalls | SimplificationTraces
     deriving (Show, Enum, Read, Bounded)
 
 class CustomUserEvent e where
-    encodeUserEventJson :: e -> ByteString
     encodeUserEvent :: e -> Put
     decodeUserEvent :: Get e
     userEventTag :: proxy e -> ByteString
@@ -101,16 +100,9 @@ encodeCustomUserEvent e = do
 traceIO :: forall m e. MonadIO m => CustomUserEvent e => e -> m ()
 traceIO e
     | userTracingEnabled && customUserEventEnabled (eventType (undefined :: proxy e)) = do
-        case hijackEventlogFileEnabled of
-            Nothing -> do
-                let message = BL.toStrict $ runPut $ encodeCustomUserEvent e
-                when (BS.length message > 2 ^ (16 :: Int)) $ error "eventlog message too long"
-                liftIO $ traceBinaryEventIO message
-            Just fhandle -> do
-                let message = encodeUserEventJson e
-                liftIO $ do
-                    BS.hPut fhandle message
-                    BS.hPut fhandle "\n"
+        let message = BL.toStrict $ runPut $ encodeCustomUserEvent e
+        when (BS.length message > 2 ^ (16 :: Int)) $ error "eventlog message too long"
+        liftIO $ traceBinaryEventIO message
     | otherwise = pure ()
 
 trace :: forall e a. CustomUserEvent e => e -> a -> a
