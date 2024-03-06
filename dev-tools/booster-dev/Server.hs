@@ -7,7 +7,7 @@ module Main (main) where
 import Booster.Util (runHandleLoggingT)
 import Control.Concurrent (newMVar)
 import Control.DeepSeq (force)
-import Control.Exception (catch, evaluate, throwIO)
+import Control.Exception (evaluate)
 import Control.Monad (forM_, when)
 import Control.Monad.Logger (runNoLoggingT)
 import Control.Monad.Logger qualified as Log
@@ -15,18 +15,16 @@ import Control.Monad.Logger.CallStack (LogLevel (LevelError))
 import Data.Conduit.Network (serverSettings)
 import Data.Map (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromJust, isJust, isNothing)
+import Data.Maybe (isNothing)
 import Data.Text (Text, unpack)
 import Options.Applicative
-import System.Directory (removeFile)
 import System.IO qualified as IO
-import System.IO.Error (isDoesNotExistError)
 
 import Booster.CLOptions
 import Booster.Definition.Base (KoreDefinition (..))
 import Booster.Definition.Ceil (computeCeilsDefinition)
 import Booster.GlobalState
-import Booster.JsonRpc (ServerState (..), respond)
+import Booster.JsonRpc (ServerState (..), handleSmtError, respond)
 import Booster.LLVM as LLVM (API)
 import Booster.LLVM.Internal (mkAPI, withDLib)
 import Booster.SMT.Interface qualified as SMT
@@ -47,18 +45,11 @@ main = do
             , smtOptions
             , equationOptions
             , eventlogEnabledUserEvents
-            , hijackEventlogFile
             } = options
 
     forM_ eventlogEnabledUserEvents $ \t -> do
         putStrLn $ "Tracing " <> show t
         enableCustomUserEvent t
-    when (isJust hijackEventlogFile) $ do
-        let fname = fromJust hijackEventlogFile
-        putStrLn $
-            "Hijacking eventlog into file " <> show fname
-        removeFileIfExists fname
-        enableHijackEventlogFile fname
     putStrLn $
         "Loading definition from "
             <> definitionFile
@@ -96,13 +87,6 @@ parserInfoModifiers =
         <> header
             "Haskell Backend Booster - a JSON RPC server for quick symbolic execution of Kore definitions"
 
-removeFileIfExists :: FilePath -> IO ()
-removeFileIfExists fileName = removeFile fileName `catch` handleExists
-  where
-    handleExists e
-        | isDoesNotExistError e = return ()
-        | otherwise = throwIO e
-
 runServer ::
     Int ->
     Map Text KoreDefinition ->
@@ -129,7 +113,7 @@ runServer port definitions defaultMain mLlvmLibrary mSMTOptions (logLevel, custo
             jsonRpcServer
                 srvSettings
                 (const $ respond stateVar)
-                [RpcError.handleErrorCall, RpcError.handleSomeException]
+                [handleSmtError, RpcError.handleErrorCall, RpcError.handleSomeException]
   where
     levelFilter _source lvl =
         lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
