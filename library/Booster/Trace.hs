@@ -84,6 +84,7 @@ instance CustomUserEvent Start where
     decodeUserEvent = Start <$> get
     userEventTag _ = "START"
     eventType _ = Timing
+
 newtype Stop = Stop ByteString
 
 instance CustomUserEvent Stop where
