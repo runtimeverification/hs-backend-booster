@@ -376,7 +376,7 @@ iterateEquations direction preference startTerm = do
             changeFlag <- getChanged
             if changeFlag
                 then checkForLoop newTerm >> resetChanged >> go newTerm
-                else pure currentTerm
+                else pure llvmResult
 
 llvmSimplify :: forall io. MonadLoggerIO io => Term -> EquationT io Term
 llvmSimplify t = do
@@ -399,12 +399,12 @@ llvmEval definition api = eval
                     Right result -> do
                         when (result /= t) $ do
                             setChanged
+                            toCache t result
                             emitEquationTrace t Nothing (Just "LLVM") Nothing $ Success result
-                        toCache t result
                         pure result
         | otherwise = do
             result <- descend t
-            toCache t result
+            when (t /= result) $ toCache t result
             pure result
     descend = \case
         dv@DomainValue{} -> pure dv
@@ -516,6 +516,7 @@ applyTerm ::
     Term ->
     EquationT io Term
 applyTerm direction pref trm = do
+    logOtherNS "booster" (LevelOther "Simplify") "Calling equation-based simplifier"
     config <- getConfig -- avoid re-reading config at every node
     descend config trm
   where
@@ -526,7 +527,7 @@ applyTerm direction pref trm = do
             fromCache t >>= \case
                 Nothing -> do
                     simplified <- apply config t
-                    toCache t simplified
+                    when (t /= simplified) $ toCache t simplified
                     pure simplified
                 Just cached -> do
                     when (t /= cached) $ do
