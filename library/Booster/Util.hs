@@ -115,7 +115,10 @@ handleOutput ::
     IO ()
 handleOutput levelToHandle loc src level msg =
     let bytes = case level of
-            Log.LevelOther "SimplifyJson" -> "[SimplifyJson] " <> Log.fromLogStr msg <> "\n"
+            Log.LevelOther "SimplifyJson" ->
+                if levelToHandle level == IO.stderr
+                    then "[SimplifyJson] " <> Log.fromLogStr msg <> "\n"
+                    else Log.fromLogStr msg <> "\n"
             _ -> Log.fromLogStr $ Log.defaultLogStr loc src level msg
      in BS.hPutStr (levelToHandle level) bytes
 
