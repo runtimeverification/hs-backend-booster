@@ -9,9 +9,11 @@ module Booster.Util (
     Bound (..),
     constructorName,
     runHandleLoggingT,
+    withLogFile,
 ) where
 
 import Control.DeepSeq (NFData (..))
+import Control.Exception (catch, throwIO)
 import Control.Monad.Logger.CallStack qualified as Log
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as BS
@@ -21,7 +23,9 @@ import Data.Hashable (Hashable)
 import Data.Map qualified as Map
 import GHC.Generics (Generic)
 import Language.Haskell.TH.Syntax (Lift)
+import System.Directory (removeFile)
 import System.IO qualified as IO
+import System.IO.Error (isDoesNotExistError)
 
 newtype Flag (name :: k) = Flag Bool
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
@@ -118,3 +122,19 @@ handleOutput levelToHandle loc src level msg =
 -- | Run a logging computation, redirecting various levels to the handles specified by the first arguments
 runHandleLoggingT :: (Log.LogLevel -> IO.Handle) -> Log.LoggingT m a -> m a
 runHandleLoggingT = flip Log.runLoggingT . handleOutput
+
+-- \| Run an action with an optional log file handle opened for appending
+withLogFile :: Maybe String -> (Maybe IO.Handle -> IO b) -> IO b
+withLogFile logFile continuation = case logFile of
+    Nothing -> continuation Nothing
+    Just fname -> do
+        removeFileIfExists fname
+        IO.withFile fname IO.AppendMode $ \handle -> do
+            continuation (Just handle)
+  where
+    removeFileIfExists :: FilePath -> IO ()
+    removeFileIfExists fileName = removeFile fileName `catch` handleExists
+      where
+        handleExists e
+            | isDoesNotExistError e = return ()
+            | otherwise = throwIO e
