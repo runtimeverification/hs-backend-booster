@@ -30,7 +30,7 @@ data CLOptions = CLOptions
     , llvmLibraryFile :: Maybe FilePath
     , port :: Int
     , logLevels :: [LogLevel]
-    , logFile :: Maybe FilePath
+    , simplificationLogFile :: Maybe FilePath
     , smtOptions :: Maybe SMTOptions
     , equationOptions :: EquationOptions
     , -- developer options below
@@ -80,10 +80,10 @@ clOptionsParser =
             )
         <*> optional
             ( strOption
-                ( metavar "LOG_FILE"
-                    <> long "log-file"
+                ( metavar "JSON_LOG_FILE"
+                    <> long "simplification-log-file"
                     <> help
-                        "Log file to write the logs to"
+                        "Log file for the JSON simplification logs"
                 )
             )
         <*> parseSMTOptions

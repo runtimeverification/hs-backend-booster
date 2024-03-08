@@ -99,7 +99,7 @@ main = do
                     , smtOptions
                     , equationOptions
                     , eventlogEnabledUserEvents
-                    , logFile
+                    , simplificationLogFile
                     }
             , proxyOptions =
                 ProxyOptions
@@ -118,7 +118,7 @@ main = do
             Set.unions $ mapMaybe (`Map.lookup` koreExtraLogs) customLevels
         koreSolverOptions = translateSMTOpts smtOptions
 
-    Booster.withLogFile logFile $ \mLogFileHandle -> do
+    Booster.withLogFile simplificationLogFile $ \mLogFileHandle -> do
         let logLevelToHandle = \case
                 Logger.LevelOther "SimplifyJson" -> fromMaybe IO.stderr mLogFileHandle
                 _ -> IO.stderr

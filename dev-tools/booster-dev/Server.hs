@@ -45,7 +45,7 @@ main = do
             , smtOptions
             , equationOptions
             , eventlogEnabledUserEvents
-            , logFile
+            , simplificationLogFile
             } = options
 
     forM_ eventlogEnabledUserEvents $ \t -> do
@@ -57,7 +57,7 @@ main = do
             <> ", main module "
             <> show mainModuleName
 
-    withLogFile logFile $ \mLogFileHandle -> withLlvmLib llvmLibraryFile $ \mLlvmLibrary -> do
+    withLogFile simplificationLogFile $ \mLogFileHandle -> withLlvmLib llvmLibraryFile $ \mLlvmLibrary -> do
         definitionMap <-
             loadDefinition definitionFile
                 >>= mapM (mapM ((fst <$>) . runNoLoggingT . computeCeilsDefinition mLlvmLibrary))
