@@ -188,11 +188,11 @@ match1
 ----- Or Terms
 -- indeterminate
 match1
-    term1@AndTerm{}
+    term1@OrTerm{}
     term2 = indeterminate term1 term2
 match1
     term1
-    term2@AndTerm{} = indeterminate term1 term2
+    term2@OrTerm{} = indeterminate term1 term2
 ----- Domain values
 match1
     d1@(DomainValue s1 t1)

@@ -201,11 +201,11 @@ unify1
 ----- Or Terms
 -- indeterminate
 unify1
-    term1@AndTerm{}
+    term1@OrTerm{}
     term2 = addIndeterminate term1 term2
 unify1
     term1
-    term2@AndTerm{} = addIndeterminate term1 term2
+    term2@OrTerm{} = addIndeterminate term1 term2
 ----- Injections
 -- two injections. Try to unify the contained terms if the sorts
 -- agree. Target sorts must be the same, source sorts may differ if
