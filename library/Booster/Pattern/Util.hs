@@ -63,6 +63,7 @@ import Booster.Util (Flag (..))
 -- | Returns the sort of a term
 sortOfTerm :: Term -> Sort
 sortOfTerm (AndTerm _ child) = sortOfTerm child
+sortOfTerm (OrTerm _ child) = sortOfTerm child
 sortOfTerm (SymbolApplication symbol sorts _) =
     substituteInSort (Map.fromList $ zip symbol.sortVars sorts) symbol.resultSort
 sortOfTerm (DomainValue sort _) = sort
@@ -93,6 +94,7 @@ substituteInTerm substitution = goSubst
             SymbolApplication sym sorts args ->
                 SymbolApplication sym sorts $ map goSubst args
             AndTerm t1 t2 -> AndTerm (goSubst t1) (goSubst t2)
+            OrTerm t1 t2 -> OrTerm (goSubst t1) (goSubst t2)
             Injection ss s sub -> Injection ss s (goSubst sub)
             KMap attrs keyVals rest -> KMap attrs (bimap goSubst goSubst <$> keyVals) (goSubst <$> rest)
             KList def heads rest ->
@@ -181,6 +183,7 @@ abstractSymbolicConstructorArguments constructorNames term = goSubst (freeVariab
                         map (\x -> if not (isConcrete x) then fst . abstractTerm freeVars $ x else x) args
                 else SymbolApplication sym sorts $ map (goSubst freeVars) args
         AndTerm t1 t2 -> AndTerm (goSubst freeVars t1) (goSubst freeVars t2)
+        OrTerm t1 t2 -> OrTerm (goSubst freeVars t1) (goSubst freeVars t2)
         Injection ss s sub -> Injection ss s (goSubst freeVars sub)
         KMap attrs keyVals rest ->
             KMap attrs (bimap (goSubst freeVars) (goSubst freeVars) <$> keyVals) (goSubst freeVars <$> rest)
@@ -245,6 +248,7 @@ filterTermSymbols check = cata $ \case
         | check symbol -> symbol : concat ts
         | otherwise -> concat ts
     AndTermF t1 t2 -> t1 <> t2
+    OrTermF t1 t2 -> t1 <> t2
     DomainValueF _ _ -> []
     VarF _ -> []
     InjectionF _ _ t -> t
@@ -300,6 +304,7 @@ sizeOfTerm :: Term -> Int
 sizeOfTerm = cata $ \case
     SymbolApplicationF symbol _ ts -> sum ts + BS.length symbol.name
     AndTermF t1 t2 -> t1 + t2
+    OrTermF t1 t2 -> t1 + t2
     DomainValueF _ v -> BS.length v
     VarF _ -> 1
     InjectionF _ _ t -> t
@@ -312,6 +317,7 @@ termVarStats :: Term -> Map Variable Int
 termVarStats = cata $ \case
     SymbolApplicationF _ _ vars -> Map.unionsWith (+) vars
     AndTermF vars1 vars2 -> Map.unionWith (+) vars1 vars2
+    OrTermF vars1 vars2 -> Map.unionWith (+) vars1 vars2
     DomainValueF _ _ -> Map.empty
     VarF var -> Map.singleton var 1
     InjectionF _ _ t -> t
@@ -336,6 +342,7 @@ termSymbolStats :: Term -> Map Symbol Int
 termSymbolStats = cata $ \case
     SymbolApplicationF symbol _ symbols -> Map.unionsWith (+) (Map.singleton symbol 1 : symbols)
     AndTermF symbols1 symbols2 -> Map.unionWith (+) symbols1 symbols2
+    OrTermF symbols1 symbols2 -> Map.unionWith (+) symbols1 symbols2
     DomainValueF _ _ -> Map.empty
     VarF _ -> Map.empty
     InjectionF _ _ t -> t
@@ -370,6 +377,7 @@ cellSymbolStats name = go
                 then termSymbolStats app
                 else Map.unionsWith (+) (map go args)
         AndTerm t1 t2 -> Map.unionsWith (+) [go t1, go t2]
+        OrTerm t1 t2 -> Map.unionsWith (+) [go t1, go t2]
         Injection _ _ sub -> go sub
         KMap{} -> Map.empty
         KList{} -> Map.empty
@@ -390,6 +398,7 @@ cellVariableStats name = go
                 then termVarStats app
                 else Map.unionsWith (+) (map go args)
         AndTerm t1 t2 -> Map.unionsWith (+) [go t1, go t2]
+        OrTerm t1 t2 -> Map.unionsWith (+) [go t1, go t2]
         Injection _ _ sub -> go sub
         KMap{} -> Map.empty
         KList{} -> Map.empty

@@ -62,6 +62,12 @@ externaliseTerm = \case
             [ externaliseTerm first'
             , externaliseTerm second'
             ]
+    Internal.OrTerm first' second' ->
+        Syntax.KJOr
+            (externaliseSort $ sortOfTerm second')
+            [ externaliseTerm first'
+            , externaliseTerm second'
+            ]
     Internal.SymbolApplication symbol sorts args ->
         Syntax.KJApp
             (symbolNameToId symbol.name)

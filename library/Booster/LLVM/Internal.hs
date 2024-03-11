@@ -419,6 +419,12 @@ marshallTerm t = do
             trm <- liftIO $ kore.patt.fromSymbol andSym
             void $ liftIO . kore.patt.addArgument trm =<< marshallTerm l
             liftIO . kore.patt.addArgument trm =<< marshallTerm r
+        OrTerm l r -> do
+            andSym <- liftIO $ kore.symbol.new "\\or"
+            void $ liftIO . kore.symbol.addArgument andSym =<< marshallSort (sortOfTerm l)
+            trm <- liftIO $ kore.patt.fromSymbol andSym
+            void $ liftIO . kore.patt.addArgument trm =<< marshallTerm l
+            liftIO . kore.patt.addArgument trm =<< marshallTerm r
         DomainValue sort val ->
             marshallSort sort >>= liftIO . kore.patt.token.new val
         Var varName -> error $ "marshalling Var " <> show varName <> " unsupported"

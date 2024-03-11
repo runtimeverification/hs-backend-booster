@@ -281,7 +281,12 @@ internaliseTermRaw qq allowAlias checkSubsorts sortVars definition@KoreDefinitio
             -- TODO check that both a and b are of sort "resultSort"
             -- Which is a unification problem if this involves variables.
             pure $ foldr1 Internal.AndTerm args
-        Syntax.KJOr{} -> predicate
+        Syntax.KJOr{patterns} -> do
+            -- analysed beforehand, expecting this to operate on terms
+            args <- mapM recursion patterns
+            -- TODO check that both a and b are of sort "resultSort"
+            -- Which is a unification problem if this involves variables.
+            pure $ foldr1 Internal.OrTerm args
         Syntax.KJImplies{} -> predicate
         Syntax.KJIff{} -> predicate
         Syntax.KJForall{} -> predicate
@@ -722,6 +727,7 @@ renderSortError = \case
 recomputeTermAttributes :: Internal.Term -> Internal.Term
 recomputeTermAttributes = \case
     Internal.AndTerm t1 t2 -> Internal.AndTerm (recomputeTermAttributes t1) (recomputeTermAttributes t2)
+    Internal.OrTerm t1 t2 -> Internal.OrTerm (recomputeTermAttributes t1) (recomputeTermAttributes t2)
     Internal.SymbolApplication sym sorts args -> Internal.SymbolApplication sym sorts $ map recomputeTermAttributes args
     Internal.DomainValue sort dv -> Internal.DomainValue sort dv
     Internal.Var v -> Internal.Var v

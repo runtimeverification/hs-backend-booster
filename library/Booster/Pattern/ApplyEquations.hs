@@ -443,6 +443,10 @@ llvmEval definition api = eval
             AndTerm -- no \and simplification
                 <$> eval arg1
                 <*> eval arg2
+        OrTerm arg1 arg2 ->
+            OrTerm -- no \or simplification
+                <$> eval arg1
+                <*> eval arg2
         SymbolApplication sym sorts args ->
             SymbolApplication sym sorts <$> mapM eval args
         KMap def keyVals rest ->
@@ -574,6 +578,10 @@ applyTerm direction pref trm = do
             Injection src trg <$> descend config t -- no injection simplification
         AndTerm arg1 arg2 ->
             AndTerm -- no \and simplification
+                <$> descend config arg1
+                <*> descend config arg2
+        OrTerm arg1 arg2 ->
+            OrTerm -- no \or simplification
                 <$> descend config arg1
                 <*> descend config arg2
         app@(SymbolApplication sym sorts args)

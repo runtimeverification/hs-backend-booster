@@ -482,6 +482,7 @@ encodeTerm = \case
         putWord8 KORECompositePattern
         encodeLength 1
     AndTerm t1 t2 -> encodeSymbolApplication "\\and" [sortOfTerm t1] [Left t1, Left t2]
+    OrTerm t1 t2 -> encodeSymbolApplication "\\or" [sortOfTerm t1] [Left t1, Left t2]
     Injection source target t -> encodeSymbolApplication "inj" [source, target] [Left t]
     KMap def keyVals rest -> encodeTerm $ externaliseKmapUnsafe def keyVals rest
     KList def heads rest -> encodeTerm $ externaliseKList def heads rest

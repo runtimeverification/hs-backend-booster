@@ -98,6 +98,7 @@ data Symbol = Symbol
 -}
 data TermF t
     = AndTermF t t
+    | OrTermF t t
     | SymbolApplicationF Symbol [Sort] [t]
     | DomainValueF Sort ByteString
     | VarF Variable
@@ -127,11 +128,11 @@ data TermAttributes = TermAttributes
     { variables :: !(Set Variable)
     , isEvaluated :: !Bool
     -- ^ false for function calls, true for
-    -- variables, recursive through AndTerm
+    -- variables, recursive through AndTerm/OrTerm
     , hash :: !Int
     , isConstructorLike :: !Bool
     , canBeEvaluated :: !Bool
-    -- ^ false for function calls, variables, and AndTerms
+    -- ^ false for function calls, variables, AndTerms and OrTerms
     }
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
@@ -471,6 +472,7 @@ externaliseKSet def elements optRest
 
 instance Corecursive Term where
     embed (AndTermF t1 t2) = AndTerm t1 t2
+    embed (OrTermF t1 t2) = OrTerm t1 t2
     embed (SymbolApplicationF s ss ts) = SymbolApplication s ss ts
     embed (DomainValueF s t) = DomainValue s t
     embed (VarF v) = Var v
@@ -492,6 +494,20 @@ pattern AndTerm t1 t2 <- Term _ (AndTermF t1 t2)
                     -- AndTerm as a replacement in a match
                     }
                 $ AndTermF t1 t2
+
+-- smart term constructors, as bidirectional patterns
+pattern OrTerm :: Term -> Term -> Term
+pattern OrTerm t1 t2 <- Term _ (OrTermF t1 t2)
+    where
+        OrTerm t1@(Term a1 _) t2@(Term a2 _) =
+            Term
+                (a1 <> a2)
+                    { hash = Hashable.hash ("OrTerm" :: ByteString, hash a1, hash a2)
+                    , isConstructorLike = False
+                    -- irrelevant, since anyway we never allow
+                    -- OrTerm as a replacement in a match
+                    }
+                $ OrTermF t1 t2
 
 pattern SymbolApplication :: Symbol -> [Sort] -> [Term] -> Term
 pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts args)
@@ -673,7 +689,7 @@ pattern KSet def elements rest <- Term _ (KSetF def elements rest)
                                 )
                         }
                     $ KSetF def newElements newRest
-{-# COMPLETE AndTerm, SymbolApplication, DomainValue, Var, Injection, KMap, KList, KSet #-}
+{-# COMPLETE AndTerm, OrTerm, SymbolApplication, DomainValue, Var, Injection, KMap, KList, KSet #-}
 
 -- hard-wired injection symbol
 injectionSymbol :: Symbol
@@ -781,6 +797,8 @@ instance Pretty Term where
     pretty = \case
         AndTerm t1 t2 ->
             pretty t1 <> "/\\" <> pretty t2
+        OrTerm t1 t2 ->
+            pretty t1 <> "\\/" <> pretty t2
         SymbolApplication symbol _sortParams args ->
             pretty (Text.replace "Lbl" "" $ Text.decodeUtf8 $ decodeLabel' symbol.name)
                 <> KPretty.argumentsP args

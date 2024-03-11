@@ -185,6 +185,14 @@ match1
     pat
     andTerm@AndTerm{} =
         indeterminate pat andTerm
+----- Or Terms
+-- indeterminate
+match1
+    term1@AndTerm{}
+    term2 = indeterminate term1 term2
+match1
+    term1
+    term2@AndTerm{} = indeterminate term1 term2
 ----- Domain values
 match1
     d1@(DomainValue s1 t1)

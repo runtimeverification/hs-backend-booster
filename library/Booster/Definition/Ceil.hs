@@ -156,6 +156,7 @@ computeCeil term@(SymbolApplication symbol _ args)
                 argCeils <- concatMapM computeCeil args
                 pure $ (map Left $ splitBoolPredicates $ Predicate simplified) <> argCeils
 computeCeil (AndTerm l r) = concatMapM computeCeil [l, r]
+computeCeil (OrTerm l r) = concatMapM computeCeil [l, r] -- TODO: Is this too much of an overapproximation? I dont think it should be Ceil(l) \/ Ceil(r)...
 computeCeil (Injection _ _ t) = computeCeil t
 computeCeil (KMap _ keyVals rest) = do
     recArgs <- concatMapM computeCeil $ concat [[k, v] | (k, v) <- keyVals] <> maybeToList rest
