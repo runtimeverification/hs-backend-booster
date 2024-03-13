@@ -159,8 +159,8 @@ functions =
                    inj1 = Injection aSubsort someSort $ dv aSubsort ""
                 in [ test "function with domain value" f1T dv1 $ remainder [(f1T, dv1)]
                    , test "domain value with function" dv1 f1T $ remainder [(dv1, f1T)]
-                   , test "function with domain value" f1T inj1 $ remainder [(f1T, inj1)]
-                   , test "domain value with function" inj1 f1T $ remainder [(inj1, f1T)]
+                   , test "function with injection" f1T inj1 $ remainder [(f1T, inj1)]
+                   , test "injection with function" inj1 f1T $ remainder [(inj1, f1T)]
                    ]
 
 varsAndValues :: TestTree
