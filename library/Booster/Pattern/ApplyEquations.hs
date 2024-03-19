@@ -391,7 +391,9 @@ iterateEquations direction preference startTerm = do
             -- the equation evaluation does not change the term any more.
             resetChanged
             -- evaluate functions and simplify (recursively at each level)
-            newTerm <- let simp = cached Equations $ traverseTerm direction simp (applyHooksAndEquations preference) in simp llvmResult
+            newTerm <-
+                let simp = cached Equations $ traverseTerm direction simp (applyHooksAndEquations preference)
+                 in simp llvmResult
             changeFlag <- getChanged
             if changeFlag
                 then checkForLoop newTerm >> resetChanged >> go newTerm
@@ -404,26 +406,25 @@ llvmSimplify term = do
         Nothing -> pure term
         Just api -> do
             logOtherNS "booster" (LevelOther "Simplify") "Calling LLVM simplification"
-            let simp = cached LLVM $ evalLlvm config.definition api $ traverseTerm BottomUp simp pure in simp term
-
-    where
-        evalLlvm definition api cb t@(Term attributes _)
-            | attributes.isEvaluated = pure t
-            | isConcrete t && attributes.canBeEvaluated = do
-                LLVM.simplifyTerm api definition t (sortOfTerm t)
-                    >>= \case
-                        Left e -> throw $ UndefinedTerm t e
-                        Right result -> do
-                            when (result /= t) $ do
-                                setChanged
-                                emitEquationTrace t Nothing (Just "LLVM") Nothing $ Success result
-                            toCache LLVM t result
-                            pure result
-            | otherwise = do
-                result <- cb t
-                toCache LLVM t result
-                pure result
-
+            let simp = cached LLVM $ evalLlvm config.definition api $ traverseTerm BottomUp simp pure
+             in simp term
+  where
+    evalLlvm definition api cb t@(Term attributes _)
+        | attributes.isEvaluated = pure t
+        | isConcrete t && attributes.canBeEvaluated = do
+            LLVM.simplifyTerm api definition t (sortOfTerm t)
+                >>= \case
+                    Left e -> throw $ UndefinedTerm t e
+                    Right result -> do
+                        when (result /= t) $ do
+                            setChanged
+                            emitEquationTrace t Nothing (Just "LLVM") Nothing $ Success result
+                        toCache LLVM t result
+                        pure result
+        | otherwise = do
+            result <- cb t
+            toCache LLVM t result
+            pure result
 
 ----------------------------------------
 -- Interface functions
@@ -496,7 +497,8 @@ evaluatePattern' Pattern{term, constraints, ceilConditions} = do
   No iteration happens at the same AST level inside these traversals,
   one equation will be applied per level (if any).
 -}
-traverseTerm :: MonadLoggerIO m => Direction -> (Term -> m Term) -> (Term -> m Term) -> Term -> m Term
+traverseTerm ::
+    MonadLoggerIO m => Direction -> (Term -> m Term) -> (Term -> m Term) -> Term -> m Term
 traverseTerm direction onRecurse onEval trm = do
     case trm of
         dv@DomainValue{} ->
@@ -553,24 +555,23 @@ traverseTerm direction onRecurse onEval trm = do
                 <$> mapM onRecurse keyVals
                 <*> maybe (pure Nothing) ((Just <$>) . onRecurse) rest
 
-
 cached :: MonadLoggerIO io => CacheTag -> (Term -> EquationT io Term) -> Term -> EquationT io Term
 cached cacheTag cb t@(Term attributes _)
-        | attributes.isEvaluated = pure t
-        | otherwise =
-            fromCache cacheTag t >>= \case
-                Nothing -> do
-                    simplified <- cb t
-                    toCache cacheTag t simplified
-                    pure simplified
-                Just cachedTerm -> do
-                    when (t /= cachedTerm) $ do
-                        setChanged
-                        emitEquationTrace t Nothing (Just "Cache") Nothing $ Success cachedTerm
-                    pure cachedTerm
+    | attributes.isEvaluated = pure t
+    | otherwise =
+        fromCache cacheTag t >>= \case
+            Nothing -> do
+                simplified <- cb t
+                toCache cacheTag t simplified
+                pure simplified
+            Just cachedTerm -> do
+                when (t /= cachedTerm) $ do
+                    setChanged
+                    emitEquationTrace t Nothing (Just "Cache") Nothing $ Success cachedTerm
+                pure cachedTerm
 
 elseApply :: (Monad m, Eq b) => (b -> m b) -> (b -> m b) -> b -> m b
-elseApply cb1 cb2 term =  do
+elseApply cb1 cb2 term = do
     fromCb1 <- cb1 term
     if fromCb1 /= term
         then pure fromCb1
@@ -619,11 +620,15 @@ applyHooksAndEquations pref term = do
     tryEquations :: EquationT io Term
     tryEquations = do
         def <- (.definition) <$> getConfig
-        (case pref of
-            PreferFunctions -> do
-                applyEquations def.functionEquations handleFunctionEquation `elseApply` applyEquations def.simplifications handleSimplificationEquation
-            PreferSimplifications -> do
-                applyEquations def.simplifications handleSimplificationEquation `elseApply` applyEquations def.functionEquations handleFunctionEquation) term
+        ( case pref of
+                PreferFunctions -> do
+                    applyEquations def.functionEquations handleFunctionEquation
+                        `elseApply` applyEquations def.simplifications handleSimplificationEquation
+                PreferSimplifications -> do
+                    applyEquations def.simplifications handleSimplificationEquation
+                        `elseApply` applyEquations def.functionEquations handleFunctionEquation
+            )
+            term
 
 data ApplyEquationResult
     = Success Term
