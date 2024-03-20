@@ -943,7 +943,36 @@ simplifyConstraint ::
     Predicate ->
     io (Either EquationFailure Predicate, [EquationTrace Term], SimplifierCache)
 simplifyConstraint doTracing def mbApi mbSMT cache (Predicate p) =
-    runEquationT doTracing def mbApi mbSMT cache $ (coerce <$>) . simplifyConstraint' True $ p
+--    runEquationT doTracing def mbApi mbSMT cache $ (coerce <$>) . simplifyConstraint' True $ p
+
+    runEquationT doTracing def mbApi mbSMT cache $
+        logOtherNS "booster" LevelInfo "simplifyConstraint" >>
+        fmap coerce (simplifyC p)
+
+simplifyC :: MonadLoggerIO io => Term -> EquationT io Term
+simplifyC = iterateWithFallback equationsAndHooks llvmSimplify
+  where
+    equationsAndHooks = applyTerm BottomUp PreferFunctions
+    iterateWithFallback f g t = do
+        logOtherNS "booster" LevelInfo $
+            "simplifyConstraint: iterate with term " <> renderText (pretty t)
+        -- FIXME no loop protection!
+        result <- f t
+        flag <- getChanged
+        logOtherNS "booster" LevelInfo $
+            "Flag and term comparison check: " <> renderText (pretty (flag, result /= t))
+        logOtherNS "booster" LevelInfo $
+            "simplifyConstraint: result was " <> renderText (pretty result)
+        if flag
+            then resetChanged >> iterateWithFallback f g result
+            else do
+                result' <- g result
+                llvmflag <- getChanged
+                logOtherNS "booster" LevelInfo $
+                    "After llvm: Flag and term comparison: " <> renderText (pretty (llvmflag, result' /= result))
+                if llvmflag
+                    then resetChanged >> iterateWithFallback f g result'
+                    else pure result'
 
 simplifyConstraints ::
     MonadLoggerIO io =>
