@@ -900,13 +900,14 @@ applyEquation term rule = fmap (either Failure Success) $ runExceptT $ do
         Constrained ->
         Term ->
         ExceptT ApplyEquationFailure (EquationT io) ()
-    mkCheck (varName, _) constrained (Term attributes _)
+    mkCheck (varName, _) constrained t@(Term attributes _)
         | not test = throwE $ MatchConstraintViolated constrained varName
         | otherwise = pure ()
       where
+        concrete = isConcrete t && attributes.canBeEvaluated
         test = case constrained of
-            Concrete -> attributes.isConstructorLike
-            Symbolic -> not attributes.isConstructorLike
+            Concrete -> concrete
+            Symbolic -> not concrete
 
     verifyVar ::
         Map Variable Term ->
