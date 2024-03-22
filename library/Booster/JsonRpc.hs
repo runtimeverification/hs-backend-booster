@@ -24,7 +24,6 @@ import Control.Monad.Logger.CallStack (MonadLoggerIO)
 import Control.Monad.Logger.CallStack qualified as Log
 import Control.Monad.Trans.Except (catchE, except, runExcept, runExceptT, throwE, withExceptT)
 import Crypto.Hash (SHA256 (..), hashWith)
-import Data.Aeson (ToJSON (toJSON))
 import Data.Bifunctor (second)
 import Data.Coerce (coerce)
 import Data.Foldable
@@ -60,7 +59,7 @@ import Booster.Pattern.Rewrite (
     performRewrite,
  )
 import Booster.Pattern.Util (sortOfPattern, substituteInPredicate, substituteInTerm)
-import Booster.Prettyprinter (renderOneLineText, renderText)
+import Booster.Prettyprinter (renderText)
 import Booster.SMT.Base qualified as SMT
 import Booster.SMT.Interface qualified as SMT
 import Booster.Syntax.Json (KoreJson (..), addHeader, prettyPattern, sortOfJson)
@@ -450,13 +449,13 @@ respond stateVar =
                                     { satisfiable = RpcTypes.Unsat
                                     , substitution = Nothing
                                     }
-                            Left SMT.Unknown ->
+                            Left SMT.ReasonUnknown{} ->
                                 RpcTypes.GetModelResult
                                     { satisfiable = RpcTypes.Unknown
                                     , substitution = Nothing
                                     }
                             Left other ->
-                                error $ "Unexpected result " <> show other <> "from getModelFor"
+                                error $ "Unexpected result " <> show other <> " from getModelFor"
                             Right subst ->
                                 let sort = fromMaybe (error "Unknown sort in input") $ sortOfJson req.state.term
                                     substitution
