@@ -248,7 +248,7 @@ respond stateVar =
 
             result <- case internalised of
                 Left [] -> do
-                    Log.logErrorNS "booster" $
+                    Log.logErrorNS "booster"
                         "Error internalising cterm."
                     Log.logOtherNS
                         "booster"
@@ -362,7 +362,7 @@ respond stateVar =
                             internaliseTermOrPredicate DisallowAlias CheckSubsorts Nothing def req.state.term
                 case internalised of
                     Left [] -> do
-                        Log.logErrorNS "booster" $
+                        Log.logErrorNS "booster"
                             "Error internalising cterm."
                         Log.logOtherNS
                             "booster"
