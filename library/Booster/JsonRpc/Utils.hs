@@ -21,6 +21,7 @@ import Data.Aeson as Json
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.Aeson.Types (parseMaybe)
 import Data.ByteString.Lazy.Char8 qualified as BS
+
 import Data.Maybe (fromMaybe)
 import Network.JSONRPC
 import Prettyprinter
@@ -38,6 +39,10 @@ import Data.Set qualified as Set
 import Kore.JsonRpc.Types
 import Kore.Syntax.Json.Types hiding (Left, Right)
 import Prettyprinter qualified as Pretty
+import qualified Kore.JsonRpc.Error as RpcError
+import qualified Data.Text.Encoding as Text
+import Data.List (intercalate, intersperse)
+import Data.Binary.Builder (fromByteString, fromLazyByteString, toLazyByteString)
 
 diffJson :: BS.ByteString -> BS.ByteString -> DiffResult
 diffJson file1 file2 =
@@ -256,7 +261,16 @@ diffBy def pat1 pat2 =
             <> if null u then "" else BS.unlines ("Unsupported parts: " : map Json.encode u)
     internalise =
         either
-            (("Pattern could not be internalised: " <>) . Json.encode)
+            (("Pattern could not be internalised: " <>) . toLazyByteString . prettyRpcErrors . map patternErrorToRpcError)
             renderBS
             . runExcept
             . internaliseTermOrPredicate DisallowAlias IgnoreSubsorts Nothing def
+    prettyRpcErrors = \case
+        [] -> "unknown error"
+        [e] -> prettyRpcError e
+        (e:es) -> prettyRpcError e <> "\n" <> prettyRpcErrors es
+    
+    prettyRpcError RpcError.ErrorWithTermAndContext{error = err, term, context} =
+        Text.encodeUtf8Builder err <> "\n" <>
+        maybe "" ((<> "\n") . fromLazyByteString . Json.encode) term <>
+        maybe "" (mconcat . intersperse ", " . map Text.encodeUtf8Builder) context

@@ -60,7 +60,7 @@ import Booster.Pattern.Rewrite (
     performRewrite,
  )
 import Booster.Pattern.Util (sortOfPattern, substituteInPredicate, substituteInTerm)
-import Booster.Prettyprinter (renderText)
+import Booster.Prettyprinter (renderText, renderOneLineText)
 import Booster.SMT.Base qualified as SMT
 import Booster.SMT.Interface qualified as SMT
 import Booster.Syntax.Json (KoreJson (..), addHeader, prettyPattern, sortOfJson)
@@ -71,12 +71,12 @@ import Booster.Syntax.Json.Internalise (
     internalisePattern,
     internaliseTermOrPredicate,
     pattern CheckSubsorts,
-    pattern DisallowAlias,
+    pattern DisallowAlias, patternErrorToRpcError,
  )
 import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base hiding (ParsedModule)
 import Booster.Syntax.ParsedKore.Base qualified as ParsedModule (ParsedModule (..))
-import Booster.Syntax.ParsedKore.Internalise (addToDefinitions)
+import Booster.Syntax.ParsedKore.Internalise (addToDefinitions, definitionErrorToRpcError)
 import Booster.Util (Flag (..), constructorName)
 import Kore.JsonRpc.Error qualified as RpcError
 import Kore.JsonRpc.Server (ErrorObj (..), JsonRpcHandler (..), Respond)
@@ -105,7 +105,7 @@ respond stateVar =
             case internalised of
                 Left patternError -> do
                     Log.logDebug $ "Error internalising cterm" <> Text.pack (show patternError)
-                    pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternError
+                    pure $ Left $ RpcError.backendError $ RpcError.CouldNotVerifyPattern $ patternErrorToRpcError patternError
                 Right (pat, substitution, unsupported) -> do
                     unless (null unsupported) $ do
                         Log.logWarnNS
@@ -153,46 +153,41 @@ respond stateVar =
             state <- liftIO $ takeMVar stateVar
             let nameAsId = fromMaybe False nameAsId'
                 moduleHash = Text.pack $ ('m' :) . show . hashWith SHA256 $ Text.encodeUtf8 _module
-                restoreStateAndRethrow (errTy, errMsg) = do
+                restoreStateAndRethrow err = do
                     liftIO (putMVar stateVar state)
-                    throwE $ RpcError.backendError errTy errMsg
+                    throwE $ RpcError.backendError err
                 listNames :: (HasField "name" a b, HasField "getId" b Text) => [a] -> Text
                 listNames = Text.intercalate ", " . map (.name.getId)
 
             flip catchE restoreStateAndRethrow $ do
                 newModule <-
-                    withExceptT ((RpcError.InvalidModule,) . toJSON) $
+                    withExceptT (RpcError.InvalidModule . RpcError.ErrorOnly . pack) $
                         except $
                             parseKoreModule "rpc-request" _module
 
                 unless (null newModule.sorts) $
-                    throwE
-                        ( RpcError.InvalidModule
-                        , toJSON $
-                            "Module introduces new sorts: " <> listNames newModule.sorts
-                        )
+                    throwE $
+                        RpcError.InvalidModule . RpcError.ErrorOnly $ "Module introduces new sorts: " <> listNames newModule.sorts
+                        
                 unless (null newModule.symbols) $
-                    throwE
-                        ( RpcError.InvalidModule
-                        , toJSON $
-                            "Module introduces new symbols: " <> listNames newModule.symbols
-                        )
+                    throwE $
+                        RpcError.InvalidModule . RpcError.ErrorOnly $ "Module introduces new symbols: " <> listNames newModule.symbols
 
                 -- check if we already received a module with this name
                 when nameAsId $
                     case Map.lookup (getId newModule.name) state.addedModules of
                         -- if a different module was already added, throw error
-                        Just m | _module /= m -> throwE (RpcError.DuplicateModuleName, toJSON $ getId newModule.name)
+                        Just m | _module /= m -> throwE $ RpcError.DuplicateModuleName $ getId newModule.name
                         _ -> pure ()
 
                 -- Check for a corner case when we send module M1 with the name "m<hash of M2>"" and name-as-id: true
                 -- followed by adding M2. Should not happen in practice...
                 case Map.lookup moduleHash state.addedModules of
-                    Just m | _module /= m -> throwE (RpcError.DuplicateModuleName, toJSON moduleHash)
+                    Just m | _module /= m -> throwE $ RpcError.DuplicateModuleName moduleHash
                     _ -> pure ()
 
                 newDefinitions <-
-                    withExceptT ((RpcError.InvalidModule,) . toJSON) $
+                    withExceptT (RpcError.InvalidModule . definitionErrorToRpcError) $
                         except $
                             runExcept $
                                 addToDefinitions newModule{ParsedModule.name = Id moduleHash} state.definitions
@@ -245,14 +240,22 @@ respond stateVar =
             solver <- traverse (SMT.initSolver def) mSMTOptions
 
             result <- case internalised of
-                Left patternErrors -> do
+                Left [] -> do
                     Log.logErrorNS "booster" $
-                        "Error internalising cterm: " <> Text.pack (show patternErrors)
+                        "Error internalising cterm."
                     Log.logOtherNS
                         "booster"
                         (Log.LevelOther "ErrorDetails")
                         (prettyPattern req.state.term)
-                    pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternErrors
+                    pure $ Left $ RpcError.backendError $ RpcError.CouldNotVerifyPattern $ RpcError.ErrorOnly "Error internalising cterm."
+                Left (patternError:_) -> do
+                    Log.logErrorNS "booster" $
+                        "Error internalising cterm: " <> pack (show patternError)
+                    Log.logOtherNS
+                        "booster"
+                        (Log.LevelOther "ErrorDetails")
+                        (prettyPattern req.state.term)
+                    pure $ Left $ RpcError.backendError $ RpcError.CouldNotVerifyPattern $ patternErrorToRpcError patternError
                 -- term and predicate (pattern)
                 Right (TermAndPredicates pat substitution unsupported) -> do
                     Log.logInfoNS "booster" "Simplifying a pattern"
@@ -282,10 +285,10 @@ respond stateVar =
                         (Left ApplyEquations.SideConditionFalse{}, _) -> do
                             let tSort = externaliseSort $ sortOfPattern pat
                             pure $ Right (addHeader $ KoreJson.KJBottom tSort, [])
-                        (Left (ApplyEquations.EquationLoop terms), _) ->
-                            pure . Left . RpcError.backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
+                        (Left (ApplyEquations.EquationLoop _terms), _) ->
+                            pure . Left . RpcError.backendError $ RpcError.Aborted "equation loop detected" -- FIXME
                         (Left other, _) ->
-                            pure . Left . RpcError.backendError RpcError.Aborted $ (Text.pack . constructorName $ other) -- FIXME
+                            pure . Left . RpcError.backendError $ RpcError.Aborted (Text.pack . constructorName $ other) -- FIXME
                             -- predicate only
                 Right (Predicates ps)
                     | null ps.boolPredicates && null ps.ceilPredicates && null ps.substitution && null ps.unsupported ->
@@ -324,7 +327,7 @@ respond stateVar =
 
                                     pure $ Right (addHeader $ Syntax.KJAnd predicateSort result, [])
                                 (Left something, _) ->
-                                    pure . Left . RpcError.backendError RpcError.Aborted $ show something
+                                    pure . Left . RpcError.backendError $ RpcError.Aborted $ renderText $ pretty something
             whenJust solver SMT.closeSolver
             stop <- liftIO $ getTime Monotonic
 
@@ -343,14 +346,22 @@ respond stateVar =
                         runExcept $
                             internaliseTermOrPredicate DisallowAlias CheckSubsorts Nothing def req.state.term
                 case internalised of
-                    Left patternErrors -> do
+                    Left [] -> do
                         Log.logErrorNS "booster" $
-                            "Error internalising cterm: " <> Text.pack (show patternErrors)
+                            "Error internalising cterm."
                         Log.logOtherNS
                             "booster"
                             (Log.LevelOther "ErrorDetails")
                             (prettyPattern req.state.term)
-                        pure $ Left $ RpcError.backendError RpcError.CouldNotVerifyPattern patternErrors
+                        pure $ Left $ RpcError.backendError $ RpcError.CouldNotVerifyPattern $ RpcError.ErrorOnly "Error internalising cterm."
+                    Left (patternError:_) -> do
+                        Log.logErrorNS "booster" $
+                            "Error internalising cterm: " <> pack (show patternError)
+                        Log.logOtherNS
+                            "booster"
+                            (Log.LevelOther "ErrorDetails")
+                            (prettyPattern req.state.term)
+                        pure $ Left $ RpcError.backendError $ RpcError.CouldNotVerifyPattern $ patternErrorToRpcError patternError
                     -- various predicates obtained
                     Right things -> do
                         Log.logInfoNS "booster" "get-model request"
@@ -463,20 +474,20 @@ respond stateVar =
         state <- liftIO $ readMVar stateVar
         let mainName = fromMaybe state.defaultMain mbMainModule
         case Map.lookup mainName state.definitions of
-            Nothing -> pure $ Left $ RpcError.backendError RpcError.CouldNotFindModule mainName
+            Nothing -> pure $ Left $ RpcError.backendError $ RpcError.CouldNotFindModule mainName
             Just d -> action (d, state.mLlvmLibrary, state.mSMTOptions)
 
 handleSmtError :: JsonRpcHandler
 handleSmtError = JsonRpcHandler $ \case
     SMT.GeneralSMTError err -> runtimeError "problem" err
     SMT.SMTTranslationError err -> runtimeError "translation" err
-    SMT.SMTSolverUnknown premises preds -> do
+    SMT.SMTSolverUnknown reason premises preds -> do
         Log.logErrorNS "booster" "SMT returned `Unknown'"
 
         let bool = externaliseSort Pattern.SortBool -- predicates are terms of sort Bool
             externalise = Syntax.KJAnd bool . map (externalisePredicate bool) . Set.toList
             allPreds = addHeader $ Syntax.KJAnd bool [externalise premises, externalise preds]
-        pure $ RpcError.backendError RpcError.SmtSolverError $ toJSON allPreds
+        pure $ RpcError.backendError $ RpcError.SmtSolverError $ RpcError.ErrorWithTerm reason allPreds
   where
     runtimeError prefix err = do
         let msg = "SMT " <> prefix <> ": " <> err

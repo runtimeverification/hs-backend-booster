@@ -12,6 +12,7 @@ module Booster.Syntax.Json.Internalise (
     internalisePredicates,
     lookupInternalSort,
     PatternError (..),
+    patternErrorToRpcError,
     internaliseSort,
     SortError (..),
     renderSortError,
@@ -39,7 +40,6 @@ import Control.Monad
 import Control.Monad.Extra
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
-import Data.Aeson (ToJSON (..), Value, object, (.=))
 import Data.Bifunctor
 import Data.ByteString.Char8 (ByteString, isPrefixOf)
 import Data.ByteString.Char8 qualified as BS
@@ -71,6 +71,8 @@ import Booster.Syntax.Json.Externalise (externaliseSort)
 import Booster.Syntax.ParsedKore.Parser (parsePattern)
 import Booster.Util (Flag (..))
 import Kore.Syntax.Json.Types qualified as Syntax
+import qualified Kore.JsonRpc.Error as RpcError
+import Booster.Syntax.Json (addHeader)
 
 pattern IsQQ, IsNotQQ :: Flag "qq"
 pattern IsQQ = Flag True
@@ -648,8 +650,8 @@ a 'data' object.
 If the error is a sort error, the message will contain its information
 while the context provides the pattern where the error occurred.
 -}
-instance ToJSON PatternError where
-    toJSON = \case
+patternErrorToRpcError :: PatternError -> RpcError.ErrorWithTermAndContext
+patternErrorToRpcError = \case
         NotSupported p ->
             wrap "Pattern not supported" p
         NoTermFound p ->
@@ -666,7 +668,7 @@ instance ToJSON PatternError where
             wrap ("Unknown symbol '" <> Syntax.getId sym <> "'") p
         MacroOrAliasSymbolNotAllowed sym p ->
             wrap ("Symbol '" <> Syntax.getId sym <> "' is a macro/alias") p
-        SubstitutionNotAllowed -> "Substitution predicates are not allowed here"
+        SubstitutionNotAllowed -> RpcError.ErrorOnly "Substitution predicates are not allowed here"
         IncorrectSymbolArity p s expected got ->
             wrap
                 ( "Inconsistent pattern. Symbol '"
@@ -678,8 +680,9 @@ instance ToJSON PatternError where
                 )
                 p
       where
-        wrap :: Text -> Syntax.KorePattern -> Value
-        wrap msg p = object ["error" .= msg, "context" .= toJSON [p]]
+        wrap :: Text -> Syntax.KorePattern -> RpcError.ErrorWithTermAndContext
+        wrap err p = RpcError.ErrorWithTerm err $ addHeader p
+
 
 data SortError
     = UnknownSort Syntax.Sort

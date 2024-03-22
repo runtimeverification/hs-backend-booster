@@ -16,6 +16,7 @@ import Data.Hashable (Hashable)
 import Data.String
 import GHC.Generics (Generic)
 import Language.Haskell.TH.Syntax (Lift)
+import Data.Text (Text)
 
 {- SMT lib 2 commands and responses
 
@@ -73,14 +74,16 @@ data ControlCommand
 data QueryCommand
     = CheckSat
     | GetValue [SExpr] -- for get-model
+    | GetReasonUnknown
     deriving stock (Eq, Ord, Show)
 
 data Response
     = Success -- for command_
     | Sat
     | Unsat
-    | Unknown
+    | Unknown 
     | Values [(SExpr, Value)]
+    | ReasonUnknown Text
     | Error BS.ByteString
     deriving stock (Eq, Ord, Show)
 
