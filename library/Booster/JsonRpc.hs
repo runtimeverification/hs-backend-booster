@@ -60,7 +60,7 @@ import Booster.Pattern.Rewrite (
     performRewrite,
  )
 import Booster.Pattern.Util (sortOfPattern, substituteInPredicate, substituteInTerm)
-import Booster.Prettyprinter (renderText, renderOneLineText)
+import Booster.Prettyprinter (renderOneLineText, renderText)
 import Booster.SMT.Base qualified as SMT
 import Booster.SMT.Interface qualified as SMT
 import Booster.Syntax.Json (KoreJson (..), addHeader, prettyPattern, sortOfJson)
@@ -70,8 +70,9 @@ import Booster.Syntax.Json.Internalise (
     TermOrPredicates (..),
     internalisePattern,
     internaliseTermOrPredicate,
+    patternErrorToRpcError,
     pattern CheckSubsorts,
-    pattern DisallowAlias, patternErrorToRpcError,
+    pattern DisallowAlias,
  )
 import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base hiding (ParsedModule)
@@ -105,7 +106,11 @@ respond stateVar =
             case internalised of
                 Left patternError -> do
                     Log.logDebug $ "Error internalising cterm" <> Text.pack (show patternError)
-                    pure $ Left $ RpcError.backendError $ RpcError.CouldNotVerifyPattern $ patternErrorToRpcError patternError
+                    pure $
+                        Left $
+                            RpcError.backendError $
+                                RpcError.CouldNotVerifyPattern $
+                                    patternErrorToRpcError patternError
                 Right (pat, substitution, unsupported) -> do
                     unless (null unsupported) $ do
                         Log.logWarnNS
@@ -167,11 +172,13 @@ respond stateVar =
 
                 unless (null newModule.sorts) $
                     throwE $
-                        RpcError.InvalidModule . RpcError.ErrorOnly $ "Module introduces new sorts: " <> listNames newModule.sorts
-                        
+                        RpcError.InvalidModule . RpcError.ErrorOnly $
+                            "Module introduces new sorts: " <> listNames newModule.sorts
+
                 unless (null newModule.symbols) $
                     throwE $
-                        RpcError.InvalidModule . RpcError.ErrorOnly $ "Module introduces new symbols: " <> listNames newModule.symbols
+                        RpcError.InvalidModule . RpcError.ErrorOnly $
+                            "Module introduces new symbols: " <> listNames newModule.symbols
 
                 -- check if we already received a module with this name
                 when nameAsId $
@@ -247,15 +254,23 @@ respond stateVar =
                         "booster"
                         (Log.LevelOther "ErrorDetails")
                         (prettyPattern req.state.term)
-                    pure $ Left $ RpcError.backendError $ RpcError.CouldNotVerifyPattern $ RpcError.ErrorOnly "Error internalising cterm."
-                Left (patternError:_) -> do
+                    pure $
+                        Left $
+                            RpcError.backendError $
+                                RpcError.CouldNotVerifyPattern $
+                                    RpcError.ErrorOnly "Error internalising cterm."
+                Left (patternError : _) -> do
                     Log.logErrorNS "booster" $
                         "Error internalising cterm: " <> pack (show patternError)
                     Log.logOtherNS
                         "booster"
                         (Log.LevelOther "ErrorDetails")
                         (prettyPattern req.state.term)
-                    pure $ Left $ RpcError.backendError $ RpcError.CouldNotVerifyPattern $ patternErrorToRpcError patternError
+                    pure $
+                        Left $
+                            RpcError.backendError $
+                                RpcError.CouldNotVerifyPattern $
+                                    patternErrorToRpcError patternError
                 -- term and predicate (pattern)
                 Right (TermAndPredicates pat substitution unsupported) -> do
                     Log.logInfoNS "booster" "Simplifying a pattern"
@@ -353,15 +368,23 @@ respond stateVar =
                             "booster"
                             (Log.LevelOther "ErrorDetails")
                             (prettyPattern req.state.term)
-                        pure $ Left $ RpcError.backendError $ RpcError.CouldNotVerifyPattern $ RpcError.ErrorOnly "Error internalising cterm."
-                    Left (patternError:_) -> do
+                        pure $
+                            Left $
+                                RpcError.backendError $
+                                    RpcError.CouldNotVerifyPattern $
+                                        RpcError.ErrorOnly "Error internalising cterm."
+                    Left (patternError : _) -> do
                         Log.logErrorNS "booster" $
                             "Error internalising cterm: " <> pack (show patternError)
                         Log.logOtherNS
                             "booster"
                             (Log.LevelOther "ErrorDetails")
                             (prettyPattern req.state.term)
-                        pure $ Left $ RpcError.backendError $ RpcError.CouldNotVerifyPattern $ patternErrorToRpcError patternError
+                        pure $
+                            Left $
+                                RpcError.backendError $
+                                    RpcError.CouldNotVerifyPattern $
+                                        patternErrorToRpcError patternError
                     -- various predicates obtained
                     Right things -> do
                         Log.logInfoNS "booster" "get-model request"

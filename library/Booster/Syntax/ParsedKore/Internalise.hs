@@ -60,9 +60,9 @@ import Booster.Syntax.Json.Internalise
 import Booster.Syntax.ParsedKore.Base
 import Booster.Syntax.ParsedKore.Parser (ParsedSentence (SentenceSymbol), parseSentence)
 import Booster.Util (Flag (..))
+import Kore.JsonRpc.Error qualified as RpcError
 import Kore.Syntax.Json.Types (Id, Sort)
 import Kore.Syntax.Json.Types qualified as Syntax
-import qualified Kore.JsonRpc.Error as RpcError
 
 {- | Traverses all modules of a parsed definition, to build internal
 @KoreDefinition@s for each of the modules (when used as the main
@@ -1337,8 +1337,11 @@ definitionErrorToRpcError = \case
     DuplicateAliases aliases ->
         "DuplicateAliases" `withContext` map (.name.getId) aliases
     DefinitionPatternError ref patErr ->
-        let err@RpcError.ErrorWithTermAndContext{context} = patternErrorToRpcError patErr in
-            err{RpcError.context = Just $ "Pattern error at " <> render ref <> " in definition": fromMaybe [] context}
+        let err@RpcError.ErrorWithTermAndContext{context} = patternErrorToRpcError patErr
+         in err
+                { RpcError.context =
+                    Just $ "Pattern error at " <> render ref <> " in definition" : fromMaybe [] context
+                }
     DefinitionAxiomError (MalformedRewriteRule rule) ->
         "Malformed rewrite rule" `withContext` [renderOneLineText $ location rule]
     DefinitionAxiomError (MalformedEquation rule) ->
@@ -1347,7 +1350,7 @@ definitionErrorToRpcError = \case
         "Unknown kind of axiom" `withContext` [renderOneLineText $ location rule]
     other ->
         RpcError.ErrorOnly $ render other
-    where
+  where
     withContext :: Text -> [Text] -> RpcError.ErrorWithTermAndContext
     withContext = RpcError.ErrorWithContext
 
@@ -1357,7 +1360,6 @@ definitionErrorToRpcError = \case
     location rule =
         either (const "unknown location") pretty $
             runExcept (Attributes.readLocation rule.attributes)
-
 
 data AliasError
     = UnknownAlias AliasName

@@ -14,9 +14,9 @@ import Data.ByteString.Char8 qualified as BS
 import Data.Data (Data)
 import Data.Hashable (Hashable)
 import Data.String
+import Data.Text (Text)
 import GHC.Generics (Generic)
 import Language.Haskell.TH.Syntax (Lift)
-import Data.Text (Text)
 
 {- SMT lib 2 commands and responses
 
@@ -81,7 +81,7 @@ data Response
     = Success -- for command_
     | Sat
     | Unsat
-    | Unknown 
+    | Unknown
     | Values [(SExpr, Value)]
     | ReasonUnknown Text
     | Error BS.ByteString
