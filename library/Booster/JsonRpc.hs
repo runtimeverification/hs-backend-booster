@@ -454,6 +454,11 @@ respond stateVar =
                                     { satisfiable = RpcTypes.Unknown
                                     , substitution = Nothing
                                     }
+                            Left SMT.Unknown ->
+                                RpcTypes.GetModelResult
+                                    { satisfiable = RpcTypes.Unknown
+                                    , substitution = Nothing
+                                    }
                             Left other ->
                                 error $ "Unexpected result " <> show other <> " from getModelFor"
                             Right subst ->

@@ -34,8 +34,8 @@ import System.Process (readProcessWithExitCode)
 import Booster.Definition.Base qualified as Internal
 import Booster.Prettyprinter
 import Booster.Syntax.Json.Internalise
-import Data.Binary.Builder (fromByteString, fromLazyByteString, toLazyByteString)
-import Data.List (intercalate, intersperse)
+import Data.Binary.Builder (fromLazyByteString, toLazyByteString)
+import Data.List (intersperse)
 import Data.Map qualified as Map
 import Data.Set qualified as Set
 import Data.Text.Encoding qualified as Text
