@@ -108,9 +108,9 @@ respond stateVar =
                     pure $
                         Left $
                             RpcError.backendError $
-                                RpcError.CouldNotVerifyPattern [
-                                    patternErrorToRpcError patternError
-                                ]
+                                RpcError.CouldNotVerifyPattern
+                                    [ patternErrorToRpcError patternError
+                                    ]
                 Right (pat, substitution, unsupported) -> do
                     unless (null unsupported) $ do
                         Log.logWarnNS
@@ -248,18 +248,18 @@ respond stateVar =
 
             result <- case internalised of
                 Left patternErrors -> do
-                        forM_ patternErrors $ \patternError ->
-                            Log.logErrorNS "booster" $
-                                "Error internalising cterm: " <> pack (show patternError)
-                        Log.logOtherNS
-                            "booster"
-                            (Log.LevelOther "ErrorDetails")
-                            (prettyPattern req.state.term)
-                        pure $
-                            Left $
-                                RpcError.backendError $
-                                    RpcError.CouldNotVerifyPattern $
-                                        map patternErrorToRpcError patternErrors
+                    forM_ patternErrors $ \patternError ->
+                        Log.logErrorNS "booster" $
+                            "Error internalising cterm: " <> pack (show patternError)
+                    Log.logOtherNS
+                        "booster"
+                        (Log.LevelOther "ErrorDetails")
+                        (prettyPattern req.state.term)
+                    pure $
+                        Left $
+                            RpcError.backendError $
+                                RpcError.CouldNotVerifyPattern $
+                                    map patternErrorToRpcError patternErrors
                 -- term and predicate (pattern)
                 Right (TermAndPredicates pat substitution unsupported) -> do
                     Log.logInfoNS "booster" "Simplifying a pattern"
