@@ -108,8 +108,9 @@ respond stateVar =
                     pure $
                         Left $
                             RpcError.backendError $
-                                RpcError.CouldNotVerifyPattern $
+                                RpcError.CouldNotVerifyPattern [
                                     patternErrorToRpcError patternError
+                                ]
                 Right (pat, substitution, unsupported) -> do
                     unless (null unsupported) $ do
                         Log.logWarnNS
@@ -246,31 +247,19 @@ respond stateVar =
             solver <- traverse (SMT.initSolver def) mSMTOptions
 
             result <- case internalised of
-                Left [] -> do
-                    Log.logErrorNS
-                        "booster"
-                        "Error internalising cterm."
-                    Log.logOtherNS
-                        "booster"
-                        (Log.LevelOther "ErrorDetails")
-                        (prettyPattern req.state.term)
-                    pure $
-                        Left $
-                            RpcError.backendError $
-                                RpcError.CouldNotVerifyPattern $
-                                    RpcError.ErrorOnly "Error internalising cterm."
-                Left (patternError : _) -> do
-                    Log.logErrorNS "booster" $
-                        "Error internalising cterm: " <> pack (show patternError)
-                    Log.logOtherNS
-                        "booster"
-                        (Log.LevelOther "ErrorDetails")
-                        (prettyPattern req.state.term)
-                    pure $
-                        Left $
-                            RpcError.backendError $
-                                RpcError.CouldNotVerifyPattern $
-                                    patternErrorToRpcError patternError
+                Left patternErrors -> do
+                        forM_ patternErrors $ \patternError ->
+                            Log.logErrorNS "booster" $
+                                "Error internalising cterm: " <> pack (show patternError)
+                        Log.logOtherNS
+                            "booster"
+                            (Log.LevelOther "ErrorDetails")
+                            (prettyPattern req.state.term)
+                        pure $
+                            Left $
+                                RpcError.backendError $
+                                    RpcError.CouldNotVerifyPattern $
+                                        map patternErrorToRpcError patternErrors
                 -- term and predicate (pattern)
                 Right (TermAndPredicates pat substitution unsupported) -> do
                     Log.logInfoNS "booster" "Simplifying a pattern"
@@ -361,10 +350,10 @@ respond stateVar =
                         runExcept $
                             internaliseTermOrPredicate DisallowAlias CheckSubsorts Nothing def req.state.term
                 case internalised of
-                    Left [] -> do
-                        Log.logErrorNS
-                            "booster"
-                            "Error internalising cterm."
+                    Left patternErrors -> do
+                        forM_ patternErrors $ \patternError ->
+                            Log.logErrorNS "booster" $
+                                "Error internalising cterm: " <> pack (show patternError)
                         Log.logOtherNS
                             "booster"
                             (Log.LevelOther "ErrorDetails")
@@ -373,19 +362,7 @@ respond stateVar =
                             Left $
                                 RpcError.backendError $
                                     RpcError.CouldNotVerifyPattern $
-                                        RpcError.ErrorOnly "Error internalising cterm."
-                    Left (patternError : _) -> do
-                        Log.logErrorNS "booster" $
-                            "Error internalising cterm: " <> pack (show patternError)
-                        Log.logOtherNS
-                            "booster"
-                            (Log.LevelOther "ErrorDetails")
-                            (prettyPattern req.state.term)
-                        pure $
-                            Left $
-                                RpcError.backendError $
-                                    RpcError.CouldNotVerifyPattern $
-                                        patternErrorToRpcError patternError
+                                        map patternErrorToRpcError patternErrors
                     -- various predicates obtained
                     Right things -> do
                         Log.logInfoNS "booster" "get-model request"
