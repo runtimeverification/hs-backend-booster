@@ -290,9 +290,9 @@ respond stateVar =
                             let tSort = externaliseSort $ sortOfPattern pat
                             pure $ Right (addHeader $ KoreJson.KJBottom tSort, [])
                         (Left (ApplyEquations.EquationLoop _terms), _) ->
-                            pure . Left . RpcError.backendError $ RpcError.Aborted "equation loop detected" -- FIXME
+                            pure . Left . RpcError.backendError $ RpcError.Aborted "equation loop detected"
                         (Left other, _) ->
-                            pure . Left . RpcError.backendError $ RpcError.Aborted (Text.pack . constructorName $ other) -- FIXME
+                            pure . Left . RpcError.backendError $ RpcError.Aborted (Text.pack . constructorName $ other)
                             -- predicate only
                 Right (Predicates ps)
                     | null ps.boolPredicates && null ps.ceilPredicates && null ps.substitution && null ps.unsupported ->
