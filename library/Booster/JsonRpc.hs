@@ -9,30 +9,31 @@ License     : BSD-3-Clause
 module Booster.JsonRpc (
     ServerState (..),
     respond,
-    runServer,
+    handleSmtError,
     RpcTypes.rpcJsonConfig,
     execStateToKoreJson,
     toExecState,
 ) where
 
 import Control.Applicative ((<|>))
-import Control.Concurrent (MVar, newMVar, putMVar, readMVar, takeMVar)
+import Control.Concurrent (MVar, putMVar, readMVar, takeMVar)
 import Control.Monad
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class
-import Control.Monad.Logger.CallStack (LogLevel (LevelError), MonadLoggerIO)
+import Control.Monad.Logger.CallStack (MonadLoggerIO)
 import Control.Monad.Logger.CallStack qualified as Log
 import Control.Monad.Trans.Except (catchE, except, runExcept, runExceptT, throwE, withExceptT)
 import Crypto.Hash (SHA256 (..), hashWith)
+import Data.Aeson (ToJSON (toJSON))
 import Data.Bifunctor (second)
 import Data.Coerce (coerce)
-import Data.Conduit.Network (serverSettings)
 import Data.Foldable
 import Data.List (singleton)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
 import Data.Sequence (Seq)
+import Data.Set qualified as Set
 import Data.Text (Text, pack)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
@@ -40,12 +41,10 @@ import GHC.Records
 import Numeric.Natural
 import Prettyprinter (pretty)
 import System.Clock (Clock (Monotonic), diffTimeSpec, getTime, toNanoSecs)
-import System.IO qualified as IO
 
 import Booster.Definition.Attributes.Base (getUniqueId, uniqueId)
 import Booster.Definition.Base (KoreDefinition (..))
 import Booster.Definition.Base qualified as Definition (RewriteRule (..))
-import Booster.JsonRpc.Utils (runHandleLoggingT)
 import Booster.LLVM as LLVM (API)
 import Booster.Pattern.ApplyEquations qualified as ApplyEquations
 import Booster.Pattern.Base (
@@ -79,10 +78,8 @@ import Booster.Syntax.ParsedKore.Base hiding (ParsedModule)
 import Booster.Syntax.ParsedKore.Base qualified as ParsedModule (ParsedModule (..))
 import Booster.Syntax.ParsedKore.Internalise (addToDefinitions)
 import Booster.Util (Flag (..), constructorName)
-import Data.Aeson (ToJSON (toJSON))
-import Data.Set qualified as Set
 import Kore.JsonRpc.Error qualified as RpcError
-import Kore.JsonRpc.Server
+import Kore.JsonRpc.Server (ErrorObj (..), JsonRpcHandler (..), Respond)
 import Kore.JsonRpc.Types qualified as RpcTypes
 import Kore.JsonRpc.Types.Log
 import Kore.Syntax.Json.Types (Id (..))
@@ -183,9 +180,9 @@ respond stateVar =
 
                 -- check if we already received a module with this name
                 when nameAsId $
-                    case Map.lookup (getId $ newModule.name) state.addedModules of
+                    case Map.lookup (getId newModule.name) state.addedModules of
                         -- if a different module was already added, throw error
-                        Just m | _module /= m -> throwE (RpcError.DuplicateModuleName, toJSON $ getId $ newModule.name)
+                        Just m | _module /= m -> throwE (RpcError.DuplicateModuleName, toJSON $ getId newModule.name)
                         _ -> pure ()
 
                 -- Check for a corner case when we send module M1 with the name "m<hash of M2>"" and name-as-id: true
@@ -206,10 +203,10 @@ respond stateVar =
                         state
                             { definitions =
                                 if nameAsId
-                                    then Map.insert (getId $ newModule.name) (newDefinitions Map.! moduleHash) newDefinitions
+                                    then Map.insert (getId newModule.name) (newDefinitions Map.! moduleHash) newDefinitions
                                     else newDefinitions
                             , addedModules =
-                                (if nameAsId then Map.insert (getId $ newModule.name) _module else id) $
+                                (if nameAsId then Map.insert (getId newModule.name) _module else id) $
                                     Map.insert moduleHash _module state.addedModules
                             }
                 Log.logInfo $
@@ -275,19 +272,19 @@ respond stateVar =
                                 , ceilConditions = pat.ceilConditions
                                 }
                     ApplyEquations.evaluatePattern doTracing def mLlvmLibrary solver mempty substPat >>= \case
-                        (Right newPattern, patternTraces, _) -> do
+                        (Right newPattern, _) -> do
                             let (term, mbPredicate, mbSubstitution) = externalisePattern newPattern substitution
                                 tSort = externaliseSort (sortOfPattern newPattern)
                                 result = case catMaybes (mbPredicate : mbSubstitution : map Just unsupported) of
                                     [] -> term
                                     ps -> KoreJson.KJAnd tSort $ term : ps
-                            pure $ Right (addHeader result, patternTraces)
-                        (Left ApplyEquations.SideConditionFalse{}, patternTraces, _) -> do
+                            pure $ Right (addHeader result, [])
+                        (Left ApplyEquations.SideConditionFalse{}, _) -> do
                             let tSort = externaliseSort $ sortOfPattern pat
-                            pure $ Right (addHeader $ KoreJson.KJBottom tSort, patternTraces)
-                        (Left (ApplyEquations.EquationLoop terms), _traces, _) ->
+                            pure $ Right (addHeader $ KoreJson.KJBottom tSort, [])
+                        (Left (ApplyEquations.EquationLoop terms), _) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ map externaliseTerm terms -- FIXME
-                        (Left other, _traces, _) ->
+                        (Left other, _) ->
                             pure . Left . RpcError.backendError RpcError.Aborted $ (Text.pack . constructorName $ other) -- FIXME
                             -- predicate only
                 Right (Predicates ps)
@@ -315,7 +312,7 @@ respond stateVar =
                             mempty
                             predicates
                             >>= \case
-                                (Right newPreds, traces, _) -> do
+                                (Right newPreds, _) -> do
                                     let predicateSort =
                                             fromMaybe (error "not a predicate") $
                                                 sortOfJson req.state.term
@@ -325,8 +322,8 @@ respond stateVar =
                                                 <> map (uncurry $ externaliseSubstitution predicateSort) (Map.toList ps.substitution)
                                                 <> ps.unsupported
 
-                                    pure $ Right (addHeader $ Syntax.KJAnd predicateSort result, traces)
-                                (Left something, _traces, _) ->
+                                    pure $ Right (addHeader $ Syntax.KJAnd predicateSort result, [])
+                                (Left something, _) ->
                                     pure . Left . RpcError.backendError RpcError.Aborted $ show something
             whenJust solver SMT.closeSolver
             stop <- liftIO $ getTime Monotonic
@@ -469,38 +466,22 @@ respond stateVar =
             Nothing -> pure $ Left $ RpcError.backendError RpcError.CouldNotFindModule mainName
             Just d -> action (d, state.mLlvmLibrary, state.mSMTOptions)
 
-runServer ::
-    Int ->
-    Map Text KoreDefinition ->
-    Text ->
-    Maybe LLVM.API ->
-    Maybe SMT.SMTOptions ->
-    (LogLevel, [LogLevel]) ->
-    IO ()
-runServer port definitions defaultMain mLlvmLibrary mSMTOptions (logLevel, customLevels) =
-    do
-        let logLevelToHandle = \case
-                _ -> IO.stderr
+handleSmtError :: JsonRpcHandler
+handleSmtError = JsonRpcHandler $ \case
+    SMT.GeneralSMTError err -> runtimeError "problem" err
+    SMT.SMTTranslationError err -> runtimeError "translation" err
+    SMT.SMTSolverUnknown premises preds -> do
+        Log.logErrorNS "booster" "SMT returned `Unknown'"
 
-        stateVar <-
-            newMVar
-                ServerState
-                    { definitions
-                    , defaultMain
-                    , mLlvmLibrary
-                    , mSMTOptions
-                    , addedModules = mempty
-                    }
-        runHandleLoggingT logLevelToHandle . Log.filterLogger levelFilter $
-            jsonRpcServer
-                srvSettings
-                (const $ respond stateVar)
-                [RpcError.handleErrorCall, RpcError.handleSomeException]
+        let bool = externaliseSort Pattern.SortBool -- predicates are terms of sort Bool
+            externalise = Syntax.KJAnd bool . map (externalisePredicate bool) . Set.toList
+            allPreds = addHeader $ Syntax.KJAnd bool [externalise premises, externalise preds]
+        pure $ RpcError.backendError RpcError.SmtSolverError $ toJSON allPreds
   where
-    levelFilter _source lvl =
-        lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
-
-    srvSettings = serverSettings port "*"
+    runtimeError prefix err = do
+        let msg = "SMT " <> prefix <> ": " <> err
+        Log.logErrorNS "booster" msg
+        pure $ RpcError.runtimeError msg
 
 data ServerState = ServerState
     { definitions :: Map Text KoreDefinition

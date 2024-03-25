@@ -68,11 +68,11 @@ library:
   - casing
   - clock
   - conduit
-  - conduit-extra
   - containers
   - cryptonite
   - deepseq
   - deriving-aeson
+  - directory
   - exceptions
   - extra
   - filepath

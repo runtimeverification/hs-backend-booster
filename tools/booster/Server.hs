@@ -48,13 +48,13 @@ import Booster.Definition.Base (HasSourceRef (sourceRef), RewriteRule (computedA
 import Booster.Definition.Ceil (ComputeCeilSummary (..), computeCeilsDefinition)
 import Booster.GlobalState
 import Booster.JsonRpc qualified as Booster
-import Booster.JsonRpc.Utils qualified as Booster
 import Booster.LLVM.Internal (mkAPI, withDLib)
 import Booster.Prettyprinter (renderText)
 import Booster.SMT.Base qualified as SMT (SExpr (..), SMTId (..))
 import Booster.SMT.Interface (SMTOptions (..))
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
+import Booster.Util qualified as Booster
 import Data.Limit (Limit (..))
 import GlobalMain qualified
 import Kore.Attribute.Symbol (StepperAttributes)
@@ -103,6 +103,7 @@ main = do
                     , smtOptions
                     , equationOptions
                     , eventlogEnabledUserEvents
+                    , simplificationLogFile
                     }
             , proxyOptions =
                 ProxyOptions
@@ -121,114 +122,121 @@ main = do
             Set.unions $ mapMaybe (`Map.lookup` koreExtraLogs) customLevels
         koreSolverOptions = translateSMTOpts smtOptions
 
-    let logLevelToHandle = \case
-            _ -> IO.stderr
+    Booster.withLogFile simplificationLogFile $ \mLogFileHandle -> do
+        let logLevelToHandle = \case
+                Logger.LevelOther "SimplifyJson" -> fromMaybe IO.stderr mLogFileHandle
+                _ -> IO.stderr
 
-    Booster.runHandleLoggingT logLevelToHandle . Logger.filterLogger levelFilter $ do
-        liftIO $ forM_ eventlogEnabledUserEvents $ \t -> do
-            putStrLn $ "Tracing " <> show t
-            enableCustomUserEvent t
-        Logger.logInfoNS "proxy" $
-            Text.pack $
-                "Loading definition from "
-                    <> definitionFile
-                    <> ", main module "
-                    <> show mainModuleName
+        Booster.runHandleLoggingT logLevelToHandle . Logger.filterLogger levelFilter $ do
+            liftIO $ forM_ eventlogEnabledUserEvents $ \t -> do
+                putStrLn $ "Tracing " <> show t
+                enableCustomUserEvent t
+            Logger.logInfoNS "proxy" $
+                Text.pack $
+                    "Loading definition from "
+                        <> definitionFile
+                        <> ", main module "
+                        <> show mainModuleName
 
-        monadLogger <- askLoggerIO
+            monadLogger <- askLoggerIO
 
-        liftIO $ void $ withBugReport (ExeName "kore-rpc-booster") BugReportOnError $ \reportDirectory -> withMDLib llvmLibraryFile $ \mdl -> do
-            let coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
-                koreLogOptions =
-                    (defaultKoreLogOptions (ExeName "") startTime)
-                        { Log.logLevel = coLogLevel
-                        , Log.logEntries = koreLogExtraLevels
-                        , Log.timestampsSwitch = TimestampsDisable
-                        , Log.debugSolverOptions =
-                            Log.DebugSolverOptions . fmap (<> ".kore") $ smtOptions >>= (.transcript)
-                        , Log.logType = LogSomeAction $ LogAction $ \txt -> liftIO $ monadLogger defaultLoc "kore" logLevel $ toLogStr txt
-                        }
-                srvSettings = serverSettings port "*"
-
-            withLogger reportDirectory koreLogOptions $ \actualLogAction -> do
-                mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
-                definitionsWithCeilSummaries <-
-                    liftIO $
-                        loadDefinition definitionFile
-                            >>= mapM (mapM (runNoLoggingT . computeCeilsDefinition mLlvmLibrary))
-                            >>= evaluate . force . either (error . show) id
-                unless (isJust $ Map.lookup mainModuleName definitionsWithCeilSummaries) $ do
-                    flip runLoggingT monadLogger $
-                        Logger.logErrorNS "proxy" $
-                            "Main module " <> mainModuleName <> " not found in " <> Text.pack definitionFile
-                    liftIO exitFailure
-
-                flip runLoggingT monadLogger $
-                    forM_ (Map.elems definitionsWithCeilSummaries) $ \(_, summaries) ->
-                        forM_ summaries $ \ComputeCeilSummary{rule, ceils} ->
-                            Logger.logOtherNS "booster" (Logger.LevelOther "Ceil") $
-                                renderText $
-                                    Pretty.vsep $
-                                        [ "Partial symbols found in rule"
-                                        , Pretty.pretty (sourceRef rule)
-                                        , Pretty.indent 2 . Pretty.vsep $
-                                            map Pretty.pretty rule.computedAttributes.notPreservesDefinednessReasons
-                                        ]
-                                            <> if null ceils
-                                                then ["discharged all ceils, rule preserves definedness"]
-                                                else
-                                                    [ "rule does NOT preserve definedness. Partially computed ceils:"
-                                                    , Pretty.indent 2 . Pretty.vsep $
-                                                        map
-                                                            (either Pretty.pretty (\t -> "#Ceil(" Pretty.<+> Pretty.pretty t Pretty.<+> ")"))
-                                                            (Set.toList ceils)
-                                                    ]
-
-                mvarLogAction <- newMVar actualLogAction
-                let logAction = swappableLogger mvarLogAction
-
-                kore@KoreServer{runSMT} <-
-                    mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions
-
-                boosterState <-
-                    liftIO $
-                        newMVar
-                            Booster.ServerState
-                                { definitions = Map.map fst definitionsWithCeilSummaries
-                                , defaultMain = mainModuleName
-                                , mLlvmLibrary
-                                , mSMTOptions = if boosterSMT then smtOptions else Nothing
-                                , addedModules = mempty
-                                }
-                statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
-
-                writeGlobalEquationOptions equationOptions
-
-                runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
-
-                let koreRespond, boosterRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
-                    koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
-                    boosterRespond = Booster.respond boosterState
-
-                    proxyConfig =
-                        ProxyConfig
-                            { statsVar
-                            , forceFallback
-                            , boosterState
-                            , fallbackReasons
-                            , simplifyAtEnd
+            liftIO $ void $ withBugReport (ExeName "kore-rpc-booster") BugReportOnError $ \reportDirectory -> withMDLib llvmLibraryFile $ \mdl -> do
+                let coLogLevel = fromMaybe Log.Info $ toSeverity logLevel
+                    koreLogOptions =
+                        (defaultKoreLogOptions (ExeName "") startTime)
+                            { Log.logLevel = coLogLevel
+                            , Log.logEntries = koreLogExtraLevels
+                            , Log.timestampsSwitch = TimestampsDisable
+                            , Log.debugSolverOptions =
+                                Log.DebugSolverOptions . fmap (<> ".kore") $ smtOptions >>= (.transcript)
+                            , Log.logType = LogSomeAction $ LogAction $ \txt -> liftIO $ monadLogger defaultLoc "kore" logLevel $ toLogStr txt
                             }
-                    server =
-                        jsonRpcServer
-                            srvSettings
-                            (const $ Proxy.respondEither proxyConfig boosterRespond koreRespond)
-                            [Kore.handleDecidePredicateUnknown, handleErrorCall, handleSomeException]
-                    interruptHandler _ = do
-                        when (logLevel >= LevelInfo) $
-                            IO.hPutStrLn IO.stderr "[Info#proxy] Server shutting down"
-                        whenJust statsVar Stats.showStats
-                        exitSuccess
-                handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger
+                    srvSettings = serverSettings port "*"
+
+                withLogger reportDirectory koreLogOptions $ \actualLogAction -> do
+                    mLlvmLibrary <- maybe (pure Nothing) (fmap Just . mkAPI) mdl
+                    definitionsWithCeilSummaries <-
+                        liftIO $
+                            loadDefinition definitionFile
+                                >>= mapM (mapM (runNoLoggingT . computeCeilsDefinition mLlvmLibrary))
+                                >>= evaluate . force . either (error . show) id
+                    unless (isJust $ Map.lookup mainModuleName definitionsWithCeilSummaries) $ do
+                        flip runLoggingT monadLogger $
+                            Logger.logErrorNS "proxy" $
+                                "Main module " <> mainModuleName <> " not found in " <> Text.pack definitionFile
+                        liftIO exitFailure
+
+                    flip runLoggingT monadLogger $
+                        forM_ (Map.elems definitionsWithCeilSummaries) $ \(_, summaries) ->
+                            forM_ summaries $ \ComputeCeilSummary{rule, ceils} ->
+                                Logger.logOtherNS "booster" (Logger.LevelOther "Ceil") $
+                                    renderText $
+                                        Pretty.vsep $
+                                            [ "Partial symbols found in rule"
+                                            , Pretty.pretty (sourceRef rule)
+                                            , Pretty.indent 2 . Pretty.vsep $
+                                                map Pretty.pretty rule.computedAttributes.notPreservesDefinednessReasons
+                                            ]
+                                                <> if null ceils
+                                                    then ["discharged all ceils, rule preserves definedness"]
+                                                    else
+                                                        [ "rule does NOT preserve definedness. Partially computed ceils:"
+                                                        , Pretty.indent 2 . Pretty.vsep $
+                                                            map
+                                                                (either Pretty.pretty (\t -> "#Ceil(" Pretty.<+> Pretty.pretty t Pretty.<+> ")"))
+                                                                (Set.toList ceils)
+                                                        ]
+
+                    mvarLogAction <- newMVar actualLogAction
+                    let logAction = swappableLogger mvarLogAction
+
+                    kore@KoreServer{runSMT} <-
+                        mkKoreServer Log.LoggerEnv{logAction} clOPts koreSolverOptions
+
+                    boosterState <-
+                        liftIO $
+                            newMVar
+                                Booster.ServerState
+                                    { definitions = Map.map fst definitionsWithCeilSummaries
+                                    , defaultMain = mainModuleName
+                                    , mLlvmLibrary
+                                    , mSMTOptions = if boosterSMT then smtOptions else Nothing
+                                    , addedModules = mempty
+                                    }
+                    statsVar <- if printStats then Just <$> Stats.newStats else pure Nothing
+
+                    writeGlobalEquationOptions equationOptions
+
+                    runLoggingT (Logger.logInfoNS "proxy" "Starting RPC server") monadLogger
+
+                    let koreRespond, boosterRespond :: Respond (API 'Req) (LoggingT IO) (API 'Res)
+                        koreRespond = Kore.respond kore.serverState (ModuleName kore.mainModule) runSMT
+                        boosterRespond = Booster.respond boosterState
+
+                        proxyConfig =
+                            ProxyConfig
+                                { statsVar
+                                , forceFallback
+                                , boosterState
+                                , fallbackReasons
+                                , simplifyAtEnd
+                                , customLogLevels = customLevels
+                                }
+                        server =
+                            jsonRpcServer
+                                srvSettings
+                                (const $ Proxy.respondEither proxyConfig boosterRespond koreRespond)
+                                [ Kore.handleDecidePredicateUnknown
+                                , Booster.handleSmtError
+                                , handleErrorCall
+                                , handleSomeException
+                                ]
+                        interruptHandler _ = do
+                            when (logLevel >= LevelInfo) $
+                                IO.hPutStrLn IO.stderr "[Info#proxy] Server shutting down"
+                            whenJust statsVar Stats.showStats
+                            exitSuccess
+                    handleJust isInterrupt interruptHandler $ runLoggingT server monadLogger
   where
     clParser =
         info
@@ -254,7 +262,10 @@ koreExtraLogs =
     Map.map (Set.fromList . mapMaybe (`Map.lookup` Log.textToType Log.registry)) $
         Map.fromList
             [ (LevelOther "SimplifyKore", ["DebugAttemptEquation", "DebugApplyEquation"])
-            , (LevelOther "RewriteKore", ["DebugAttemptedRewriteRules", "DebugAppliedRewriteRules"])
+            ,
+                ( LevelOther "RewriteKore"
+                , ["DebugAttemptedRewriteRules", "DebugAppliedLabeledRewriteRule", "DebugAppliedRewriteRules"]
+                )
             , (LevelOther "SimplifySuccess", ["DebugApplyEquation"])
             , (LevelOther "RewriteSuccess", ["DebugAppliedRewriteRules"])
             ]

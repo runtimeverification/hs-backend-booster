@@ -90,7 +90,7 @@ closeContext ctxt = do
     whenJust ctxt.mbTranscript $ \h -> liftIO $ do
         BS.hPutStrLn h "; stopping solver\n;;;;;;;;;;;;;;;;;;;;;;;"
         hClose h
-    liftIO $ ctxt.solverClose
+    liftIO ctxt.solverClose
 
 newtype SMT m a = SMT (ReaderT SMTContext m a)
     deriving newtype (Functor, Applicative, Monad, MonadIO, MonadLogger, MonadLoggerIO)
@@ -162,6 +162,9 @@ instance SMTEncode QueryCommand where
 instance SMTEncode ControlCommand where
     encode Push = "(push)"
     encode Pop = "(pop)"
+    encode (SetTimeout n)
+        | n > 0 = "(set-option :timeout " <> BS.string7 (show n) <> ")"
+        | otherwise = error $ "Illegal SMT timeout value " <> show n
     encode Exit = "(exit)"
 
     comment _ = Just ";;;;;;;\n"

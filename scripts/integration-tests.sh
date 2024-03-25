@@ -14,6 +14,8 @@ cabal test llvm-integration
 
 # The runDirectoryTest.sh script expects the following env vars to be set
 export PLUGIN_DIR=$(nix build github:runtimeverification/blockchain-k-plugin/$PLUGIN_VERSION --no-link --json | jq -r '.[].outputs | to_entries[].value')
+export SECP256K1_DIR=$(nix build nixpkgs#secp256k1 --no-link --json | jq -r '.[].outputs | to_entries[].value')
+
 cabal build all
 KORE_RPC_BOOSTER=$(cabal exec which kore-rpc-booster)
 BOOSTER_DEV=$(cabal exec which booster-dev)
@@ -51,6 +53,9 @@ for dir in $(ls -d test-*); do
             ;;
         "simplify")
             SERVER=$BOOSTER_DEV ./runDirectoryTest.sh test-$name $@
+            ;;
+        "log-simplify-json")
+            SERVER="${KORE_RPC_BOOSTER} -l SimplifyJson --simplification-log-file test-$name/simplify-log.txt" ./runDirectoryTest.sh test-$name $@
             ;;
         "foundry-bug-report")
             SERVER=$KORE_RPC_BOOSTER ./runDirectoryTest.sh test-$name --time $@

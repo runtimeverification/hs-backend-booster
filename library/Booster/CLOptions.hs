@@ -30,11 +30,11 @@ data CLOptions = CLOptions
     , llvmLibraryFile :: Maybe FilePath
     , port :: Int
     , logLevels :: [LogLevel]
+    , simplificationLogFile :: Maybe FilePath
     , smtOptions :: Maybe SMTOptions
     , equationOptions :: EquationOptions
     , -- developer options below
       eventlogEnabledUserEvents :: [CustomUserEventType]
-    , hijackEventlogFile :: Maybe FilePath
     }
     deriving (Show)
 
@@ -78,6 +78,14 @@ clOptionsParser =
                         )
                 )
             )
+        <*> optional
+            ( strOption
+                ( metavar "JSON_LOG_FILE"
+                    <> long "simplification-log-file"
+                    <> help
+                        "Log file for the JSON simplification logs"
+                )
+            )
         <*> parseSMTOptions
         <*> parseEquationOptions
         -- developer options below
@@ -93,14 +101,6 @@ clOptionsParser =
                                 ", "
                                 [toKebab $ fromHumps $ show t | t <- [minBound .. maxBound] :: [CustomUserEventType]]
                         )
-                )
-            )
-        <*> optional
-            ( strOption
-                ( metavar "HIJACK_EVENTLOG_FILE"
-                    <> long "hijack-eventlog-file"
-                    <> help
-                        "Hijack LlvmCall tracing events and write them to a file to overcome GHC RTS' restriction on event size (2^16 bytes). Avoid at all costs."
                 )
             )
   where
@@ -128,6 +128,7 @@ allowedLogLevels =
     , ("RewriteKore", "Log all rewriting in kore-rpc fall-backs")
     , ("RewriteSuccess", "Log successful rewrites (booster and kore-rpc)")
     , ("Simplify", "Log all simplification/evaluation in booster")
+    , ("SimplifyJson", "Log simplification/evaluation in booster as JSON")
     , ("SimplifyKore", "Log all simplification in kore-rpc")
     , ("SimplifySuccess", "Log successful simplifications (booster and kore-rpc)")
     , ("Depth", "Log the current depth of the state")

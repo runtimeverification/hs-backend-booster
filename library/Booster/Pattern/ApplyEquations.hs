@@ -32,7 +32,7 @@ module Booster.Pattern.ApplyEquations (
 ) where
 
 import Control.Monad
-import Control.Monad.Extra
+import Control.Monad.Extra (fromMaybeM, whenJust)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger.CallStack (
     LogLevel (..),
@@ -45,6 +45,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.State
+import Data.Aeson.Text (encodeToLazyText)
 import Data.ByteString.Char8 qualified as BS
 import Data.Coerce (coerce)
 import Data.Data (Data)
@@ -52,7 +53,7 @@ import Data.Foldable (toList, traverse_)
 import Data.List (partition)
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust)
+import Data.Maybe (catMaybes, fromJust, fromMaybe)
 import Data.Sequence (Seq (..), pattern (:<|))
 import Data.Sequence qualified as Seq
 import Data.Set (Set)
@@ -60,6 +61,7 @@ import Data.Set qualified as Set
 import Data.Text (Text, pack)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
+import Data.Text.Lazy qualified as Text (toStrict)
 import Prettyprinter
 
 import Booster.Builtin as Builtin
@@ -75,6 +77,7 @@ import Booster.Pattern.Util
 import Booster.Prettyprinter (renderDefault, renderText)
 import Booster.SMT.Interface qualified as SMT
 import Booster.Util (Bound (..), Flag (..))
+import Kore.JsonRpc.Types.Log qualified as KoreRpcLog
 
 newtype EquationT io a
     = EquationT (ReaderT EquationConfig (ExceptT EquationFailure (StateT EquationState io)) a)
@@ -151,11 +154,21 @@ data EquationState = EquationState
     , recursionStack :: [Term]
     , changed :: Bool
     , predicates :: Set Predicate
-    , trace :: Seq (EquationTrace Term)
     , cache :: SimplifierCache
     }
 
-type SimplifierCache = Map Term Term
+data SimplifierCache = SimplifierCache {llvm, equations :: Map Term Term}
+    deriving stock (Show)
+
+instance Semigroup SimplifierCache where
+    cache1 <> cache2 =
+        SimplifierCache (cache1.llvm <> cache2.llvm) (cache1.equations <> cache2.equations)
+
+instance Monoid SimplifierCache where
+    mempty = SimplifierCache mempty mempty
+
+data CacheTag = LLVM | Equations
+    deriving stock (Show)
 
 data EquationMetadata = EquationMetadata
     { location :: Maybe Location
@@ -246,14 +259,51 @@ isMatchFailure _ = False
 isSuccess EquationApplied{} = True
 isSuccess _ = False
 
-startState :: Map Term Term -> EquationState
+equationTraceToLogEntry :: EquationTrace Term -> KoreRpcLog.LogEntry
+equationTraceToLogEntry = \case
+    EquationApplied _subjectTerm metadata _rewritten ->
+        KoreRpcLog.Simplification
+            { originalTerm
+            , originalTermIndex
+            , origin
+            , result =
+                KoreRpcLog.Success Nothing Nothing (fromMaybe "UNKNOWN" _ruleId)
+            }
+      where
+        originalTerm = Nothing
+        originalTermIndex = Nothing
+        origin = KoreRpcLog.Booster
+        _ruleId = fmap getUniqueId metadata.ruleId
+    EquationNotApplied _subjectTerm metadata failure ->
+        KoreRpcLog.Simplification
+            { originalTerm
+            , originalTermIndex
+            , origin
+            , result = KoreRpcLog.Failure (failureDescription failure) _ruleId
+            }
+      where
+        originalTerm = Nothing
+        originalTermIndex = Nothing
+        origin = KoreRpcLog.Booster
+        _ruleId = fmap getUniqueId metadata.ruleId
+
+        failureDescription :: ApplyEquationFailure -> Text.Text
+        failureDescription = \case
+            FailedMatch{} -> "Failed match"
+            IndeterminateMatch -> "IndeterminateMatch"
+            IndeterminateCondition{} -> "IndeterminateCondition"
+            ConditionFalse{} -> "ConditionFalse"
+            EnsuresFalse{} -> "EnsuresFalse"
+            RuleNotPreservingDefinedness -> "RuleNotPreservingDefinedness"
+            MatchConstraintViolated{} -> "MatchConstraintViolated"
+
+startState :: SimplifierCache -> EquationState
 startState cache =
     EquationState
         { termStack = mempty
         , recursionStack = []
         , changed = False
         , predicates = mempty
-        , trace = mempty
         , cache
         }
 
@@ -295,11 +345,19 @@ popRecursion = do
         then throw $ InternalError "Trying to pop an empty recursion stack"
         else eqState $ put s{recursionStack = tail s.recursionStack}
 
-toCache :: MonadLoggerIO io => Term -> Term -> EquationT io ()
-toCache orig result = eqState . modify $ \s -> s{cache = Map.insert orig result s.cache}
+toCache :: MonadLoggerIO io => CacheTag -> Term -> Term -> EquationT io ()
+toCache tag orig result = eqState . modify $ \s -> s{cache = updateCache tag s.cache}
+  where
+    insertInto = Map.insert orig result
+    updateCache LLVM cache = cache{llvm = insertInto cache.llvm}
+    updateCache Equations cache = cache{equations = insertInto cache.equations}
 
-fromCache :: MonadLoggerIO io => Term -> EquationT io (Maybe Term)
-fromCache t = eqState $ Map.lookup t <$> gets (.cache)
+fromCache :: MonadLoggerIO io => CacheTag -> Term -> EquationT io (Maybe Term)
+fromCache tag t = eqState $ Map.lookup t <$> gets (select tag . (.cache))
+  where
+    select :: CacheTag -> SimplifierCache -> Map Term Term
+    select LLVM = (.llvm)
+    select Equations = (.equations)
 
 checkForLoop :: MonadLoggerIO io => Term -> EquationT io ()
 checkForLoop t = do
@@ -321,7 +379,7 @@ runEquationT ::
     Maybe SMT.SMTContext ->
     SimplifierCache ->
     EquationT io a ->
-    io (Either EquationFailure a, [EquationTrace Term], SimplifierCache)
+    io (Either EquationFailure a, SimplifierCache)
 runEquationT doTracing definition llvmApi smtSolver sCache (EquationT m) = do
     globalEquationOptions <- liftIO GlobalState.readGlobalEquationOptions
     (res, endState) <-
@@ -337,7 +395,7 @@ runEquationT doTracing definition llvmApi smtSolver sCache (EquationT m) = do
                         , maxIterations = globalEquationOptions.maxIterations
                         , maxRecursion = globalEquationOptions.maxRecursion
                         }
-    pure (res, toList endState.trace, endState.cache)
+    pure (res, endState.cache)
 
 iterateEquations ::
     MonadLoggerIO io =>
@@ -366,12 +424,46 @@ iterateEquations direction preference startTerm = do
                 throw $
                     TooManyIterations currentCount startTerm currentTerm
             pushTerm currentTerm
+            -- simplify the term using the LLVM backend first
+            llvmResult <- llvmSimplify currentTerm
+            -- NB llvmSimplify is idempotent. No need to iterate if
+            -- the equation evaluation does not change the term any more.
+            resetChanged
             -- evaluate functions and simplify (recursively at each level)
-            newTerm <- applyTerm direction preference currentTerm
+            newTerm <-
+                let simp = cached Equations $ traverseTerm direction simp (applyHooksAndEquations preference)
+                 in simp llvmResult
             changeFlag <- getChanged
             if changeFlag
                 then checkForLoop newTerm >> resetChanged >> go newTerm
-                else pure currentTerm
+                else pure llvmResult
+
+llvmSimplify :: forall io. MonadLoggerIO io => Term -> EquationT io Term
+llvmSimplify term = do
+    config <- getConfig
+    case config.llvmApi of
+        Nothing -> pure term
+        Just api -> do
+            logOtherNS "booster" (LevelOther "Simplify") "Calling LLVM simplification"
+            let simp = cached LLVM $ evalLlvm config.definition api $ traverseTerm BottomUp simp pure
+             in simp term
+  where
+    evalLlvm definition api cb t@(Term attributes _)
+        | attributes.isEvaluated = pure t
+        | isConcrete t && attributes.canBeEvaluated = do
+            LLVM.simplifyTerm api definition t (sortOfTerm t)
+                >>= \case
+                    Left e -> throw $ UndefinedTerm t e
+                    Right result -> do
+                        when (result /= t) $ do
+                            setChanged
+                            emitEquationTrace t Nothing (Just "LLVM") Nothing $ Success result
+                        toCache LLVM t result
+                        pure result
+        | otherwise = do
+            result <- cb t
+            toCache LLVM t result
+            pure result
 
 ----------------------------------------
 -- Interface functions
@@ -385,7 +477,7 @@ evaluateTerm ::
     Maybe LLVM.API ->
     Maybe SMT.SMTContext ->
     Term ->
-    io (Either EquationFailure Term, [EquationTrace Term], SimplifierCache)
+    io (Either EquationFailure Term, SimplifierCache)
 evaluateTerm doTracing direction def llvmApi smtSolver =
     runEquationT doTracing def llvmApi smtSolver mempty
         . evaluateTerm' direction
@@ -409,7 +501,7 @@ evaluatePattern ::
     Maybe SMT.SMTContext ->
     SimplifierCache ->
     Pattern ->
-    io (Either EquationFailure Pattern, [EquationTrace Term], SimplifierCache)
+    io (Either EquationFailure Pattern, SimplifierCache)
 evaluatePattern doTracing def mLlvmLibrary smtSolver cache =
     runEquationT doTracing def mLlvmLibrary smtSolver cache . evaluatePattern'
 
@@ -444,114 +536,100 @@ evaluatePattern' Pattern{term, constraints, ceilConditions} = do
   No iteration happens at the same AST level inside these traversals,
   one equation will be applied per level (if any).
 -}
-applyTerm ::
-    MonadLoggerIO io =>
-    Direction ->
-    EquationPreference ->
-    Term ->
-    EquationT io Term
-applyTerm direction pref trm = do
-    config <- getConfig -- avoid re-reading config at every node
-    descend config trm
-  where
-    -- descend :: EquationConfig -> Term -> EquationT io Term
-    descend config t@(Term attributes _)
-        | attributes.isEvaluated = pure t
-        | otherwise =
-            fromCache t >>= \case
-                Nothing -> do
-                    simplified <-
-                        if isConcrete t && isJust config.llvmApi && attributes.canBeEvaluated
-                            then -- LLVM simplification proceeds top-down and cuts the descent
-
-                                LLVM.simplifyTerm (fromJust config.llvmApi) config.definition t (sortOfTerm t)
-                                    >>= \case
-                                        Left e -> throw $ UndefinedTerm t e
-                                        Right result -> do
-                                            when (result /= t) $ do
-                                                setChanged
-                                                emitEquationTrace t Nothing (Just "LLVM") Nothing $ Success result
-                                            pure result
-                            else -- use equations
-                                apply config t
-                    toCache t simplified
-                    pure simplified
-                Just cached -> do
-                    when (t /= cached) $ do
-                        setChanged
-                        emitEquationTrace t Nothing (Just "Cache") Nothing $ Success cached
-                    pure cached
-
-    -- Bottom-up evaluation traverses AST nodes in post-order but finds work top-down
-    -- Top-down evaluation traverses AST nodes in pre-order
-    apply config = \case
+traverseTerm ::
+    MonadLoggerIO m => Direction -> (Term -> m Term) -> (Term -> m Term) -> Term -> m Term
+traverseTerm direction onRecurse onEval trm = do
+    case trm of
         dv@DomainValue{} ->
             pure dv
         v@Var{} ->
             pure v
         Injection src trg t ->
-            Injection src trg <$> descend config t -- no injection simplification
+            Injection src trg <$> onRecurse t -- no injection simplification
         AndTerm arg1 arg2 ->
             AndTerm -- no \and simplification
-                <$> descend config arg1
-                <*> descend config arg2
+                <$> onRecurse arg1
+                <*> onRecurse arg2
         app@(SymbolApplication sym sorts args)
             | direction == BottomUp -> do
                 -- evaluate arguments first
-                args' <- mapM (descend config) args
+                args' <- mapM onRecurse args
                 -- then try to apply equations
-                applyAtTop pref $ SymbolApplication sym sorts args'
+                onEval $ SymbolApplication sym sorts args'
             | otherwise {- direction == TopDown -} -> do
                 -- try to apply equations
-                t <- applyAtTop pref app
+                t <- onEval app
                 -- then recurse into arguments or re-evaluate (avoiding a loop)
                 if t /= app
                     then do
                         case t of
                             SymbolApplication sym' sorts' args' ->
                                 SymbolApplication sym' sorts'
-                                    <$> mapM (descend config) args'
+                                    <$> mapM onRecurse args'
                             _otherwise ->
-                                descend config t -- won't loop
+                                onRecurse t -- won't loop
                     else
                         SymbolApplication sym sorts
-                            <$> mapM (descend config) args
+                            <$> mapM onRecurse args
         -- maps, lists, and sets, are not currently evaluated because
         -- the matcher does not provide matches on collections.
         KMap def keyVals rest ->
             KMap def
-                <$> mapM (\(k, v) -> (,) <$> descend config k <*> descend config v) keyVals
-                <*> maybe (pure Nothing) ((Just <$>) . descend config) rest
+                <$> mapM (\(k, v) -> (,) <$> onRecurse k <*> onRecurse v) keyVals
+                <*> maybe (pure Nothing) ((Just <$>) . onRecurse) rest
         KList def heads rest ->
             KList def
-                <$> mapM (descend config) heads
+                <$> mapM onRecurse heads
                 <*> maybe
                     (pure Nothing)
                     ( (Just <$>)
                         . \(mid, tails) ->
                             (,)
-                                <$> descend config mid
-                                <*> mapM (descend config) tails
+                                <$> onRecurse mid
+                                <*> mapM onRecurse tails
                     )
                     rest
         KSet def keyVals rest ->
             KSet def
-                <$> mapM (descend config) keyVals
-                <*> maybe (pure Nothing) ((Just <$>) . descend config) rest
+                <$> mapM onRecurse keyVals
+                <*> maybe (pure Nothing) ((Just <$>) . onRecurse) rest
+
+cached :: MonadLoggerIO io => CacheTag -> (Term -> EquationT io Term) -> Term -> EquationT io Term
+cached cacheTag cb t@(Term attributes _)
+    | attributes.isEvaluated = pure t
+    | otherwise =
+        fromCache cacheTag t >>= \case
+            Nothing -> do
+                simplified <- cb t
+                toCache cacheTag t simplified
+                pure simplified
+            Just cachedTerm -> do
+                when (t /= cachedTerm) $ do
+                    setChanged
+                    emitEquationTrace t Nothing (Just "Cache") Nothing $ Success cachedTerm
+                pure cachedTerm
+
+elseApply :: (Monad m, Eq b) => (b -> m b) -> (b -> m b) -> b -> m b
+elseApply cb1 cb2 term = do
+    fromCb1 <- cb1 term
+    if fromCb1 /= term
+        then pure fromCb1
+        else cb2 term
 
 {- | Try to apply function equations and simplifications to the given
    top-level term, in priority order and per group.
 -}
-applyAtTop ::
+applyHooksAndEquations ::
     forall io.
     MonadLoggerIO io =>
     EquationPreference ->
     Term ->
     EquationT io Term
-applyAtTop pref term = do
+applyHooksAndEquations pref term = do
     -- always try built-in (hooked) functions first, then equations
-    fromMaybeM tryEquations tryBuiltins
+    tryBuiltins `whenNothing` tryEquations
   where
+    whenNothing = flip fromMaybeM
     tryBuiltins :: EquationT io (Maybe Term)
     tryBuiltins = do
         case term of
@@ -581,17 +659,15 @@ applyAtTop pref term = do
     tryEquations :: EquationT io Term
     tryEquations = do
         def <- (.definition) <$> getConfig
-        case pref of
-            PreferFunctions -> do
-                fromFunctions <- applyEquations def.functionEquations handleFunctionEquation term
-                if fromFunctions == term
-                    then applyEquations def.simplifications handleSimplificationEquation term
-                    else pure fromFunctions
-            PreferSimplifications -> do
-                simplified <- applyEquations def.simplifications handleSimplificationEquation term
-                if simplified == term
-                    then applyEquations def.functionEquations handleFunctionEquation term
-                    else pure simplified
+        ( case pref of
+                PreferFunctions -> do
+                    applyEquations def.functionEquations handleFunctionEquation
+                        `elseApply` applyEquations def.simplifications handleSimplificationEquation
+                PreferSimplifications -> do
+                    applyEquations def.simplifications handleSimplificationEquation
+                        `elseApply` applyEquations def.functionEquations handleFunctionEquation
+            )
+            term
 
 data ApplyEquationResult
     = Success Term
@@ -701,13 +777,12 @@ emitEquationTrace t loc lbl uid res = do
                 Failure failure -> EquationNotApplied t (EquationMetadata loc lbl uid) failure
         prettyItem = pack . renderDefault . pretty $ newTraceItem
     logOther (LevelOther "Simplify") prettyItem
+    logOther
+        (LevelOther "SimplifyJson")
+        (Text.toStrict . encodeToLazyText $ equationTraceToLogEntry newTraceItem)
     case res of
         Success{} -> logOther (LevelOther "SimplifySuccess") prettyItem
         _ -> pure ()
-    config <- getConfig
-    when (coerce config.doTracing) $
-        eqState . modify $
-            \s -> s{trace = s.trace :|> newTraceItem}
 
 applyEquation ::
     forall io tag.
@@ -860,7 +935,7 @@ simplifyConstraint ::
     Maybe SMT.SMTContext ->
     SimplifierCache ->
     Predicate ->
-    io (Either EquationFailure Predicate, [EquationTrace Term], SimplifierCache)
+    io (Either EquationFailure Predicate, SimplifierCache)
 simplifyConstraint doTracing def mbApi mbSMT cache (Predicate p) =
     runEquationT doTracing def mbApi mbSMT cache $ (coerce <$>) . simplifyConstraint' True $ p
 
@@ -872,7 +947,7 @@ simplifyConstraints ::
     Maybe SMT.SMTContext ->
     SimplifierCache ->
     [Predicate] ->
-    io (Either EquationFailure [Predicate], [EquationTrace Term], SimplifierCache)
+    io (Either EquationFailure [Predicate], SimplifierCache)
 simplifyConstraints doTracing def mbApi mbSMT cache ps =
     runEquationT doTracing def mbApi mbSMT cache $
         concatMap splitAndBools

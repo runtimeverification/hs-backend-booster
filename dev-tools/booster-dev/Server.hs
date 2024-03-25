@@ -4,24 +4,34 @@ License     : BSD-3-Clause
 -}
 module Main (main) where
 
+import Booster.Util (runHandleLoggingT, withLogFile)
+import Control.Concurrent (newMVar)
 import Control.DeepSeq (force)
-import Control.Exception (catch, evaluate, throwIO)
+import Control.Exception (evaluate)
 import Control.Monad (forM_, when)
 import Control.Monad.Logger (runNoLoggingT)
+import Control.Monad.Logger qualified as Log
+import Control.Monad.Logger.CallStack (LogLevel (LevelError))
+import Data.Conduit.Network (serverSettings)
+import Data.Map (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromJust, isJust, isNothing)
-import Data.Text (unpack)
+import Data.Maybe (fromMaybe, isNothing)
+import Data.Text (Text, unpack)
 import Options.Applicative
-import System.Directory (removeFile)
-import System.IO.Error (isDoesNotExistError)
+import System.IO qualified as IO
 
 import Booster.CLOptions
+import Booster.Definition.Base (KoreDefinition (..))
 import Booster.Definition.Ceil (computeCeilsDefinition)
 import Booster.GlobalState
-import Booster.JsonRpc (runServer)
+import Booster.JsonRpc (ServerState (..), handleSmtError, respond)
+import Booster.LLVM as LLVM (API)
 import Booster.LLVM.Internal (mkAPI, withDLib)
+import Booster.SMT.Interface qualified as SMT
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
+import Kore.JsonRpc.Error qualified as RpcError
+import Kore.JsonRpc.Server
 
 main :: IO ()
 main = do
@@ -35,24 +45,19 @@ main = do
             , smtOptions
             , equationOptions
             , eventlogEnabledUserEvents
-            , hijackEventlogFile
+            , simplificationLogFile
             } = options
 
     forM_ eventlogEnabledUserEvents $ \t -> do
         putStrLn $ "Tracing " <> show t
         enableCustomUserEvent t
-    when (isJust hijackEventlogFile) $ do
-        let fname = fromJust hijackEventlogFile
-        putStrLn $
-            "Hijacking eventlog into file " <> show fname
-        removeFileIfExists fname
-        enableHijackEventlogFile fname
     putStrLn $
         "Loading definition from "
             <> definitionFile
             <> ", main module "
             <> show mainModuleName
-    withLlvmLib llvmLibraryFile $ \mLlvmLibrary -> do
+
+    withLogFile simplificationLogFile $ \mLogFileHandle -> withLlvmLib llvmLibraryFile $ \mLlvmLibrary -> do
         definitionMap <-
             loadDefinition definitionFile
                 >>= mapM (mapM ((fst <$>) . runNoLoggingT . computeCeilsDefinition mLlvmLibrary))
@@ -65,7 +70,14 @@ main = do
         writeGlobalEquationOptions equationOptions
 
         putStrLn "Starting RPC server"
-        runServer port definitionMap mainModuleName mLlvmLibrary smtOptions (adjustLogLevels logLevels)
+        runServer
+            port
+            definitionMap
+            mainModuleName
+            mLlvmLibrary
+            mLogFileHandle
+            smtOptions
+            (adjustLogLevels logLevels)
   where
     withLlvmLib libFile m = case libFile of
         Nothing -> m Nothing
@@ -84,9 +96,37 @@ parserInfoModifiers =
         <> header
             "Haskell Backend Booster - a JSON RPC server for quick symbolic execution of Kore definitions"
 
-removeFileIfExists :: FilePath -> IO ()
-removeFileIfExists fileName = removeFile fileName `catch` handleExists
+runServer ::
+    Int ->
+    Map Text KoreDefinition ->
+    Text ->
+    Maybe LLVM.API ->
+    Maybe IO.Handle ->
+    Maybe SMT.SMTOptions ->
+    (LogLevel, [LogLevel]) ->
+    IO ()
+runServer port definitions defaultMain mLlvmLibrary mLogFileHandle mSMTOptions (logLevel, customLevels) =
+    do
+        let logLevelToHandle = \case
+                Log.LevelOther "SimplifyJson" -> fromMaybe IO.stderr mLogFileHandle
+                _ -> IO.stderr
+
+        stateVar <-
+            newMVar
+                ServerState
+                    { definitions
+                    , defaultMain
+                    , mLlvmLibrary
+                    , mSMTOptions
+                    , addedModules = mempty
+                    }
+        runHandleLoggingT logLevelToHandle . Log.filterLogger levelFilter $
+            jsonRpcServer
+                srvSettings
+                (const $ respond stateVar)
+                [handleSmtError, RpcError.handleErrorCall, RpcError.handleSomeException]
   where
-    handleExists e
-        | isDoesNotExistError e = return ()
-        | otherwise = throwIO e
+    levelFilter _source lvl =
+        lvl `elem` customLevels || lvl >= logLevel && lvl <= LevelError
+
+    srvSettings = serverSettings port "*"
