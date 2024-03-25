@@ -52,7 +52,9 @@ import Booster.SMT.Interface (SMTOptions (..))
 import Booster.Syntax.ParsedKore (loadDefinition)
 import Booster.Trace
 import Booster.Util qualified as Booster
+import Control.Concurrent (killThread, mkWeakThreadId, myThreadId)
 import Data.Limit (Limit (..))
+import GHC.Weak (deRefWeak)
 import GlobalMain qualified
 import Kore.Attribute.Symbol (StepperAttributes)
 import Kore.BugReport (BugReportOption (..), withBugReport)
@@ -83,9 +85,29 @@ import Proxy (KoreServer (..), ProxyConfig (..))
 import Proxy qualified
 import SMT qualified as KoreSMT
 import Stats qualified
+import System.Posix.Signals qualified as Signals
+
+{- | Workaround to ensure that the main thread throws an async exception on
+receiving a SIGTERM signal.
+based on https://github.com/IntersectMBO/cardano-node/pull/3641/files
+-}
+installSigTermHandler :: IO ()
+installSigTermHandler = do
+    -- Similar implementation to the RTS's handling of SIGINT (see GHC's
+    -- https://gitlab.haskell.org/ghc/ghc/-/blob/master/libraries/base/GHC/TopHandler.hs).
+    runThreadIdWk <- mkWeakThreadId =<< myThreadId
+    void $
+        Signals.installHandler
+            Signals.sigTERM
+            ( Signals.CatchOnce $ do
+                runThreadIdMay <- deRefWeak runThreadIdWk
+                forM_ runThreadIdMay killThread
+            )
+            Nothing
 
 main :: IO ()
 main = do
+    installSigTermHandler
     startTime <- getTime Monotonic
     options <- execParser clParser
     let CLProxyOptions
