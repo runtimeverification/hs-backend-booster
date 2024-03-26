@@ -1,5 +1,6 @@
 module TEST
   imports BOOL
+  imports INT
 
   syntax State ::= "a" [token]
                  | "b" [token]
@@ -10,10 +11,14 @@ module TEST
                  | "bot" [token]
 
   // we need a k cell with a kseq in it to have proper indexing
-  configuration <k> $PGM:State ~> .K </k>
+  configuration <T>
+                  <k> $PGM:State ~> .K </k>
+                  <val> 0 </val>
+                </T>
 
-  rule [AB]: <k> a => b ... </k>
-  rule [AC]: <k> a => c ... </k>
+
+  rule [AB]: <k> a => b ... </k> <val> V </val> requires V ==Int 0
+  rule [AC]: <k> a => c ... </k> <val> V </val> requires notBool (V ==Int 0)
   rule [CD]: <k> c => d ... </k>
   rule [DE]: <k> d => e ... </k>
   rule [EF]: <k> e => f ... </k>
