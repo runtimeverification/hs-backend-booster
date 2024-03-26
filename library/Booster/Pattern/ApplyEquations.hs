@@ -958,8 +958,10 @@ simplifyConstraint' :: MonadLoggerIO io => Bool -> Term -> EquationT io Term
 -- Evaluates terms of boolean sort (coming from predicates of the form
 -- 'true \equals P' using simplifyBool if they are concrete, or using
 -- evaluateTerm.
-simplifyConstraint' recurseIntoEvalBool = \case
-    t@(Term TermAttributes{canBeEvaluated} _)
+simplifyConstraint' recurseIntoEvalBool t = do
+    logOtherNS "booster" (LevelOther "Simplify") $ "Simplify constraint: " <> renderText (pretty t)
+    case t of
+      (Term TermAttributes{canBeEvaluated} _)
         | isConcrete t && canBeEvaluated -> do
             mbApi <- (.llvmApi) <$> getConfig
             case mbApi of
