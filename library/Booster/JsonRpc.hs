@@ -573,7 +573,7 @@ execResponse mbDuration req (d, traces, rr) originalSubstitution unsupported = c
                     , rule = Nothing
                     , unknownPredicate = Nothing
                     }
-    RewriteCutPoint lbl muid p next ->
+    RewriteCutPoint lbl _ p next ->
         Right $
             RpcTypes.Execute
                 RpcTypes.ExecuteResult
@@ -581,30 +581,30 @@ execResponse mbDuration req (d, traces, rr) originalSubstitution unsupported = c
                     , depth
                     , logs
                     , state = toExecState p originalSubstitution unsupported Nothing
-                    , nextStates = Just [toExecState next originalSubstitution unsupported muid]
+                    , nextStates = Just [toExecState next originalSubstitution unsupported Nothing]
                     , rule = Just lbl
                     , unknownPredicate = Nothing
                     }
-    RewriteTerminal lbl muid p ->
+    RewriteTerminal lbl _ p ->
         Right $
             RpcTypes.Execute
                 RpcTypes.ExecuteResult
                     { reason = RpcTypes.TerminalRule
                     , depth
                     , logs
-                    , state = toExecState p originalSubstitution unsupported muid
+                    , state = toExecState p originalSubstitution unsupported Nothing
                     , nextStates = Nothing
                     , rule = Just lbl
                     , unknownPredicate = Nothing
                     }
-    RewriteFinished _ muid p ->
+    RewriteFinished _ _ p ->
         Right $
             RpcTypes.Execute
                 RpcTypes.ExecuteResult
                     { reason = RpcTypes.DepthBound
                     , depth
                     , logs
-                    , state = toExecState p originalSubstitution unsupported muid
+                    , state = toExecState p originalSubstitution unsupported Nothing
                     , nextStates = Nothing
                     , rule = Nothing
                     , unknownPredicate = Nothing

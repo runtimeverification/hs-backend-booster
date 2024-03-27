@@ -5,9 +5,4 @@ Files test/jsonrpc-examples/depth-limit.spaghetti-formatted.execute.response and
 >     "reason": "terminal-rule",
 3a4
 >     "rule": "TEST.DE",
-101c102,103
-<         }
----
->         },
->         "rule-id": "a042e8abc8a92dc1a4c0bf0ca8b14a266a049cca42cb03da291f8a960978f859"
 
