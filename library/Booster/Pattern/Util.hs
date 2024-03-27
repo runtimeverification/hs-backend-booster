@@ -13,6 +13,7 @@ module Booster.Pattern.Util (
     modifyVarName,
     modifyVarNameConcreteness,
     freeVariables,
+    freeVariablesPattern,
     isConstructorSymbol,
     isSortInjectionSymbol,
     isFunctionSymbol,
@@ -199,6 +200,9 @@ modifyVarNameConcreteness f = \case
 
 freeVariables :: Term -> Set Variable
 freeVariables (Term attributes _) = attributes.variables
+
+freeVariablesPattern :: Pattern -> Set Variable
+freeVariablesPattern p = Set.unions $ map freeVariables $ p.term : (map coerce . Set.toList) p.constraints
 
 isConcrete :: Term -> Bool
 isConcrete = Set.null . freeVariables

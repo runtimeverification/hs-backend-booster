@@ -799,7 +799,15 @@ internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
             | v `Set.member` existentials' = Util.modifyVarName Util.markAsExVar v
             | otherwise = Util.modifyVarName Util.markAsRuleVar v
     rhs <- internalisePattern' ref renameVariable right
-    let notPreservesDefinednessReasons =
+    let lhsVars =
+            Set.map (\v@Variable{variableName} -> v{variableName = Util.stripMarker variableName}) $
+                Util.freeVariablesPattern lhs
+        rhsVars =
+            Set.filter (\v -> not $ v `Set.member` existentials') $
+                Set.map (\v@Variable{variableName} -> v{variableName = Util.stripMarker variableName}) $
+                    Util.freeVariablesPattern rhs
+
+        notPreservesDefinednessReasons =
             -- users can override the definedness computation by an explicit attribute
             if coerce axAttributes.preserving
                 then []
@@ -812,6 +820,11 @@ internaliseRewriteRuleNoAlias partialDefinition exs left right axAttributes = do
         computedAttributes =
             ComputedAxiomAttributes{notPreservesDefinednessReasons, containsAcSymbols}
         existentials = Set.map (Util.modifyVarName Util.markAsExVar) existentials'
+
+    unless (rhsVars `Set.isSubsetOf` lhsVars) $
+        throwE $
+            UnboundVariables ref $
+                rhsVars `Set.difference` lhsVars
     return
         RewriteRule
             { lhs = lhs.term
@@ -1289,6 +1302,7 @@ data DefinitionError
     | DefinitionTermOrPredicateError SourceRef TermOrPredicateError
     | ElemSymbolMalformed Def.Symbol
     | ElemSymbolNotFound Def.SymbolName
+    | UnboundVariables SourceRef (Set Variable)
     deriving stock (Eq, Show)
 
 instance Pretty DefinitionError where
@@ -1324,6 +1338,11 @@ instance Pretty DefinitionError where
             pretty $ "Element{} symbol is malformed: " <> show sym
         ElemSymbolNotFound sym ->
             pretty $ "Expected an element{} symbol " <> show sym
+        UnboundVariables ref vars ->
+            "Unbound variable "
+                <> Booster.Prettyprinter.list "" "" (map pretty $ Set.toList vars)
+                <> " in rule "
+                <> pretty ref
 
 {- | RPC error instance (user-facing for add-module endpoint):
 Renders the error string as 'error', with minimal context.
