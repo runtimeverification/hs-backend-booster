@@ -28,7 +28,8 @@ Tests involving variables that cannot be back-translated
     - `Map.lookup(?STORAGE, KEY) < Map.lookup(?STORAGE, KEY) + AMOUNT`
     - `KEY <= 42`
     - `AMOUNT <= 1`
-  - Result: `sat`, substitution `AMOUNT = 1, KEY = 0` (`KEY` irrelevant but present)
+  - Result: `sat`, substitution `AMOUNT = 1, KEY = 0, ?STORAGE = ?STORAGE`
+    (the latter irrelevant but present)
 * `with-map-unsat`: unsatisfiable predicate involving an irrelevant `Map` lookup
   - Input predicates:
     - `Map.lookup(?STORAGE, KEY) < Map.lookup(?STORAGE, KEY) + AMOUNT`
@@ -40,4 +41,10 @@ Tests involving variables that cannot be back-translated
     - `AMOUNT < Map.lookup(?STORAGE, KEY)`
     - `KEY <= 42`
     - `AMOUNT <= 1`
-  - Result: `sat`, substitution `AMOUNT = 0, KEY = 0`. Note that `?STORAGE` is not provided but relevant.
+  - Result: `sat`, substitution `AMOUNT = 0, KEY = 0, ?STORAGE = ?STORAGE`.
+    (NB: `?STORAGE` value is relevant but not provided)
+* `with-map-unsat2`: unsatisfiable predicate with a relevant `Map` lookup
+  - Input predicates:
+    - `Map.lookup(?STORAGE, KEY) < Map.lookup(?STORAGE, KEY)`
+    - `KEY <= 42`
+  - Result: `unsat`, no substitution
