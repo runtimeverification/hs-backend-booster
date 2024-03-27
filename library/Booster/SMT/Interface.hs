@@ -205,9 +205,9 @@ getModelFor ctxt ps subst
                      in logSMT ("Untranslatable variables in model: " <> vars)
 
                 response <-
-                    if Map.null freeVarsToSExprs
+                    if Map.null freeVarsMap
                         then pure $ Values []
-                        else runCmd $ GetValue (Map.elems freeVarsToSExprs)
+                        else runCmd $ GetValue (Map.elems freeVarsMap)
                 runCmd_ SMT.Pop
                 case response of
                     Error msg ->
@@ -217,8 +217,10 @@ getModelFor ctxt ps subst
                                 Map.partition isLeft
                                     . Map.map (valueToTerm transState)
                                     $ Map.compose (Map.fromList pairs) freeVarsToSExprs
+                            untranslated =
+                                Map.mapWithKey (const . Var) untranslatableVars
                          in if null errors
-                                then pure $ Right $ Map.map fromRight' values
+                                then pure $ Right $ Map.map fromRight' values <> untranslated
                                 else
                                     throwSMT . Text.unlines $
                                         ( "SMT errors while converting results: "

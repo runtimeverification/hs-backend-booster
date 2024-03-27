@@ -74,6 +74,37 @@
                             },
                             "value": "0"
                         }
+                    },
+                    {
+                        "tag": "Equals",
+                        "argSort": {
+                            "tag": "SortApp",
+                            "name": "SortMap",
+                            "args": []
+                        },
+                        "sort": {
+                            "tag": "SortApp",
+                            "name": "SortGeneratedTopCell",
+                            "args": []
+                        },
+                        "first": {
+                            "tag": "EVar",
+                            "name": "Var'Ques'STORAGE",
+                            "sort": {
+                                "tag": "SortApp",
+                                "name": "SortMap",
+                                "args": []
+                            }
+                        },
+                        "second": {
+                            "tag": "EVar",
+                            "name": "Var'Ques'STORAGE",
+                            "sort": {
+                                "tag": "SortApp",
+                                "name": "SortMap",
+                                "args": []
+                            }
+                        }
                     }
                 ]
             }
