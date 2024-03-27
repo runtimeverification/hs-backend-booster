@@ -2,8 +2,8 @@
     "jsonrpc": "2.0",
     "id": 1,
     "result": {
-        "reason": "depth-bound",
-        "depth": 2,
+        "reason": "aborted",
+        "depth": 0,
         "state": {
             "term": {
                 "format": "KORE",
@@ -51,7 +51,7 @@
                                                                 "name": "SortState",
                                                                 "args": []
                                                             },
-                                                            "value": "e"
+                                                            "value": "a"
                                                         }
                                                     ]
                                                 },
@@ -71,13 +71,13 @@
                                     "sorts": [],
                                     "args": [
                                         {
-                                            "tag": "DV",
+                                            "tag": "EVar",
+                                            "name": "X",
                                             "sort": {
                                                 "tag": "SortApp",
                                                 "name": "SortInt",
                                                 "args": []
-                                            },
-                                            "value": "0"
+                                            }
                                         }
                                     ]
                                 }
