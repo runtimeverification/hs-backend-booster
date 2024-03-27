@@ -27,7 +27,7 @@ import Data.Map qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text as Text (Text, pack, unlines, unwords)
-import Prettyprinter (Pretty, pretty, vsep)
+import Prettyprinter (Pretty, hsep, pretty, vsep)
 
 import Booster.Definition.Base
 import Booster.Pattern.Base
@@ -149,13 +149,6 @@ getModelFor ctxt ps subst
         when (isLeft translated) $
             smtTranslateError (fromLeft' translated)
         let (smtAsserts, transState) = fromRight' translated
-            freeVarsMap =
-                Map.filterWithKey
-                    (const . (`Set.member` Set.map Var freeVars))
-                    transState.mappings
-            getVar (Var v) = v
-            getVar other = smtTranslateError . pack $ "Solver returned non-var in translation state: " <> show other
-            freeVarsToSExprs = Map.mapKeys getVar $ Map.map Atom freeVarsMap
 
         runCmd_ SMT.Push -- assuming the prelude has been run already,
 
@@ -192,6 +185,25 @@ getModelFor ctxt ps subst
                 runCmd_ SMT.Pop
                 throwSMT' $ "Unexpected SMT response to CheckSat: " <> show satResponse
             Sat -> do
+                let freeVarsMap =
+                        Map.map Atom . Map.mapKeys getVar $
+                            Map.filterWithKey
+                                (const . (`Set.member` Set.map Var freeVars))
+                                transState.mappings
+                    getVar (Var v) = v
+                    getVar other =
+                        smtTranslateError . pack $
+                            "Solver returned non-var in translation state: " <> show other
+                    sortsToTranslate = Set.fromList [SortInt, SortBool]
+
+                    (freeVarsToSExprs, untranslatableVars) =
+                        Map.partitionWithKey
+                            (const . ((`Set.member` sortsToTranslate) . (.variableSort)))
+                            freeVarsMap
+                unless (Map.null untranslatableVars) $
+                    let vars = Pretty.renderText . hsep . map pretty $ Map.keys untranslatableVars
+                     in logSMT ("Untranslatable variables in model: " <> vars)
+
                 response <-
                     if Map.null freeVarsToSExprs
                         then pure $ Values []
