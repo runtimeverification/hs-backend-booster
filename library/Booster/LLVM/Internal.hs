@@ -24,7 +24,7 @@ module Booster.LLVM.Internal (
     LlvmError (..),
 ) where
 
-import Control.Concurrent.MVar (MVar, newMVar, withMVar)
+import Control.Concurrent.MVar (newMVar, withMVar)
 import Control.Exception (IOException)
 import Control.Monad (foldM, forM_, void, (>=>))
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, catch)
@@ -114,7 +114,6 @@ data API = API
     , simplifyBool :: KorePatternPtr -> IO (Either LlvmError Bool)
     , simplify :: KorePatternPtr -> KoreSortPtr -> IO (Either LlvmError ByteString)
     , collect :: IO ()
-    , mutex :: MVar ()
     }
 
 newtype LLVM a = LLVM (ReaderT API IO a)
@@ -161,7 +160,7 @@ withDLib dlib = Linker.withDL dlib [Linker.RTLD_LAZY]
 
 runLLVM :: API -> LLVM a -> IO a
 runLLVM api (LLVM m) =
-    withMVar api.mutex $ const $ runReaderT m api
+    runReaderT m api
 
 mkAPI :: Linker.DL -> IO API
 mkAPI dlib = flip runReaderT dlib $ do
@@ -311,9 +310,12 @@ mkAPI dlib = flip runReaderT dlib $ do
     collect <- kllvmFreeAllMemory
 
     simplifyBool' <- koreSimplifyBool
+
+    mutex <- liftIO $ newMVar ()
+
     let simplifyBool p =
             {-# SCC "LLVM.simplifyBool" #-}
-            do
+            withMVar mutex $ const $ do
                 Trace.traceIO $
                     LlvmCall
                         { call = "kore_simplify_bool"
@@ -333,7 +335,7 @@ mkAPI dlib = flip runReaderT dlib $ do
     simplify' <- koreSimplify
     let simplify pat srt =
             {-# SCC "LLVM.simplify" #-}
-            liftIO $ do
+            liftIO $ withMVar mutex $ const $ do
                 err <- newError
                 withForeignPtr err $ \errPtr ->
                     withForeignPtr pat $ \patPtr ->
@@ -370,8 +372,7 @@ mkAPI dlib = flip runReaderT dlib $ do
                 stderr
                 "[Warn] Using an LLVM backend compiled with --llvm-mutable-bytes (unsound byte array semantics)"
 
-    mutex <- liftIO $ newMVar ()
-    pure API{patt, symbol, sort, simplifyBool, simplify, collect, mutex}
+    pure API{patt, symbol, sort, simplifyBool, simplify, collect}
   where
     traceCall call args retTy retPtr = do
         Trace.traceIO $ LlvmCall{ret = Just (retTy, somePtr retPtr), call, args}
