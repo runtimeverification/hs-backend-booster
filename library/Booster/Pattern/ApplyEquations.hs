@@ -259,6 +259,15 @@ isMatchFailure _ = False
 isSuccess EquationApplied{} = True
 isSuccess _ = False
 
+{- | Attempt to get an equation's unique id, falling back to it's label or eventually to UNKNOWN.
+  The fallbacks are useful in case of cached equation applications or the ones done via LLVM,
+  as neither of these categories have unique IDs.
+-}
+equationRuleIdWithFallbacks :: EquationMetadata -> Text
+equationRuleIdWithFallbacks metadata = case fmap getUniqueId metadata.ruleId of
+    Nothing -> fromMaybe "UNKNOWN" metadata.label
+    Just x -> x
+
 equationTraceToLogEntry :: EquationTrace Term -> KoreRpcLog.LogEntry
 equationTraceToLogEntry = \case
     EquationApplied _subjectTerm metadata _rewritten ->
@@ -267,25 +276,25 @@ equationTraceToLogEntry = \case
             , originalTermIndex
             , origin
             , result =
-                KoreRpcLog.Success Nothing Nothing (fromMaybe "UNKNOWN" _ruleId)
+                KoreRpcLog.Success Nothing Nothing _ruleId
             }
       where
         originalTerm = Nothing
         originalTermIndex = Nothing
         origin = KoreRpcLog.Booster
-        _ruleId = fmap getUniqueId metadata.ruleId
+        _ruleId = equationRuleIdWithFallbacks metadata
     EquationNotApplied _subjectTerm metadata failure ->
         KoreRpcLog.Simplification
             { originalTerm
             , originalTermIndex
             , origin
-            , result = KoreRpcLog.Failure (failureDescription failure) _ruleId
+            , result = KoreRpcLog.Failure (failureDescription failure) (Just _ruleId)
             }
       where
         originalTerm = Nothing
         originalTermIndex = Nothing
         origin = KoreRpcLog.Booster
-        _ruleId = fmap getUniqueId metadata.ruleId
+        _ruleId = equationRuleIdWithFallbacks metadata
 
         failureDescription :: ApplyEquationFailure -> Text.Text
         failureDescription = \case
