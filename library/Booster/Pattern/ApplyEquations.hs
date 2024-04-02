@@ -606,7 +606,8 @@ cached cacheTag cb t@(Term attributes _)
             Just cachedTerm -> do
                 when (t /= cachedTerm) $ do
                     setChanged
-                    emitEquationTrace t Nothing (Just "Cache") Nothing $ Success cachedTerm
+                    emitEquationTrace t Nothing (Just ("Cache" <> Text.pack (show cacheTag))) Nothing $
+                        Success cachedTerm
                 pure cachedTerm
 
 elseApply :: (Monad m, Eq b) => (b -> m b) -> (b -> m b) -> b -> m b
