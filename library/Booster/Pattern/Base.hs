@@ -587,7 +587,7 @@ pattern KMap def keyVals rest <- Term _ (KMapF def keyVals rest)
                         (_ : _, Just r) ->
                             foldl' (<>) (getAttributes r) $ concatMap (\(k, v) -> [getAttributes k, getAttributes v]) keyVals
                 (keyVals', rest') = case rest of
-                    Just (KMap def' kvs r) | def' == def -> (kvs, r)
+                    Just (KMap def' kvs r) | def' == def -> (Set.toList . Set.fromList $ kvs, r)
                     r -> ([], r)
                 newKeyVals = Set.toList $ Set.fromList $ keyVals ++ keyVals'
                 newRest = rest'
@@ -656,7 +656,7 @@ pattern KSet def elements rest <- Term _ (KSetF def elements rest)
                             error $ "Inconsistent set definition " <> show (def, def')
                         | otherwise ->
                             (Set.toList . Set.fromList $ elements <> elements', rest')
-                    other -> (elements, other)
+                    other -> (Set.toList . Set.fromList $ elements, other)
              in Term
                     argAttributes
                         { hash =
