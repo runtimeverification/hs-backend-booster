@@ -37,6 +37,10 @@ test_collections =
             , setInternalisation
             , setSmartConstructors
             ]
+        , testGroup
+            "Internalised Map"
+            [ mapSmartConstructors
+            ]
         ]
 
 ------------------------------------------------------------
@@ -247,3 +251,48 @@ setConcat l1 l2 = Term mempty $ SymbolApplicationF Fixture.setConcatSym [] [l1, 
 
 inSet :: Term -> Term
 inSet x = SymbolApplication Fixture.setElemSym [] [x]
+
+------------------------------------------------------------
+
+mapSmartConstructors :: TestTree
+mapSmartConstructors =
+    testGroup
+        "pattern KMap"
+        [ testCase "Fully concrete KMap" $
+            let input = makeKMapNoRest [3, 1, 2]
+                expected = makeKMapNoRest [1, 2, 3]
+             in input @=? expected
+        , testCase "Fully concrete KMap, with duplicates" $
+            let input = makeKMapNoRest [3, 1, 2, 2, 3, 1]
+                expected = makeKMapNoRest [1, 2, 3]
+             in input @=? expected
+        , testCase "Concrete KMap with nested concrete KMap" $
+            let input = makeKMapWithRest [3, 1, 2] (makeKMapNoRest [6, 4, 5])
+                expected = makeKMapNoRest [1, 2, 3, 4, 5, 6]
+             in input @=? expected
+        , testCase "KMap with a symbolic rest" $
+            let input = makeKMapWithRest [3, 1, 2] [trm| REST:SortTestMap{}|]
+                expected = makeKMapWithRest [1, 2, 3] [trm| REST:SortTestMap{}|]
+             in input @=? expected
+        , testCase "KMap with a nested KMap with a symbolic rest" $
+            let input = makeKMapWithRest [3, 1, 2] (makeKMapWithRest [6, 4, 5] [trm| REST:SortTestMap{}|])
+                expected = makeKMapWithRest [1, 2, 3, 4, 5, 6] [trm| REST:SortTestMap{}|]
+             in input @=? expected
+        ]
+  where
+    makeKMapNoRest :: [Int] -> Term
+    makeKMapNoRest xs =
+        KMap
+            Fixture.testKMapDefinition
+            (zip (makeDVs xs) (makeDVs xs))
+            Nothing
+
+    makeKMapWithRest :: [Int] -> Term -> Term
+    makeKMapWithRest xs rest =
+        KMap
+            Fixture.testKMapDefinition
+            (zip (makeDVs xs) (makeDVs xs))
+            (Just rest)
+
+    makeDVs :: [Int] -> [Term]
+    makeDVs = map (Fixture.dv Fixture.someSort . BS.pack . show @Int)
