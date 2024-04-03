@@ -588,16 +588,19 @@ pattern KMap def keyVals rest <- Term _ (KMapF def keyVals rest)
                 (keyVals', rest') = case rest of
                     Just (KMap def' kvs r) | def' == def -> (kvs, r)
                     r -> ([], r)
+                newKeyVals = Set.toList $ Set.fromList $ keyVals ++ keyVals'
+                newRest = rest'
              in Term
                     argAttributes
+                        { hash =
                             Hashable.hash
                                 ( "KMap" :: ByteString
                                 , def
-                                , map (\(k, v) -> (hash $ getAttributes k, hash $ getAttributes v)) keyVals
-                                , hash . getAttributes <$> rest
+                                , map (\(k, v) -> (hash $ getAttributes k, hash $ getAttributes v)) newKeyVals
+                                , hash . getAttributes <$> newRest
                                 )
                         }
-                    $ KMapF def (Set.toList $ Set.fromList $ keyVals ++ keyVals') rest'
+                    $ KMapF def newKeyVals newRest
 
 pattern KList :: KListDefinition -> [Term] -> Maybe (Term, [Term]) -> Term
 pattern KList def heads rest <- Term _ (KListF def heads rest)
