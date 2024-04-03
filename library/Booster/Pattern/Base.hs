@@ -630,9 +630,9 @@ pattern KList def heads rest <- Term _ (KListF def heads rest)
                             Hashable.hash
                                 ( "KList" :: ByteString
                                 , def
-                                , map (hash . getAttributes) heads
-                                , fmap (hash . getAttributes . fst) rest
-                                , fmap (map (hash . getAttributes) . snd) rest
+                                , map (hash . getAttributes) newHeads
+                                , fmap (hash . getAttributes . fst) newRest
+                                , fmap (map (hash . getAttributes) . snd) newRest
                                 )
                         }
                     $ KListF def newHeads newRest
@@ -662,8 +662,8 @@ pattern KSet def elements rest <- Term _ (KSetF def elements rest)
                             Hashable.hash
                                 ( "KSet" :: ByteString
                                 , def
-                                , map (hash . getAttributes) elements
-                                , fmap (hash . getAttributes) rest
+                                , map (hash . getAttributes) newElements
+                                , fmap (hash . getAttributes) newRest
                                 )
                         }
                     $ KSetF def newElements newRest
