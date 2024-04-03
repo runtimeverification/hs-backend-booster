@@ -89,6 +89,10 @@ llvmSpec =
                 it "should leave literal byte arrays as they are" $
                     hedgehog . propertyTest . byteArrayProp
 
+            describe "LLVM INT simplification" $ do
+                it "should leave naked domain values as they are" $
+                    hedgehog . propertyTest . intProp
+
             describe "LLVM String handling" $
                 it "should work with latin-1strings" $
                     hedgehog . propertyTest . latin1Prop
@@ -131,6 +135,12 @@ byteArrayProp api = property $ do
     ba' <- forAll $ Gen.bytes $ Range.linear 0 1024
     res' <- LLVM.simplifyTerm api testDef (bytesTerm ba') bytesSort
     res' === Right (bytesTerm ba')
+
+intProp :: LLVM.API -> Property
+intProp api = property $ do
+    i <- forAll $ Gen.int (Range.linear 0 1024)
+    res <- LLVM.simplifyTerm api testDef (intTerm i) intSort
+    res === Right (intTerm i)
 
 -- Round-trip test passing syntactic strings through the simplifier
 -- and back. latin-1 characters should be left as they are (treated as
@@ -222,12 +232,16 @@ boolSort = SortApp "SortBool" []
 intSort = SortApp "SortInt" []
 bytesSort = SortApp "SortBytes" []
 stringSort = SortApp "SortString" []
+kItemSort = SortApp "SortKItem" []
 
 boolTerm :: Bool -> Term
 boolTerm = DomainValue boolSort . BS.pack . map toLower . show
 
 intTerm :: (Integral a, Show a) => a -> Term
 intTerm = DomainValue intSort . BS.pack . show . (+ 0)
+
+intTermKItem :: (Integral a, Show a) => a -> Term
+intTermKItem = DomainValue kItemSort . BS.pack . show . (+ 0)
 
 bytesTerm :: ByteString -> Term
 bytesTerm = DomainValue bytesSort
@@ -313,6 +327,19 @@ sortMapKmap =
         , keySortName = "SortKItem"
         , elementSortName = "SortKItem"
         , mapSortName = "SortMap"
+        }
+
+sortSetKSet :: KSetDefinition
+sortSetKSet =
+    KListDefinition
+        { symbolNames =
+            KCollectionSymbolNames
+                { unitSymbolName = "Lbl'Stop'Set"
+                , elementSymbolName = "LblSetItem"
+                , concatSymbolName = "Lbl'Unds'Set'Unds'"
+                }
+        , elementSortName = "SortKItem"
+        , listSortName = "SortList"
         }
 
 sortListKList :: KListDefinition
