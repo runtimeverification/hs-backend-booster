@@ -26,10 +26,17 @@ test_collections :: TestTree
 test_collections =
     testGroup
         "Internal collection representation"
-        [ listRoundTrips
-        , listInternalisation
-        , setRoundTrips
-        , setInternalisation
+        [ testGroup
+            "Internalised List"
+            [ listRoundTrips
+            , listInternalisation
+            ]
+        , testGroup
+            "Internalised Set"
+            [ setRoundTrips
+            , setInternalisation
+            , setSmartConstructors
+            ]
         ]
 
 ------------------------------------------------------------
@@ -171,6 +178,49 @@ setInternalisation =
   where
     internalise = internaliseKSet Fixture.testKSetDef
     unit = SymbolApplication Fixture.setUnitSym [] []
+
+setSmartConstructors :: TestTree
+setSmartConstructors =
+    testGroup
+        "pattern KSet"
+        [ testCase "Fully concrete KSet" $
+            let input = makeKSetNoRest [3, 1, 2]
+                expected = makeKSetNoRest [1, 2, 3]
+             in input @=? expected
+        , testCase "Fully concrete KSet, with duplicates" $
+            let input = makeKSetNoRest [3, 1, 2, 2, 3, 1]
+                expected = makeKSetNoRest [1, 2, 3]
+             in input @=? expected
+        , testCase "Concrete KSet with nested concrete KSet" $
+            let input = makeKSetWithRest [3, 1, 2] (makeKSetNoRest [6, 4, 5])
+                expected = makeKSetNoRest [1, 2, 3, 4, 5, 6]
+             in input @=? expected
+        , testCase "KSet with a symbolic rest" $
+            let input = makeKSetWithRest [3, 1, 2] [trm| REST:SortTestSet{}|]
+                expected = makeKSetWithRest [1, 2, 3] [trm| REST:SortTestSet{}|]
+             in input @=? expected
+        , testCase "KSet with a nested KSet with a symbolic rest" $
+            let input = makeKSetWithRest [3, 1, 2] (makeKSetWithRest [6, 4, 5] [trm| REST:SortTestSet{}|])
+                expected = makeKSetWithRest [1, 2, 3, 4, 5, 6] [trm| REST:SortTestSet{}|]
+             in input @=? expected
+        ]
+  where
+    makeKSetNoRest :: [Int] -> Term
+    makeKSetNoRest xs =
+        KSet
+            Fixture.testKSetDef
+            (makeDVs xs)
+            Nothing
+
+    makeKSetWithRest :: [Int] -> Term -> Term
+    makeKSetWithRest xs rest =
+        KSet
+            Fixture.testKSetDef
+            (makeDVs xs)
+            (Just rest)
+
+    makeDVs :: [Int] -> [Term]
+    makeDVs = map (Fixture.dv Fixture.someSort . BS.pack . show @Int)
 
 -- internalised data structures representing sets
 emptySet, concreteSet, setWithElement :: Term
