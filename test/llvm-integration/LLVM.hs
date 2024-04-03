@@ -10,13 +10,13 @@ module Main (
     displayTestDef,
 ) where
 
-import Control.Monad (unless, when)
+import Control.Monad (forM_, unless, when)
 import Control.Monad.Trans.Except (runExcept)
 import Data.ByteString.Char8 (ByteString)
 import Data.ByteString.Char8 qualified as BS
 import Data.Char (toLower)
 import Data.Int (Int64)
-import Data.List (isInfixOf)
+import Data.List (foldl1', isInfixOf, nub)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
@@ -100,6 +100,10 @@ llvmSpec =
             describe "special map tests" $
                 it "should correct sort injections in non KItem maps" $
                     hedgehog . propertyTest . mapKItemInjProp
+
+            describe "internalised set tests" $
+                it "show leave concrete sets alone" $
+                    hedgehog . propertyTest . setProp
 
 --------------------------------------------------
 -- individual hedgehog property tests and helpers
@@ -204,6 +208,47 @@ mapKItemInjProp api = property $ do
                 []
                 [intTerm i]
             ]
+
+setProp :: LLVM.API -> Property
+setProp api = property $ do
+    forM_ [2 .. 10] $ \n -> do
+        xs <-
+            forAll $
+                Gen.filter (\xs -> xs == nub xs) $
+                    Gen.list (Range.singleton n) $
+                        Gen.int (Range.linear 0 1024)
+        let setTerm = makeKSetNoRest xs
+        res <- LLVM.simplifyTerm api testDef setTerm (SortApp "SortSet" [])
+        res === Right (setAsConcat . map wrapIntTerm $ xs)
+  where
+    makeKSetNoRest :: [Int] -> Term
+    makeKSetNoRest xs =
+        KSet
+            sortSetKSet
+            (map wrapIntTerm xs)
+            Nothing
+
+    singletonSet v =
+        SymbolApplication
+            (defSymbols Map.! sortSetKSet.symbolNames.elementSymbolName)
+            []
+            [v]
+
+    setAsConcat =
+        foldl1'
+            ( \x y ->
+                SymbolApplication
+                    (defSymbols Map.! sortSetKSet.symbolNames.concatSymbolName)
+                    []
+                    [singletonSet x, singletonSet y]
+            )
+
+    wrapIntTerm :: Int -> Term
+    wrapIntTerm i =
+        SymbolApplication
+            (defSymbols Map.! "inj")
+            [SortApp "SortInt" [], SortApp "SortKItem" []]
+            [intTerm i]
 
 ------------------------------------------------------------
 
