@@ -31,6 +31,7 @@ module Booster.Pattern.ApplyEquations (
     SimplifierCache,
 ) where
 
+import Control.Applicative (Alternative (..))
 import Control.Monad
 import Control.Monad.Extra (fromMaybeM, whenJust)
 import Control.Monad.IO.Class (MonadIO (..))
@@ -264,9 +265,8 @@ isSuccess _ = False
   as neither of these categories have unique IDs.
 -}
 equationRuleIdWithFallbacks :: EquationMetadata -> Text
-equationRuleIdWithFallbacks metadata = case fmap getUniqueId metadata.ruleId of
-    Nothing -> fromMaybe "UNKNOWN" metadata.label
-    Just x -> x
+equationRuleIdWithFallbacks metadata =
+    fromMaybe "UNKNOWN" (fmap getUniqueId metadata.ruleId <|> metadata.label)
 
 equationTraceToLogEntry :: EquationTrace Term -> KoreRpcLog.LogEntry
 equationTraceToLogEntry = \case
