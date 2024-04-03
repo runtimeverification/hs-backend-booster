@@ -37,7 +37,7 @@ import Data.Data (Data)
 import Data.Functor.Foldable
 import Data.Hashable (Hashable)
 import Data.Hashable qualified as Hashable
-import Data.List as List (foldl1', sort)
+import Data.List as List (foldl', foldl1', sort)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text qualified as Text
@@ -584,7 +584,8 @@ pattern KMap def keyVals rest <- Term _ (KMapF def keyVals rest)
                         ([], Nothing) -> mempty
                         ([], Just s) -> getAttributes s
                         (_ : _, Nothing) -> foldl1' (<>) $ concatMap (\(k, v) -> [getAttributes k, getAttributes v]) keyVals
-                        (_ : _, Just r) -> foldr (<>) (getAttributes r) $ concatMap (\(k, v) -> [getAttributes k, getAttributes v]) keyVals
+                        (_ : _, Just r) ->
+                            foldl' (<>) (getAttributes r) $ concatMap (\(k, v) -> [getAttributes k, getAttributes v]) keyVals
                 (keyVals', rest') = case rest of
                     Just (KMap def' kvs r) | def' == def -> (kvs, r)
                     r -> ([], r)
@@ -613,7 +614,7 @@ pattern KList def heads rest <- Term _ (KListF def heads rest)
                         (nonEmpty, Nothing) ->
                             foldl1' (<>) $ map getAttributes nonEmpty
                         (_, Just (m, tails)) ->
-                            foldr ((<>) . getAttributes) (getAttributes m) $ heads <> tails
+                            foldl' (<>) (getAttributes m) . map getAttributes $ heads <> tails
                 (newHeads, newRest) = case rest of
                     Just (KList def' heads' rest', tails)
                         | def' /= def ->
@@ -648,7 +649,7 @@ pattern KSet def elements rest <- Term _ (KSetF def elements rest)
                     | Nothing <- rest =
                         foldl1' (<>) $ map getAttributes elements
                     | Just r <- rest =
-                        foldr ((<>) . getAttributes) (getAttributes r) elements
+                        foldl' (<>) (getAttributes r) . map getAttributes $ elements
                 (newElements, newRest) = case rest of
                     Just (KSet def' elements' rest')
                         | def /= def' ->
