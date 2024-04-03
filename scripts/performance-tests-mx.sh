@@ -54,16 +54,39 @@ fi
 
 git submodule update --init --recursive --depth 1 kmxwasm/k-src/mx-semantics/
 
+BUG_REPORT=''
+POSITIONAL_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --bug-report)
+      mkdir -p $SCRIPT_DIR/bug-reports/mx-$MX_VERSION-$FEATURE_BRANCH_NAME
+      BUG_REPORT="--bug-report --bug-report-dir $SCRIPT_DIR/bug-reports/mx-$MX_VERSION-$FEATURE_BRANCH_NAME"
+      shift # past argument
+      ;;
+    -*|--*)
+      echo "Unknown option $1"
+      exit 1
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$1") # save positional arg
+      shift # past argument
+      ;;
+  esac
+done
+
+set -- "${POSITIONAL_ARGS[@]}" # restore positional parameters
+
 
 feature_shell "poetry -C kmxwasm install && make -C kmxwasm kbuild-haskell"
 
 
 mkdir -p $SCRIPT_DIR/logs
 
-feature_shell "make -C kmxwasm test-booster && make -C kmxwasm test-integration | tee $SCRIPT_DIR/logs/mx-$MX_VERSION-$FEATURE_BRANCH_NAME.log"
+feature_shell "make -C kmxwasm test-booster TEST_ARGS='$BUG_REPORT' && make -C kmxwasm test-integration TEST_ARGS='$BUG_REPORT' | tee $SCRIPT_DIR/logs/mx-$MX_VERSION-$FEATURE_BRANCH_NAME.log"
 killall kore-rpc-booster || echo "No zombie processes found"
 
-
+if [ -z "$BUG_REPORT" ]; then
 if [ ! -e "$SCRIPT_DIR/logs/mx-$MX_VERSION-master-$MASTER_COMMIT_SHORT.log" ]; then
   master_shell "make -C kmxwasm test-booster && make -C kmxwasm test-integration | tee $SCRIPT_DIR/logs/mx-$MX_VERSION-master-$MASTER_COMMIT_SHORT.log"
   killall kore-rpc-booster || echo "No zombie processes found"
@@ -71,3 +94,4 @@ fi
 
 cd $SCRIPT_DIR
 python3 compare.py logs/mx-$MX_VERSION-$FEATURE_BRANCH_NAME.log logs/mx-$MX_VERSION-master-$MASTER_COMMIT_SHORT.log > logs/mx-$MX_VERSION-master-$MASTER_COMMIT_SHORT-$FEATURE_BRANCH_NAME-compare
+fi
