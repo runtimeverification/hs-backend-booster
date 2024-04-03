@@ -166,6 +166,10 @@ type instance Base Term = TermF
 instance Recursive Term where
     project (Term _ t) = t
 
+-- | Sort and de duplicate a list
+sortAndDeduplicate :: Ord a => [a] -> [a]
+sortAndDeduplicate = Set.toAscList . Set.fromList
+
 getAttributes :: Term -> TermAttributes
 getAttributes (Term a _) = a
 
@@ -587,9 +591,9 @@ pattern KMap def keyVals rest <- Term _ (KMapF def keyVals rest)
                         (_ : _, Just r) ->
                             foldl' (<>) (getAttributes r) $ concatMap (\(k, v) -> [getAttributes k, getAttributes v]) keyVals
                 (keyVals', rest') = case rest of
-                    Just (KMap def' kvs r) | def' == def -> (Set.toList . Set.fromList $ kvs, r)
+                    Just (KMap def' kvs r) | def' == def -> (sortAndDeduplicate kvs, r)
                     r -> ([], r)
-                newKeyVals = Set.toList $ Set.fromList $ keyVals ++ keyVals'
+                newKeyVals = sortAndDeduplicate $ keyVals ++ keyVals'
                 newRest = rest'
              in Term
                     argAttributes
@@ -655,8 +659,8 @@ pattern KSet def elements rest <- Term _ (KSetF def elements rest)
                         | def /= def' ->
                             error $ "Inconsistent set definition " <> show (def, def')
                         | otherwise ->
-                            (Set.toList . Set.fromList $ elements <> elements', rest')
-                    other -> (Set.toList . Set.fromList $ elements, other)
+                            (sortAndDeduplicate $ elements <> elements', rest')
+                    other -> (sortAndDeduplicate elements, other)
              in Term
                     argAttributes
                         { hash =
