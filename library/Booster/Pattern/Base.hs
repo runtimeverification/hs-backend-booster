@@ -590,21 +590,12 @@ pattern KMap def keyVals rest <- Term _ (KMapF def keyVals rest)
                     r -> ([], r)
              in Term
                     argAttributes
-                        { isEvaluated =
-                            -- Constructors and injections are evaluated if their arguments are.
-                            -- Function calls are not evaluated.
-                            argAttributes.isEvaluated
-                        , hash =
                             Hashable.hash
                                 ( "KMap" :: ByteString
                                 , def
                                 , map (\(k, v) -> (hash $ getAttributes k, hash $ getAttributes v)) keyVals
                                 , hash . getAttributes <$> rest
                                 )
-                        , isConstructorLike =
-                            argAttributes.isConstructorLike
-                        , canBeEvaluated =
-                            argAttributes.canBeEvaluated
                         }
                     $ KMapF def (Set.toList $ Set.fromList $ keyVals ++ keyVals') rest'
 
