@@ -102,7 +102,7 @@ llvmSpec =
                     hedgehog . propertyTest . mapKItemInjProp
 
             describe "internalised set tests" $
-                it "show leave concrete sets alone" $
+                it "should leave concrete sets unchanged" $
                     hedgehog . propertyTest . setProp
 
 --------------------------------------------------
@@ -211,7 +211,7 @@ mapKItemInjProp api = property $ do
 
 setProp :: LLVM.API -> Property
 setProp api = property $ do
-    forM_ [2 .. 10] $ \n -> do
+    forM_ [1 .. 10] $ \n -> do
         xs <-
             forAll $
                 Gen.filter (\xs -> xs == nub xs) $
@@ -285,9 +285,6 @@ boolTerm = DomainValue boolSort . BS.pack . map toLower . show
 
 intTerm :: (Integral a, Show a) => a -> Term
 intTerm = DomainValue intSort . BS.pack . show . (+ 0)
-
-intTermKItem :: (Integral a, Show a) => a -> Term
-intTermKItem = DomainValue kItemSort . BS.pack . show . (+ 0)
 
 bytesTerm :: ByteString -> Term
 bytesTerm = DomainValue bytesSort
