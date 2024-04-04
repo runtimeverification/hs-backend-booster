@@ -30,7 +30,7 @@ import Data.Foldable
 import Data.List (singleton)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe, fromJust)
 import Data.Sequence (Seq)
 import Data.Set qualified as Set
 import Data.Text (Text, pack)
@@ -58,7 +58,8 @@ import Booster.Pattern.Rewrite (
     RewriteTrace (..),
     performRewrite,
  )
-import Booster.Pattern.Util (sortOfPattern, substituteInPredicate, substituteInTerm)
+import Booster.Pattern.Unify (UnificationResult (..), unifyTerms)
+import Booster.Pattern.Util (freeVariables, sortOfPattern, substituteInPredicate, substituteInTerm)
 import Booster.Prettyprinter (renderText)
 import Booster.SMT.Base qualified as SMT
 import Booster.SMT.Interface qualified as SMT
@@ -85,6 +86,7 @@ import Kore.JsonRpc.Types.Log
 import Kore.Syntax.Json.Types (Id (..))
 import Kore.Syntax.Json.Types qualified as KoreJson
 import Kore.Syntax.Json.Types qualified as Syntax
+import Booster.Pattern.Bool (pattern TrueBool)
 
 respond ::
     forall m.
@@ -464,12 +466,97 @@ respond stateVar =
                                         { satisfiable = RpcTypes.Sat
                                         , substitution
                                         }
+        RpcTypes.Implies req -> withContext req._module $ \(def, mLlvmLibrary, mSMTOptions) -> do
+            -- internalise given constrained term
+            let internalised = runExcept . internalisePattern DisallowAlias CheckSubsorts Nothing def
+
+            case (internalised req.antecedent.term, internalised req.consequent.term) of
+                (Left patternError, _) -> do
+                    Log.logDebug $ "Error internalising cterm" <> Text.pack (show patternError)
+                    pure $
+                        Left $
+                            RpcError.backendError $
+                                RpcError.CouldNotVerifyPattern
+                                    [ patternErrorToRpcError patternError
+                                    ]
+                (_, Left patternError) -> do
+                    Log.logDebug $ "Error internalising cterm" <> Text.pack (show patternError)
+                    pure $
+                        Left $
+                            RpcError.backendError $
+                                RpcError.CouldNotVerifyPattern
+                                    [ patternErrorToRpcError patternError
+                                    ]
+                (Right (patL, substitutionL, unsupportedL), Right (patR, substitutionR, unsupportedR)) -> do
+                    unless (null unsupportedL && null unsupportedR) $ do
+                        Log.logWarnNS
+                            "booster"
+                            "Implies: aborting due to unsupported predicate parts"
+                        unless (null unsupportedL) $
+                            Log.logOtherNS
+                                "booster"
+                                (Log.LevelOther "ErrorDetails")
+                                (Text.unlines $ map prettyPattern unsupportedL)
+                        unless (null unsupportedR) $
+                            Log.logOtherNS
+                                "booster"
+                                (Log.LevelOther "ErrorDetails")
+                                (Text.unlines $ map prettyPattern unsupportedR)
+                    let doTracing =
+                            Flag $
+                                any
+                                    (fromMaybe False)
+                                    [ req.logSuccessfulSimplifications
+                                    , req.logFailedSimplifications
+                                    ]
+                        -- apply the given substitution before doing anything else
+                        substPatL =
+                            Pattern
+                                { term = substituteInTerm substitutionL patL.term
+                                , constraints = Set.map (substituteInPredicate substitutionL) patL.constraints
+                                , ceilConditions = patL.ceilConditions
+                                }
+                        substPatR =
+                            Pattern
+                                { term = substituteInTerm substitutionR patR.term
+                                , constraints = Set.map (substituteInPredicate substitutionR) patR.constraints
+                                , ceilConditions = patR.ceilConditions
+                                }
+
+                    case unifyTerms def substPatL.term substPatR.term of
+                        UnificationFailed _reason ->
+                            req.antecedent.term `doesNotImply` req.consequent.term
+                        UnificationSortError sortError ->
+                            pure . Left . RpcError.backendError . RpcError.ImplicationCheckError . RpcError.ErrorOnly . pack $
+                                show sortError
+                        UnificationRemainder remainder ->
+                            pure . Left . RpcError.backendError . RpcError.ImplicationCheckError . RpcError.ErrorOnly . pack $
+                                show remainder
+                        UnificationSuccess subst ->
+                            -- check it is a "matching" substitution (substitutes variables
+                            -- from the subject term only). Return does not imply if not.
+                            if Map.keysSet subst /= freeVariables substPatL.term
+                                then -- let violatingItems = Map.restrictKeys subst (Map.keysSet subst `Set.difference` freeVariables substPatL.term)
+                                    req.antecedent.term `doesNotImply` req.consequent.term
+                                else do
+                                    let filteredConsequentPreds = substPatR.constraints `Set.difference` substPatL.constraints
+                                    solver <- traverse (SMT.initSolver def) mSMTOptions
+
+                                    if null filteredConsequentPreds
+                                        then req.antecedent.term `implies` req.consequent.term
+                                        else
+                                            ApplyEquations.evaluateConstraints doTracing def mLlvmLibrary solver mempty filteredConsequentPreds >>= \case
+                                                (Right newPreds, _) ->
+                                                    if all (== Pattern.Predicate TrueBool) newPreds then req.antecedent.term `implies` req.consequent.term
+                                                    else pure . Left . RpcError.backendError $ RpcError.Aborted "unknown constrains"
+                                                (Left other, _) ->
+                                                    pure . Left . RpcError.backendError $ RpcError.Aborted (Text.pack . constructorName $ other)
 
         -- this case is only reachable if the cancel appeared as part of a batch request
         RpcTypes.Cancel -> pure $ Left RpcError.cancelUnsupportedInBatchMode
-        -- using "Method does not exist" error code
-        _ -> pure $ Left RpcError.notImplemented
   where
+    -- using "Method does not exist" error code
+
     withContext ::
         Maybe Text ->
         ( (KoreDefinition, Maybe LLVM.API, Maybe SMT.SMTOptions) ->
@@ -483,6 +570,27 @@ respond stateVar =
             Nothing -> pure $ Left $ RpcError.backendError $ RpcError.CouldNotFindModule mainName
             Just d -> action (d, state.mLlvmLibrary, state.mSMTOptions)
 
+    doesNotImply l r =
+        pure $
+            Right $
+                RpcTypes.Implies
+                    RpcTypes.ImpliesResult
+                        { implication = addHeader $ Syntax.KJImplies (fromJust $ sortOfJson l) l r
+                        , satisfiable = False
+                        , condition = Nothing
+                        , logs = Nothing
+                        }
+
+    implies l r =
+        pure $
+            Right $
+                RpcTypes.Implies
+                    RpcTypes.ImpliesResult
+                        { implication = addHeader $ Syntax.KJImplies (fromJust $ sortOfJson l) l r
+                        , satisfiable = True
+                        , condition = Nothing
+                        , logs = Nothing
+                        }
 handleSmtError :: JsonRpcHandler
 handleSmtError = JsonRpcHandler $ \case
     SMT.GeneralSMTError err -> runtimeError "problem" err
