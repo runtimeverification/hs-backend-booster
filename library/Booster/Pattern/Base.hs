@@ -591,7 +591,7 @@ pattern KMap def keyVals rest <- Term _ (KMapF def keyVals rest)
                         (_ : _, Just r) ->
                             foldl' (<>) (getAttributes r) $ concatMap (\(k, v) -> [getAttributes k, getAttributes v]) keyVals
                 (keyVals', rest') = case rest of
-                    Just (KMap def' kvs r) | def' == def -> (sortAndDeduplicate kvs, r)
+                    Just (KMap def' kvs r) | def' == def -> (kvs, r)
                     r -> ([], r)
                 newKeyVals = sortAndDeduplicate $ keyVals ++ keyVals'
                 newRest = rest'
@@ -654,13 +654,13 @@ pattern KSet def elements rest <- Term _ (KSetF def elements rest)
                         foldl1' (<>) $ map getAttributes elements
                     | Just r <- rest =
                         foldl' (<>) (getAttributes r) . map getAttributes $ elements
-                (newElements, newRest) = case rest of
-                    Just (KSet def' elements' rest')
-                        | def /= def' ->
-                            error $ "Inconsistent set definition " <> show (def, def')
-                        | otherwise ->
-                            (sortAndDeduplicate $ elements <> elements', rest')
-                    other -> (sortAndDeduplicate elements, other)
+                (elements', rest') = case rest of
+                    Just (KSet def' es r)
+                        | def /= def' -> error $ "Inconsistent set definition " <> show (def, def')
+                        | otherwise -> (es, r)
+                    other -> ([], other)
+                newElements = sortAndDeduplicate $ elements <> elements'
+                newRest = rest'
              in Term
                     argAttributes
                         { hash =

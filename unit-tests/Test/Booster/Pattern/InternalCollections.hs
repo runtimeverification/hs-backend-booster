@@ -187,26 +187,22 @@ setSmartConstructors :: TestTree
 setSmartConstructors =
     testGroup
         "pattern KSet"
-        [ testCase "Fully concrete KSet" $
-            let input = makeKSetNoRest [3, 1, 2]
-                expected = makeKSetNoRest [1, 2, 3]
-             in input @=? expected
-        , testCase "Fully concrete KSet, with duplicates" $
-            let input = makeKSetNoRest [3, 1, 2, 2, 3, 1]
-                expected = makeKSetNoRest [1, 2, 3]
-             in input @=? expected
-        , testCase "Concrete KSet with nested concrete KSet" $
-            let input = makeKSetWithRest [3, 1, 2] (makeKSetNoRest [6, 4, 5])
+        [ testCase "Concrete KSet with nested concrete KSet" $
+            let input = makeKSetWithRest [1, 2, 3] (makeKSetNoRest [4, 5, 6])
                 expected = makeKSetNoRest [1, 2, 3, 4, 5, 6]
-             in input @=? expected
-        , testCase "KSet with a symbolic rest" $
-            let input = makeKSetWithRest [3, 1, 2] [trm| REST:SortTestSet{}|]
-                expected = makeKSetWithRest [1, 2, 3] [trm| REST:SortTestSet{}|]
-             in input @=? expected
+             in expected @=? input
+        , testCase "Concrete KSet with nested concrete KSet (results needs sorting and de-duping)" $
+            let input = makeKSetWithRest [1, 2, 3] (makeKSetNoRest [1, 2, 4])
+                expected = makeKSetNoRest [1, 2, 3, 4]
+             in expected @=? input
         , testCase "KSet with a nested KSet with a symbolic rest" $
-            let input = makeKSetWithRest [3, 1, 2] (makeKSetWithRest [6, 4, 5] [trm| REST:SortTestSet{}|])
+            let input = makeKSetWithRest [1, 2, 3] (makeKSetWithRest [4, 5, 6] [trm| REST:SortTestSet{}|])
                 expected = makeKSetWithRest [1, 2, 3, 4, 5, 6] [trm| REST:SortTestSet{}|]
-             in input @=? expected
+             in expected @=? input
+        , testCase "KSet with a nested KSet with a symbolic rest (results needs sorting and de-duping)" $
+            let input = makeKSetWithRest [1, 2, 3] (makeKSetWithRest [1, 2, 4] [trm| REST:SortTestSet{}|])
+                expected = makeKSetWithRest [1, 2, 3, 4] [trm| REST:SortTestSet{}|]
+             in expected @=? input
         ]
   where
     makeKSetNoRest :: [Int] -> Term
@@ -258,28 +254,25 @@ mapSmartConstructors :: TestTree
 mapSmartConstructors =
     testGroup
         "pattern KMap"
-        [ testCase "Fully concrete KMap" $
-            let input = makeKMapNoRest [3, 1, 2]
-                expected = makeKMapNoRest [1, 2, 3]
-             in input @=? expected
-        , testCase "Fully concrete KMap, with duplicates" $
-            let input = makeKMapNoRest [3, 1, 2, 2, 3, 1]
-                expected = makeKMapNoRest [1, 2, 3]
-             in input @=? expected
-        , testCase "Concrete KMap with nested concrete KMap" $
-            let input = makeKMapWithRest [3, 1, 2] (makeKMapNoRest [6, 4, 5])
+        [ testCase "Concrete KMap with nested concrete KMap" $
+            let input = makeKMapWithRest [1, 2, 3] (makeKMapNoRest [4, 5, 6])
                 expected = makeKMapNoRest [1, 2, 3, 4, 5, 6]
              in input @=? expected
-        , testCase "KMap with a symbolic rest" $
-            let input = makeKMapWithRest [3, 1, 2] [trm| REST:SortTestMap{}|]
-                expected = makeKMapWithRest [1, 2, 3] [trm| REST:SortTestMap{}|]
+        , testCase "Concrete KMap with nested concrete KMap (results needs sorting and de-duping)" $
+            let input = makeKMapWithRest [1, 2, 3] (makeKMapNoRest [1, 2, 4])
+                expected = makeKMapNoRest [1, 2, 3, 4]
              in input @=? expected
         , testCase "KMap with a nested KMap with a symbolic rest" $
-            let input = makeKMapWithRest [3, 1, 2] (makeKMapWithRest [6, 4, 5] [trm| REST:SortTestMap{}|])
+            let input = makeKMapWithRest [1, 2, 3] (makeKMapWithRest [4, 5, 6] [trm| REST:SortTestMap{}|])
                 expected = makeKMapWithRest [1, 2, 3, 4, 5, 6] [trm| REST:SortTestMap{}|]
+             in input @=? expected
+        , testCase "KMap with a nested KMap with a symbolic rest (results needs sorting and de-duping)" $
+            let input = makeKMapWithRest [1, 2, 3] (makeKMapWithRest [1, 2, 4] [trm| REST:SortTestMap{}|])
+                expected = makeKMapWithRest [1, 2, 3, 4] [trm| REST:SortTestMap{}|]
              in input @=? expected
         ]
   where
+    -- produced a map of identities for all input ints: x1 |-> x1, x2 |-> x2 ...
     makeKMapNoRest :: [Int] -> Term
     makeKMapNoRest xs =
         KMap
@@ -287,6 +280,7 @@ mapSmartConstructors =
             (zip (makeDVs xs) (makeDVs xs))
             Nothing
 
+    -- produced a map of identities for all input ints and an opaque rest: x1 |-> x1, x2 |-> x2 ..., REST
     makeKMapWithRest :: [Int] -> Term -> Term
     makeKMapWithRest xs rest =
         KMap
