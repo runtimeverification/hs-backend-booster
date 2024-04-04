@@ -240,14 +240,15 @@ setProp api = property $ do
                 SymbolApplication
                     (defSymbols Map.! sortSetKSet.symbolNames.concatSymbolName)
                     []
-                    [singletonSet x, singletonSet y]
+                    [x, y]
             )
+            . map singletonSet
 
     wrapIntTerm :: Int -> Term
     wrapIntTerm i =
         SymbolApplication
             (defSymbols Map.! "inj")
-            [SortApp "SortInt" [], SortApp "SortKItem" []]
+            [intSort, kItemSort]
             [intTerm i]
 
 ------------------------------------------------------------
@@ -272,7 +273,7 @@ loadAPI = Internal.withDLib dlPath Internal.mkAPI
 ------------------------------------------------------------
 -- term construction
 
-boolSort, intSort, bytesSort, stringSort :: Sort
+boolSort, intSort, bytesSort, stringSort, kItemSort :: Sort
 boolSort = SortApp "SortBool" []
 intSort = SortApp "SortInt" []
 bytesSort = SortApp "SortBytes" []
@@ -384,7 +385,7 @@ sortSetKSet =
                 , concatSymbolName = "Lbl'Unds'Set'Unds'"
                 }
         , elementSortName = "SortKItem"
-        , listSortName = "SortList"
+        , listSortName = "SortSet"
         }
 
 sortListKList :: KListDefinition
@@ -500,6 +501,13 @@ defSorts =
             ,
                 ( SortAttributes{collectionAttributes = Just (sortListKList.symbolNames, KListTag), argCount = 0}
                 , Set.fromList ["SortList"]
+                )
+            )
+        ,
+            ( "SortSet"
+            ,
+                ( SortAttributes{collectionAttributes = Just (sortSetKSet.symbolNames, KSetTag), argCount = 0}
+                , Set.fromList ["SortSet"]
                 )
             )
         ,
@@ -707,7 +715,7 @@ defSymbols =
                 , resultSort = SortApp "SortSet" []
                 , attributes =
                     SymbolAttributes
-                        { collectionMetadata = Nothing
+                        { collectionMetadata = Just $ KSetMeta sortSetKSet
                         , symbolType = TotalFunction
                         , isIdem = IsNotIdem
                         , isAssoc = IsNotAssoc
@@ -827,7 +835,7 @@ defSymbols =
                 , resultSort = SortApp "SortSet" []
                 , attributes =
                     SymbolAttributes
-                        { collectionMetadata = Nothing
+                        { collectionMetadata = Just $ KSetMeta sortSetKSet
                         , symbolType = PartialFunction
                         , isIdem = IsIdem
                         , isAssoc = IsAssoc
@@ -2010,7 +2018,7 @@ defSymbols =
                 , resultSort = SortApp "SortSet" []
                 , attributes =
                     SymbolAttributes
-                        { collectionMetadata = Nothing
+                        { collectionMetadata = Just $ KSetMeta sortSetKSet
                         , symbolType = TotalFunction
                         , isIdem = IsNotIdem
                         , isAssoc = IsNotAssoc
