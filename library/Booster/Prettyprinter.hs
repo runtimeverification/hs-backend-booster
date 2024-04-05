@@ -28,6 +28,7 @@ module Booster.Prettyprinter (
     escapeCharT,
     unparseAssoc',
     unparseConcat',
+    list,
 ) where
 
 import Control.Arrow ((>>>)) -- TODO: remove
