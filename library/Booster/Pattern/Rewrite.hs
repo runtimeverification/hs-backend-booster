@@ -257,7 +257,7 @@ applyRule ::
 applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     def <- lift getDefinition
     -- unify terms
-    let unified = unifyTerms def rule.lhs pat.term
+    let unified = unifyTerms False def rule.lhs pat.term
     subst <- case unified of
         UnificationFailed _reason ->
             fail "Unification failed"

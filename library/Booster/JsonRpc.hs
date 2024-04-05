@@ -59,8 +59,8 @@ import Booster.Pattern.Rewrite (
     performRewrite,
  )
 import Booster.Pattern.Unify (UnificationResult (..), unifyTerms)
-import Booster.Pattern.Util (freeVariables, sortOfPattern, substituteInPredicate, substituteInTerm)
-import Booster.Prettyprinter (renderText)
+import Booster.Pattern.Util (freeVariables, sortOfPattern, substituteInPredicate, substituteInTerm, modifyVariables, modifyVarName)
+import Booster.Prettyprinter (renderText, renderDefault)
 import Booster.SMT.Base qualified as SMT
 import Booster.SMT.Interface qualified as SMT
 import Booster.Syntax.Json (KoreJson (..), addHeader, prettyPattern, sortOfJson)
@@ -77,7 +77,7 @@ import Booster.Syntax.Json.Internalise (
 import Booster.Syntax.ParsedKore (parseKoreModule)
 import Booster.Syntax.ParsedKore.Base hiding (ParsedModule)
 import Booster.Syntax.ParsedKore.Base qualified as ParsedModule (ParsedModule (..))
-import Booster.Syntax.ParsedKore.Internalise (addToDefinitions, definitionErrorToRpcError)
+import Booster.Syntax.ParsedKore.Internalise (addToDefinitions, definitionErrorToRpcError, extractExistentials)
 import Booster.Util (Flag (..), constructorName)
 import Kore.JsonRpc.Error qualified as RpcError
 import Kore.JsonRpc.Server (ErrorObj (..), JsonRpcHandler (..), Respond)
@@ -468,7 +468,7 @@ respond stateVar =
                                         }
         RpcTypes.Implies req -> withContext req._module $ \(def, mLlvmLibrary, mSMTOptions) -> do
             -- internalise given constrained term
-            let internalised = runExcept . internalisePattern DisallowAlias CheckSubsorts Nothing def
+            let internalised = runExcept . internalisePattern DisallowAlias CheckSubsorts Nothing def . fst . extractExistentials
 
             case (internalised req.antecedent.term, internalised req.consequent.term) of
                 (Left patternError, _) -> do
@@ -523,15 +523,15 @@ respond stateVar =
                                 , ceilConditions = patR.ceilConditions
                                 }
 
-                    case unifyTerms def substPatL.term substPatR.term of
+                    case unifyTerms True def substPatL.term substPatR.term of
                         UnificationFailed _reason ->
                             req.antecedent.term `doesNotImply` req.consequent.term
                         UnificationSortError sortError ->
                             pure . Left . RpcError.backendError . RpcError.ImplicationCheckError . RpcError.ErrorOnly . pack $
                                 show sortError
                         UnificationRemainder remainder ->
-                            pure . Left . RpcError.backendError . RpcError.ImplicationCheckError . RpcError.ErrorOnly . pack $
-                                show remainder
+                            pure . Left . RpcError.backendError . RpcError.ImplicationCheckError . RpcError.ErrorOnly . pack $ "unification remainder: " <>
+                                renderDefault (pretty remainder)
                         UnificationSuccess subst ->
                             -- check it is a "matching" substitution (substitutes variables
                             -- from the subject term only). Return does not imply if not.

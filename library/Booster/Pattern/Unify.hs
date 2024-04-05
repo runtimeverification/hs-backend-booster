@@ -106,8 +106,8 @@ type Substitution = Map Variable Term
    arguments that should not be possible), assuming the caller will
    catch and handle those errors.
 -}
-unifyTerms :: KoreDefinition -> Term -> Term -> UnificationResult
-unifyTerms KoreDefinition{sorts} term1 term2 =
+unifyTerms :: Bool -> KoreDefinition -> Term -> Term -> UnificationResult
+unifyTerms uImplicationCheck KoreDefinition{sorts} term1 term2 =
     let runUnification :: UnificationState -> UnificationResult
         runUnification =
             fromEither
@@ -117,7 +117,7 @@ unifyTerms KoreDefinition{sorts} term1 term2 =
         freeVars1 = freeVariables term1
         freeVars2 = freeVariables term2
         sharedVars = freeVars1 `Set.intersection` freeVars2
-     in if not $ Set.null sharedVars
+     in if not $ uImplicationCheck || Set.null sharedVars
             then
                 UnificationRemainder $
                     NE.fromList
@@ -131,6 +131,7 @@ unifyTerms KoreDefinition{sorts} term1 term2 =
                         , uMapQueue = mempty
                         , uIndeterminate = []
                         , uSubsorts = Map.map snd sorts
+                        , uImplicationCheck
                         }
 
 data UnificationState = State
@@ -140,6 +141,7 @@ data UnificationState = State
     , uMapQueue :: Seq (Term, Term)
     , uIndeterminate :: [(Term, Term)] -- list of postponed indeterminate terms (function results)
     , uSubsorts :: SortTable
+    , uImplicationCheck :: Bool
     }
 
 type SortTable = Map SortName (Set SortName)
@@ -173,6 +175,7 @@ unify1 ::
     Term ->
     Term ->
     StateT UnificationState (Except UnificationResult) ()
+unify1 t1 t2 | t1 == t2 = pure () 
 ----- Domain values
 -- two domain values: have to fully agree
 unify1
@@ -226,10 +229,14 @@ unify1
 unify1
     t1@(SymbolApplication symbol1 sorts1 args1)
     t2@(SymbolApplication symbol2 sorts2 args2)
-        | isFunctionSymbol symbol1 || isFunctionSymbol symbol2 =
-            -- If we have functions, pass, only match constructors.
-            -- NB the result is suspended to get more true failures.
-            addIndeterminate t1 t2
+        | isFunctionSymbol symbol1 || isFunctionSymbol symbol2 = do
+            implicationCheck <- gets uImplicationCheck
+            if implicationCheck && symbol1.name == symbol2.name && length args1 == length args2 then
+                enqueueRegularProblems $ Seq.fromList $ zip args1 args2
+            else
+                -- If we have functions, pass, only match constructors.
+                -- NB the result is suspended to get more true failures.
+                addIndeterminate t1 t2
         | symbol1.name /= symbol2.name = failWith (DifferentSymbols t1 t2)
         | length args1 /= length args2 =
             internalError $
@@ -243,8 +250,10 @@ unify1
     (Var var1@(Variable varSort1 varName1))
     (Var var2@(Variable varSort2 varName2))
         -- same variable: forbidden!
-        | var1 == var2 =
-            internalError $ "Shared variable: " <> show var1
+        | var1 == var2 = do
+            implicationCheck <- gets uImplicationCheck
+            if implicationCheck then pure ()
+            else internalError $ "Shared variable: " <> show var1
         | varName1 == varName2 && varSort1 /= varSort2 =
             -- sorts differ, names equal: error!
             failWith $ VariableConflict var1 (Var var1) (Var var2)

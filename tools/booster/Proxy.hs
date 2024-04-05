@@ -133,7 +133,10 @@ respondEither cfg@ProxyConfig{statsVar, boosterState} booster kore req = case re
                                 $ koreRes.logs
                     _ -> pure ()
                 pure koreResult
-            rightRes -> pure rightRes
+            rightRes -> do
+                Log.logErrorNS "proxy" . Text.pack $
+                             "implies success in booster"
+                pure rightRes
 
 
     Simplify simplifyReq ->
