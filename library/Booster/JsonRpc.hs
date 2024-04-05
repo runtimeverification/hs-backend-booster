@@ -525,7 +525,7 @@ respond stateVar =
 
                     case unifyTerms True def substPatL.term substPatR.term of
                         UnificationFailed _reason ->
-                            req.antecedent.term `doesNotImply` req.consequent.term
+                            doesNotImply (sortOfPattern substPatL) req.antecedent.term  req.consequent.term
                         UnificationSortError sortError ->
                             pure . Left . RpcError.backendError . RpcError.ImplicationCheckError . RpcError.ErrorOnly . pack $
                                 show sortError
@@ -537,17 +537,17 @@ respond stateVar =
                             -- from the subject term only). Return does not imply if not.
                             if Map.keysSet subst /= freeVariables substPatL.term
                                 then -- let violatingItems = Map.restrictKeys subst (Map.keysSet subst `Set.difference` freeVariables substPatL.term)
-                                    req.antecedent.term `doesNotImply` req.consequent.term
+                                    doesNotImply (sortOfPattern substPatL) req.antecedent.term req.consequent.term
                                 else do
                                     let filteredConsequentPreds = substPatR.constraints `Set.difference` substPatL.constraints
                                     solver <- traverse (SMT.initSolver def) mSMTOptions
 
                                     if null filteredConsequentPreds
-                                        then req.antecedent.term `implies` req.consequent.term
+                                        then implies (sortOfPattern substPatL) req.antecedent.term req.consequent.term
                                         else
                                             ApplyEquations.evaluateConstraints doTracing def mLlvmLibrary solver mempty filteredConsequentPreds >>= \case
                                                 (Right newPreds, _) ->
-                                                    if all (== Pattern.Predicate TrueBool) newPreds then req.antecedent.term `implies` req.consequent.term
+                                                    if all (== Pattern.Predicate TrueBool) newPreds then implies (sortOfPattern substPatL) req.antecedent.term req.consequent.term
                                                     else pure . Left . RpcError.backendError $ RpcError.Aborted "unknown constrains"
                                                 (Left other, _) ->
                                                     pure . Left . RpcError.backendError $ RpcError.Aborted (Text.pack . constructorName $ other)
@@ -570,23 +570,23 @@ respond stateVar =
             Nothing -> pure $ Left $ RpcError.backendError $ RpcError.CouldNotFindModule mainName
             Just d -> action (d, state.mLlvmLibrary, state.mSMTOptions)
 
-    doesNotImply l r =
+    doesNotImply s l r =
         pure $
             Right $
                 RpcTypes.Implies
                     RpcTypes.ImpliesResult
-                        { implication = addHeader $ Syntax.KJImplies (fromJust $ sortOfJson l) l r
+                        { implication = addHeader $ Syntax.KJImplies (externaliseSort s) l r
                         , satisfiable = False
                         , condition = Nothing
                         , logs = Nothing
                         }
 
-    implies l r =
+    implies s l r =
         pure $
             Right $
                 RpcTypes.Implies
                     RpcTypes.ImpliesResult
-                        { implication = addHeader $ Syntax.KJImplies (fromJust $ sortOfJson l) l r
+                        { implication = addHeader $ Syntax.KJImplies (externaliseSort s) l r
                         , satisfiable = True
                         , condition = Nothing
                         , logs = Nothing
