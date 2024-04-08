@@ -131,6 +131,8 @@ respondEither cfg@ProxyConfig{statsVar, boosterState} booster kore req = case re
                                 . map RPCLog.logEntryEraseTerms
                                 . fromJust
                                 $ koreRes.logs
+                        Log.logErrorNS "proxy" . Text.pack $
+                             "implies result in kore: " <> show koreRes.satisfiable
                     _ -> pure ()
                 pure koreResult
             rightRes -> do

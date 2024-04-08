@@ -117,7 +117,7 @@ unifyTerms uImplicationCheck KoreDefinition{sorts} term1 term2 =
         freeVars1 = freeVariables term1
         freeVars2 = freeVariables term2
         sharedVars = freeVars1 `Set.intersection` freeVars2
-     in if not $ uImplicationCheck || Set.null sharedVars
+     in if not $ Set.null sharedVars
             then
                 UnificationRemainder $
                     NE.fromList
@@ -175,7 +175,6 @@ unify1 ::
     Term ->
     Term ->
     StateT UnificationState (Except UnificationResult) ()
-unify1 t1 t2 | t1 == t2 = pure () 
 ----- Domain values
 -- two domain values: have to fully agree
 unify1
@@ -250,10 +249,7 @@ unify1
     (Var var1@(Variable varSort1 varName1))
     (Var var2@(Variable varSort2 varName2))
         -- same variable: forbidden!
-        | var1 == var2 = do
-            implicationCheck <- gets uImplicationCheck
-            if implicationCheck then pure ()
-            else internalError $ "Shared variable: " <> show var1
+        | var1 == var2 = internalError $ "Shared variable: " <> show var1
         | varName1 == varName2 && varSort1 /= varSort2 =
             -- sorts differ, names equal: error!
             failWith $ VariableConflict var1 (Var var1) (Var var2)
@@ -297,6 +293,7 @@ unify1
 unify1
     l1@(KList def1 heads1 rest1)
     l2@(KList def2 heads2 rest2)
+        | l1 == l2 = pure ()
         | -- incompatible lists
           def1 /= def2 =
             failWith $ DifferentSorts l1 l2
@@ -412,6 +409,7 @@ unify1
 unify1
     t1@(KMap def1 _ _)
     t2@(KMap def2 _ _)
+        | t1 == t2 = pure ()
         | def1 == def2 = do
             State{uSubstitution = currentSubst, uQueue = queue} <- get
             case queue of
@@ -505,7 +503,7 @@ unify1
 -- not supported yet FIXME
 unify1
     t1@KSet{}
-    t2 =
+    t2 = if t1 == t2 then pure () else
         addIndeterminate t1 t2
 unify1
     t1

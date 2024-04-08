@@ -38,7 +38,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Records
 import Numeric.Natural
-import Prettyprinter (pretty)
+import Prettyprinter (pretty, vsep)
 import System.Clock (Clock (Monotonic), diffTimeSpec, getTime, toNanoSecs)
 
 import Booster.Definition.Attributes.Base (UniqueId, getUniqueId, uniqueId)
@@ -87,6 +87,7 @@ import Kore.Syntax.Json.Types (Id (..))
 import Kore.Syntax.Json.Types qualified as KoreJson
 import Kore.Syntax.Json.Types qualified as Syntax
 import Booster.Pattern.Bool (pattern TrueBool)
+import Data.Aeson (ToJSON(toJSON))
 
 respond ::
     forall m.
@@ -517,14 +518,16 @@ respond stateVar =
                                 , ceilConditions = patL.ceilConditions
                                 }
                         substPatR =
-                            Pattern
+                            modifyVariables (modifyVarName ("RHS#" <>)) $ Pattern
                                 { term = substituteInTerm substitutionR patR.term
                                 , constraints = Set.map (substituteInPredicate substitutionR) patR.constraints
                                 , ceilConditions = patR.ceilConditions
                                 }
 
-                    case unifyTerms True def substPatL.term substPatR.term of
+                    case unifyTerms True def substPatR.term substPatL.term of
                         UnificationFailed _reason ->
+                            -- pure . Left . RpcError.backendError . RpcError.ImplicationCheckError . RpcError.ErrorWithContext "does-not-imply" $ [pack $ show _reason]
+
                             doesNotImply (sortOfPattern substPatL) req.antecedent.term  req.consequent.term
                         UnificationSortError sortError ->
                             pure . Left . RpcError.backendError . RpcError.ImplicationCheckError . RpcError.ErrorOnly . pack $
@@ -532,22 +535,28 @@ respond stateVar =
                         UnificationRemainder remainder ->
                             pure . Left . RpcError.backendError . RpcError.ImplicationCheckError . RpcError.ErrorOnly . pack $ "unification remainder: " <>
                                 renderDefault (pretty remainder)
-                        UnificationSuccess subst ->
+                        UnificationSuccess subst -> do
                             -- check it is a "matching" substitution (substitutes variables
                             -- from the subject term only). Return does not imply if not.
-                            if Map.keysSet subst /= freeVariables substPatL.term
-                                then -- let violatingItems = Map.restrictKeys subst (Map.keysSet subst `Set.difference` freeVariables substPatL.term)
-                                    doesNotImply (sortOfPattern substPatL) req.antecedent.term req.consequent.term
+                            let violatingItems = Map.restrictKeys subst (Map.keysSet subst `Set.difference` freeVariables substPatR.term)
+                            if not $ null violatingItems
+                                then do
+                                    pure . Left . RpcError.backendError . RpcError.ImplicationCheckError . RpcError.ErrorWithContext "does-not-imply2" $ ["not matching substitution", pack $ renderDefault $ vsep [pretty k <> "->" <> pretty v | (k, v) <- Map.toList violatingItems]]
+                                    -- doesNotImply (sortOfPattern substPatL) req.antecedent.term req.consequent.term
                                 else do
-                                    let filteredConsequentPreds = substPatR.constraints `Set.difference` substPatL.constraints
+                                    let filteredConsequentPreds = Set.map (substituteInPredicate subst) substPatR.constraints `Set.difference` substPatL.constraints
                                     solver <- traverse (SMT.initSolver def) mSMTOptions
 
                                     if null filteredConsequentPreds
-                                        then implies (sortOfPattern substPatL) req.antecedent.term req.consequent.term
+                                        then 
+                                            implies (sortOfPattern substPatL) req.antecedent.term req.consequent.term
+                                            -- pure . Left . RpcError.backendError . RpcError.ImplicationCheckError . RpcError.ErrorOnly $ "implies"
                                         else
                                             ApplyEquations.evaluateConstraints doTracing def mLlvmLibrary solver mempty filteredConsequentPreds >>= \case
                                                 (Right newPreds, _) ->
-                                                    if all (== Pattern.Predicate TrueBool) newPreds then implies (sortOfPattern substPatL) req.antecedent.term req.consequent.term
+                                                    if all (== Pattern.Predicate TrueBool) newPreds then 
+                                                        implies (sortOfPattern substPatL) req.antecedent.term req.consequent.term
+                                                        --  pure . Left . RpcError.backendError . RpcError.ImplicationCheckError . RpcError.ErrorOnly $ "implies"
                                                     else pure . Left . RpcError.backendError $ RpcError.Aborted "unknown constrains"
                                                 (Left other, _) ->
                                                     pure . Left . RpcError.backendError $ RpcError.Aborted (Text.pack . constructorName $ other)
