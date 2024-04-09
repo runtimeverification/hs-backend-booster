@@ -13,6 +13,7 @@ module Booster.Pattern.Base (
 ) where
 
 import Booster.Definition.Attributes.Base (
+    FunctionType (..),
     KCollectionMetadata (..),
     KCollectionSymbolNames (..),
     KListDefinition (..),
@@ -24,7 +25,7 @@ import Booster.Definition.Attributes.Base (
     pattern IsAssoc,
     pattern IsNotAssoc,
     pattern IsNotIdem,
-    pattern IsNotMacroOrAlias, FunctionType (..),
+    pattern IsNotMacroOrAlias,
  )
 import Booster.Prettyprinter qualified as KPretty
 
@@ -848,12 +849,16 @@ instance Pretty Pattern where
                 <> fmap (Pretty.indent 4 . pretty) (Set.toList patt.constraints)
                 <> fmap (Pretty.indent 4 . pretty) patt.ceilConditions
 
-
-
 pattern ConsApplication :: Symbol -> [Sort] -> [Term] -> Term
-pattern ConsApplication sym sorts args <- Term _ (SymbolApplicationF sym@(Symbol _ _ _ _ (SymbolAttributes{symbolType = Constructor})) sorts args)
+pattern ConsApplication sym sorts args <-
+    Term
+        _
+        (SymbolApplicationF sym@(Symbol _ _ _ _ (SymbolAttributes{symbolType = Constructor})) sorts args)
 
 pattern FunctionApplication :: Symbol -> [Sort] -> [Term] -> Term
-pattern FunctionApplication sym sorts args <- Term _ (SymbolApplicationF sym@(Symbol _ _ _ _ (SymbolAttributes{symbolType = Function _})) sorts args)
+pattern FunctionApplication sym sorts args <-
+    Term
+        _
+        (SymbolApplicationF sym@(Symbol _ _ _ _ (SymbolAttributes{symbolType = Function _})) sorts args)
 
 {-# COMPLETE AndTerm, ConsApplication, FunctionApplication, DomainValue, Var, Injection, KMap, KList, KSet #-}

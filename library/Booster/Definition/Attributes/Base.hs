@@ -156,7 +156,7 @@ data Concreteness
     deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (NFData)
 
-data FunctionType = Partial | Total 
+data FunctionType = Partial | Total
     deriving stock (Eq, Ord, Show, Generic, Data, Lift)
     deriving anyclass (NFData, Hashable)
 

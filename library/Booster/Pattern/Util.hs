@@ -50,11 +50,12 @@ import Data.Set qualified as Set
 
 import Booster.Definition.Attributes.Base (
     Concreteness (..),
+    FunctionType (..),
     KCollectionMetadata (..),
     KListDefinition (..),
     KMapDefinition (..),
     SymbolAttributes (..),
-    SymbolType (..), FunctionType (..),
+    SymbolType (..),
  )
 import Booster.Pattern.Base
 import Booster.Util (Flag (..))

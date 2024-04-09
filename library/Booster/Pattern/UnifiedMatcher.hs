@@ -1,8 +1,9 @@
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Booster.Pattern.UnifiedMatcher (
     MatchResult (..),
     MatchType (..),
@@ -29,16 +30,18 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Prettyprinter
 
+import Booster.Definition.Attributes.Base (KListDefinition)
 import Booster.Definition.Base
 import Booster.Pattern.Base
 import Booster.Pattern.Util (
+    checkSymbolIsAc,
     freeVariables,
+    isConstructorSymbol,
     sortOfTerm,
-    substituteInTerm, checkSymbolIsAc, isConstructorSymbol,
+    substituteInTerm,
  )
-import Data.List (partition)
 import Data.ByteString (ByteString)
-import Booster.Definition.Attributes.Base (KListDefinition)
+import Data.List (partition)
 
 -- | Result of matching a pattern to a subject (a substitution or an indication of what went wrong)
 data MatchResult
@@ -50,7 +53,7 @@ data MatchResult
       MatchIndeterminate (NonEmpty (Term, Term))
     deriving stock (Eq, Show)
 
-data MatchType = Rule | Fun deriving Eq
+data MatchType = Rule | Fun deriving (Eq)
 
 -- | Additional information to explain why a unification has failed
 data FailReason
@@ -178,10 +181,11 @@ checkIndeterminate = do
     unless (null indeterminate) . lift $
         throwE (MatchIndeterminate $ NE.fromList indeterminate)
 match1 ::
-    MatchType -> 
+    MatchType ->
     Term ->
     Term ->
     StateT MatchState (Except MatchResult) ()
+{- FOURMOLU_DISABLE -}
 match1 Rule (AndTerm t1a t1b)                          t2@AndTerm{}                               = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
 match1 Fun  t1@AndTerm{}                               t2@AndTerm{}                               = addIndeterminate t1 t2
 match1 _    (AndTerm t1a t1b)                          t2@DomainValue{}                           = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
@@ -191,8 +195,10 @@ match1 _    (AndTerm t1a t1b)                          t2@KList{}               
 match1 _    (AndTerm t1a t1b)                          t2@KSet{}                                  = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
 match1 _    (AndTerm t1a t1b)                          t2@ConsApplication{}                       = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
 match1 _    (AndTerm t1a t1b)                          t2@FunctionApplication{}                   = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
-match1 _    (AndTerm t1a t1b)                          t2@Var{}                                   = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
-match1 _    t1@DomainValue{}                           (AndTerm t2a t2b)                          = enqueueRegularProblem t1 t2a >> enqueueRegularProblem t1 t2b
+match1 Rule (AndTerm t1a t1b)                          t2@Var{}                                   = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
+match1 Fun  t1@AndTerm{}                               t2@Var{}                                   = addIndeterminate t1 t2
+match1 Rule t1@DomainValue{}                           (AndTerm t2a t2b)                          = enqueueRegularProblem t1 t2a >> enqueueRegularProblem t1 t2b
+match1 Fun  t1@DomainValue{}                           t2@AndTerm{}                               = addIndeterminate t1 t2
 match1 _    (DomainValue s1 t1)                        (DomainValue s2 t2)                        = matchDV s1 t1 s2 t2
 match1 _    t1@DomainValue{}                           t2@Injection{}                             = failWith $ DifferentSymbols t1 t2
 match1 _    t1@DomainValue{}                           t2@KMap{}                                  = failWith $ DifferentSymbols t1 t2
@@ -217,7 +223,7 @@ match1 Fun  t1@KMap{}                                  t2@AndTerm{}             
 match1 _    t1@KMap{}                                  t2@DomainValue{}                           = failWith $ DifferentSymbols t1 t2
 match1 Rule t1@KMap{}                                  t2@Injection{}                             = failWith $ DifferentSymbols t1 t2
 match1 Fun  t1@KMap{}                                  t2@Injection{}                             = addIndeterminate t1 t2
-match1 _    t1@KMap{}                                  t2@KMap{}                                  = matchMap t1 t2
+match1 _    t1@KMap{}                                  t2@KMap{}                                  = matchMaps t1 t2
 match1 _    t1@KMap{}                                  t2@KList{}                                 = failWith $ DifferentSymbols t1 t2
 match1 _    t1@KMap{}                                  t2@KSet{}                                  = failWith $ DifferentSymbols t1 t2
 match1 _    t1@KMap{}                                  t2@ConsApplication{}                       = failWith $ DifferentSymbols t1 t2
@@ -230,7 +236,7 @@ match1 _    t1@KList{}                                 t2@DomainValue{}         
 match1 Rule t1@KList{}                                 t2@Injection{}                             = failWith $ DifferentSymbols t1 t2
 match1 Fun  t1@KList{}                                 t2@Injection{}                             = addIndeterminate t1 t2
 match1 _    t1@KList{}                                 t2@KMap{}                                  = failWith $ DifferentSymbols t1 t2
-match1 Rule (KList def1 heads1 rest1)                  (KList def2 heads2 rest2)                  = unifyList def1 heads1 rest1 def2 heads2 rest2
+match1 Rule (KList def1 heads1 rest1)                  (KList def2 heads2 rest2)                  = matchLists def1 heads1 rest1 def2 heads2 rest2
 match1 Fun  t1@KList{}                                 t2@KList{}                                 = addIndeterminate t1 t2
 match1 _    t1@KList{}                                 t2@KSet{}                                  = failWith $ DifferentSymbols t1 t2
 match1 _    t1@KList{}                                 t2@ConsApplication{}                       = failWith $ DifferentSymbols t1 t2
@@ -280,7 +286,7 @@ match1 Fun  (FunctionApplication symbol1 sorts1 args1) (FunctionApplication symb
 match1 Rule t1@FunctionApplication{}                   (Var var2)                                 = matchVar Rule var2 t1
 match1 Fun  t1@FunctionApplication{}                   t2@Var{}                                   = addIndeterminate t1 t2
 match1 Rule t1@Var{}                                   (AndTerm t2a t2b)                          = enqueueRegularProblem t1 t2a >> enqueueRegularProblem t1 t2b
-match1 Fun  (Var var1)                                 t2@AndTerm{}                               = matchVar Fun var1 t2
+match1 Fun  t1@Var{}                                   t2@AndTerm{}                               = addIndeterminate t1 t2
 match1 mTy  (Var var1)                                 t2@DomainValue{}                           = matchVar mTy var1 t2
 match1 mTy  (Var var1)                                 t2@Injection{}                             = matchVar mTy var1 t2
 match1 mTy  (Var var1)                                 t2@KMap{}                                  = matchVar mTy var1 t2
@@ -289,30 +295,39 @@ match1 mTy  (Var var1)                                 t2@KSet{}                
 match1 mTy  (Var var1)                                 t2@ConsApplication{}                       = matchVar mTy var1 t2
 match1 mTy  (Var var1)                                 t2@FunctionApplication{}                   = matchVar mTy var1 t2
 match1 mTy  (Var var1)                                 t2@Var{}                                   = matchVar mTy var1 t2
-
-
+{- FOURMOLU_ENABLE -}
 
 matchDV :: Sort -> ByteString -> Sort -> ByteString -> StateT s (Except MatchResult) ()
-matchDV
-    s1 t1 s2 t2 =
-        do
-            unless (t1 == t2) $
-                failWith (DifferentValues (DomainValue s1 t1) (DomainValue s2 t2))
-            unless (s1 == s2) $ -- sorts must be exactly the same for DVs
-                failWith (DifferentSorts (DomainValue s1 t1) (DomainValue s2 t2))
-
-
+matchDV s1 t1 s2 t2 =
+    do
+        unless (t1 == t2) $
+            failWith (DifferentValues (DomainValue s1 t1) (DomainValue s2 t2))
+        unless (s1 == s2) $ -- sorts must be exactly the same for DVs
+            failWith (DifferentSorts (DomainValue s1 t1) (DomainValue s2 t2))
+{-# INLINE matchDV #-}
 
 ----- Injections
 -- two injections. Try to unify the contained terms if the sorts
 -- agree. Target sorts must be the same, source sorts may differ if
 -- the contained pattern term is just a variable, otherwise they need
 -- to be identical.
-matchInj :: MatchType -> Sort -> Sort -> Term -> Sort -> Sort -> Term -> StateT MatchState (Except MatchResult) ()
+matchInj ::
+    MatchType ->
+    Sort ->
+    Sort ->
+    Term ->
+    Sort ->
+    Sort ->
+    Term ->
+    StateT MatchState (Except MatchResult) ()
 matchInj
     mType
-    source1 target1 trm1
-    source2 target2 trm2
+    source1
+    target1
+    trm1
+    source2
+    target2
+    trm2
         | target1 /= target2 = do
             failWith (DifferentSorts (Injection source1 target1 trm1) (Injection source2 target2 trm2))
         | source1 == source2 = do
@@ -328,46 +343,72 @@ matchInj
                 else failWith (DifferentSorts trm1 trm2)
         | otherwise =
             failWith (DifferentSorts (Injection source1 target1 trm1) (Injection source2 target2 trm2))
-        
+{-# INLINE matchInj #-}
 ----- Symbol Applications
 -- two constructors: fail if names differ, recurse
 
 ----- Symbol Applications
-matchSymbolAplications :: MatchType -> Symbol -> [Sort] -> [Term] -> Symbol -> [Sort] -> [Term] -> StateT MatchState (Except MatchResult) ()
+matchSymbolAplications ::
+    MatchType ->
+    Symbol ->
+    [Sort] ->
+    [Term] ->
+    Symbol ->
+    [Sort] ->
+    [Term] ->
+    StateT MatchState (Except MatchResult) ()
 matchSymbolAplications
     Rule
-    symbol1 sorts1 args1
-    symbol2 sorts2 args2
-        | symbol1.name /= symbol2.name = failWith (DifferentSymbols (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2) )
+    symbol1
+    sorts1
+    args1
+    symbol2
+    sorts2
+    args2
+        | symbol1.name /= symbol2.name =
+            failWith
+                ( DifferentSymbols (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2)
+                )
         | length args1 /= length args2 =
-            failWith $ ArgLengthsDiffer (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2) 
-        | sorts1 /= sorts2 = failWith (DifferentSorts (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2) )
+            failWith $
+                ArgLengthsDiffer (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2)
+        | sorts1 /= sorts2 =
+            failWith
+                (DifferentSorts (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2))
         | otherwise =
             enqueueRegularProblems $ Seq.fromList $ zip args1 args2
 matchSymbolAplications
     Fun
-    symbol1 sorts1 args1
-    symbol2 sorts2 args2
+    symbol1
+    sorts1
+    args1
+    symbol2
+    sorts2
+    args2
         | symbol1.name /= symbol2.name =
             if isConstructorSymbol symbol1 && isConstructorSymbol symbol2
-                then failWith (DifferentSymbols (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2))
+                then
+                    failWith
+                        (DifferentSymbols (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2))
                 else addIndeterminate (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2)
         | length args1 /= length args2 =
-            failWith $ ArgLengthsDiffer (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2)
-        | sorts1 /= sorts2 = failWith (DifferentSorts (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2) )
-
+            failWith $
+                ArgLengthsDiffer (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2)
+        | sorts1 /= sorts2 =
+            failWith
+                (DifferentSorts (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2))
         -- If the symbol is non-free (AC symbol), return indeterminate
         | checkSymbolIsAc symbol1 =
             addIndeterminate (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2)
         | otherwise =
             enqueueRegularProblems $ Seq.fromList $ zip args1 args2
-   
+
 ----- Variables
 
 matchVar :: MatchType -> Variable -> Term -> StateT MatchState (Except MatchResult) ()
-matchVar 
+matchVar
     Rule
--- twice the exact same variable: verify sorts are equal
+    -- twice the exact same variable: verify sorts are equal
     var1@(Variable varSort1 varName1)
     (Var var2@(Variable varSort2 varName2))
         -- same variable: forbidden!
@@ -377,7 +418,7 @@ matchVar
             -- sorts differ, names equal: error!
             failWith $ VariableConflict var1 (Var var1) (Var var2)
 matchVar
--- term1 variable (target): introduce a new binding
+    -- term1 variable (target): introduce a new binding
     mType
     var@Variable{variableSort}
     term2 =
@@ -392,21 +433,32 @@ matchVar
                 else failWith $ DifferentSorts (Var var) term2
 
 -- unification for lists. Only solves simple cases, returns indeterminate otherwise
-unifyList :: KListDefinition -> [Term] -> Maybe (Term, [Term]) -> KListDefinition -> [Term] -> Maybe (Term, [Term]) -> StateT MatchState (Except MatchResult) ()
-unifyList
-    def1 heads1 rest1
-    def2 heads2 rest2
+matchLists ::
+    KListDefinition ->
+    [Term] ->
+    Maybe (Term, [Term]) ->
+    KListDefinition ->
+    [Term] ->
+    Maybe (Term, [Term]) ->
+    StateT MatchState (Except MatchResult) ()
+matchLists
+    def1
+    heads1
+    rest1
+    def2
+    heads2
+    rest2
         | -- incompatible lists
-        def1 /= def2 =
+          def1 /= def2 =
             failWith $ DifferentSorts (KList def1 heads1 rest1) (KList def2 heads2 rest2)
         | -- two fully-concrete lists of the same length
-        Nothing <- rest1
+          Nothing <- rest1
         , Nothing <- rest2 =
             if length heads1 == length heads2
                 then void $ enqueuePairs heads1 heads2
                 else failWith $ DifferentValues (KList def1 heads1 rest1) (KList def2 heads2 rest2)
         | -- left list has a symbolic part, right one is fully concrete
-        Just (symb1, tails1) <- rest1
+          Just (symb1, tails1) <- rest1
         , Nothing <- rest2 = do
             let emptyList = KList def1 [] Nothing
             remainder <- enqueuePairs heads1 heads2
@@ -441,11 +493,11 @@ unifyList
                                 let newRight = KList def2 (reverse tail2) Nothing
                                 enqueueRegularProblem symb1 newRight
         | -- mirrored case above: left list fully concrete, right one isn't
-        Nothing <- rest1
+          Nothing <- rest1
         , Just _ <- rest2 =
-            unifyList def2 heads2 rest2 def1 heads1 rest1 -- won't loop, will fail later if unification succeeds
+            matchLists def2 heads2 rest2 def1 heads1 rest1 -- won't loop, will fail later if unification succeeds
         | -- two lists with symbolic middle
-        Just (symb1, tails1) <- rest1
+          Just (symb1, tails1) <- rest1
         , Just (symb2, tails2) <- rest2 = do
             remainder <- enqueuePairs heads1 heads2
             case remainder of
@@ -489,11 +541,11 @@ unifyList
                             let surplusLeft = KList def1 [] (Just (symb1, tails1'))
                                 surplusRight = KList def2 heads2' (Just (symb2, []))
                             addIndeterminate surplusLeft surplusRight
-
+{-# INLINE matchLists #-}
 
 ------ Internalised Maps
-matchMap :: Term -> Term -> StateT MatchState (Except MatchResult) ()
-matchMap
+matchMaps :: Term -> Term -> StateT MatchState (Except MatchResult) ()
+matchMaps
     t1@(KMap def1 _ _)
     t2@(KMap def2 _ _)
         | def1 == def2 = do
@@ -505,7 +557,7 @@ matchMap
                             | Just duplicate <- duplicateKeys kvs1 -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs1 rest1
                             | Just duplicate <- duplicateKeys kvs2 -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs2 rest2
                             | -- both sets of keys are syntactically the same (some keys could be functions)
-                            Set.fromList [k | (k, _v) <- kvs1] == Set.fromList [k | (k, _v) <- kvs2] -> do
+                              Set.fromList [k | (k, _v) <- kvs1] == Set.fromList [k | (k, _v) <- kvs2] -> do
                                 forM_ (Map.elems $ Map.intersectionWith (,) (Map.fromList kvs1) (Map.fromList kvs2)) $
                                     uncurry enqueueRegularProblem
                                 case (rest1, rest2) of
@@ -515,8 +567,8 @@ matchMap
                                     (Nothing, Nothing) -> pure ()
                         (KMap _ kvs1 Nothing, KMap _ kvs2 Nothing)
                             | -- the sets of keys do not match but all keys are concrete and fully evaluated
-                            -- this means there is a mismatch
-                            allKeysConstructorLike kvs1 && allKeysConstructorLike kvs2 ->
+                              -- this means there is a mismatch
+                              allKeysConstructorLike kvs1 && allKeysConstructorLike kvs2 ->
                                 case kvs1 `findAllKeysIn` kvs2 of
                                     Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 kvs2 Nothing
                                     Right (_matched, []) -> error "unreachable case"
@@ -530,7 +582,7 @@ matchMap
                     -- defer unification until all regular terms have unified
                     enqueueMapProblem t1 t2
         | otherwise = failWith $ DifferentSorts t1 t2
-    where
+      where
         partitionConcreteKeys :: [(Term, Term)] -> ([(Term, Term)], [(Term, Term)])
         partitionConcreteKeys = partition (\(Term attrs _, _) -> attrs.isConstructorLike)
 
@@ -544,14 +596,14 @@ matchMap
                 matchedMap = Map.intersectionWith (,) searchMap subjectMap
                 restMap = Map.difference subjectMap matchedMap
                 unmatched = Map.keys $ Map.difference searchMap subjectMap
-            in if null unmatched
+             in if null unmatched
                     then Right (Map.elems matchedMap, Map.toList restMap)
                     else Left unmatched
 
         duplicateKeys :: [(Term, Term)] -> Maybe Term
         duplicateKeys kvs =
             let duplicates = Map.filter (> (1 :: Int)) $ foldr (flip (Map.insertWith (+)) 1 . fst) mempty kvs
-            in case Map.toList duplicates of
+             in case Map.toList duplicates of
                     [] -> Nothing
                     (k, _) : _ -> Just k
 
@@ -567,8 +619,8 @@ matchMap
         substituteInKeys substitution = \case
             KMap attrs keyVals rest -> KMap attrs (first (substituteInTerm substitution) <$> keyVals) rest
             other -> other
-
-matchMap _ _ = undefined
+matchMaps _ _ = undefined
+{-# INLINE matchMaps #-}
 
 failWith :: FailReason -> StateT s (Except MatchResult) ()
 failWith = lift . throwE . MatchFailed
@@ -628,7 +680,8 @@ bindVariable mType var term = do
         -- Check if term is a variable, prefer target variables. Should
         -- not happen given how we call it in the code above.
         Var var2
-            | mType == Rule && var2 `Set.member` targets
+            | mType == Rule
+                && var2 `Set.member` targets
                 && not (var `Set.member` targets) ->
                 bindVariable mType var2 (Var var)
         -- regular case
@@ -636,7 +689,10 @@ bindVariable mType var term = do
             case Map.lookup var currentSubst of
                 Just oldTerm
                     | oldTerm == term -> pure () -- already bound
-                    | DomainValue{} <- oldTerm, DomainValue{} <- term, mType == Rule -> enqueueRegularProblem oldTerm term
+                    | DomainValue{} <- oldTerm
+                    , DomainValue{} <- term
+                    , mType == Rule ->
+                        enqueueRegularProblem oldTerm term
                     | otherwise ->
                         -- the term in the binding could be _equivalent_
                         -- (not necessarily syntactically equal) to term'

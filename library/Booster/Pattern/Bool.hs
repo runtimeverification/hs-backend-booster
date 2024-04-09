@@ -26,13 +26,14 @@ module Booster.Pattern.Bool (
 import Data.ByteString.Char8 (ByteString)
 
 import Booster.Definition.Attributes.Base (
+    FunctionType (..),
     SMTType (SMTHook),
     SymbolAttributes (SymbolAttributes),
     SymbolType (Function),
     pattern CanBeEvaluated,
     pattern IsNotAssoc,
     pattern IsNotIdem,
-    pattern IsNotMacroOrAlias, FunctionType (..),
+    pattern IsNotMacroOrAlias,
  )
 import Booster.Pattern.Base (
     Pattern,
