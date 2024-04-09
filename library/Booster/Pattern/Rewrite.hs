@@ -52,7 +52,7 @@ import Booster.Pattern.ApplyEquations qualified as ApplyEquations
 import Booster.Pattern.Base
 import Booster.Pattern.Bool
 import Booster.Pattern.Index (TermIndex (..), kCellTermIndex)
-import Booster.Pattern.Unify
+import Booster.Pattern.UnifiedMatcher
 import Booster.Pattern.Util
 import Booster.Prettyprinter
 import Booster.SMT.Interface qualified as SMT
@@ -257,15 +257,14 @@ applyRule ::
 applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     def <- lift getDefinition
     -- unify terms
-    let unified = unifyTerms def rule.lhs pat.term
-    subst <- case unified of
-        UnificationFailed _reason ->
-            fail "Unification failed"
-        UnificationSortError sortError ->
+    subst <- case matchTerms Rule def rule.lhs pat.term of
+        MatchFailed (SubsortingError sortError) ->
             failRewrite $ RewriteSortError rule pat.term sortError
-        UnificationRemainder remainder ->
+        MatchFailed _reason ->
+            fail "Rule matching failed"
+        MatchIndeterminate remainder ->
             failRewrite $ RuleApplicationUnclear rule pat.term remainder
-        UnificationSuccess substitution ->
+        MatchSuccess substitution ->
             pure substitution
 
     -- check it is a "matching" substitution (substitutes variables

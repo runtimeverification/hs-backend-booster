@@ -73,7 +73,7 @@ import Booster.LLVM qualified as LLVM
 import Booster.Pattern.Base
 import Booster.Pattern.Bool
 import Booster.Pattern.Index
-import Booster.Pattern.Match
+import Booster.Pattern.UnifiedMatcher
 import Booster.Pattern.Util
 import Booster.Prettyprinter (renderDefault, renderText)
 import Booster.SMT.Interface qualified as SMT
@@ -685,7 +685,7 @@ data ApplyEquationResult
     deriving stock (Eq, Show)
 
 data ApplyEquationFailure
-    = FailedMatch MatchFailReason
+    = FailedMatch FailReason
     | IndeterminateMatch
     | IndeterminateCondition [Predicate]
     | ConditionFalse Predicate
@@ -813,9 +813,9 @@ applyEquation term rule = fmap (either Failure Success) $ runExceptT $ do
         throwE (MatchConstraintViolated Concrete "* (term has variables)")
     -- match lhs
     koreDef <- (.definition) <$> lift getConfig
-    case matchTerm koreDef rule.lhs term of
+    case matchTerms Fun koreDef rule.lhs term of
         MatchFailed failReason -> throwE $ FailedMatch failReason
-        MatchIndeterminate _pat _subj -> throwE IndeterminateMatch
+        MatchIndeterminate{} -> throwE IndeterminateMatch
         MatchSuccess subst -> do
             -- cancel if condition
             -- forall (v, t) : subst. concrete(v) -> isConstructorLike(t) /\
