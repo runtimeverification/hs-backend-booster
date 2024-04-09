@@ -154,73 +154,90 @@ match1 ::
 --    f(foo(bar())) => flob()
 -- would be unreachable anyway, hence
 --   f(foo(A)) => baz()
--- must always apply to f(foo(X))
+-- must always apply to f(foo(X))  
 
 
-match1 t1@AndTerm{}           t2@AndTerm{}           = indeterminate t1 t2
-match1 t1@AndTerm{}           t2@DomainValue{}       = matchAndTerm t1 t2
-match1 t1@AndTerm{}           t2@Injection{}         = matchAndTerm t1 t2
-match1 t1@AndTerm{}           t2@KMap{}              = matchAndTerm t1 t2
-match1 t1@AndTerm{}           t2@KList{}             = matchAndTerm t1 t2
-match1 t1@AndTerm{}           t2@KSet{}              = matchAndTerm t1 t2
-match1 t1@AndTerm{}           t2@SymbolApplication{} = matchAndTerm t1 t2
-match1 t1@AndTerm{}           t2@Var{}               = indeterminate t1 t2
-match1 t1@DomainValue{}       t2@AndTerm{}           = indeterminate t1 t2
-match1 t1@DomainValue{}       t2@DomainValue{}       = matchDVDV t1 t2
-match1 t1@DomainValue{}       t2@Injection{}         = matchDVSymbolApplication t1 t2
-match1 t1@DomainValue{}       t2@KMap{}              = failWith $ DifferentValues t1 t2
-match1 t1@DomainValue{}       t2@KList{}             = failWith $ DifferentValues t1 t2
-match1 t1@DomainValue{}       t2@KSet{}              = failWith $ DifferentValues t1 t2
-match1 t1@DomainValue{}       t2@SymbolApplication{} = matchDVSymbolApplication t1 t2
-match1 t1@DomainValue{}       t2@Var{}               = indeterminate t1 t2
-match1 t1@Injection{}         t2@AndTerm{}           = indeterminate t1 t2
-match1 t1@Injection{}         t2@DomainValue{}       = failWith $ DifferentSymbols t1 t2
-match1 t1@Injection{}         t2@Injection{}         = matchInjInj t1 t2
-match1 t1@Injection{}         t2@KMap{}              = failWith $ DifferentSymbols t1 t2
-match1 t1@Injection{}         t2@KList{}             = failWith $ DifferentSymbols t1 t2
-match1 t1@Injection{}         t2@KSet{}              = failWith $ DifferentSymbols t1 t2
-match1 t1@Injection{}         t2@SymbolApplication{} = matchInjSymbolApplication t1 t2
-match1 t1@Injection{}         t2@Var{}               = indeterminate t1 t2
-match1 t1@KMap{}              t2@AndTerm{}           = indeterminate t1 t2
-match1 t1@KMap{}              t2@DomainValue{}       = indeterminate t1 t2
-match1 t1@KMap{}              t2@Injection{}         = indeterminate t1 t2
-match1 t1@KMap{}              t2@KMap{}              = matchKMap t1 t2
-match1 t1@KMap{}              t2@KList{}             = indeterminate t1 t2
-match1 t1@KMap{}              t2@KSet{}              = indeterminate t1 t2
-match1 t1@KMap{}              t2@SymbolApplication{} = indeterminate t1 t2
-match1 t1@KMap{}              t2@Var{}               = indeterminate t1 t2
-match1 t1@KList{}             t2@AndTerm{}           = indeterminate t1 t2
-match1 t1@KList{}             t2@DomainValue{}       = indeterminate t1 t2
-match1 t1@KList{}             t2@Injection{}         = indeterminate t1 t2
-match1 t1@KList{}             t2@KMap{}              = indeterminate t1 t2
-match1 t1@KList{}             t2@KList{}             = indeterminate t1 t2
-match1 t1@KList{}             t2@KSet{}              = indeterminate t1 t2
-match1 t1@KList{}             t2@SymbolApplication{} = indeterminate t1 t2
-match1 t1@KList{}             t2@Var{}               = indeterminate t1 t2
-match1 t1@KSet{}              t2@AndTerm{}           = indeterminate t1 t2
-match1 t1@KSet{}              t2@DomainValue{}       = indeterminate t1 t2
-match1 t1@KSet{}              t2@Injection{}         = indeterminate t1 t2
-match1 t1@KSet{}              t2@KMap{}              = indeterminate t1 t2
-match1 t1@KSet{}              t2@KList{}             = indeterminate t1 t2
-match1 t1@KSet{}              t2@KSet{}              = indeterminate t1 t2
-match1 t1@KSet{}              t2@SymbolApplication{} = indeterminate t1 t2
-match1 t1@KSet{}              t2@Var{}               = indeterminate t1 t2
-match1 t1@SymbolApplication{} t2@AndTerm{}           = indeterminate t1 t2
-match1 t1@SymbolApplication{} t2@DomainValue{}       = failWith $ DifferentSymbols t1 t2
-match1 t1@SymbolApplication{} t2@Injection{}         = failWith $ DifferentSymbols t1 t2
-match1 t1@SymbolApplication{} t2@KMap{}              = failWith $ DifferentSymbols t1 t2
-match1 t1@SymbolApplication{} t2@KList{}             = failWith $ DifferentSymbols t1 t2
-match1 t1@SymbolApplication{} t2@KSet{}              = failWith $ DifferentSymbols t1 t2
-match1 t1@SymbolApplication{} t2@SymbolApplication{} = matchSymbolApplicationSymbolApplication t1 t2
-match1 t1@SymbolApplication{} t2@Var{}               = failWith $ DifferentSymbols t1 t2
-match1 t1@Var{}               t2@AndTerm{}           = matchVar t1 t2
-match1 t1@Var{}               t2@DomainValue{}       = matchVar t1 t2
-match1 t1@Var{}               t2@Injection{}         = matchVar t1 t2
-match1 t1@Var{}               t2@KMap{}              = matchVar t1 t2
-match1 t1@Var{}               t2@KList{}             = matchVar t1 t2
-match1 t1@Var{}               t2@KSet{}              = matchVar t1 t2
-match1 t1@Var{}               t2@SymbolApplication{} = matchVar t1 t2
-match1 t1@Var{}               t2@Var{}               = matchVar t1 t2
+match1 t1@AndTerm{}             t2@AndTerm{}             = indeterminate t1 t2
+match1 t1@AndTerm{}             t2@DomainValue{}         = matchAndTerm t1 t2
+match1 t1@AndTerm{}             t2@Injection{}           = matchAndTerm t1 t2
+match1 t1@AndTerm{}             t2@KMap{}                = matchAndTerm t1 t2
+match1 t1@AndTerm{}             t2@KList{}               = matchAndTerm t1 t2
+match1 t1@AndTerm{}             t2@KSet{}                = matchAndTerm t1 t2
+match1 t1@AndTerm{}             t2@ConsApplication{}     = matchAndTerm t1 t2
+match1 t1@AndTerm{}             t2@FunctionApplication{} = matchAndTerm t1 t2
+match1 t1@AndTerm{}             t2@Var{}                 = indeterminate t1 t2
+match1 t1@DomainValue{}         t2@AndTerm{}             = indeterminate t1 t2
+match1 t1@DomainValue{}         t2@DomainValue{}         = matchDVDV t1 t2
+match1 t1@DomainValue{}         t2@Injection{}           = failWith $ DifferentValues t1 t2
+match1 t1@DomainValue{}         t2@KMap{}                = failWith $ DifferentValues t1 t2
+match1 t1@DomainValue{}         t2@KList{}               = failWith $ DifferentValues t1 t2
+match1 t1@DomainValue{}         t2@KSet{}                = failWith $ DifferentValues t1 t2
+match1 t1@DomainValue{}         t2@ConsApplication{}     = failWith $ DifferentValues t1 t2
+match1 t1@DomainValue{}         t2@FunctionApplication{} = indeterminate t1 t2
+match1 t1@DomainValue{}         t2@Var{}                 = indeterminate t1 t2
+match1 t1@Injection{}           t2@AndTerm{}             = indeterminate t1 t2
+match1 t1@Injection{}           t2@DomainValue{}         = failWith $ DifferentSymbols t1 t2
+match1 t1@Injection{}           t2@Injection{}           = matchInjInj t1 t2
+match1 t1@Injection{}           t2@KMap{}                = failWith $ DifferentSymbols t1 t2
+match1 t1@Injection{}           t2@KList{}               = failWith $ DifferentSymbols t1 t2
+match1 t1@Injection{}           t2@KSet{}                = failWith $ DifferentSymbols t1 t2
+match1 t1@Injection{}           t2@ConsApplication{}     = failWith $ DifferentSymbols t1 t2
+match1 t1@Injection{}           t2@FunctionApplication{} = indeterminate t1 t2
+match1 t1@Injection{}           t2@Var{}                 = indeterminate t1 t2
+match1 t1@KMap{}                t2@AndTerm{}             = indeterminate t1 t2
+match1 t1@KMap{}                t2@DomainValue{}         = failWith $ DifferentSymbols t1 t2
+match1 t1@KMap{}                t2@Injection{}           = indeterminate t1 t2
+match1 t1@KMap{}                t2@KMap{}                = matchKMap t1 t2
+match1 t1@KMap{}                t2@KList{}               = failWith $ DifferentSymbols t1 t2
+match1 t1@KMap{}                t2@KSet{}                = failWith $ DifferentSymbols t1 t2
+match1 t1@KMap{}                t2@ConsApplication{}     = failWith $ DifferentSymbols t1 t2
+match1 t1@KMap{}                t2@FunctionApplication{} = indeterminate t1 t2
+match1 t1@KMap{}                t2@Var{}                 = indeterminate t1 t2
+match1 t1@KList{}               t2@AndTerm{}             = indeterminate t1 t2
+match1 t1@KList{}               t2@DomainValue{}         = failWith $ DifferentSymbols t1 t2
+match1 t1@KList{}               t2@Injection{}           = indeterminate t1 t2
+match1 t1@KList{}               t2@KMap{}                = failWith $ DifferentSymbols t1 t2
+match1 t1@KList{}               t2@KList{}               = indeterminate t1 t2
+match1 t1@KList{}               t2@KSet{}                = failWith $ DifferentSymbols t1 t2
+match1 t1@KList{}               t2@ConsApplication{}     = failWith $ DifferentSymbols t1 t2
+match1 t1@KList{}               t2@FunctionApplication{} = indeterminate t1 t2
+match1 t1@KList{}               t2@Var{}                 = indeterminate t1 t2
+match1 t1@KSet{}                t2@AndTerm{}             = indeterminate t1 t2
+match1 t1@KSet{}                t2@DomainValue{}         = failWith $ DifferentSymbols t1 t2
+match1 t1@KSet{}                t2@Injection{}           = indeterminate t1 t2
+match1 t1@KSet{}                t2@KMap{}                = failWith $ DifferentSymbols t1 t2
+match1 t1@KSet{}                t2@KList{}               = failWith $ DifferentSymbols t1 t2
+match1 t1@KSet{}                t2@KSet{}                = indeterminate t1 t2
+match1 t1@KSet{}                t2@ConsApplication{}     = failWith $ DifferentSymbols t1 t2
+match1 t1@KSet{}                t2@FunctionApplication{} = indeterminate t1 t2
+match1 t1@KSet{}                t2@Var{}                 = indeterminate t1 t2
+match1 t1@ConsApplication{}     t2@AndTerm{}             = indeterminate t1 t2
+match1 t1@ConsApplication{}     t2@DomainValue{}         = failWith $ DifferentSymbols t1 t2
+match1 t1@ConsApplication{}     t2@Injection{}           = failWith $ DifferentSymbols t1 t2
+match1 t1@ConsApplication{}     t2@KMap{}                = failWith $ DifferentSymbols t1 t2
+match1 t1@ConsApplication{}     t2@KList{}               = failWith $ DifferentSymbols t1 t2
+match1 t1@ConsApplication{}     t2@KSet{}                = failWith $ DifferentSymbols t1 t2
+match1 t1@ConsApplication{}     t2@ConsApplication{}     = matchSymbolApplicationSymbolApplication t1 t2
+match1 t1@ConsApplication{}     t2@FunctionApplication{} = matchSymbolApplicationSymbolApplication t1 t2
+match1 t1@ConsApplication{}     t2@Var{}                 = indeterminate t1 t2
+match1 t1@FunctionApplication{} t2@AndTerm{}             = indeterminate t1 t2
+match1 t1@FunctionApplication{} t2@DomainValue{}         = failWith $ DifferentSymbols t1 t2
+match1 t1@FunctionApplication{} t2@Injection{}           = failWith $ DifferentSymbols t1 t2
+match1 t1@FunctionApplication{} t2@KMap{}                = failWith $ DifferentSymbols t1 t2
+match1 t1@FunctionApplication{} t2@KList{}               = failWith $ DifferentSymbols t1 t2
+match1 t1@FunctionApplication{} t2@KSet{}                = failWith $ DifferentSymbols t1 t2
+match1 t1@FunctionApplication{} t2@ConsApplication{}     = matchSymbolApplicationSymbolApplication t1 t2
+match1 t1@FunctionApplication{} t2@FunctionApplication{} = matchSymbolApplicationSymbolApplication t1 t2
+match1 t1@FunctionApplication{} t2@Var{}                 = indeterminate t1 t2
+match1 t1@Var{}                 t2@AndTerm{}             = matchVar t1 t2
+match1 t1@Var{}                 t2@DomainValue{}         = matchVar t1 t2
+match1 t1@Var{}                 t2@Injection{}           = matchVar t1 t2
+match1 t1@Var{}                 t2@KMap{}                = matchVar t1 t2
+match1 t1@Var{}                 t2@KList{}               = matchVar t1 t2
+match1 t1@Var{}                 t2@KSet{}                = matchVar t1 t2
+match1 t1@Var{}                 t2@ConsApplication{}     = matchVar t1 t2
+match1 t1@Var{}                 t2@FunctionApplication{} = matchVar t1 t2
+match1 t1@Var{}                 t2@Var{}                 = matchVar t1 t2
 
 
 
@@ -254,13 +271,6 @@ matchDVDV
         unless (s1 == s2) $ -- sorts must be exactly the same for DVs
             failWith (DifferentSorts d1 subj)
 
-matchDVSymbolApplication
-    d1@(DomainValue s1 t1)
-    subj@(SymbolApplication sym _ _)
-        -- subject is function application (unevaluated): indeterminate
-        | isFunctionSymbol sym = indeterminate d1 subj
-        -- subject is constructor: fail
-        | otherwise = failWith $ DifferentValues d1 subj
 ----- And Terms
 -- and-term in pattern: must unify with both arguments (typically used
 -- to bind variables while also matching)
@@ -291,16 +301,6 @@ matchInjInj
         | otherwise =
             failWith (DifferentSorts inj subj)
         
-
-matchInjSymbolApplication
-    inj@(Injection source1 target1 trm1)
-    subj@(SymbolApplication sym _ _)
-    -- injection in pattern, unevaluated function call in
-    -- subject: indeterminate
-    
-        | isFunctionSymbol sym = indeterminate inj subj
-        | otherwise = failWith $ DifferentSymbols inj subj
-           
            
 
 ----- Symbol Applications

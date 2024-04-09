@@ -24,7 +24,7 @@ import Booster.Definition.Attributes.Base (
     pattern IsAssoc,
     pattern IsNotAssoc,
     pattern IsNotIdem,
-    pattern IsNotMacroOrAlias,
+    pattern IsNotMacroOrAlias, FunctionType (..),
  )
 import Booster.Prettyprinter qualified as KPretty
 
@@ -182,7 +182,7 @@ unitSymbol def =
         , resultSort = SortApp collectionSort []
         , attributes =
             SymbolAttributes
-                { symbolType = TotalFunction
+                { symbolType = Function Total
                 , isIdem = IsNotIdem
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
@@ -219,9 +219,9 @@ concatSymbol def =
   where
     (symbolNames, collectionSort, symbolType) =
         case def of
-            KMapMeta mapDef -> (mapDef.symbolNames, mapDef.mapSortName, PartialFunction)
-            KListMeta listDef -> (listDef.symbolNames, listDef.listSortName, TotalFunction)
-            KSetMeta listDef -> (listDef.symbolNames, listDef.listSortName, PartialFunction)
+            KMapMeta mapDef -> (mapDef.symbolNames, mapDef.mapSortName, Function Partial)
+            KListMeta listDef -> (listDef.symbolNames, listDef.listSortName, Function Total)
+            KSetMeta listDef -> (listDef.symbolNames, listDef.listSortName, Function Partial)
 
 kmapElementSymbol :: KMapDefinition -> Symbol
 kmapElementSymbol def =
@@ -232,7 +232,7 @@ kmapElementSymbol def =
         , resultSort = SortApp def.mapSortName []
         , attributes =
             SymbolAttributes
-                { symbolType = TotalFunction
+                { symbolType = Function Total
                 , isIdem = IsNotIdem
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
@@ -252,7 +252,7 @@ klistElementSymbol def =
         , resultSort = SortApp def.listSortName []
         , attributes =
             SymbolAttributes
-                { symbolType = TotalFunction
+                { symbolType = Function Total
                 , isIdem = IsNotIdem
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
@@ -522,7 +522,7 @@ pattern SymbolApplication sym sorts args <- Term _ (SymbolApplicationF sym sorts
                         -- if there are arg.s
                         | otherwise = foldl1' (<>) $ map getAttributes args
                     symIsConstructor =
-                        sym.attributes.symbolType `elem` [Constructor, SortInjection]
+                        sym.attributes.symbolType == Constructor
                  in Term
                         argAttributes
                             { isEvaluated =
@@ -684,7 +684,7 @@ injectionSymbol =
         , resultSort = SortVar "To"
         , attributes =
             SymbolAttributes
-                { symbolType = SortInjection
+                { symbolType = Constructor
                 , isIdem = IsNotIdem
                 , isAssoc = IsNotAssoc
                 , isMacroOrAlias = IsNotMacroOrAlias
@@ -847,3 +847,13 @@ instance Pretty Pattern where
             ]
                 <> fmap (Pretty.indent 4 . pretty) (Set.toList patt.constraints)
                 <> fmap (Pretty.indent 4 . pretty) patt.ceilConditions
+
+
+
+pattern ConsApplication :: Symbol -> [Sort] -> [Term] -> Term
+pattern ConsApplication sym sorts args <- Term _ (SymbolApplicationF sym@(Symbol _ _ _ _ (SymbolAttributes{symbolType = Constructor})) sorts args)
+
+pattern FunctionApplication :: Symbol -> [Sort] -> [Term] -> Term
+pattern FunctionApplication sym sorts args <- Term _ (SymbolApplicationF sym@(Symbol _ _ _ _ (SymbolAttributes{symbolType = Function _})) sorts args)
+
+{-# COMPLETE AndTerm, ConsApplication, FunctionApplication, DomainValue, Var, Injection, KMap, KList, KSet #-}

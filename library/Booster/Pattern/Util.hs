@@ -14,7 +14,6 @@ module Booster.Pattern.Util (
     modifyVarNameConcreteness,
     freeVariables,
     isConstructorSymbol,
-    isSortInjectionSymbol,
     isFunctionSymbol,
     isDefinedSymbol,
     checkSymbolIsAc,
@@ -55,7 +54,7 @@ import Booster.Definition.Attributes.Base (
     KListDefinition (..),
     KMapDefinition (..),
     SymbolAttributes (..),
-    SymbolType (..),
+    SymbolType (..), FunctionType (..),
  )
 import Booster.Pattern.Base
 import Booster.Util (Flag (..))
@@ -209,26 +208,18 @@ isConstructorSymbol symbol =
         Constructor -> True
         _ -> False
 
-isSortInjectionSymbol :: Symbol -> Bool
-isSortInjectionSymbol symbol =
-    case symbol.attributes.symbolType of
-        SortInjection -> True
-        _ -> False
-
 isFunctionSymbol :: Symbol -> Bool
 isFunctionSymbol symbol =
     case symbol.attributes.symbolType of
-        TotalFunction -> True
-        PartialFunction -> True
+        Function _ -> True
         _ -> False
 
 isDefinedSymbol :: Symbol -> Bool
 isDefinedSymbol symbol =
     case symbol.attributes.symbolType of
         Constructor -> True
-        TotalFunction -> True
-        SortInjection -> True
-        PartialFunction -> False
+        Function Total -> True
+        Function Partial -> False
 
 checkSymbolIsAc :: Symbol -> Bool
 checkSymbolIsAc symbol =

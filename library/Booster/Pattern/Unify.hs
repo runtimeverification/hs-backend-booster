@@ -37,6 +37,8 @@ import Booster.Pattern.Util (
     substituteInTerm,
  )
 import Data.List (partition)
+import Data.ByteString (ByteString)
+import Booster.Definition.Attributes.Base (SymbolType(..), SymbolAttributes (..), KListDefinition)
 
 -- | Result of a unification (a substitution or an indication of what went wrong)
 data UnificationResult
@@ -178,106 +180,110 @@ unify1 ::
 -- two domain values: have to fully agree
 
 
-unify1 t1@AndTerm{}           t2@AndTerm{}           = unifyAndTerm1 t1 t2
-unify1 t1@AndTerm{}           t2@DomainValue{}       = unifyAndTerm1 t1 t2
-unify1 t1@AndTerm{}           t2@Injection{}         = unifyAndTerm1 t1 t2
-unify1 t1@AndTerm{}           t2@KMap{}              = unifyAndTerm1 t1 t2
-unify1 t1@AndTerm{}           t2@KList{}             = unifyAndTerm1 t1 t2
-unify1 t1@AndTerm{}           t2@KSet{}              = unifyAndTerm1 t1 t2
-unify1 t1@AndTerm{}           t2@SymbolApplication{} = unifyAndTerm1 t1 t2
-unify1 t1@AndTerm{}           t2@Var{}               = unifyAndTerm1 t1 t2
-unify1 t1@DomainValue{}       t2@AndTerm{}           = unifyAndTerm2 t1 t2
-unify1 t1@DomainValue{}       t2@DomainValue{}       = unifyDV t1 t2
-unify1 t1@DomainValue{}       t2@Injection{}         = failWith $ DifferentSymbols t1 t2
-unify1 t1@DomainValue{}       t2@KMap{}              = failWith $ DifferentSymbols t1 t2
-unify1 t1@DomainValue{}       t2@KList{}             = failWith $ DifferentSymbols t1 t2
-unify1 t1@DomainValue{}       t2@KSet{}              = failWith $ DifferentSymbols t1 t2
-unify1 t1@DomainValue{}       t2@SymbolApplication{} = addIndeterminate t1 t2
-unify1 t1@DomainValue{}       t2@Var{}               = unifyVar t2 t1
-unify1 t1@Injection{}         t2@AndTerm{}           = unifyAndTerm2 t1 t2
-unify1 t1@Injection{}         t2@DomainValue{}       = failWith $ DifferentSymbols t1 t2
-unify1 t1@Injection{}         t2@Injection{}         = unifyInj t1 t2
-unify1 t1@Injection{}         t2@KMap{}              = failWith $ DifferentSymbols t1 t2
-unify1 t1@Injection{}         t2@KList{}             = failWith $ DifferentSymbols t1 t2
-unify1 t1@Injection{}         t2@KSet{}              = failWith $ DifferentSymbols t1 t2
-unify1 t1@Injection{}         t2@SymbolApplication{} = unifyInjectionSymbolApplication t1 t2
-unify1 t1@Injection{}         t2@Var{}               = addIndeterminate t1 t2
-unify1 t1@KMap{}              t2@AndTerm{}           = unifyAndTerm2 t1 t2
-unify1 t1@KMap{}              t2@DomainValue{}       = failWith $ DifferentSymbols t1 t2
-unify1 t1@KMap{}              t2@Injection{}         = failWith $ DifferentSymbols t1 t2
-unify1 t1@KMap{}              t2@KMap{}              = unifyMap t1 t2
-unify1 t1@KMap{}              t2@KList{}             = failWith $ DifferentSymbols t1 t2
-unify1 t1@KMap{}              t2@KSet{}              = failWith $ DifferentSymbols t1 t2
-unify1 t1@KMap{}              t2@SymbolApplication{} = addIndeterminate t1 t2
-unify1 t1@KMap{}              t2@Var{}               = unifyVar t2 t1
-unify1 t1@KList{}             t2@AndTerm{}           = unifyAndTerm2 t1 t2
-unify1 t1@KList{}             t2@DomainValue{}       = failWith $ DifferentSymbols t1 t2
-unify1 t1@KList{}             t2@Injection{}         = failWith $ DifferentSymbols t1 t2
-unify1 t1@KList{}             t2@KMap{}              = failWith $ DifferentSymbols t1 t2
-unify1 t1@KList{}             t2@KList{}             = unifyList t1 t2
-unify1 t1@KList{}             t2@KSet{}              = failWith $ DifferentSymbols t1 t2
-unify1 t1@KList{}             t2@SymbolApplication{} = addIndeterminate t1 t2
-unify1 t1@KList{}             t2@Var{}               = unifyVar t2 t1
-unify1 t1@KSet{}              t2@AndTerm{}           = unifyAndTerm2 t1 t2
-unify1 t1@KSet{}              t2@DomainValue{}       = failWith $ DifferentSymbols t1 t2
-unify1 t1@KSet{}              t2@Injection{}         = failWith $ DifferentSymbols t1 t2
-unify1 t1@KSet{}              t2@KMap{}              = failWith $ DifferentSymbols t1 t2
-unify1 t1@KSet{}              t2@KList{}             = failWith $ DifferentSymbols t1 t2
-unify1 t1@KSet{}              t2@KSet{}              = addIndeterminate t1 t2
-unify1 t1@KSet{}              t2@SymbolApplication{} = addIndeterminate t1 t2
-unify1 t1@KSet{}              t2@Var{}               = unifyVar t2 t1
-unify1 t1@SymbolApplication{} t2@AndTerm{}           = unifyAndTerm2 t1 t2
-unify1 t1@SymbolApplication{} t2@DomainValue{}       = addIndeterminate t1 t2
-unify1 t1@SymbolApplication{} t2@Injection{}         = unifyInjectionSymbolApplicationOp t1 t2
-unify1 t1@SymbolApplication{} t2@KMap{}              = addIndeterminate t1 t2
-unify1 t1@SymbolApplication{} t2@KList{}             = addIndeterminate t1 t2
-unify1 t1@SymbolApplication{} t2@KSet{}              = addIndeterminate t1 t2
-unify1 t1@SymbolApplication{} t2@SymbolApplication{} = unifySymbolApplication t1 t2
-unify1 t1@SymbolApplication{} t2@Var{}               = unifyVar t2 t1
-unify1 t1@Var{}               t2@AndTerm{}           = unifyAndTerm2 t1 t2
-unify1 t1@Var{}               t2@DomainValue{}       = unifyVar t1 t2
-unify1 t1@Var{}               t2@Injection{}         = unifyVar t1 t2
-unify1 t1@Var{}               t2@KMap{}              = unifyVar t1 t2
-unify1 t1@Var{}               t2@KList{}             = unifyVar t1 t2
-unify1 t1@Var{}               t2@KSet{}              = unifyVar t1 t2
-unify1 t1@Var{}               t2@SymbolApplication{} = unifyVar t1 t2
-unify1 t1@Var{}               t2@Var{}               = unifyVarVar t1 t2
+unify1 (AndTerm t1a t1b)                        t2@AndTerm{}                             = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
+unify1 (AndTerm t1a t1b)                        t2@DomainValue{}                         = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
+unify1 (AndTerm t1a t1b)                        t2@Injection{}                           = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
+unify1 (AndTerm t1a t1b)                        t2@KMap{}                                = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
+unify1 (AndTerm t1a t1b)                        t2@KList{}                               = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
+unify1 (AndTerm t1a t1b)                        t2@KSet{}                                = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
+unify1 (AndTerm t1a t1b)                        t2@ConsApplication{}                     = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
+unify1 (AndTerm t1a t1b)                        t2@FunctionApplication{}                 = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
+unify1 (AndTerm t1a t1b)                        t2@Var{}                                 = enqueueRegularProblem t1a t2 >> enqueueRegularProblem t1b t2
+unify1 t1@DomainValue{}                         (AndTerm t2a t2b)                        = enqueueRegularProblem t1 t2a >> enqueueRegularProblem t1 t2b
+unify1 (DomainValue s1 t1)                      (DomainValue s2 t2)                      = unifyDV s1 t1 s2 t2
+unify1 t1@DomainValue{}                         t2@Injection{}                           = failWith $ DifferentSymbols t1 t2
+unify1 t1@DomainValue{}                         t2@KMap{}                                = failWith $ DifferentSymbols t1 t2
+unify1 t1@DomainValue{}                         t2@KList{}                               = failWith $ DifferentSymbols t1 t2
+unify1 t1@DomainValue{}                         t2@KSet{}                                = failWith $ DifferentSymbols t1 t2
+unify1 t1@DomainValue{}                         t2@ConsApplication{}                     = failWith $ DifferentSymbols t1 t2
+unify1 t1@DomainValue{}                         t2@FunctionApplication{}                 = addIndeterminate t1 t2
+unify1 t1@DomainValue{}                         (Var var2)                               = unifyVar var2 t1
+unify1 t1@Injection{}                           (AndTerm t2a t2b)                        = enqueueRegularProblem t1 t2a >> enqueueRegularProblem t1 t2b
+unify1 t1@Injection{}                           t2@DomainValue{}                         = failWith $ DifferentSymbols t1 t2
+unify1 (Injection source1 target1 trm1)         (Injection source2 target2 trm2)         = unifyInj source1 target1 trm1 source2 target2 trm2
+unify1 t1@Injection{}                           t2@KMap{}                                = failWith $ DifferentSymbols t1 t2
+unify1 t1@Injection{}                           t2@KList{}                               = failWith $ DifferentSymbols t1 t2
+unify1 t1@Injection{}                           t2@KSet{}                                = failWith $ DifferentSymbols t1 t2
+unify1 t1@Injection{}                           t2@ConsApplication{}                     = failWith $ DifferentSymbols t1 t2
+unify1 t1@Injection{}                           t2@FunctionApplication{}                 = addIndeterminate t1 t2
+unify1 t1@Injection{}                           t2@Var{}                                 = addIndeterminate t1 t2
+unify1 t1@KMap{}                                (AndTerm t2a t2b)                        = enqueueRegularProblem t1 t2a >> enqueueRegularProblem t1 t2b
+unify1 t1@KMap{}                                t2@DomainValue{}                         = failWith $ DifferentSymbols t1 t2
+unify1 t1@KMap{}                                t2@Injection{}                           = failWith $ DifferentSymbols t1 t2
+unify1 t1@KMap{}                                t2@KMap{}                                = unifyMap t1 t2
+unify1 t1@KMap{}                                t2@KList{}                               = failWith $ DifferentSymbols t1 t2
+unify1 t1@KMap{}                                t2@KSet{}                                = failWith $ DifferentSymbols t1 t2
+unify1 t1@KMap{}                                t2@ConsApplication{}                     = failWith $ DifferentSymbols t1 t2
+unify1 t1@KMap{}                                t2@FunctionApplication{}                 = addIndeterminate t1 t2
+unify1 t1@KMap{}                                (Var var2)                               = unifyVar var2 t1
+unify1 t1@KList{}                               (AndTerm t2a t2b)                        = enqueueRegularProblem t1 t2a >> enqueueRegularProblem t1 t2b
+unify1 t1@KList{}                               t2@DomainValue{}                         = failWith $ DifferentSymbols t1 t2
+unify1 t1@KList{}                               t2@Injection{}                           = failWith $ DifferentSymbols t1 t2
+unify1 t1@KList{}                               t2@KMap{}                                = failWith $ DifferentSymbols t1 t2
+unify1 (KList def1 heads1 rest1)                (KList def2 heads2 rest2)                = unifyList def1 heads1 rest1 def2 heads2 rest2
+unify1 t1@KList{}                               t2@KSet{}                                = failWith $ DifferentSymbols t1 t2
+unify1 t1@KList{}                               t2@ConsApplication{}                     = failWith $ DifferentSymbols t1 t2
+unify1 t1@KList{}                               t2@FunctionApplication{}                 = addIndeterminate t1 t2
+unify1 t1@KList{}                               (Var var2)                               = unifyVar var2 t1
+unify1 t1@KSet{}                                (AndTerm t2a t2b)                        = enqueueRegularProblem t1 t2a >> enqueueRegularProblem t1 t2b
+unify1 t1@KSet{}                                t2@DomainValue{}                         = failWith $ DifferentSymbols t1 t2
+unify1 t1@KSet{}                                t2@Injection{}                           = failWith $ DifferentSymbols t1 t2
+unify1 t1@KSet{}                                t2@KMap{}                                = failWith $ DifferentSymbols t1 t2
+unify1 t1@KSet{}                                t2@KList{}                               = failWith $ DifferentSymbols t1 t2
+unify1 t1@KSet{}                                t2@KSet{}                                = addIndeterminate t1 t2
+unify1 t1@KSet{}                                t2@ConsApplication{}                     = failWith $ DifferentSymbols t1 t2
+unify1 t1@KSet{}                                t2@FunctionApplication{}                 = addIndeterminate t1 t2
+unify1 t1@KSet{}                                (Var var2)                               = unifyVar var2 t1
+unify1 t1@ConsApplication{}                     (AndTerm t2a t2b)                        = enqueueRegularProblem t1 t2a >> enqueueRegularProblem t1 t2b
+unify1 t1@ConsApplication{}                     t2@DomainValue{}                         = failWith $ DifferentSymbols t1 t2
+unify1 t1@ConsApplication{}                     t2@Injection{}                           = failWith $ DifferentSymbols t1 t2
+unify1 t1@ConsApplication{}                     t2@KMap{}                                = failWith $ DifferentSymbols t1 t2
+unify1 t1@ConsApplication{}                     t2@KList{}                               = failWith $ DifferentSymbols t1 t2
+unify1 t1@ConsApplication{}                     t2@KSet{}                                = failWith $ DifferentSymbols t1 t2
+unify1 (ConsApplication symbol1 sorts1 args1)   (ConsApplication symbol2 sorts2 args2)   = unifyConss symbol1 sorts1 args1 symbol2 sorts2 args2
+unify1 t1@ConsApplication{}                     t2@FunctionApplication{}                 = addIndeterminate t1 t2
+unify1 t1@ConsApplication{}                     (Var var2)                               = unifyVar var2 t1
+unify1 t1@FunctionApplication{}                 (AndTerm t2a t2b)                        = enqueueRegularProblem t1 t2a >> enqueueRegularProblem t1 t2b
+unify1 t1@FunctionApplication{}                 t2@DomainValue{}                         = addIndeterminate t1 t2
+unify1 t1@FunctionApplication{}                 t2@Injection{}                           = addIndeterminate t1 t2
+unify1 t1@FunctionApplication{}                 t2@KMap{}                                = addIndeterminate t1 t2
+unify1 t1@FunctionApplication{}                 t2@KList{}                               = addIndeterminate t1 t2
+unify1 t1@FunctionApplication{}                 t2@KSet{}                                = addIndeterminate t1 t2
+unify1 t1@FunctionApplication{}                 t2@ConsApplication{}                     = addIndeterminate t1 t2
+unify1 t1@FunctionApplication{}                 t2@FunctionApplication{}                 = addIndeterminate t1 t2
+unify1 t1@FunctionApplication{}                 (Var var2)                               = unifyVar var2 t1
+unify1 t1@Var{}                                 (AndTerm t2a t2b)                        = enqueueRegularProblem t1 t2a >> enqueueRegularProblem t1 t2b
+unify1 (Var var1)                               t2@DomainValue{}                         = unifyVar var1 t2
+unify1 (Var var1)                               t2@Injection{}                           = unifyVar var1 t2
+unify1 (Var var1)                               t2@KMap{}                                = unifyVar var1 t2
+unify1 (Var var1)                               t2@KList{}                               = unifyVar var1 t2
+unify1 (Var var1)                               t2@KSet{}                                = unifyVar var1 t2
+unify1 (Var var1)                               t2@ConsApplication{}                     = unifyVar var1 t2
+unify1 (Var var1)                               t2@FunctionApplication{}                 = unifyVar var1 t2
+unify1 (Var var1)                               t2@Var{}                                 = unifyVar var1 t2
 
 
 
+unifyDV :: Sort -> ByteString -> Sort -> ByteString -> StateT s (Except UnificationResult) ()
 unifyDV
-    d1@(DomainValue s1 t1)
-    d2@(DomainValue s2 t2) =
+    s1 t1 s2 t2 =
         do
             unless (t1 == t2) $
-                failWith (DifferentValues d1 d2)
+                failWith (DifferentValues (DomainValue s1 t1) (DomainValue s2 t2))
             unless (s1 == s2) $ -- sorts must be exactly the same for DVs
-                failWith (DifferentSorts d1 d2)
------ And Terms
--- and-term in pattern: must unify with both arguments
-unifyAndTerm1
-    (AndTerm t1a t1b)
-    term2 =
-        do
-            enqueueRegularProblem t1a term2
-            enqueueRegularProblem t1b term2
--- and-term in subject: must unify with both arguments
-unifyAndTerm2
-    term1
-    (AndTerm t2a t2b) =
-        do
-            enqueueRegularProblem term1 t2a
-            enqueueRegularProblem term1 t2b
+                failWith (DifferentSorts (DomainValue s1 t1) (DomainValue s2 t2))
+
 ----- Injections
 -- two injections. Try to unify the contained terms if the sorts
 -- agree. Target sorts must be the same, source sorts may differ if
 -- the contained pattern term is just a variable, otherwise they need
 -- to be identical.
+unifyInj :: Sort -> Sort -> Term -> Sort -> Sort -> Term -> StateT UnificationState (Except UnificationResult) ()
 unifyInj
-    pat@(Injection source1 target1 trm1)
-    subj@(Injection source2 target2 trm2)
+    source1 target1 trm1
+    source2 target2 trm2
         | target1 /= target2 = do
-            failWith (DifferentSorts pat subj)
+            failWith (DifferentSorts (Injection source1 target1 trm1) (Injection source2 target2 trm2))
         | source1 == source2 = do
             enqueueRegularProblem trm1 trm2
         | Var v <- trm1 = do
@@ -290,27 +296,26 @@ unifyInj
                 then bindVariable v (Injection source2 source1 trm2)
                 else failWith (DifferentSorts trm1 trm2)
         | otherwise =
-            failWith (DifferentSorts pat subj)
+            failWith (DifferentSorts (Injection source1 target1 trm1) (Injection source2 target2 trm2))
 ----- Symbol Applications
--- two symbol applications: fail if names differ, recurse
-unifySymbolApplication
-    t1@(SymbolApplication symbol1 sorts1 args1)
-    t2@(SymbolApplication symbol2 sorts2 args2)
-        | isFunctionSymbol symbol1 || isFunctionSymbol symbol2 =
-            -- If we have functions, pass, only match constructors.
-            -- NB the result is suspended to get more true failures.
-            addIndeterminate t1 t2
-        | symbol1.name /= symbol2.name = failWith (DifferentSymbols t1 t2)
+-- two constructors: fail if names differ, recurse
+unifyConss :: Symbol -> [Sort] -> [Term] -> Symbol -> [Sort] -> [Term] -> StateT UnificationState (Except UnificationResult) ()
+unifyConss
+    symbol1 sorts1 args1
+    symbol2 sorts2 args2
+        | symbol1.name /= symbol2.name = failWith (DifferentSymbols (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2) )
         | length args1 /= length args2 =
             internalError $
-                "Argument counts differ for same constructor" <> show (t1, t2)
-        | sorts1 /= sorts2 = failWith (DifferentSorts t1 t2)
+                "Argument counts differ for same constructor" <> show (SymbolApplication symbol1 sorts1 args1, SymbolApplication symbol2 sorts2 args2) 
+        | sorts1 /= sorts2 = failWith (DifferentSorts (SymbolApplication symbol1 sorts1 args1) (SymbolApplication symbol2 sorts2 args2) )
         | otherwise =
             enqueueRegularProblems $ Seq.fromList $ zip args1 args2
 ----- Variables
+
+unifyVar :: Variable -> Term -> StateT UnificationState (Except UnificationResult) ()
+unifyVar
 -- twice the exact same variable: verify sorts are equal
-unifyVarVar
-    (Var var1@(Variable varSort1 varName1))
+    var1@(Variable varSort1 varName1)
     (Var var2@(Variable varSort2 varName2))
         -- same variable: forbidden!
         | var1 == var2 =
@@ -318,9 +323,9 @@ unifyVarVar
         | varName1 == varName2 && varSort1 /= varSort2 =
             -- sorts differ, names equal: error!
             failWith $ VariableConflict var1 (Var var1) (Var var2)
--- term1 variable (target): introduce a new binding
 unifyVar
-    term1@(Var var@Variable{variableSort})
+-- term1 variable (target): introduce a new binding
+    var@Variable{variableSort}
     term2 =
         do
             let termSort = sortOfTerm term2
@@ -330,34 +335,22 @@ unifyVar
                     checkSubsort subsorts termSort variableSort
             if isSubsort
                 then bindVariable var term2
-                else failWith $ DifferentSorts term1 term2
+                else failWith $ DifferentSorts (Var var) term2
 
-
-unifyInjectionSymbolApplication
-    inj@Injection{}
-    trm@(SymbolApplication symbol _ _)
-        | isFunctionSymbol symbol = addIndeterminate inj trm
-        | otherwise = failWith $ DifferentSymbols inj trm
--- injection in subject but not in pattern: indeterminate if trm is a function, otherwise fail (trm cannot be a variable)
-unifyInjectionSymbolApplicationOp
-    trm@(SymbolApplication symbol _ _)
-    inj@Injection{}
-        | isFunctionSymbol symbol = addIndeterminate trm inj
-        | otherwise = failWith $ DifferentSymbols trm inj
------- Internalised Lists
 -- unification for lists. Only solves simple cases, returns indeterminate otherwise
+unifyList :: KListDefinition -> [Term] -> Maybe (Term, [Term]) -> KListDefinition -> [Term] -> Maybe (Term, [Term]) -> StateT UnificationState (Except UnificationResult) ()
 unifyList
-    l1@(KList def1 heads1 rest1)
-    l2@(KList def2 heads2 rest2)
+    def1 heads1 rest1
+    def2 heads2 rest2
         | -- incompatible lists
         def1 /= def2 =
-            failWith $ DifferentSorts l1 l2
+            failWith $ DifferentSorts (KList def1 heads1 rest1) (KList def2 heads2 rest2)
         | -- two fully-concrete lists of the same length
         Nothing <- rest1
         , Nothing <- rest2 =
             if length heads1 == length heads2
                 then void $ enqueuePairs heads1 heads2
-                else failWith $ DifferentValues l1 l2
+                else failWith $ DifferentValues (KList def1 heads1 rest1) (KList def2 heads2 rest2)
         | -- left list has a symbolic part, right one is fully concrete
         Just (symb1, tails1) <- rest1
         , Nothing <- rest2 = do
@@ -396,7 +389,7 @@ unifyList
         | -- mirrored case above: left list fully concrete, right one isn't
         Nothing <- rest1
         , Just _ <- rest2 =
-            unify1 l2 l1 -- won't loop, will fail later if unification succeeds
+            unifyList def2 heads2 rest2 def1 heads1 rest1 -- won't loop, will fail later if unification succeeds
         | -- two lists with symbolic middle
         Just (symb1, tails1) <- rest1
         , Just (symb2, tails2) <- rest2 = do
