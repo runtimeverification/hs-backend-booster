@@ -155,7 +155,76 @@ match1 ::
 -- would be unreachable anyway, hence
 --   f(foo(A)) => baz()
 -- must always apply to f(foo(X))
-match1
+
+
+match1 t1@AndTerm{}           t2@AndTerm{}           = indeterminate t1 t2
+match1 t1@AndTerm{}           t2@DomainValue{}       = matchAndTerm t1 t2
+match1 t1@AndTerm{}           t2@Injection{}         = matchAndTerm t1 t2
+match1 t1@AndTerm{}           t2@KMap{}              = matchAndTerm t1 t2
+match1 t1@AndTerm{}           t2@KList{}             = matchAndTerm t1 t2
+match1 t1@AndTerm{}           t2@KSet{}              = matchAndTerm t1 t2
+match1 t1@AndTerm{}           t2@SymbolApplication{} = matchAndTerm t1 t2
+match1 t1@AndTerm{}           t2@Var{}               = indeterminate t1 t2
+match1 t1@DomainValue{}       t2@AndTerm{}           = indeterminate t1 t2
+match1 t1@DomainValue{}       t2@DomainValue{}       = matchDVDV t1 t2
+match1 t1@DomainValue{}       t2@Injection{}         = matchDVSymbolApplication t1 t2
+match1 t1@DomainValue{}       t2@KMap{}              = failWith $ DifferentValues t1 t2
+match1 t1@DomainValue{}       t2@KList{}             = failWith $ DifferentValues t1 t2
+match1 t1@DomainValue{}       t2@KSet{}              = failWith $ DifferentValues t1 t2
+match1 t1@DomainValue{}       t2@SymbolApplication{} = matchDVSymbolApplication t1 t2
+match1 t1@DomainValue{}       t2@Var{}               = indeterminate t1 t2
+match1 t1@Injection{}         t2@AndTerm{}           = indeterminate t1 t2
+match1 t1@Injection{}         t2@DomainValue{}       = failWith $ DifferentSymbols t1 t2
+match1 t1@Injection{}         t2@Injection{}         = matchInjInj t1 t2
+match1 t1@Injection{}         t2@KMap{}              = failWith $ DifferentSymbols t1 t2
+match1 t1@Injection{}         t2@KList{}             = failWith $ DifferentSymbols t1 t2
+match1 t1@Injection{}         t2@KSet{}              = failWith $ DifferentSymbols t1 t2
+match1 t1@Injection{}         t2@SymbolApplication{} = matchInjSymbolApplication t1 t2
+match1 t1@Injection{}         t2@Var{}               = indeterminate t1 t2
+match1 t1@KMap{}              t2@AndTerm{}           = indeterminate t1 t2
+match1 t1@KMap{}              t2@DomainValue{}       = indeterminate t1 t2
+match1 t1@KMap{}              t2@Injection{}         = indeterminate t1 t2
+match1 t1@KMap{}              t2@KMap{}              = matchKMap t1 t2
+match1 t1@KMap{}              t2@KList{}             = indeterminate t1 t2
+match1 t1@KMap{}              t2@KSet{}              = indeterminate t1 t2
+match1 t1@KMap{}              t2@SymbolApplication{} = indeterminate t1 t2
+match1 t1@KMap{}              t2@Var{}               = indeterminate t1 t2
+match1 t1@KList{}             t2@AndTerm{}           = indeterminate t1 t2
+match1 t1@KList{}             t2@DomainValue{}       = indeterminate t1 t2
+match1 t1@KList{}             t2@Injection{}         = indeterminate t1 t2
+match1 t1@KList{}             t2@KMap{}              = indeterminate t1 t2
+match1 t1@KList{}             t2@KList{}             = indeterminate t1 t2
+match1 t1@KList{}             t2@KSet{}              = indeterminate t1 t2
+match1 t1@KList{}             t2@SymbolApplication{} = indeterminate t1 t2
+match1 t1@KList{}             t2@Var{}               = indeterminate t1 t2
+match1 t1@KSet{}              t2@AndTerm{}           = indeterminate t1 t2
+match1 t1@KSet{}              t2@DomainValue{}       = indeterminate t1 t2
+match1 t1@KSet{}              t2@Injection{}         = indeterminate t1 t2
+match1 t1@KSet{}              t2@KMap{}              = indeterminate t1 t2
+match1 t1@KSet{}              t2@KList{}             = indeterminate t1 t2
+match1 t1@KSet{}              t2@KSet{}              = indeterminate t1 t2
+match1 t1@KSet{}              t2@SymbolApplication{} = indeterminate t1 t2
+match1 t1@KSet{}              t2@Var{}               = indeterminate t1 t2
+match1 t1@SymbolApplication{} t2@AndTerm{}           = indeterminate t1 t2
+match1 t1@SymbolApplication{} t2@DomainValue{}       = failWith $ DifferentSymbols t1 t2
+match1 t1@SymbolApplication{} t2@Injection{}         = failWith $ DifferentSymbols t1 t2
+match1 t1@SymbolApplication{} t2@KMap{}              = failWith $ DifferentSymbols t1 t2
+match1 t1@SymbolApplication{} t2@KList{}             = failWith $ DifferentSymbols t1 t2
+match1 t1@SymbolApplication{} t2@KSet{}              = failWith $ DifferentSymbols t1 t2
+match1 t1@SymbolApplication{} t2@SymbolApplication{} = matchSymbolApplicationSymbolApplication t1 t2
+match1 t1@SymbolApplication{} t2@Var{}               = failWith $ DifferentSymbols t1 t2
+match1 t1@Var{}               t2@AndTerm{}           = matchVar t1 t2
+match1 t1@Var{}               t2@DomainValue{}       = matchVar t1 t2
+match1 t1@Var{}               t2@Injection{}         = matchVar t1 t2
+match1 t1@Var{}               t2@KMap{}              = matchVar t1 t2
+match1 t1@Var{}               t2@KList{}             = matchVar t1 t2
+match1 t1@Var{}               t2@KSet{}              = matchVar t1 t2
+match1 t1@Var{}               t2@SymbolApplication{} = matchVar t1 t2
+match1 t1@Var{}               t2@Var{}               = matchVar t1 t2
+
+
+
+matchVar
     term1@(Var var@Variable{variableSort})
     term2 =
         do
@@ -174,110 +243,86 @@ match1
                     then term2
                     else Injection termSort variableSort term2
                 )
--- subject term is a variable but pattern term is not: indeterminate
-match1
-    pat
-    var@Var{} =
-        indeterminate pat var
--- and-terms in subject term are considered indeterminate
--- (what would they mean?)
-match1
-    pat
-    andTerm@AndTerm{} =
-        indeterminate pat andTerm
+
+
 ----- Domain values
-match1
+matchDVDV
     d1@(DomainValue s1 t1)
-    subj =
-        case subj of
-            -- two domain values: have to fully agree
-            DomainValue s2 t2 -> do
-                unless (t1 == t2) $
-                    failWith (DifferentValues d1 subj)
-                unless (s1 == s2) $ -- sorts must be exactly the same for DVs
-                    failWith (DifferentSorts d1 subj)
-            SymbolApplication sym _ _
-                -- subject is function application (unevaluated): indeterminate
-                | isFunctionSymbol sym -> indeterminate d1 subj
-                -- subject is constructor: fail
-                | otherwise -> failWith $ DifferentValues d1 subj
-            -- Var{} case caught above
-            -- injections, and-terms, maps: fail
-            _other ->
-                failWith $ DifferentValues d1 subj
+    subj@(DomainValue s2 t2) = do
+        unless (t1 == t2) $
+            failWith (DifferentValues d1 subj)
+        unless (s1 == s2) $ -- sorts must be exactly the same for DVs
+            failWith (DifferentSorts d1 subj)
+
+matchDVSymbolApplication
+    d1@(DomainValue s1 t1)
+    subj@(SymbolApplication sym _ _)
+        -- subject is function application (unevaluated): indeterminate
+        | isFunctionSymbol sym = indeterminate d1 subj
+        -- subject is constructor: fail
+        | otherwise = failWith $ DifferentValues d1 subj
 ----- And Terms
 -- and-term in pattern: must unify with both arguments (typically used
 -- to bind variables while also matching)
-match1
+matchAndTerm
     (AndTerm t1a t1b)
     term2 =
         do
             enqueueProblem t1a term2
             enqueueProblem t1b term2
 ----- Injections
-match1
+
+matchInjInj
     inj@(Injection source1 target1 trm1)
-    subj =
-        case subj of
-            -- matching two injections:
-            -- Try to unify the contained terms if the sorts
-            -- agree. Target sorts must be the same, source sorts may
-            -- differ if the contained pattern term is just a
-            -- variable, otherwise they need to be identical.
-            Injection source2 target2 trm2
-                | target1 /= target2 -> do
-                    failWith (DifferentSorts inj subj)
-                | source1 == source2 -> do
-                    enqueueProblem trm1 trm2
-                | Var v <- trm1 -> do
-                    -- variable in pattern, check source sorts and bind
-                    subsorts <- gets mSubsorts
-                    isSubsort <-
-                        lift . withExcept (MatchFailed . SubsortingError) $
-                            checkSubsort subsorts source2 source1
-                    if isSubsort
-                        then bindVariable v (Injection source2 source1 trm2)
-                        else failWith (DifferentSorts trm1 trm2)
-                | otherwise ->
-                    failWith (DifferentSorts inj subj)
-            -- injection in pattern, unevaluated function call in
-            -- subject: indeterminate
-            SymbolApplication sym _ _
-                | isFunctionSymbol sym -> indeterminate inj subj
-                | otherwise -> failWith $ DifferentSymbols inj subj
-            -- injection in pattern, no injection in subject: fail
-            -- Var{} case caught above
-            -- and, domain values, maps: fail
-            _other ->
-                failWith $ DifferentSymbols inj subj
+    subj@(Injection source2 target2 trm2)
+        | target1 /= target2 = do
+            failWith (DifferentSorts inj subj)
+        | source1 == source2 = do
+            enqueueProblem trm1 trm2
+        | Var v <- trm1 = do
+            -- variable in pattern, check source sorts and bind
+            subsorts <- gets mSubsorts
+            isSubsort <-
+                lift . withExcept (MatchFailed . SubsortingError) $
+                    checkSubsort subsorts source2 source1
+            if isSubsort
+                then bindVariable v (Injection source2 source1 trm2)
+                else failWith (DifferentSorts trm1 trm2)
+        | otherwise =
+            failWith (DifferentSorts inj subj)
+        
+
+matchInjSymbolApplication
+    inj@(Injection source1 target1 trm1)
+    subj@(SymbolApplication sym _ _)
+    -- injection in pattern, unevaluated function call in
+    -- subject: indeterminate
+    
+        | isFunctionSymbol sym = indeterminate inj subj
+        | otherwise = failWith $ DifferentSymbols inj subj
+           
+           
+
 ----- Symbol Applications
-match1
+matchSymbolApplicationSymbolApplication
     app@(SymbolApplication symbol1 sorts1 args1)
-    subj =
-        case subj of
-            -- two symbol applications: fail if names differ, match
-            -- argument count and sorts, recurse
-            SymbolApplication symbol2 sorts2 args2
-                | symbol1.name /= symbol2.name ->
-                    if isConstructorSymbol symbol1 && isConstructorSymbol symbol2
-                        then failWith (DifferentSymbols app subj)
-                        else indeterminate app subj
-                | length args1 /= length args2 ->
-                    lift $ throwE $ MatchFailed $ ArgLengthsDiffer app subj
-                | sorts1 /= sorts2 ->
-                    failWith (DifferentSorts app subj)
-                -- If the symbol is non-free (AC symbol), return indeterminate
-                | checkSymbolIsAc symbol1 ->
-                    indeterminate app subj
-                | otherwise ->
-                    enqueueProblems $ Seq.fromList $ zip args1 args2
-            -- subject not a symbol application: fail
-            -- Var{} case caught above
-            -- and, domain values, injections, maps: fail
-            _other ->
-                failWith $ DifferentSymbols app subj
+    subj@(SymbolApplication symbol2 sorts2 args2)
+        | symbol1.name /= symbol2.name =
+            if isConstructorSymbol symbol1 && isConstructorSymbol symbol2
+                then failWith (DifferentSymbols app subj)
+                else indeterminate app subj
+        | length args1 /= length args2 =
+            lift $ throwE $ MatchFailed $ ArgLengthsDiffer app subj
+        | sorts1 /= sorts2 =
+            failWith (DifferentSorts app subj)
+        -- If the symbol is non-free (AC symbol), return indeterminate
+        | checkSymbolIsAc symbol1 =
+            indeterminate app subj
+        | otherwise =
+            enqueueProblems $ Seq.fromList $ zip args1 args2
+    
 ----- KMap
-match1
+matchKMap
     t1@(KMap patDef patKeyVals patRest)
     t2@(KMap subjDef subjKeyVals subjRest) = do
         -- different map sorts do not match
@@ -365,18 +410,7 @@ match1
                     (k, _) : _ -> failWith $ DuplicateKeys k m
         checkDuplicateKeys _ = pure ()
 
---- not matching map patterns with anything else
-match1
-    t1@KMap{}
-    t2 = indeterminate t1 t2
--- no matching for lists, return indeterminate for now
-match1
-    t1@KList{}
-    t2 = indeterminate t1 t2
--- no matching for sets, return indeterminate for now
-match1
-    t1@KSet{}
-    t2 = indeterminate t1 t2
+
 
 failWith :: FailReason -> StateT s (Except MatchResult) ()
 failWith = lift . throwE . MatchFailed . General

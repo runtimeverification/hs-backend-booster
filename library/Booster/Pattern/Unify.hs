@@ -2,6 +2,7 @@
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Booster.Pattern.Unify (
     UnificationResult (..),
     FailReason (..),
@@ -175,7 +176,76 @@ unify1 ::
     StateT UnificationState (Except UnificationResult) ()
 ----- Domain values
 -- two domain values: have to fully agree
-unify1
+
+
+unify1 t1@AndTerm{}           t2@AndTerm{}           = unifyAndTerm1 t1 t2
+unify1 t1@AndTerm{}           t2@DomainValue{}       = unifyAndTerm1 t1 t2
+unify1 t1@AndTerm{}           t2@Injection{}         = unifyAndTerm1 t1 t2
+unify1 t1@AndTerm{}           t2@KMap{}              = unifyAndTerm1 t1 t2
+unify1 t1@AndTerm{}           t2@KList{}             = unifyAndTerm1 t1 t2
+unify1 t1@AndTerm{}           t2@KSet{}              = unifyAndTerm1 t1 t2
+unify1 t1@AndTerm{}           t2@SymbolApplication{} = unifyAndTerm1 t1 t2
+unify1 t1@AndTerm{}           t2@Var{}               = unifyAndTerm1 t1 t2
+unify1 t1@DomainValue{}       t2@AndTerm{}           = unifyAndTerm2 t1 t2
+unify1 t1@DomainValue{}       t2@DomainValue{}       = unifyDV t1 t2
+unify1 t1@DomainValue{}       t2@Injection{}         = failWith $ DifferentSymbols t1 t2
+unify1 t1@DomainValue{}       t2@KMap{}              = failWith $ DifferentSymbols t1 t2
+unify1 t1@DomainValue{}       t2@KList{}             = failWith $ DifferentSymbols t1 t2
+unify1 t1@DomainValue{}       t2@KSet{}              = failWith $ DifferentSymbols t1 t2
+unify1 t1@DomainValue{}       t2@SymbolApplication{} = addIndeterminate t1 t2
+unify1 t1@DomainValue{}       t2@Var{}               = unifyVar t2 t1
+unify1 t1@Injection{}         t2@AndTerm{}           = unifyAndTerm2 t1 t2
+unify1 t1@Injection{}         t2@DomainValue{}       = failWith $ DifferentSymbols t1 t2
+unify1 t1@Injection{}         t2@Injection{}         = unifyInj t1 t2
+unify1 t1@Injection{}         t2@KMap{}              = failWith $ DifferentSymbols t1 t2
+unify1 t1@Injection{}         t2@KList{}             = failWith $ DifferentSymbols t1 t2
+unify1 t1@Injection{}         t2@KSet{}              = failWith $ DifferentSymbols t1 t2
+unify1 t1@Injection{}         t2@SymbolApplication{} = unifyInjectionSymbolApplication t1 t2
+unify1 t1@Injection{}         t2@Var{}               = addIndeterminate t1 t2
+unify1 t1@KMap{}              t2@AndTerm{}           = unifyAndTerm2 t1 t2
+unify1 t1@KMap{}              t2@DomainValue{}       = failWith $ DifferentSymbols t1 t2
+unify1 t1@KMap{}              t2@Injection{}         = failWith $ DifferentSymbols t1 t2
+unify1 t1@KMap{}              t2@KMap{}              = unifyMap t1 t2
+unify1 t1@KMap{}              t2@KList{}             = failWith $ DifferentSymbols t1 t2
+unify1 t1@KMap{}              t2@KSet{}              = failWith $ DifferentSymbols t1 t2
+unify1 t1@KMap{}              t2@SymbolApplication{} = addIndeterminate t1 t2
+unify1 t1@KMap{}              t2@Var{}               = unifyVar t2 t1
+unify1 t1@KList{}             t2@AndTerm{}           = unifyAndTerm2 t1 t2
+unify1 t1@KList{}             t2@DomainValue{}       = failWith $ DifferentSymbols t1 t2
+unify1 t1@KList{}             t2@Injection{}         = failWith $ DifferentSymbols t1 t2
+unify1 t1@KList{}             t2@KMap{}              = failWith $ DifferentSymbols t1 t2
+unify1 t1@KList{}             t2@KList{}             = unifyList t1 t2
+unify1 t1@KList{}             t2@KSet{}              = failWith $ DifferentSymbols t1 t2
+unify1 t1@KList{}             t2@SymbolApplication{} = addIndeterminate t1 t2
+unify1 t1@KList{}             t2@Var{}               = unifyVar t2 t1
+unify1 t1@KSet{}              t2@AndTerm{}           = unifyAndTerm2 t1 t2
+unify1 t1@KSet{}              t2@DomainValue{}       = failWith $ DifferentSymbols t1 t2
+unify1 t1@KSet{}              t2@Injection{}         = failWith $ DifferentSymbols t1 t2
+unify1 t1@KSet{}              t2@KMap{}              = failWith $ DifferentSymbols t1 t2
+unify1 t1@KSet{}              t2@KList{}             = failWith $ DifferentSymbols t1 t2
+unify1 t1@KSet{}              t2@KSet{}              = addIndeterminate t1 t2
+unify1 t1@KSet{}              t2@SymbolApplication{} = addIndeterminate t1 t2
+unify1 t1@KSet{}              t2@Var{}               = unifyVar t2 t1
+unify1 t1@SymbolApplication{} t2@AndTerm{}           = unifyAndTerm2 t1 t2
+unify1 t1@SymbolApplication{} t2@DomainValue{}       = addIndeterminate t1 t2
+unify1 t1@SymbolApplication{} t2@Injection{}         = unifyInjectionSymbolApplicationOp t1 t2
+unify1 t1@SymbolApplication{} t2@KMap{}              = addIndeterminate t1 t2
+unify1 t1@SymbolApplication{} t2@KList{}             = addIndeterminate t1 t2
+unify1 t1@SymbolApplication{} t2@KSet{}              = addIndeterminate t1 t2
+unify1 t1@SymbolApplication{} t2@SymbolApplication{} = unifySymbolApplication t1 t2
+unify1 t1@SymbolApplication{} t2@Var{}               = unifyVar t2 t1
+unify1 t1@Var{}               t2@AndTerm{}           = unifyAndTerm2 t1 t2
+unify1 t1@Var{}               t2@DomainValue{}       = unifyVar t1 t2
+unify1 t1@Var{}               t2@Injection{}         = unifyVar t1 t2
+unify1 t1@Var{}               t2@KMap{}              = unifyVar t1 t2
+unify1 t1@Var{}               t2@KList{}             = unifyVar t1 t2
+unify1 t1@Var{}               t2@KSet{}              = unifyVar t1 t2
+unify1 t1@Var{}               t2@SymbolApplication{} = unifyVar t1 t2
+unify1 t1@Var{}               t2@Var{}               = unifyVarVar t1 t2
+
+
+
+unifyDV
     d1@(DomainValue s1 t1)
     d2@(DomainValue s2 t2) =
         do
@@ -185,14 +255,14 @@ unify1
                 failWith (DifferentSorts d1 d2)
 ----- And Terms
 -- and-term in pattern: must unify with both arguments
-unify1
+unifyAndTerm1
     (AndTerm t1a t1b)
     term2 =
         do
             enqueueRegularProblem t1a term2
             enqueueRegularProblem t1b term2
 -- and-term in subject: must unify with both arguments
-unify1
+unifyAndTerm2
     term1
     (AndTerm t2a t2b) =
         do
@@ -203,7 +273,7 @@ unify1
 -- agree. Target sorts must be the same, source sorts may differ if
 -- the contained pattern term is just a variable, otherwise they need
 -- to be identical.
-unify1
+unifyInj
     pat@(Injection source1 target1 trm1)
     subj@(Injection source2 target2 trm2)
         | target1 /= target2 = do
@@ -223,7 +293,7 @@ unify1
             failWith (DifferentSorts pat subj)
 ----- Symbol Applications
 -- two symbol applications: fail if names differ, recurse
-unify1
+unifySymbolApplication
     t1@(SymbolApplication symbol1 sorts1 args1)
     t2@(SymbolApplication symbol2 sorts2 args2)
         | isFunctionSymbol symbol1 || isFunctionSymbol symbol2 =
@@ -239,7 +309,7 @@ unify1
             enqueueRegularProblems $ Seq.fromList $ zip args1 args2
 ----- Variables
 -- twice the exact same variable: verify sorts are equal
-unify1
+unifyVarVar
     (Var var1@(Variable varSort1 varName1))
     (Var var2@(Variable varSort2 varName2))
         -- same variable: forbidden!
@@ -249,7 +319,7 @@ unify1
             -- sorts differ, names equal: error!
             failWith $ VariableConflict var1 (Var var1) (Var var2)
 -- term1 variable (target): introduce a new binding
-unify1
+unifyVar
     term1@(Var var@Variable{variableSort})
     term2 =
         do
@@ -261,44 +331,35 @@ unify1
             if isSubsort
                 then bindVariable var term2
                 else failWith $ DifferentSorts term1 term2
--- term1 is an injection. We could unify, but it would not be a matching substitution: indeterminate
-unify1
+
+
+unifyInjectionSymbolApplication
     inj@Injection{}
-    v@Var{} =
-        addIndeterminate inj v
--- term2 variable (not target), term1 not a variable: swap arguments (won't recurse)
-unify1
-    term1
-    v@Var{} =
-        unify1 v term1
--- injection in pattern, no injection in subject: indeterminate if trm is a function, otherwise fail (trm cannot be a variable)
-unify1
-    inj@Injection{}
-    trm = case trm of
-        SymbolApplication symbol _ _ | isFunctionSymbol symbol -> addIndeterminate inj trm
-        _ -> failWith $ DifferentSymbols inj trm
+    trm@(SymbolApplication symbol _ _)
+        | isFunctionSymbol symbol = addIndeterminate inj trm
+        | otherwise = failWith $ DifferentSymbols inj trm
 -- injection in subject but not in pattern: indeterminate if trm is a function, otherwise fail (trm cannot be a variable)
-unify1
-    trm
-    inj@Injection{} = case trm of
-        SymbolApplication symbol _ _ | isFunctionSymbol symbol -> addIndeterminate trm inj
-        _ -> failWith $ DifferentSymbols trm inj
+unifyInjectionSymbolApplicationOp
+    trm@(SymbolApplication symbol _ _)
+    inj@Injection{}
+        | isFunctionSymbol symbol = addIndeterminate trm inj
+        | otherwise = failWith $ DifferentSymbols trm inj
 ------ Internalised Lists
 -- unification for lists. Only solves simple cases, returns indeterminate otherwise
-unify1
+unifyList
     l1@(KList def1 heads1 rest1)
     l2@(KList def2 heads2 rest2)
         | -- incompatible lists
-          def1 /= def2 =
+        def1 /= def2 =
             failWith $ DifferentSorts l1 l2
         | -- two fully-concrete lists of the same length
-          Nothing <- rest1
+        Nothing <- rest1
         , Nothing <- rest2 =
             if length heads1 == length heads2
                 then void $ enqueuePairs heads1 heads2
                 else failWith $ DifferentValues l1 l2
         | -- left list has a symbolic part, right one is fully concrete
-          Just (symb1, tails1) <- rest1
+        Just (symb1, tails1) <- rest1
         , Nothing <- rest2 = do
             let emptyList = KList def1 [] Nothing
             remainder <- enqueuePairs heads1 heads2
@@ -333,11 +394,11 @@ unify1
                                 let newRight = KList def2 (reverse tail2) Nothing
                                 enqueueRegularProblem symb1 newRight
         | -- mirrored case above: left list fully concrete, right one isn't
-          Nothing <- rest1
+        Nothing <- rest1
         , Just _ <- rest2 =
             unify1 l2 l1 -- won't loop, will fail later if unification succeeds
         | -- two lists with symbolic middle
-          Just (symb1, tails1) <- rest1
+        Just (symb1, tails1) <- rest1
         , Just (symb2, tails2) <- rest2 = do
             remainder <- enqueuePairs heads1 heads2
             case remainder of
@@ -381,26 +442,10 @@ unify1
                             let surplusLeft = KList def1 [] (Just (symb1, tails1'))
                                 surplusRight = KList def2 heads2' (Just (symb2, []))
                             addIndeterminate surplusLeft surplusRight
--- indeterminate if one of the terms is a symbol application (i.e., function)
-unify1
-    l1@KList{}
-    app@SymbolApplication{} =
-        addIndeterminate l1 app
-unify1
-    app@SymbolApplication{}
-    l2@KList{} =
-        addIndeterminate l2 app
--- fail if one of the terms is neither symbol app nor KList (other cannot be a variable)
-unify1
-    l1@KList{}
-    other =
-        failWith $ DifferentValues l1 other
-unify1
-    other
-    l2@KList{} =
-        failWith $ DifferentValues other l2
+
+
 ------ Internalised Maps
-unify1
+unifyMap
     t1@(KMap def1 _ _)
     t2@(KMap def2 _ _)
         | def1 == def2 = do
@@ -412,7 +457,7 @@ unify1
                             | Just duplicate <- duplicateKeys kvs1 -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs1 rest1
                             | Just duplicate <- duplicateKeys kvs2 -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs2 rest2
                             | -- both sets of keys are syntactically the same (some keys could be functions)
-                              Set.fromList [k | (k, _v) <- kvs1] == Set.fromList [k | (k, _v) <- kvs2] -> do
+                            Set.fromList [k | (k, _v) <- kvs1] == Set.fromList [k | (k, _v) <- kvs2] -> do
                                 forM_ (Map.elems $ Map.intersectionWith (,) (Map.fromList kvs1) (Map.fromList kvs2)) $
                                     uncurry enqueueRegularProblem
                                 case (rest1, rest2) of
@@ -422,8 +467,8 @@ unify1
                                     (Nothing, Nothing) -> pure ()
                         (KMap _ kvs1 Nothing, KMap _ kvs2 Nothing)
                             | -- the sets of keys do not match but all keys are concrete and fully evaluated
-                              -- this means there is a mismatch
-                              allKeysConstructorLike kvs1 && allKeysConstructorLike kvs2 ->
+                            -- this means there is a mismatch
+                            allKeysConstructorLike kvs1 && allKeysConstructorLike kvs2 ->
                                 case kvs1 `findAllKeysIn` kvs2 of
                                     Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 kvs2 Nothing
                                     Right (_matched, []) -> error "unreachable case"
@@ -437,7 +482,7 @@ unify1
                     -- defer unification until all regular terms have unified
                     enqueueMapProblem t1 t2
         | otherwise = failWith $ DifferentSorts t1 t2
-      where
+    where
         partitionConcreteKeys :: [(Term, Term)] -> ([(Term, Term)], [(Term, Term)])
         partitionConcreteKeys = partition (\(Term attrs _, _) -> attrs.isConstructorLike)
 
@@ -451,14 +496,14 @@ unify1
                 matchedMap = Map.intersectionWith (,) searchMap subjectMap
                 restMap = Map.difference subjectMap matchedMap
                 unmatched = Map.keys $ Map.difference searchMap subjectMap
-             in if null unmatched
+            in if null unmatched
                     then Right (Map.elems matchedMap, Map.toList restMap)
                     else Left unmatched
 
         duplicateKeys :: [(Term, Term)] -> Maybe Term
         duplicateKeys kvs =
             let duplicates = Map.filter (> (1 :: Int)) $ foldr (flip (Map.insertWith (+)) 1 . fst) mempty kvs
-             in case Map.toList duplicates of
+            in case Map.toList duplicates of
                     [] -> Nothing
                     (k, _) : _ -> Just k
 
@@ -474,44 +519,6 @@ unify1
         substituteInKeys substitution = \case
             KMap attrs keyVals rest -> KMap attrs (first (substituteInTerm substitution) <$> keyVals) rest
             other -> other
-
--- could be unifying a map with a function which returns a map
-unify1
-    t1@SymbolApplication{}
-    t2@KMap{} =
-        addIndeterminate t1 t2
-unify1
-    t1@KMap{}
-    t2@SymbolApplication{} =
-        addIndeterminate t1 t2
-unify1
-    trm
-    m@KMap{} =
-        failWith $ DifferentSymbols trm m
-unify1
-    m@KMap{}
-    trm =
-        failWith $ DifferentSymbols m trm
------- Internalised Sets
--- not supported yet FIXME
-unify1
-    t1@KSet{}
-    t2 =
-        addIndeterminate t1 t2
-unify1
-    t1
-    t2@KSet{} =
-        addIndeterminate t1 t2
------- Remaining other cases: mix of DomainValue and SymbolApplication
------- (either side). The remaining unification problems are returned.
-unify1
-    t1@SymbolApplication{}
-    t2@DomainValue{} =
-        addIndeterminate t1 t2
-unify1
-    t1@DomainValue{}
-    t2@SymbolApplication{} =
-        addIndeterminate t1 t2
 
 failWith :: FailReason -> StateT s (Except UnificationResult) ()
 failWith = lift . throwE . UnificationFailed
