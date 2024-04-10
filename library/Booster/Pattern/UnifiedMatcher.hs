@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -81,30 +79,37 @@ data FailReason
     deriving stock (Eq, Show)
 
 instance Pretty FailReason where
-    pretty (DifferentValues t1 t2) =
-        "Values differ:" <> align (sep [pretty t1, pretty t2])
-    pretty (DifferentSymbols t1 t2) =
-        vsep ["Symbols differ:", pretty t1, pretty t2] -- shorten?
-    pretty (DifferentSorts t1 t2) =
-        vsep ["Sorts differ:", pretty t1, pretty t2] -- shorten?
-    pretty (VariableRecursion v t) =
-        "Variable recursion found: " <> pretty v <> " in " <> pretty t
-    pretty (VariableConflict v t1 t2) =
-        vsep
-            [ "Variable conflict for " <> pretty v
-            , pretty t1
-            , pretty t2
-            ]
-    pretty (KeyNotFound k m) =
-        vsep
-            [ "Key " <> pretty k <> " not found in map"
-            , pretty m
-            ]
-    pretty (DuplicateKeys k m) =
-        vsep
-            [ "Key " <> pretty k <> " appears more than once in map"
-            , pretty m
-            ]
+    pretty = \case
+        DifferentValues t1 t2 ->
+            "Values differ:" <> align (sep [pretty t1, pretty t2])
+        DifferentSymbols t1 t2 ->
+            vsep ["Symbols differ:", pretty t1, pretty t2] -- shorten?
+        DifferentSorts t1 t2 ->
+            vsep ["Sorts differ:", pretty t1, pretty t2] -- shorten?
+        VariableRecursion v t ->
+            "Variable recursion found: " <> pretty v <> " in " <> pretty t
+        VariableConflict v t1 t2 ->
+            vsep
+                [ "Variable conflict for " <> pretty v
+                , pretty t1
+                , pretty t2
+                ]
+        KeyNotFound k m ->
+            vsep
+                [ "Key " <> pretty k <> " not found in map"
+                , pretty m
+                ]
+        DuplicateKeys k m ->
+            vsep
+                [ "Key " <> pretty k <> " appears more than once in map"
+                , pretty m
+                ]
+        SharedVariables vs ->
+            "Shared variables:" <+> hsep (map pretty $ Set.toList vs)
+        SubsortingError err ->
+            pretty $ show err
+        ArgLengthsDiffer t1 t2 ->
+            vsep ["Argument length differ", pretty t1, pretty t2]
 
 type Substitution = Map Variable Term
 
@@ -344,6 +349,7 @@ matchInj
         | otherwise =
             failWith (DifferentSorts (Injection source1 target1 trm1) (Injection source2 target2 trm2))
 {-# INLINE matchInj #-}
+
 ----- Symbol Applications
 -- two constructors: fail if names differ, recurse
 
