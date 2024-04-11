@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -21,16 +23,16 @@ import Data.Either.Extra
 import Data.List.NonEmpty as NE (NonEmpty, fromList)
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Sequence (Seq (..), (><))
+import Data.Sequence (Seq, pattern (:<|), pattern (:|>), (><))
 import Data.Sequence qualified as Seq
 
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Prettyprinter
 
-import Booster.Definition.Attributes.Base (KListDefinition)
+import Booster.Definition.Attributes.Base (KListDefinition, KMapDefinition)
 import Booster.Definition.Base
-import Booster.Pattern.Base
+import Booster.Pattern.Base hiding (DotDotDot)
 import Booster.Pattern.Util (
     checkSymbolIsAc,
     freeVariables,
@@ -38,8 +40,11 @@ import Booster.Pattern.Util (
     sortOfTerm,
     substituteInTerm,
  )
+import Booster.Prettyprinter (renderText)
+import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.ByteString (ByteString)
 import Data.List (partition)
+import Data.Text (unpack)
 
 -- | Result of matching a pattern to a subject (a substitution or an indication of what went wrong)
 data MatchResult
@@ -135,10 +140,12 @@ matchTerms mType KoreDefinition{sorts} term1 term2 =
         freeVars2 = freeVariables term2
         sharedVars = freeVars1 `Set.intersection` freeVars2
      in if not $ Set.null sharedVars
-            then
-                MatchIndeterminate $
-                    NE.fromList
-                        [(Var v, Var v) | v <- Set.toList sharedVars]
+            then case mType of
+                Rule ->
+                    MatchIndeterminate $
+                        NE.fromList
+                            [(Var v, Var v) | v <- Set.toList sharedVars]
+                Fun -> MatchFailed $ SharedVariables sharedVars
             else
                 runMatch
                     State
@@ -166,8 +173,8 @@ match mType = do
     queue <- gets mQueue
     mapQueue <- gets mMapQueue
     case queue of
-        Empty -> case mapQueue of
-            Empty -> checkIndeterminate -- done
+        Seq.Empty -> case mapQueue of
+            Seq.Empty -> checkIndeterminate -- done
             (term1, term2) :<| rest -> do
                 modify $ \s -> s{mMapQueue = rest}
                 match1 mType term1 term2
@@ -228,7 +235,7 @@ match1 Fun  t1@KMap{}                                  t2@AndTerm{}             
 match1 _    t1@KMap{}                                  t2@DomainValue{}                           = failWith $ DifferentSymbols t1 t2
 match1 Rule t1@KMap{}                                  t2@Injection{}                             = failWith $ DifferentSymbols t1 t2
 match1 Fun  t1@KMap{}                                  t2@Injection{}                             = addIndeterminate t1 t2
-match1 _    t1@KMap{}                                  t2@KMap{}                                  = matchMaps t1 t2
+match1 _    t1@(KMap def1 patKeyVals patRest)         t2@(KMap def2 subjKeyVals subjRest)       = if def1 == def2 then matchMaps def1 patKeyVals patRest subjKeyVals subjRest else failWith $ DifferentSorts t1 t2 
 match1 _    t1@KMap{}                                  t2@KList{}                                 = failWith $ DifferentSymbols t1 t2
 match1 _    t1@KMap{}                                  t2@KSet{}                                  = failWith $ DifferentSymbols t1 t2
 match1 _    t1@KMap{}                                  t2@ConsApplication{}                       = failWith $ DifferentSymbols t1 t2
@@ -241,7 +248,7 @@ match1 _    t1@KList{}                                 t2@DomainValue{}         
 match1 Rule t1@KList{}                                 t2@Injection{}                             = failWith $ DifferentSymbols t1 t2
 match1 Fun  t1@KList{}                                 t2@Injection{}                             = addIndeterminate t1 t2
 match1 _    t1@KList{}                                 t2@KMap{}                                  = failWith $ DifferentSymbols t1 t2
-match1 Rule (KList def1 heads1 rest1)                  (KList def2 heads2 rest2)                  = matchLists def1 heads1 rest1 def2 heads2 rest2
+match1 Rule t1@(KList def1 heads1 rest1)               t2@(KList def2 heads2 rest2)               = if def1 == def2 then matchLists def1 heads1 rest1 heads2 rest2 else failWith $ DifferentSorts t1 t2
 match1 Fun  t1@KList{}                                 t2@KList{}                                 = addIndeterminate t1 t2
 match1 _    t1@KList{}                                 t2@KSet{}                                  = failWith $ DifferentSymbols t1 t2
 match1 _    t1@KList{}                                 t2@ConsApplication{}                       = failWith $ DifferentSymbols t1 t2
@@ -435,7 +442,12 @@ matchVar
                 lift . withExcept (MatchFailed . SubsortingError) $
                     checkSubsort subsorts termSort variableSort
             if isSubsort
-                then bindVariable mType var term2
+                then bindVariable mType var $ case mType of
+                    Rule -> term2
+                    Fun ->
+                        if termSort == variableSort
+                            then term2
+                            else Injection termSort variableSort term2
                 else failWith $ DifferentSorts (Var var) term2
 
 -- unification for lists. Only solves simple cases, returns indeterminate otherwise
@@ -443,30 +455,25 @@ matchLists ::
     KListDefinition ->
     [Term] ->
     Maybe (Term, [Term]) ->
-    KListDefinition ->
     [Term] ->
     Maybe (Term, [Term]) ->
     StateT MatchState (Except MatchResult) ()
 matchLists
-    def1
+    def
     heads1
     rest1
-    def2
     heads2
     rest2
-        | -- incompatible lists
-          def1 /= def2 =
-            failWith $ DifferentSorts (KList def1 heads1 rest1) (KList def2 heads2 rest2)
         | -- two fully-concrete lists of the same length
           Nothing <- rest1
         , Nothing <- rest2 =
             if length heads1 == length heads2
                 then void $ enqueuePairs heads1 heads2
-                else failWith $ DifferentValues (KList def1 heads1 rest1) (KList def2 heads2 rest2)
+                else failWith $ DifferentValues (KList def heads1 rest1) (KList def heads2 rest2)
         | -- left list has a symbolic part, right one is fully concrete
           Just (symb1, tails1) <- rest1
         , Nothing <- rest2 = do
-            let emptyList = KList def1 [] Nothing
+            let emptyList = KList def [] Nothing
             remainder <- enqueuePairs heads1 heads2
             case remainder of
                 Nothing -- equal head length, rest1 must become .List
@@ -474,15 +481,15 @@ matchLists
                         enqueueRegularProblem symb1 emptyList
                     | otherwise -> do
                         -- fully concrete list too short
-                        let surplusLeft = KList def1 [] rest1
+                        let surplusLeft = KList def [] rest1
                         failWith $ DifferentValues surplusLeft emptyList
                 Just (Left leftover1) -> do
                     -- fully concrete list too short
-                    let surplusLeft = KList def1 leftover1 rest1
+                    let surplusLeft = KList def leftover1 rest1
                     failWith $ DifferentValues surplusLeft emptyList
                 Just (Right leftover2)
                     | null tails1 -> do
-                        let newRight = KList def2 leftover2 Nothing
+                        let newRight = KList def leftover2 Nothing
                         enqueueRegularProblem symb1 newRight
                     | otherwise -> do
                         tailRemainder <- -- reversed!
@@ -493,15 +500,15 @@ matchLists
                                 enqueueRegularProblem symb1 emptyList
                             Just (Left tail1) -> do
                                 -- fully concrete list too short
-                                let surplusLeft = KList def1 [] $ Just (symb1, reverse tail1)
+                                let surplusLeft = KList def [] $ Just (symb1, reverse tail1)
                                 failWith $ DifferentValues surplusLeft emptyList
                             Just (Right tail2) -> do
-                                let newRight = KList def2 (reverse tail2) Nothing
+                                let newRight = KList def (reverse tail2) Nothing
                                 enqueueRegularProblem symb1 newRight
         | -- mirrored case above: left list fully concrete, right one isn't
           Nothing <- rest1
         , Just _ <- rest2 =
-            matchLists def2 heads2 rest2 def1 heads1 rest1 -- won't loop, will fail later if unification succeeds
+            matchLists def heads2 rest2 heads1 rest1 -- won't loop, will fail later if unification succeeds
         | -- two lists with symbolic middle
           Just (symb1, tails1) <- rest1
         , Just (symb2, tails2) <- rest2 = do
@@ -516,10 +523,10 @@ matchLists
                         Nothing ->
                             enqueueRegularProblem symb1 symb2
                         Just (Left tails1') -> do
-                            let newLeft = KList def1 [] (Just (symb1, tails1'))
+                            let newLeft = KList def [] (Just (symb1, tails1'))
                             enqueueRegularProblem newLeft symb2
                         Just (Right tails2') -> do
-                            let newRight = KList def2 [] (Just (symb2, tails2'))
+                            let newRight = KList def [] (Just (symb2, tails2'))
                             enqueueRegularProblem symb1 newRight
                 Just headRem -> do
                     -- either left or right was longer, remove tails and proceed
@@ -528,107 +535,180 @@ matchLists
                             <$> enqueuePairs (reverse tails1) (reverse tails2)
                     case (headRem, tailRem) of
                         (Left heads1', Nothing) -> do
-                            let newLeft = KList def1 heads1' (Just (symb1, []))
+                            let newLeft = KList def heads1' (Just (symb1, []))
                             enqueueRegularProblem newLeft symb2
                         (Left heads1', Just (Left tails1')) -> do
-                            let newLeft = KList def1 heads1' (Just (symb1, tails1'))
+                            let newLeft = KList def heads1' (Just (symb1, tails1'))
                             enqueueRegularProblem newLeft symb2
                         (Left heads1', Just (Right tails2')) -> do
-                            let surplusLeft = KList def1 heads1' (Just (symb1, []))
-                                surplusRight = KList def2 [] (Just (symb2, tails2'))
+                            let surplusLeft = KList def heads1' (Just (symb1, []))
+                                surplusRight = KList def [] (Just (symb2, tails2'))
                             addIndeterminate surplusLeft surplusRight
                         (Right heads2', Nothing) -> do
-                            let newRight = KList def2 heads2' (Just (symb2, []))
+                            let newRight = KList def heads2' (Just (symb2, []))
                             enqueueRegularProblem symb1 newRight
                         (Right heads2', Just (Right tails2')) -> do
-                            let newRight = KList def2 heads2' (Just (symb2, tails2'))
+                            let newRight = KList def heads2' (Just (symb2, tails2'))
                             enqueueRegularProblem symb1 newRight
                         (Right heads2', Just (Left tails1')) -> do
-                            let surplusLeft = KList def1 [] (Just (symb1, tails1'))
-                                surplusRight = KList def2 heads2' (Just (symb2, []))
+                            let surplusLeft = KList def [] (Just (symb1, tails1'))
+                                surplusRight = KList def heads2' (Just (symb2, []))
                             addIndeterminate surplusLeft surplusRight
 {-# INLINE matchLists #-}
 
+data MapList
+    = ConstructorKey Term Term MapList
+    | Rest RestMapList
+
+pattern SingleConstructorKey :: Term -> Term -> MapList
+pattern SingleConstructorKey k v = ConstructorKey k v (Rest Empty)
+
+pattern SingleOtherKey :: Term -> Term -> MapList
+pattern SingleOtherKey k v = Rest (OtherKey k v Empty)
+
+instance Show MapList where
+    show = \case
+        ConstructorKey k v rest -> unpack (renderText $ pretty k) <> " -> " <> unpack (renderText $ pretty v) <> " " <> show rest
+        Rest s -> show s
+
+data RestMapList
+    = OtherKey Term Term RestMapList
+    | Empty
+    | Remainder Term
+
+instance Show RestMapList where
+    show = \case
+        OtherKey k v rest ->
+            "?"
+                <> unpack (renderText $ pretty k)
+                <> " -> "
+                <> unpack (renderText $ pretty v)
+                <> " "
+                <> show rest
+        Empty -> ""
+        Remainder t -> "..." <> unpack (renderText $ pretty t)
+
+toMapList :: [(Term, Term)] -> Maybe Term -> MapList
+toMapList kvs rest =
+    let (conc, sym) = partitionConcreteKeys kvs
+     in foldr
+            (uncurry ConstructorKey)
+            (Rest $ foldr (uncurry OtherKey) (maybe Empty Remainder rest) sym)
+            conc
+  where
+    partitionConcreteKeys :: [(Term, Term)] -> ([(Term, Term)], [(Term, Term)])
+    partitionConcreteKeys = partition (\(Term attrs _, _) -> attrs.isConstructorLike)
+
+fromMapList :: KMapDefinition -> MapList -> Term
+fromMapList def ml = uncurry (KMap def) $ recurse ml
+  where
+    recurse (ConstructorKey k v rest) = first ((k, v) :) $ recurse rest
+    recurse (Rest s) = recurseS s
+
+    recurseS (OtherKey k v rest) = first ((k, v) :) $ recurseS rest
+    recurseS Empty = ([], Nothing)
+    recurseS (Remainder t) = ([], Just t)
+
+hasNoRemainder :: RestMapList -> Bool
+hasNoRemainder = \case
+    OtherKey _ _ r -> hasNoRemainder r
+    Empty -> True
+    Remainder{} -> False
+
 ------ Internalised Maps
-matchMaps :: Term -> Term -> StateT MatchState (Except MatchResult) ()
+matchMaps ::
+    KMapDefinition ->
+    [(Term, Term)] ->
+    Maybe Term ->
+    [(Term, Term)] ->
+    Maybe Term ->
+    StateT MatchState (Except MatchResult) ()
 matchMaps
-    t1@(KMap def1 _ _)
-    t2@(KMap def2 _ _)
-        | def1 == def2 = do
-            State{mSubstitution = currentSubst, mQueue = queue} <- get
-            case queue of
-                Empty ->
-                    case (substituteInKeys currentSubst t1, substituteInKeys currentSubst t2) of
-                        (KMap _ kvs1 rest1, KMap _ kvs2 rest2)
-                            | Just duplicate <- duplicateKeys kvs1 -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs1 rest1
-                            | Just duplicate <- duplicateKeys kvs2 -> failWith $ DuplicateKeys duplicate $ KMap def1 kvs2 rest2
-                            | -- both sets of keys are syntactically the same (some keys could be functions)
-                              Set.fromList [k | (k, _v) <- kvs1] == Set.fromList [k | (k, _v) <- kvs2] -> do
-                                forM_ (Map.elems $ Map.intersectionWith (,) (Map.fromList kvs1) (Map.fromList kvs2)) $
-                                    uncurry enqueueRegularProblem
-                                case (rest1, rest2) of
-                                    (Just r1, Just r2) -> enqueueRegularProblem r1 r2
-                                    (Just r1, Nothing) -> enqueueRegularProblem r1 (KMap def1 [] Nothing)
-                                    (Nothing, Just r2) -> enqueueRegularProblem (KMap def1 [] Nothing) r2
-                                    (Nothing, Nothing) -> pure ()
-                        (KMap _ kvs1 Nothing, KMap _ kvs2 Nothing)
-                            | -- the sets of keys do not match but all keys are concrete and fully evaluated
-                              -- this means there is a mismatch
-                              allKeysConstructorLike kvs1 && allKeysConstructorLike kvs2 ->
-                                case kvs1 `findAllKeysIn` kvs2 of
-                                    Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 kvs2 Nothing
-                                    Right (_matched, []) -> error "unreachable case"
-                                    Right (_matched, rest) -> failWith $ KeyNotFound (fst $ head rest) $ KMap def1 kvs1 Nothing
-                        (KMap _ kvs (Just restVar@Var{}), KMap _ m Nothing)
-                            | (cKvs, []) <- partitionConcreteKeys kvs -> unifySimpleMapShape cKvs restVar m
-                        (KMap _ m Nothing, KMap _ kvs (Just restVar@Var{}))
-                            | (cKvs, []) <- partitionConcreteKeys kvs -> unifySimpleMapShape cKvs restVar m
-                        (t1', t2') -> addIndeterminate t1' t2'
-                _ ->
-                    -- defer unification until all regular terms have unified
-                    enqueueMapProblem t1 t2
-        | otherwise = failWith $ DifferentSorts t1 t2
+    def
+    patKeyVals
+    patRest
+    subjKeyVals
+    subjRest
+        | def == def = do
+            st <- get
+            if not (Seq.null st.mQueue)
+                then -- delay matching 'KMap's until there are no regular
+                -- problems left, to obtain a maximal prior substitution
+                -- before matching map keys.
+                    enqueueMapProblem (KMap def patKeyVals patRest) (KMap def subjKeyVals subjRest)
+                else do
+                    let patternKeyVals = map (first (substituteInTerm st.mSubstitution)) patKeyVals
+                    -- check for duplicate keys
+                    checkDuplicateKeys patternKeyVals patRest
+                    checkDuplicateKeys subjKeyVals subjRest
+
+                    let patMap = Map.fromList patternKeyVals
+                        subjMap = Map.fromList subjKeyVals
+                        -- handles syntactically identical keys in pattern and subject
+                        commonMap = Map.intersectionWith (,) patMap subjMap
+                        patExtra = patMap `Map.withoutKeys` Map.keysSet commonMap
+                        subjExtra = subjMap `Map.withoutKeys` Map.keysSet commonMap
+
+                    runMaybeT
+                        ( matchRemainderOfMapLists
+                            (toMapList (Map.toList patExtra) patRest)
+                            (toMapList (Map.toList subjExtra) subjRest)
+                        )
+                        >>= \case
+                            Just newProblems ->
+                                enqueueRegularProblems $ (Seq.fromList $ Map.elems commonMap) >< newProblems
+                            Nothing -> pure ()
+        | otherwise =
+            failWith $ DifferentSorts (KMap def patKeyVals patRest) (KMap def subjKeyVals subjRest)
       where
-        partitionConcreteKeys :: [(Term, Term)] -> ([(Term, Term)], [(Term, Term)])
-        partitionConcreteKeys = partition (\(Term attrs _, _) -> attrs.isConstructorLike)
+        checkDuplicateKeys assocs rest =
+            let duplicates =
+                    Map.filter (> (1 :: Int)) $ foldr (flip (Map.insertWith (+)) 1 . fst) mempty assocs
+             in case Map.assocs duplicates of
+                    [] -> pure ()
+                    (k, _) : _ -> failWith $ DuplicateKeys k $ KMap def assocs rest
 
-        allKeysConstructorLike :: [(Term, Term)] -> Bool
-        allKeysConstructorLike = all (\(Term attrs _, _) -> attrs.isConstructorLike)
-
-        findAllKeysIn :: [(Term, Term)] -> [(Term, Term)] -> Either [Term] ([(Term, Term)], [(Term, Term)])
-        findAllKeysIn kvs m =
-            let searchMap = Map.fromList kvs
-                subjectMap = Map.fromList m
-                matchedMap = Map.intersectionWith (,) searchMap subjectMap
-                restMap = Map.difference subjectMap matchedMap
-                unmatched = Map.keys $ Map.difference searchMap subjectMap
-             in if null unmatched
-                    then Right (Map.elems matchedMap, Map.toList restMap)
-                    else Left unmatched
-
-        duplicateKeys :: [(Term, Term)] -> Maybe Term
-        duplicateKeys kvs =
-            let duplicates = Map.filter (> (1 :: Int)) $ foldr (flip (Map.insertWith (+)) 1 . fst) mempty kvs
-             in case Map.toList duplicates of
-                    [] -> Nothing
-                    (k, _) : _ -> Just k
-
-        unifySimpleMapShape cKvs restVar m = do
-            let (cM, sM) = partitionConcreteKeys m
-            case cKvs `findAllKeysIn` cM of
-                Left notFoundKeys -> failWith $ KeyNotFound (head notFoundKeys) $ KMap def1 m Nothing
-                Right (matched, rest) -> do
-                    forM_ matched $ uncurry enqueueRegularProblem
-                    enqueueRegularProblem restVar $ KMap def1 (rest ++ sM) Nothing
-
-        substituteInKeys :: Map Variable Term -> Term -> Term
-        substituteInKeys substitution = \case
-            KMap attrs keyVals rest -> KMap attrs (first (substituteInTerm substitution) <$> keyVals) rest
-            other -> other
-matchMaps _ _ = undefined
+        matchRemainderOfMapLists ::
+            MapList -> MapList -> MaybeT (StateT MatchState (Except MatchResult)) (Seq (Term, Term))
+        -- match {} with {}
+        -- succeeds
+        matchRemainderOfMapLists (Rest Empty) (Rest Empty) = pure mempty
+        -- match {} with {...rest} or {K -> V, ...}
+        -- fails as the size of the maps is different and there is no substitution `subst`, s.t.
+        -- subst({}) = {...rest} or {K -> V, ...}
+        matchRemainderOfMapLists (Rest Empty) subj =
+            lift $ failWith $ DifferentSymbols (fromMapList def (Rest Empty)) (fromMapList def subj)
+        -- match {...pat} with subj
+        -- succeeds as `pat` must be a variable of sort map or a function which evaluates to a map
+        matchRemainderOfMapLists (Rest (Remainder pat)) subj = pure $ Seq.singleton (pat, fromMapList def subj)
+        -- match {K -> V ...} with `subj` where K is concrete
+        -- fail here because we already matched all concrete keys, so we know `K` does not appear in `subj`
+        matchRemainderOfMapLists (ConstructorKey patKey _ _) subj = lift $ failWith $ KeyNotFound patKey (fromMapList def subj)
+        -- match {K -> V} with {K' -> V'} where K' is a constructor like and K is not (i.e. a variable or function)
+        -- we can proceed matching because the two key/value pairs must match
+        matchRemainderOfMapLists (SingleOtherKey patKey patVal) (SingleConstructorKey subjKey subjVal) =
+            pure $ Seq.fromList [(patKey, subjKey), (patVal, subjVal)]
+        -- match {K -> V} with {K' -> V'} where K and K' are both non-constructor like (i.e. a variable or function)
+        -- same as above
+        matchRemainderOfMapLists (SingleOtherKey patKey patVal) (SingleOtherKey subjKey subjVal) =
+            pure $ Seq.fromList [(patKey, subjKey), (patVal, subjVal)]
+        -- match {K -> V ...} with {}
+        -- fails
+        matchRemainderOfMapLists pat@(Rest OtherKey{}) subj@(Rest Empty) =
+            lift $ failWith $ DifferentSymbols (fromMapList def pat) (fromMapList def subj)
+        -- match {?K/f(..) -> V ...} with {...?REST} where ?REST is a variable
+        -- fail because there is no substitution `sub` such that sub({?K -> V ...}) = {...?REST}
+        matchRemainderOfMapLists (Rest pat@OtherKey{}) subj@(Rest (Remainder Var{}))
+            | hasNoRemainder pat =
+                lift $ failWith $ DifferentSymbols (fromMapList def (Rest pat)) (fromMapList def subj)
+        -- match {?K/f(..) -> V ...} with {C -> V' ...} or {C -> V'} or {...}
+        -- indeterminate
+        matchRemainderOfMapLists pat@(Rest OtherKey{}) subj = do
+            lift $ addIndeterminate (fromMapList def pat) (fromMapList def subj)
+            fail "all other cases are indeterminate"
 {-# INLINE matchMaps #-}
 
-failWith :: FailReason -> StateT s (Except MatchResult) ()
+failWith :: FailReason -> StateT s (Except MatchResult) a
 failWith = lift . throwE . MatchFailed
 
 internalError :: String -> a

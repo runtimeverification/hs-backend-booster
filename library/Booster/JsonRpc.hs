@@ -816,6 +816,11 @@ mkLogRewriteTrace
                                             { reason = "Sort error while unifying"
                                             , _ruleId = fmap getUniqueId (uniqueId $ Definition.attributes r)
                                             }
+                                    InternalMatchError{} ->
+                                        Failure
+                                            { reason = "Internal match error"
+                                            , _ruleId = Nothing
+                                            }
                                 , origin = Booster
                                 }
             RewriteSimplified equationTraces Nothing

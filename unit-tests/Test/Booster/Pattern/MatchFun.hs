@@ -1,22 +1,24 @@
+{-# LANGUAGE QuasiQuotes #-}
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
-module Test.Booster.Pattern.Match (
-    test_match,
+module Test.Booster.Pattern.MatchFun (
+    test_match_fun,
 ) where
 
 import Data.Map qualified as Map
+import Data.List.NonEmpty qualified as NE
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import Booster.Pattern.Base
-import Booster.Pattern.Match
-import Booster.Pattern.Unify (FailReason (..))
+import Booster.Pattern.UnifiedMatcher
+import Booster.Syntax.Json.Internalise (trm)
 import Test.Booster.Fixture
 
-test_match :: TestTree
-test_match =
+test_match_fun :: TestTree
+test_match_fun =
     testGroup
         "(equation) matching"
         [ symbols
@@ -48,11 +50,11 @@ symbols =
         , let pat = app con1 [var "X" someSort]
               subj = app f1 [var "Y" someSort]
            in test "constructor and function" pat subj $
-                MatchIndeterminate pat subj
+                MatchIndeterminate $ NE.singleton (pat, subj)
         , let pat = app f1 [var "X" someSort]
               subj = app con1 [var "Y" someSort]
            in test "function and constructor" pat subj $
-                MatchIndeterminate pat subj
+                MatchIndeterminate $ NE.singleton (pat, subj)
         , let x = var "X" someSort
               d = dv differentSort "something"
               pat = app con1 [x]
@@ -141,15 +143,15 @@ varsAndValues =
         , let v = var "X" someSort
               d = dv someSort ""
            in test "dv matching a var (on RHS): indeterminate" d v $
-                MatchIndeterminate d v
+                 MatchIndeterminate $ NE.singleton (d, v)
         , let d = dv someSort ""
               f = app f1 [d]
            in test "dv matching a function call (on RHS): indeterminate" d f $
-                MatchIndeterminate d f
+                 MatchIndeterminate $ NE.singleton (d, f)
         , let d = dv someSort ""
               c = app con1 [d]
            in test "dv matching a constructor (on RHS): fail" d c $
-                failed (DifferentValues d c)
+                failed (DifferentSymbols d c)
         ]
 
 andTerms :: TestTree
@@ -181,7 +183,7 @@ andTerms =
                 "And-term on the right, indeterminate"
                 d
                 (AndTerm fa fb)
-                (MatchIndeterminate d (AndTerm fa fb))
+                (MatchIndeterminate $ NE.singleton (d ,AndTerm fa fb))
         ]
 
 kmapTerms :: TestTree
@@ -199,20 +201,15 @@ kmapTerms =
             concreteKMapWithOneItem
             (success [])
         , test
-            "Empty KMap ~= non-empty concrete KMap: fails"
-            emptyKMap
-            concreteKMapWithOneItem
-            (failed $ DifferentValues emptyKMap concreteKMapWithOneItem)
-        , test
             "Non-empty concrete KMap ~= empty KMap: fails"
             concreteKMapWithOneItem
             emptyKMap
-            (failed $ DifferentValues concreteKMapWithOneItem emptyKMap)
+            (failed $ KeyNotFound [trm| \dv{SortTestKMapKey{}}("key")|] emptyKMap)
         , test
             "Non-empty symbolic KMap ~= empty KMap: fails"
             symbolicKMapWithOneItem
             emptyKMap
-            (failed $ DifferentValues symbolicKMapWithOneItem emptyKMap)
+            (failed $ KeyNotFound [trm| \dv{SortTestKMapKey{}}("key")|] emptyKMap)
         , test
             "Non-empty symbolic KMap ~= non-empty concrete KMap, same key: matches contained value"
             symbolicKMapWithOneItem -- "key" -> A
@@ -231,19 +228,11 @@ kmapTerms =
                in success [("REST", kmapSort, restMap)]
             )
         , -- pattern has more assocs than subject
-          let patRest = kmap [(dv kmapKeySort "key2", dv kmapElementSort "value2")] Nothing
-           in test
+          test
                 "Extra concrete key in pattern, no rest in subject: fail on rest"
                 concreteKMapWithTwoItems
                 concreteKMapWithOneItem
-                (failed $ DifferentValues patRest emptyKMap)
-        , let patRest =
-                kmap [(dv kmapKeySort "key2", dv kmapElementSort "value2")] Nothing
-           in test
-                "Extra concrete key in pattern, opaque rest in subject: indeterminate part"
-                concreteKMapWithTwoItems
-                concreteKMapWithOneItemAndRest
-                (MatchIndeterminate patRest (var "REST" kmapSort))
+                (failed $ KeyNotFound [trm| \dv{SortTestKMapKey{}}("key2")|] emptyKMap)
         , -- cases with disjoint keys
           test
             "Variable key ~= concrete key (and common element) without rest: match key"
@@ -252,24 +241,24 @@ kmapTerms =
             ( success [("A", kmapKeySort, dv kmapKeySort "key2")]
             )
         , let patMap =
-                kmap [(var "K" kmapKeySort, var "V" kmapElementSort)] (Just "PATTERN")
+                kmap [([trm| K:SortTestKMapKey{} |], var "V" kmapElementSort)] (Just "PATTERN")
            in test
                 "Variable key ~= concrete key with rest in subject and pattern: indeterminate"
                 patMap
                 functionKMapWithOneItemAndRest
-                (MatchIndeterminate patMap functionKMapWithOneItemAndRest)
+                (MatchIndeterminate $ NE.singleton (patMap, functionKMapWithOneItemAndRest))
         , let patMap =
                 kmap [(var "K" kmapKeySort, var "V" kmapElementSort)] (Just "PATTERN")
            in test
                 "Variable key and opaque rest ~= two items: indeterminate"
                 patMap
                 concreteKMapWithTwoItems
-                (MatchIndeterminate patMap concreteKMapWithTwoItems)
+                (MatchIndeterminate $ NE.singleton (patMap, concreteKMapWithTwoItems))
         , test
             "Keys disjoint and pattern keys are fully-concrete: fail"
             concreteKMapWithOneItemAndRest
             functionKMapWithOneItem
-            (failed $ DifferentValues concreteKMapWithOneItemAndRest functionKMapWithOneItem)
+            (failed $ KeyNotFound [trm| \dv{SortTestKMapKey{}}("key")|] functionKMapWithOneItem)
         , let patMap =
                 kmap
                     [ (var "A" kmapKeySort, dv kmapElementSort "a")
@@ -286,7 +275,7 @@ kmapTerms =
                 "Disjoint non-singleton maps, non-concrete keys in pattern: indeterminate"
                 patMap
                 subjMap
-                (MatchIndeterminate patMap subjMap)
+                (MatchIndeterminate $ NE.singleton (patMap, subjMap))
         ]
   where
     kmap :: [(Term, Term)] -> Maybe VarName -> Term
@@ -300,7 +289,7 @@ cornerCases =
 
 test :: String -> Term -> Term -> MatchResult -> TestTree
 test name pat subj expected =
-    testCase name $ matchTerm testDefinition pat subj @?= expected
+    testCase name $ matchTerms Fun testDefinition pat subj @?= expected
 
 success :: [(VarName, Sort, Term)] -> MatchResult
 success assocs =
@@ -311,11 +300,11 @@ success assocs =
             ]
 
 failed :: FailReason -> MatchResult
-failed = MatchFailed . General
+failed = MatchFailed 
 
 errors :: String -> Term -> Term -> TestTree
 errors name pat subj =
     testCase name $
-        case matchTerm testDefinition pat subj of
+        case matchTerms Fun testDefinition pat subj of
             MatchFailed _ -> pure ()
             other -> assertFailure $ "Expected MatchFailed, got " <> show other

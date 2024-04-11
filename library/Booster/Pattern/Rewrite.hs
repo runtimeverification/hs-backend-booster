@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RankNTypes #-}
 
 {- |
 Copyright   : (c) Runtime Verification, 2022
@@ -260,6 +261,8 @@ applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     subst <- case matchTerms Rule def rule.lhs pat.term of
         MatchFailed (SubsortingError sortError) ->
             failRewrite $ RewriteSortError rule pat.term sortError
+        MatchFailed err@ArgLengthsDiffer{} ->
+            failRewrite $ InternalMatchError $ renderText $ pretty err
         MatchFailed _reason ->
             fail "Rule matching failed"
         MatchIndeterminate remainder ->
@@ -400,6 +403,8 @@ data RewriteFailed k
       UnificationIsNotMatch (RewriteRule k) Term Substitution
     | -- | A sort error was detected during unification
       RewriteSortError (RewriteRule k) Term SortError
+    | -- | A sort error was detected during unification
+      InternalMatchError Text
     | -- | Term has index 'None', no rule should apply
       TermIndexIsNone Term
     deriving stock (Eq, Show)
@@ -450,6 +455,7 @@ instance Pretty (RewriteFailed k) where
             ]
     pretty (TermIndexIsNone term) =
         "Term index is None for term " <> pretty term
+    pretty (InternalMatchError err) = "An internal error occured" <> pretty err
 
 ruleLabelOrLoc :: RewriteRule k -> Doc a
 ruleLabelOrLoc rule =
