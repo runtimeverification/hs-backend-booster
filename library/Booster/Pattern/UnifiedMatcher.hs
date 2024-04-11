@@ -23,7 +23,7 @@ import Data.Either.Extra
 import Data.List.NonEmpty as NE (NonEmpty, fromList)
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Sequence (Seq, pattern (:<|), pattern (:|>), (><))
+import Data.Sequence (Seq, (><), pattern (:<|), pattern (:|>))
 import Data.Sequence qualified as Seq
 
 import Data.Set (Set)

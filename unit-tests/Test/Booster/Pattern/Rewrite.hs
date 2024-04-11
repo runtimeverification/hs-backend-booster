@@ -346,13 +346,12 @@ callsError :: TestTree
 callsError =
     testGroup
         "Calls error when there are unexpected situations"
-        [ testCase "on wrong argument count in a symbol application" $ 
+        [ testCase "on wrong argument count in a symbol application" $
             runRewrite
-                    [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
-                    >>= \case
+                [trm| kCell{}( kseq{}( inj{SomeSort{}, SortKItem{}}( con1{}( \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing"), \dv{SomeSort{}}("thing") ) ), C:SortK{}) ) |]
+                >>= \case
                     (_, RewriteAborted InternalMatchError{} _) -> pure ()
                     _ -> assertFailure "success"
-                
         ]
 
 getsStuckOnFailures :: TestTree

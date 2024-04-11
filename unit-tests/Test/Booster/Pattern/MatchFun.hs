@@ -1,4 +1,5 @@
 {-# LANGUAGE QuasiQuotes #-}
+
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -7,8 +8,8 @@ module Test.Booster.Pattern.MatchFun (
     test_match_fun,
 ) where
 
-import Data.Map qualified as Map
 import Data.List.NonEmpty qualified as NE
+import Data.Map qualified as Map
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -50,11 +51,13 @@ symbols =
         , let pat = app con1 [var "X" someSort]
               subj = app f1 [var "Y" someSort]
            in test "constructor and function" pat subj $
-                MatchIndeterminate $ NE.singleton (pat, subj)
+                MatchIndeterminate $
+                    NE.singleton (pat, subj)
         , let pat = app f1 [var "X" someSort]
               subj = app con1 [var "Y" someSort]
            in test "function and constructor" pat subj $
-                MatchIndeterminate $ NE.singleton (pat, subj)
+                MatchIndeterminate $
+                    NE.singleton (pat, subj)
         , let x = var "X" someSort
               d = dv differentSort "something"
               pat = app con1 [x]
@@ -143,11 +146,13 @@ varsAndValues =
         , let v = var "X" someSort
               d = dv someSort ""
            in test "dv matching a var (on RHS): indeterminate" d v $
-                 MatchIndeterminate $ NE.singleton (d, v)
+                MatchIndeterminate $
+                    NE.singleton (d, v)
         , let d = dv someSort ""
               f = app f1 [d]
            in test "dv matching a function call (on RHS): indeterminate" d f $
-                 MatchIndeterminate $ NE.singleton (d, f)
+                MatchIndeterminate $
+                    NE.singleton (d, f)
         , let d = dv someSort ""
               c = app con1 [d]
            in test "dv matching a constructor (on RHS): fail" d c $
@@ -183,7 +188,7 @@ andTerms =
                 "And-term on the right, indeterminate"
                 d
                 (AndTerm fa fb)
-                (MatchIndeterminate $ NE.singleton (d ,AndTerm fa fb))
+                (MatchIndeterminate $ NE.singleton (d, AndTerm fa fb))
         ]
 
 kmapTerms :: TestTree
@@ -229,10 +234,10 @@ kmapTerms =
             )
         , -- pattern has more assocs than subject
           test
-                "Extra concrete key in pattern, no rest in subject: fail on rest"
-                concreteKMapWithTwoItems
-                concreteKMapWithOneItem
-                (failed $ KeyNotFound [trm| \dv{SortTestKMapKey{}}("key2")|] emptyKMap)
+            "Extra concrete key in pattern, no rest in subject: fail on rest"
+            concreteKMapWithTwoItems
+            concreteKMapWithOneItem
+            (failed $ KeyNotFound [trm| \dv{SortTestKMapKey{}}("key2")|] emptyKMap)
         , -- cases with disjoint keys
           test
             "Variable key ~= concrete key (and common element) without rest: match key"
@@ -300,7 +305,7 @@ success assocs =
             ]
 
 failed :: FailReason -> MatchResult
-failed = MatchFailed 
+failed = MatchFailed
 
 errors :: String -> Term -> Term -> TestTree
 errors name pat subj =

@@ -432,13 +432,19 @@ internalMaps =
             "Fails to match {\"key\" |-> \"value\", A |-> \"value2\"} with {\"key\" |-> \"value\", ...REST}"
             concreteAndSymbolicKMapWithTwoItems
             concreteKMapWithOneItemAndRest
-            (failed $ DifferentSymbols ( KMap
-                testKMapDefinition
-                [( [trm| A:SortTestKMapKey{}|]
-                    , [trm| \dv{SortTestKMapItem{}}("value2") |]
+            ( failed $
+                DifferentSymbols
+                    ( KMap
+                        testKMapDefinition
+                        [
+                            ( [trm| A:SortTestKMapKey{}|]
+                            , [trm| \dv{SortTestKMapItem{}}("value2") |]
+                            )
+                        ]
+                        Nothing
                     )
-                ]
-                Nothing) (KMap testKMapDefinition [] (Just [trm| REST:SortTestKMap{}|])))
+                    (KMap testKMapDefinition [] (Just [trm| REST:SortTestKMap{}|]))
+            )
         , test
             "Can match {\"f()\" |-> \"value\", ...REST} with {\"f()\" |-> B}"
             functionKMapWithOneItemAndRest
