@@ -55,7 +55,7 @@ data MatchResult
 
 data MatchType = Rewrite | Eval deriving (Eq)
 
--- | Additional information to explain why a unification has failed
+-- | Additional information to explain why matching has failed
 data FailReason
     = -- | (Domain) values differ
       DifferentValues Term Term
@@ -157,7 +157,7 @@ matchTerms matchType KoreDefinition{sorts} term1 term2 =
 data MatchState = State
     { mSubstitution :: Substitution
     , mTargetVars :: Set Variable
-    , mQueue :: Seq (Term, Term) -- PriorityQueue.HashPSQ (Term, Term) UnificationPriority () -- work queue with a priority
+    , mQueue :: Seq (Term, Term)
     , mMapQueue :: Seq (Term, Term)
     , mIndeterminate :: [(Term, Term)] -- list of postponed indeterminate terms (function results)
     , mSubsorts :: SortTable
@@ -177,9 +177,6 @@ match matchType = do
                 match1 matchType term1 term2
                 match matchType
         (term1, term2) :<| rest -> do
-            -- case PriorityQueue.minView queue of
-            --     Nothing -> checkIndeterminate -- done
-            --     Just ((term1, term2), _, _, rest) -> do
             modify $ \s -> s{mQueue = rest}
             match1 matchType term1 term2
             match matchType
@@ -316,7 +313,7 @@ matchDV s1 t1 s2 t2 =
 {-# INLINE matchDV #-}
 
 ----- Injections
--- two injections. Try to unify the contained terms if the sorts
+-- two injections. Try to match the contained terms if the sorts
 -- agree. Target sorts must be the same, source sorts may differ if
 -- the contained pattern term is just a variable, otherwise they need
 -- to be identical.
@@ -447,7 +444,7 @@ matchVar
                             else Injection termSort variableSort term2
                 else failWith $ DifferentSorts (Var var) term2
 
--- unification for lists. Only solves simple cases, returns indeterminate otherwise
+-- matching for lists. Only solves simple cases, returns indeterminate otherwise
 matchLists ::
     KListDefinition ->
     [Term] ->
@@ -764,7 +761,6 @@ enqueuePairs ts1 ts2
     l2 = length ts2
     enqueue xs ys = enqueueRegularProblems $ Seq.fromList $ zip xs ys
 
--- modify $ \s@State{mQueue} -> s{mQueue = foldr (\(p, t) q -> PriorityQueue.insert t p () q) mQueue ts}
 
 {- | Binds a variable to a term to add to the resulting unifier.
 
@@ -819,7 +815,7 @@ addIndeterminate pat subj =
    sort can be used in place of the pattern sort, i.e., is a subsort.
 
 Sort variables are only accepted if they are syntactically identical.
-They should not occur in the patterns matched/unified here, and should
+They should not occur in the patterns matched here, and should
 not be sent by clients either.
 -}
 checkSubsort :: SortTable -> Sort -> Sort -> Except SortError Bool
