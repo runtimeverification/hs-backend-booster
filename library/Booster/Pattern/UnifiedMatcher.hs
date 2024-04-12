@@ -124,7 +124,6 @@ type Substitution = Map Variable Term
    TODO: This should not be the case and we need to re-factor the code further
    to ensure that we always produce a matching substitution without having to check
    after running the matcher
-
 -}
 matchTerms :: MatchType -> KoreDefinition -> Term -> Term -> MatchResult
 matchTerms matchType KoreDefinition{sorts} term1 term2 =
