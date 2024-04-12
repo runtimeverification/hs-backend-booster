@@ -1,5 +1,3 @@
-{-# LANGUAGE PatternSynonyms #-}
-
 {- |
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
@@ -118,14 +116,15 @@ instance Pretty FailReason where
 type Substitution = Map Variable Term
 
 {- | Attempts to find a simple unifying substitution for the given
-   terms. Only constructor symbols are considered (no functions).
+   terms.
 
    The returned substitution is oriented towards 'term1', i.e.,
    prefers to replace its variables if given a choice.
 
-   This code calls `error` for internal errors (e.g., function
-   arguments that should not be possible), assuming the caller will
-   catch and handle those errors.
+   TODO: This should not be the case and we need to re-factor the code further
+   to ensure that we always produce a matching substitution without having to check
+   after running the matcher
+
 -}
 matchTerms :: MatchType -> KoreDefinition -> Term -> Term -> MatchResult
 matchTerms matchType KoreDefinition{sorts} term1 term2 =

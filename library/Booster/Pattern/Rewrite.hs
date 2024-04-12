@@ -399,11 +399,11 @@ data RewriteFailed k
       RuleConditionUnclear (RewriteRule k) Predicate
     | -- | A rewrite rule does not preserve definedness
       DefinednessUnclear (RewriteRule k) Pattern [NotPreservesDefinednessReason]
-    | -- | A unification produced a non-match substitution
+    | -- | A matching produced a non-match substitution
       UnificationIsNotMatch (RewriteRule k) Term Substitution
-    | -- | A sort error was detected during unification
+    | -- | A sort error was detected during m,atching
       RewriteSortError (RewriteRule k) Term SortError
-    | -- | A sort error was detected during unification
+    | -- | An error was detected during matching
       InternalMatchError Text
     | -- | Term has index 'None', no rule should apply
       TermIndexIsNone Term
