@@ -4,8 +4,8 @@
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
-module Test.Booster.Pattern.MatchFun (
-    test_match_fun,
+module Test.Booster.Pattern.MatchEval (
+    test_match_eval,
 ) where
 
 import Data.List.NonEmpty qualified as NE
@@ -18,10 +18,10 @@ import Booster.Pattern.UnifiedMatcher
 import Booster.Syntax.Json.Internalise (trm)
 import Test.Booster.Fixture
 
-test_match_fun :: TestTree
-test_match_fun =
+test_match_eval:: TestTree
+test_match_eval =
     testGroup
-        "(equation) matching"
+        "Equation/simplification matching"
         [ symbols
         , varsAndValues
         , cornerCases
@@ -209,12 +209,12 @@ kmapTerms =
             "Non-empty concrete KMap ~= empty KMap: fails"
             concreteKMapWithOneItem
             emptyKMap
-            (failed $ KeyNotFound [trm| \dv{SortTestKMapKey{}}("key")|] emptyKMap)
+            (failed $ DifferentValues concreteKMapWithOneItem emptyKMap)
         , test
             "Non-empty symbolic KMap ~= empty KMap: fails"
             symbolicKMapWithOneItem
             emptyKMap
-            (failed $ KeyNotFound [trm| \dv{SortTestKMapKey{}}("key")|] emptyKMap)
+            (failed $ DifferentValues symbolicKMapWithOneItem emptyKMap)
         , test
             "Non-empty symbolic KMap ~= non-empty concrete KMap, same key: matches contained value"
             symbolicKMapWithOneItem -- "key" -> A
@@ -233,11 +233,12 @@ kmapTerms =
                in success [("REST", kmapSort, restMap)]
             )
         , -- pattern has more assocs than subject
-          test
+          let patRest = kmap [(dv kmapKeySort "key2", dv kmapElementSort "value2")] Nothing
+           in test
             "Extra concrete key in pattern, no rest in subject: fail on rest"
             concreteKMapWithTwoItems
             concreteKMapWithOneItem
-            (failed $ KeyNotFound [trm| \dv{SortTestKMapKey{}}("key2")|] emptyKMap)
+            (failed $ DifferentValues patRest emptyKMap)
         , -- cases with disjoint keys
           test
             "Variable key ~= concrete key (and common element) without rest: match key"
@@ -263,7 +264,7 @@ kmapTerms =
             "Keys disjoint and pattern keys are fully-concrete: fail"
             concreteKMapWithOneItemAndRest
             functionKMapWithOneItem
-            (failed $ KeyNotFound [trm| \dv{SortTestKMapKey{}}("key")|] functionKMapWithOneItem)
+            (failed $ DifferentValues concreteKMapWithOneItemAndRest functionKMapWithOneItem)
         , let patMap =
                 kmap
                     [ (var "A" kmapKeySort, dv kmapElementSort "a")
@@ -294,7 +295,7 @@ cornerCases =
 
 test :: String -> Term -> Term -> MatchResult -> TestTree
 test name pat subj expected =
-    testCase name $ matchTerms Fun testDefinition pat subj @?= expected
+    testCase name $ matchTerms Eval testDefinition pat subj @?= expected
 
 success :: [(VarName, Sort, Term)] -> MatchResult
 success assocs =
@@ -310,6 +311,6 @@ failed = MatchFailed
 errors :: String -> Term -> Term -> TestTree
 errors name pat subj =
     testCase name $
-        case matchTerms Fun testDefinition pat subj of
+        case matchTerms Eval testDefinition pat subj of
             MatchFailed _ -> pure ()
             other -> assertFailure $ "Expected MatchFailed, got " <> show other

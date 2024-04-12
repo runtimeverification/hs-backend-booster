@@ -258,7 +258,7 @@ applyRule ::
 applyRule pat@Pattern{ceilConditions} rule = runRewriteRuleAppT $ do
     def <- lift getDefinition
     -- unify terms
-    subst <- case matchTerms Rule def rule.lhs pat.term of
+    subst <- case matchTerms Rewrite def rule.lhs pat.term of
         MatchFailed (SubsortingError sortError) ->
             failRewrite $ RewriteSortError rule pat.term sortError
         MatchFailed err@ArgLengthsDiffer{} ->

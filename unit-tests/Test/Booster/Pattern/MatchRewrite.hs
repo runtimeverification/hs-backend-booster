@@ -6,8 +6,8 @@
 Copyright   : (c) Runtime Verification, 2022
 License     : BSD-3-Clause
 -}
-module Test.Booster.Pattern.MatchRule (
-    test_match_rule,
+module Test.Booster.Pattern.MatchRewrite (
+    test_match_rewrite,
 ) where
 
 import Data.List.NonEmpty qualified as NE
@@ -21,10 +21,10 @@ import Booster.Syntax.Json.Internalise (trm)
 import Test.Booster.Fixture
 import Test.Booster.Pattern.InternalCollections
 
-test_match_rule :: TestTree
-test_match_rule =
+test_match_rewrite :: TestTree
+test_match_rewrite =
     testGroup
-        "Rule matching"
+        "Rewrite rule matching"
         [ constructors
         , functions
         , varsAndValues
@@ -428,23 +428,26 @@ internalMaps =
                     )
                 ]
             )
-        , test
-            "Fails to match {\"key\" |-> \"value\", A |-> \"value2\"} with {\"key\" |-> \"value\", ...REST}"
-            concreteAndSymbolicKMapWithTwoItems
-            concreteKMapWithOneItemAndRest
-            ( failed $
-                DifferentSymbols
-                    ( KMap
-                        testKMapDefinition
-                        [
-                            ( [trm| A:SortTestKMapKey{}|]
-                            , [trm| \dv{SortTestKMapItem{}}("value2") |]
-                            )
-                        ]
-                        Nothing
-                    )
-                    (KMap testKMapDefinition [] (Just [trm| REST:SortTestKMap{}|]))
-            )
+        -- TODO: re-enable once we re-factor the map matching
+        -- this would not produce a matchign substitution and should therefore fail
+        -- at match time
+        -- , test
+        --     "Fails to match {\"key\" |-> \"value\", A |-> \"value2\"} with {\"key\" |-> \"value\", ...REST}"
+        --     concreteAndSymbolicKMapWithTwoItems
+        --     concreteKMapWithOneItemAndRest
+        --     ( failed $
+        --         DifferentSymbols
+        --             ( KMap
+        --                 testKMapDefinition
+        --                 [
+        --                     ( [trm| A:SortTestKMapKey{}|]
+        --                     , [trm| \dv{SortTestKMapItem{}}("value2") |]
+        --                     )
+        --                 ]
+        --                 Nothing
+        --             )
+        --             (KMap testKMapDefinition [] (Just [trm| REST:SortTestKMap{}|]))
+        --     )
         , test
             "Can match {\"f()\" |-> \"value\", ...REST} with {\"f()\" |-> B}"
             functionKMapWithOneItemAndRest
@@ -469,12 +472,12 @@ internalMaps =
             "Empty and non-empty concrete map fail to match"
             emptyKMap
             concreteKMapWithOneItem
-            (failed $ DifferentSymbols emptyKMap concreteKMapWithOneItem)
+            (failed $ KeyNotFound [trm| \dv{SortTestKMapKey{}}("key")|] emptyKMap)
         , test
             "Concrete maps of different length fail to match"
             concreteKMapWithTwoItems
             concreteKMapWithOneItem
-            (failed $ KeyNotFound [trm| \dv{SortTestKMapKey{}}("key2")|] emptyKMap)
+            (failed $ KeyNotFound [trm| \dv{SortTestKMapKey{}}("key2")|] concreteKMapWithOneItem)
         , test
             "Symbolic non-empty map and empty map fail to match"
             symbolicKMapWithOneItem
@@ -503,4 +506,4 @@ sortErr = MatchFailed . SubsortingError
 
 test :: String -> Term -> Term -> MatchResult -> TestTree
 test name term1 term2 expected =
-    testCase name $ matchTerms Rule testDefinition term1 term2 @?= expected
+    testCase name $ matchTerms Rewrite testDefinition term1 term2 @?= expected

@@ -813,7 +813,7 @@ applyEquation term rule = fmap (either Failure Success) $ runExceptT $ do
         throwE (MatchConstraintViolated Concrete "* (term has variables)")
     -- match lhs
     koreDef <- (.definition) <$> lift getConfig
-    case matchTerms Fun koreDef rule.lhs term of
+    case matchTerms Eval koreDef rule.lhs term of
         MatchFailed failReason -> throwE $ FailedMatch failReason
         MatchIndeterminate{} -> throwE IndeterminateMatch
         MatchSuccess subst -> do
