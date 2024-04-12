@@ -761,7 +761,6 @@ enqueuePairs ts1 ts2
     l2 = length ts2
     enqueue xs ys = enqueueRegularProblems $ Seq.fromList $ zip xs ys
 
-
 {- | Binds a variable to a term to add to the resulting unifier.
 
  We apply the accumulated substitution whenever a new variable
