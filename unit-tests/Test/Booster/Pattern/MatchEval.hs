@@ -18,7 +18,7 @@ import Booster.Pattern.UnifiedMatcher
 import Booster.Syntax.Json.Internalise (trm)
 import Test.Booster.Fixture
 
-test_match_eval:: TestTree
+test_match_eval :: TestTree
 test_match_eval =
     testGroup
         "Equation/simplification matching"
@@ -235,10 +235,10 @@ kmapTerms =
         , -- pattern has more assocs than subject
           let patRest = kmap [(dv kmapKeySort "key2", dv kmapElementSort "value2")] Nothing
            in test
-            "Extra concrete key in pattern, no rest in subject: fail on rest"
-            concreteKMapWithTwoItems
-            concreteKMapWithOneItem
-            (failed $ DifferentValues patRest emptyKMap)
+                "Extra concrete key in pattern, no rest in subject: fail on rest"
+                concreteKMapWithTwoItems
+                concreteKMapWithOneItem
+                (failed $ DifferentValues patRest emptyKMap)
         , -- cases with disjoint keys
           test
             "Variable key ~= concrete key (and common element) without rest: match key"

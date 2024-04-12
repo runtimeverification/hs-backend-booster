@@ -23,7 +23,7 @@ import Data.Either.Extra
 import Data.List.NonEmpty as NE (NonEmpty, fromList)
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Sequence (Seq(..), (><))
+import Data.Sequence (Seq (..), (><))
 import Data.Sequence qualified as Seq
 
 import Data.Set (Set)
@@ -36,9 +36,10 @@ import Booster.Pattern.Base
 import Booster.Pattern.Util (
     checkSymbolIsAc,
     freeVariables,
+    isConcrete,
     isConstructorSymbol,
     sortOfTerm,
-    substituteInTerm, isConcrete,
+    substituteInTerm,
  )
 import Data.ByteString (ByteString)
 import Data.List (partition)
@@ -553,7 +554,6 @@ matchLists
                                 surplusRight = KList def heads2' (Just (symb2, []))
                             addIndeterminate surplusLeft surplusRight
 {-# INLINE matchLists #-}
-
 
 ------ Internalised Maps
 matchMaps :: MatchType -> Term -> Term -> StateT MatchState (Except MatchResult) ()
