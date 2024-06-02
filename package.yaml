@@ -157,6 +157,7 @@ executables:
       - stm
       - text
       - transformers
+      - unix
     ghc-options:
     - -rtsopts
     - -threaded
