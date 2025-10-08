@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ghc_version: '9.12.'
+  ghc_version: '9.12.2'
   hpack_version: '0.34.2'
 
 jobs:
@@ -41,19 +41,19 @@ jobs:
       - name: 'Set up Docker'
         uses: ./.github/actions/with-docker
         with:
-          tag: hs-booster-ci-stack-unit-buster-${{ github.run_id }}
+          tag: hs-booster-ci-stack-unit-bookworm-${{ github.run_id }}
           os: ubuntu
           distro: jammy
           hpack: ${{ env.hpack_version }}
           ghc: ${{ env.ghc_version }}
 
       - name: 'Run unit tests'
-        run: docker exec -t hs-booster-ci-stack-unit-buster-${{ github.run_id }} /bin/bash -c 'stack --system-ghc --stack-root $(pwd)/stack-cache test :unit-tests --pedantic'
+        run: docker exec -t hs-booster-ci-stack-unit-bookworm-${{ github.run_id }} /bin/bash -c 'stack --system-ghc --stack-root $(pwd)/stack-cache test :unit-tests --pedantic'
 
       - name: 'Tear down Docker'
         if: always()
         run: |
-          docker stop --time=0 hs-booster-ci-stack-unit-buster-${{ github.run_id }}
+          docker stop --time=0 hs-booster-ci-stack-unit-bookworm-${{ github.run_id }}
 
   style:
     name: 'Formatting and Style'

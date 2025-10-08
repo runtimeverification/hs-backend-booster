@@ -3,7 +3,7 @@ ARG BASE_DISTRO
 ARG HPACK_VERSION
 ARG GHC_VERSION
 
-FROM haskell:${GHC_VERSION}-buster
+FROM haskell:${GHC_VERSION}-bookworm
 
 ENV TZ America/Chicago
 ENV DEBIAN_FRONTEND=noninteractive
