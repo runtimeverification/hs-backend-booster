@@ -12,10 +12,10 @@ ARG HPACK_VERSION
 ARG FOURMOLU_VERSION
 ARG HLINT_VERSION
 
-RUN    apt-get update        \
-    && apt-get install --yes \
+RUN    apt update        \
+    && apt install --yes \
         curl                 \
-        libsecp256k1-0       \
+        libsecp256k1-1       \
         libsecp256k1-dev     \
         libtinfo5            \
         locales              \
