@@ -148,6 +148,12 @@ jobs:
           authToken: '${{ secrets.CACHIX_PUBLIC_TOKEN }}'
           skipPush: true
 
+      - name: 'Ensure Git repository integrity'
+        run: |
+          git fsck --full
+          git submodule update --init --recursive
+          git clean -ffdx
+
       - name: Build executables
         env:
           CACHIX_AUTH_TOKEN: '${{ secrets.CACHIX_PUBLIC_TOKEN }}'
@@ -172,6 +178,12 @@ jobs:
             cabal-nix-${{ runner.os }}-ghc-${{ env.ghc_version }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('dev-tools/package.yaml') }}-
             cabal-nix-${{ runner.os }}-ghc-${{ env.ghc_version }}-${{ hashFiles('package.yaml') }}-
             cabal-nix-${{ runner.os }}-ghc-${{ env.ghc_version }}-
+
+      - name: 'Clear corrupted Cabal cache (macOS only)'
+        if: ${{ matrix.os == 'self-macos-latest' }}
+        run: |
+          rm -rf cabal-cache/store
+          cabal clean
 
       - name: Unit Tests
         run: GC_DONT_GC=1 nix develop .#cabal --command bash -c "hpack . && hpack dev-tools && cabal --store-dir ./cabal-cache/store update && cabal --store-dir ./cabal-cache/store test unit-tests --enable-tests --test-show-details=direct"
