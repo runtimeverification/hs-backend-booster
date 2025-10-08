@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ghc_version: '9.6.4'
+  ghc_version: '9.12.'
   hpack_version: '0.34.2'
 
 jobs:
@@ -177,5 +177,5 @@ jobs:
         run: GC_DONT_GC=1 nix develop .#cabal --command bash -c "hpack . && hpack dev-tools && cabal --store-dir ./cabal-cache/store update && cabal --store-dir ./cabal-cache/store test unit-tests --enable-tests --test-show-details=direct"
 
       - name: Integration Tests
-        if: ${{ matrix.os != 'macos-15' }}  ## takes long on public runner, already tested in MacM1
+        if: ${{ matrix.os != 'macos-15' || matrix.os != 'self-macos-latest' }}  ## takes long on public runner, already tested in MacM1
         run: GC_DONT_GC=1 nix develop .#cabal --command bash -c "scripts/integration-tests.sh"
